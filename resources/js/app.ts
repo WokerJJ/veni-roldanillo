@@ -6,6 +6,9 @@ import { createApp, h } from 'vue';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Vení Roldanillo';
 
+// El color de la barra de progreso sale del token de la marca (brand/tokens.css).
+const progressColor = getComputedStyle(document.documentElement).getPropertyValue('--veni-arrebol').trim();
+
 void createInertiaApp({
     title: (title) => (title ? `${title} · ${appName}` : appName),
     resolve: (name) => {
@@ -24,6 +27,6 @@ void createInertiaApp({
             .mount(el);
     },
     progress: {
-        color: '#F0525A',
+        color: progressColor,
     },
 });

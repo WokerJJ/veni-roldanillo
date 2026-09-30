@@ -4,7 +4,7 @@ import { Head } from '@inertiajs/vue3';
 
 <template>
     <Head title="Inicio" />
-    <main>
-        <h1>Vení, comamos en Roldanillo</h1>
+    <main class="bg-veni-blanco font-sans text-veni-ciruela">
+        <h1 class="font-display text-3xl font-extrabold">Vení, comamos en Roldanillo</h1>
     </main>
 </template>

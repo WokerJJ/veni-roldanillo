@@ -1,9 +1,31 @@
-@import 'tailwindcss';
+/* Tailwind solo escanea el código del frontend y las vistas Blade. */
+@import 'tailwindcss' source(none);
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
+/* Única fuente de verdad de la marca: aquí no se repiten valores. */
+@import '../../brand/tokens.css';
 
-@theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+@source '../js';
+@source '../views';
+
+/*
+ * Tokens de la marca como utilidades de Tailwind (bg-veni-ciruela,
+ * rounded-veni-md, font-display, min-h-touch…). `inline` hace que las
+ * utilidades usen var(--veni-*) directamente.
+ */
+@theme inline {
+    --color-veni-ciruela: var(--veni-ciruela);
+    --color-veni-ciruela-suave: var(--veni-ciruela-suave);
+    --color-veni-arrebol: var(--veni-arrebol);
+    --color-veni-mango: var(--veni-mango);
+    --color-veni-lila: var(--veni-lila);
+    --color-veni-blanco: var(--veni-blanco);
+
+    --font-display: var(--veni-font-display);
+    --font-sans: var(--veni-font-body);
+
+    --radius-veni-sm: var(--veni-radius-sm);
+    --radius-veni-md: var(--veni-radius-md);
+    --radius-veni-lg: var(--veni-radius-lg);
+
+    --spacing-touch: var(--veni-touch-min);
 }
