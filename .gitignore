@@ -1,17 +1,40 @@
-# Laravel y Node (se completa al crear el proyecto)
+# Dependencias y compilados
 /vendor/
 /node_modules/
 /public/build/
 /public/hot
-/storage/*.key
+/public/storage
+/public/fonts-manifest.dev.json
+
+# Entorno y secretos
 .env
 .env.*
 !.env.example
+/auth.json
+/storage/*.key
+/storage/pail
+
+# Octane con FrankenPHP (se generan al arrancar)
+/public/frankenphp-worker.php
+/frankenphp
+/caddy
+
+# Pruebas
 .phpunit.result.cache
+/.phpunit.cache
 /coverage/
+
+# Registros y herramientas
+*.log
+_ide_helper.php
+.phpactor.json
 
 # Editores y sistema
 .idea/
 .vscode/
+/.zed
+/.nova
+/.cursor/
+/.codex
 .DS_Store
 Thumbs.db
