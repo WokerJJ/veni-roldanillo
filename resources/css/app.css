@@ -28,6 +28,34 @@
 @source '../js';
 @source '../views';
 
+/* El modo oscuro lo decide data-theme en <html> (ver resources/js/composables/useTheme.ts). */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Colores por rol, derivados de los tokens de la marca. Contraste de texto
+ * (WCAG) medido sobre canvas y surface: todos ≥ 4.5:1. El acento (arrebol en
+ * claro) solo se usa en formas y en el contorno de foco, nunca en texto pequeño.
+ */
+:root {
+    color-scheme: light;
+    --canvas: var(--veni-blanco);
+    --surface: var(--veni-lila);
+    --ink: var(--veni-ciruela);
+    --ink-muted: var(--veni-ciruela-suave);
+    --accent: var(--veni-arrebol);
+    --line: color-mix(in oklab, var(--veni-ciruela) 15%, transparent);
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+    --canvas: var(--veni-ciruela);
+    --surface: color-mix(in oklab, var(--veni-ciruela), var(--veni-blanco) 8%);
+    --ink: var(--veni-blanco);
+    --ink-muted: var(--veni-lila);
+    --accent: var(--veni-mango);
+    --line: color-mix(in oklab, var(--veni-lila) 20%, transparent);
+}
+
 /*
  * Tokens de la marca como utilidades de Tailwind (bg-veni-ciruela,
  * rounded-veni-md, font-display, min-h-touch…). `inline` hace que las
@@ -49,4 +77,36 @@
     --radius-veni-lg: var(--veni-radius-lg);
 
     --spacing-touch: var(--veni-touch-min);
+
+    --color-canvas: var(--canvas);
+    --color-surface: var(--surface);
+    --color-ink: var(--ink);
+    --color-ink-muted: var(--ink-muted);
+    --color-accent: var(--accent);
+    --color-line: var(--line);
+}
+
+@layer base {
+    html {
+        @apply bg-canvas font-sans text-ink antialiased;
+    }
+
+    h1,
+    h2,
+    h3 {
+        @apply font-display font-extrabold text-balance;
+    }
+
+    :focus-visible {
+        @apply outline-2 outline-offset-2 outline-accent;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        ::before,
+        ::after {
+            animation-duration: 0.01ms !important;
+            transition-duration: 0.01ms !important;
+        }
+    }
 }

@@ -4,6 +4,8 @@ import { createInertiaApp } from '@inertiajs/vue3';
 import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
 
+import AppLayout from '@/layouts/AppLayout.vue';
+
 const appName = import.meta.env.VITE_APP_NAME || 'Vení Roldanillo';
 
 // El color de la barra de progreso sale del token de la marca (brand/tokens.css).
@@ -21,6 +23,8 @@ void createInertiaApp({
 
         return page();
     },
+    // Layout persistente por defecto: no se vuelve a montar al navegar.
+    layout: () => AppLayout,
     setup({ el, App, props, plugin }) {
         createApp({ render: () => h(App, props) })
             .use(plugin)
