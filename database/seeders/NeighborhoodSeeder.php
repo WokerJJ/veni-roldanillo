@@ -3,15 +3,14 @@
 namespace Database\Seeders;
 
 use App\Models\Neighborhood;
-use Illuminate\Database\Seeder;
 
 /**
  * Barrios inventados: la lista real de barrios de Roldanillo se cargará desde
  * una fuente pública verificada, no desde este seeder.
  */
-class NeighborhoodSeeder extends Seeder
+class NeighborhoodSeeder extends FictitiousSeeder
 {
-    public function run(): void
+    protected function populate(): void
     {
         $names = ['Los Guayacanes', 'El Mirador de Prueba', 'La Esquina Lila', 'San Ensayo', 'El Llano Mango', 'Villa Ejemplo'];
 

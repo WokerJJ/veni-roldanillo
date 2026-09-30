@@ -3,24 +3,18 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
-use RuntimeException;
 
 /**
  * Datos de ejemplo para desarrollo: todo es ficticio y está marcado como tal
  * (is_fictitious y «(ficticio)» en el nombre). Nada viene de Google,
- * TripAdvisor ni otros sitios. Nunca se ejecuta en producción.
+ * TripAdvisor ni otros sitios. Solo corre en local o testing (FictitiousSeeder).
  */
-class DatabaseSeeder extends Seeder
+class DatabaseSeeder extends FictitiousSeeder
 {
     use WithoutModelEvents;
 
-    public function run(): void
+    protected function populate(): void
     {
-        if (app()->isProduction()) {
-            throw new RuntimeException('Los datos ficticios no se siembran en producción.');
-        }
-
         $this->call([
             CategorySeeder::class,
             NeighborhoodSeeder::class,

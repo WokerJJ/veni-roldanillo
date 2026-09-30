@@ -3,28 +3,33 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 /**
- * Cuentas de ejemplo con correos del dominio reservado example.test.
+ * Cuentas de ejemplo con correos del dominio reservado example.test. Cada una
+ * lleva una contraseña aleatoria que no se guarda en ningún lado: si una base
+ * sembrada llegara a exponerse, nadie podría entrar con una clave conocida.
+ * El acceso será por código de WhatsApp; para probar una sesión en local se
+ * usa actingAs() en las pruebas o tinker.
  */
-class UserSeeder extends Seeder
+class UserSeeder extends FictitiousSeeder
 {
-    public function run(): void
+    protected function populate(): void
     {
-        User::factory()->admin()->create([
-            'name' => 'Administración de Prueba (ficticio)',
-            'email' => 'admin@example.test',
-        ]);
+        $accounts = [
+            ['Administración de Prueba (ficticio)', 'admin@example.test', true],
+            ['Dueña de Prueba (ficticio)', 'duena@example.test', false],
+            ['Usuario de Prueba (ficticio)', 'usuario@example.test', false],
+        ];
 
-        User::factory()->create([
-            'name' => 'Dueña de Prueba (ficticio)',
-            'email' => 'duena@example.test',
-        ]);
+        foreach ($accounts as [$name, $email, $admin]) {
+            $factory = $admin ? User::factory()->admin() : User::factory();
 
-        User::factory()->create([
-            'name' => 'Usuario de Prueba (ficticio)',
-            'email' => 'usuario@example.test',
-        ]);
+            $factory->create([
+                'name' => $name,
+                'email' => $email,
+                'password' => Str::password(32),
+            ]);
+        }
     }
 }

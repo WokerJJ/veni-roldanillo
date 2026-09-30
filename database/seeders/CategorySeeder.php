@@ -3,14 +3,13 @@
 namespace Database\Seeders;
 
 use App\Models\Category;
-use Illuminate\Database\Seeder;
 
 /**
  * Tipos de comida genéricos (clasificación, no datos de negocios).
  */
-class CategorySeeder extends Seeder
+class CategorySeeder extends FictitiousSeeder
 {
-    public function run(): void
+    protected function populate(): void
     {
         $categories = [
             ['comida-tipica', 'Comida típica', 'Traditional food'],

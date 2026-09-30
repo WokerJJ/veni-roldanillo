@@ -11,25 +11,32 @@ use App\Models\Option;
 use App\Models\OptionGroup;
 use App\Models\Restaurant;
 use App\Models\User;
-use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
 /**
  * Restaurantes ficticios con menú, horario, almuerzo del día y domicilios.
  * Los nombres y coordenadas son inventados (RestaurantFactory).
  */
-class RestaurantSeeder extends Seeder
+class RestaurantSeeder extends FictitiousSeeder
 {
     private const array NAMES = [
         'La Ceiba', 'El Guadual', 'Los Totumos', 'La Chiminea',
         'El Fogón Azul', 'La Mesa Larga', 'El Patio Lila', 'Las Tres Ollas',
     ];
 
-    public function run(): void
+    /**
+     * Categorías, domicilios y zonas salen del índice de cada restaurante (no
+     * al azar): la misma siembra da siempre los mismos datos de domicilio.
+     */
+    protected function populate(): void
     {
-        $categories = Category::query()->pluck('id');
-        $neighborhoods = Neighborhood::query()->pluck('id');
+        $categories = Category::query()->orderBy('id')->pluck('id');
+        $neighborhoods = Neighborhood::query()->orderBy('id')->pluck('id');
         $owner = User::query()->where('email', 'duena@example.test')->first();
+
+        if ($categories->isEmpty()) {
+            $categories = collect([Category::factory()->create()->id]);
+        }
 
         foreach (self::NAMES as $i => $base) {
             $factory = Restaurant::factory();
@@ -43,8 +50,16 @@ class RestaurantSeeder extends Seeder
             $restaurant = $factory->create([
                 'name' => "Restaurante de Prueba {$base} (ficticio)",
                 'slug' => Str::slug("prueba {$base}"),
-                'category_id' => $categories->isEmpty() ? Category::factory() : $categories->random(),
+                'delivery' => $i % 2 === 0,
             ]);
+
+            // Una categoría por restaurante y, cada tres, una segunda.
+            $restaurant->categories()->attach(
+                collect([$categories[$i % $categories->count()], $categories[($i + 1) % $categories->count()]])
+                    ->take($i % 3 === 0 ? 2 : 1)
+                    ->unique()
+                    ->all(),
+            );
 
             if ($i === 0 && $owner !== null) {
                 $restaurant->members()->attach($owner, ['role' => RestaurantRole::Owner->value]);
@@ -61,10 +76,10 @@ class RestaurantSeeder extends Seeder
             ]);
 
             if ($restaurant->delivery && $neighborhoods->isNotEmpty()) {
-                foreach ($neighborhoods->random(min(3, $neighborhoods->count())) as $neighborhoodId) {
+                foreach (range(0, min(3, $neighborhoods->count()) - 1) as $k) {
                     $restaurant->deliveryZones()->create([
-                        'neighborhood_id' => $neighborhoodId,
-                        'fee' => fake()->numberBetween(2, 8) * 500,
+                        'neighborhood_id' => $neighborhoods[($i + $k) % $neighborhoods->count()],
+                        'fee' => (2 + ($i + $k) % 5) * 500,
                     ]);
                 }
             }
@@ -98,7 +113,8 @@ class RestaurantSeeder extends Seeder
             ->create();
 
         foreach ($sections as $section) {
-            $dishes = Dish::factory()->count(3)->for($section)->create(['restaurant_id' => $restaurant->id]);
+            // Por las relaciones, sin restaurant_id suelto (ver Dish).
+            $dishes = Dish::factory()->count(3)->for($section)->for($restaurant)->create();
 
             if ($section->position !== 0) {
                 continue;
