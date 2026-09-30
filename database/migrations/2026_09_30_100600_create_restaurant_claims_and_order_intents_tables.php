@@ -22,7 +22,12 @@ return new class extends Migration
             $table->timestampsTz();
 
             $table->index(['status', 'created_at']);
+            // Uno por FK: el único parcial de pendientes no cubre las resueltas,
+            // y sin índice el borrado de un restaurante o de quien revisó
+            // recorre la tabla entera.
+            $table->index('restaurant_id');
             $table->index('user_id');
+            $table->index('reviewed_by');
         });
 
         // Una solicitud resuelta tiene fecha de resolución; una pendiente no.
@@ -48,11 +53,31 @@ return new class extends Migration
         });
 
         DB::statement("ALTER TABLE order_intents ADD CONSTRAINT order_intents_device_hash_format CHECK (device_hash ~ '^[0-9a-f]{64}$')");
+
+        // Anonimización real (Ley 1581): cuando la FK deja user_id en NULL al
+        // borrar la cuenta, el device_hash también se borra; si quedara, las
+        // intenciones seguirían enlazadas entre sí y con el dispositivo. Va en
+        // la base para que ningún camino (Eloquent, SQL, cascada) lo salte.
+        // OR REPLACE: migrate:fresh borra tablas pero no funciones.
+        DB::statement(<<<'SQL'
+            CREATE OR REPLACE FUNCTION order_intents_anonymize() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+                NEW.device_hash := NULL;
+                RETURN NEW;
+            END;
+            $$
+            SQL);
+        DB::statement(<<<'SQL'
+            CREATE TRIGGER order_intents_anonymize BEFORE UPDATE OF user_id ON order_intents
+            FOR EACH ROW WHEN (OLD.user_id IS NOT NULL AND NEW.user_id IS NULL)
+            EXECUTE FUNCTION order_intents_anonymize()
+            SQL);
     }
 
     public function down(): void
     {
         Schema::dropIfExists('order_intents');
+        DB::statement('DROP FUNCTION IF EXISTS order_intents_anonymize()');
         Schema::dropIfExists('restaurant_claims');
     }
 };
