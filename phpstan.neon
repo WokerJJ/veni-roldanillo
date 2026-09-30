@@ -5,6 +5,9 @@ includes:
 
 parameters:
     level: max
+    # tests/ queda fuera a propósito: las pruebas de Pest son closures con $this
+    # dinámico y expectativas encadenadas que PHPStan ve como mixed; sin el
+    # plugin de Pest para PHPStan serían solo ruido. Las pruebas ya se ejecutan.
     paths:
         - app
         - bootstrap/app.php

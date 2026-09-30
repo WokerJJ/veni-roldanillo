@@ -1,10 +1,11 @@
 name: Seguridad
 
+# Revisión periódica e informativa: no corre en PR ni en push y no es un check
+# requerido. Los mismos controles (composer audit, npm audit y gitleaks) corren
+# en ci.yml y bloquean ci-ok; aquí solo se repiten los avisos de dependencias,
+# que pueden aparecer sin que cambie el código. gitleaks no se repite: el
+# historial solo cambia con un push, y ese push ya pasa por ci.yml.
 on:
-  pull_request:
-  push:
-    branches: [main]
-  # Los avisos nuevos aparecen sin que cambie el código: revisión semanal.
   schedule:
     - cron: '0 11 * * 1' # lunes 06:00 en Bogotá
   workflow_dispatch:
@@ -14,12 +15,8 @@ permissions:
 
 concurrency:
   group: security-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  GITLEAKS_VERSION: 8.30.1
-  # gitleaks_8.30.1_linux_x64.tar.gz según gitleaks_8.30.1_checksums.txt de la release.
-  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  # Solo cancela en PR (hoy no dispara con PR; queda igual que ci.yml).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   composer-audit:
@@ -48,25 +45,3 @@ jobs:
           node-version: 24
       - name: Avisos de seguridad de npm (high o más)
         run: npm audit --audit-level=high
-
-  # CLI de gitleaks (licencia MIT) en lugar de gitleaks-action: no pide licencia
-  # ni permisos para comentar en los PR. Se verifica el SHA-256 del binario.
-  gitleaks:
-    name: Secretos (gitleaks)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # Todo el historial: un secreto borrado en un commit posterior sigue filtrado.
-          fetch-depth: 0
-      - name: Instalar gitleaks
-        run: |
-          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          curl -sSfL -o "$RUNNER_TEMP/$archive" \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
-          echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
-          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
-      - name: Escanear el historial
-        run: |
-          "$RUNNER_TEMP/gitleaks" git --redact --verbose --exit-code 1 .
