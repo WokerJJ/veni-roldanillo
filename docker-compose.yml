@@ -30,20 +30,15 @@ services:
     <<: *app
     command: ["php", "artisan", "queue:work", "--tries=3", "--max-time=3600"]
     # La imagen revisa /up en el puerto 8000; el worker no sirve HTTP.
+    # Worker y scheduler heredan de x-app la espera a db y meilisearch sanos.
     healthcheck:
       disable: true
-    depends_on:
-      app:
-        condition: service_healthy
 
   scheduler:
     <<: *app
     command: ["php", "artisan", "schedule:work"]
     healthcheck:
       disable: true
-    depends_on:
-      app:
-        condition: service_healthy
 
   db:
     image: postgis/postgis:18-3.6
