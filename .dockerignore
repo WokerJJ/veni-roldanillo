@@ -1,0 +1,44 @@
+# Control de versiones y documentación
+.git
+.github
+docs
+brand
+*.md
+
+# Dependencias y compilados (se instalan dentro de la imagen)
+vendor
+node_modules
+public/build
+public/hot
+public/storage
+public/frankenphp-worker.php
+
+# Entorno y secretos: nunca dentro de la imagen
+.env
+.env.*
+!.env.example
+auth.json
+
+# Estado local
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/testing/*
+storage/framework/views/*
+storage/pail
+bootstrap/cache/*.php
+.phpunit.cache
+.phpunit.result.cache
+coverage
+
+# Docker y editores
+Dockerfile
+docker-compose*.yml
+.dockerignore
+.claude
+.idea
+.vscode
+
+# Pruebas (no van en la imagen de producción)
+tests
+phpunit.xml
