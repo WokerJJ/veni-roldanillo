@@ -20,14 +20,14 @@ const year = new Date().getFullYear();
         <header class="border-b border-line">
             <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-2">
                 <Link href="/" class="inline-flex min-h-touch items-center rounded-veni-sm">
-                    <img :src="wordmark" alt="Vení, inicio" width="72" height="40" class="h-10 w-auto dark:hidden" />
+                    <img :src="wordmark" alt="Vení, inicio" width="72" height="40" class="h-10 w-auto dark:hidden">
                     <img
                         :src="wordmarkWhite"
                         alt="Vení, inicio"
                         width="72"
                         height="40"
                         class="hidden h-10 w-auto dark:block"
-                    />
+                    >
                 </Link>
                 <ThemeToggle />
             </div>
