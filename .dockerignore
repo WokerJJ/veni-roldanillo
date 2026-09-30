@@ -1,6 +1,10 @@
-# Control de versiones y documentación
-.git
-.github
+# Archivos y carpetas ocultos (git, editores, herramientas locales),
+# salvo los que usa la compilación
+.*
+!.npmrc
+!.env.example
+
+# Documentación
 docs
 brand
 *.md
@@ -13,10 +17,7 @@ public/hot
 public/storage
 public/frankenphp-worker.php
 
-# Entorno y secretos: nunca dentro de la imagen
-.env
-.env.*
-!.env.example
+# Secretos: nunca dentro de la imagen (el .env ya queda fuera con .*)
 auth.json
 
 # Estado local
@@ -31,13 +32,9 @@ bootstrap/cache/*.php
 .phpunit.result.cache
 coverage
 
-# Docker y editores
+# Docker
 Dockerfile
 docker-compose*.yml
-.dockerignore
-.claude
-.idea
-.vscode
 
 # Pruebas (no van en la imagen de producción)
 tests
