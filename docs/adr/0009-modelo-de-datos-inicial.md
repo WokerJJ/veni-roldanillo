@@ -2,7 +2,7 @@
 
 - Estado: aceptada
 - Fecha: 2026-09-30
-- Sustituye en parte: `docs/04-seguridad-y-legal.md` (roles con spatie/laravel-permission queda diferido).
+- Afecta a: `docs/04-seguridad-y-legal.md` (roles con spatie/laravel-permission queda diferido).
 
 ## Contexto
 
@@ -10,12 +10,14 @@ El modelo del borrador de `docs/03-arquitectura.md` tenía que convertirse en mi
 
 ## Decisión
 
+- **Extensiones:** la primera migración crea `postgis` y `btree_gist` con `IF NOT EXISTS`; su `down` no las quita porque son de toda la base.
+- **Categorías:** un restaurante puede tener varias (`category_restaurant`, PK compuesta); no hay `restaurants.category_id`.
 - **Ubicación:** columna `geography(Point,4326)` con índice GiST, creada con el `Blueprint` de Laravel (`geography()` y `spatialIndex()`). Un cast propio (`AsGeoPoint` → `GeoPoint`) escribe EWKT y lee el EWKB que devuelve PostgreSQL. No se usa `clickbar/laravel-magellan`: solo hace falta un punto y un paquete más ata la actualización de Laravel a su calendario. Las consultas espaciales (`ST_DWithin`) se escriben con parámetros enlazados.
 - **Estados y roles:** `varchar` con `CHECK` (lo que genera `enum()` en PostgreSQL) y enums PHP en los modelos. Más fácil de evolucionar que los tipos `ENUM` de PostgreSQL.
-- **Roles:** rol global en `users.role` (user/admin) y dueño o empleado por restaurante en `restaurant_user.role`; la autorización va en Policies. spatie/laravel-permission se retoma cuando lleguen moderadores y paneles (#18, #19).
-- **Integridad en la base:** FK con `onDelete` explícito (cascada para lo que cuelga del restaurante, `RESTRICT` para categorías y barrios en uso, `SET NULL` para que un usuario borrado deje sus intenciones de pedido anónimas), FK compuesta para que un plato no use la sección de otro restaurante y `CHECK` en precios, horarios y opciones.
+- **Roles:** rol global en `users.role` (user/admin) y dueño o empleado por restaurante en `restaurant_user.role`; la autorización va en Policies (`RestaurantPolicy` y, para todo lo que cuelga del restaurante, `RestaurantContentPolicy`, que delega en ella). spatie/laravel-permission se retoma cuando lleguen moderadores y paneles (#18, #19).
+- **Integridad en la base:** FK con `onDelete` explícito (cascada para lo que cuelga del restaurante, `RESTRICT` para categorías y barrios en uso, `SET NULL` para que un usuario borrado deje sus intenciones de pedido anónimas, con un trigger que borra también el `device_hash`), FK compuesta para que un plato no use la sección de otro restaurante, `CHECK` en precios, horarios, opciones, WhatsApp y medios de pago, y `EXCLUDE` (GiST con `btree_gist`) contra franjas de horario solapadas.
 - **Precios** en pesos enteros; **fechas** `timestamp with time zone` con la sesión en la zona de la aplicación.
-- **Datos ficticios:** columna `is_fictitious` (el campo «ficticio» del issue #6, en inglés como el resto del código) y «(ficticio)» en el nombre; coordenadas inventadas dentro del casco urbano, WhatsApp imposible (`570…`) y correos `example.test`. El seeder no corre en producción.
+- **Datos ficticios:** columna `is_fictitious` (el campo «ficticio» del issue #6, en inglés como el resto del código) y «(ficticio)» en el nombre; coordenadas inventadas dentro del casco urbano, WhatsApp imposible (`570…`) y correos `example.test` con contraseñas aleatorias. Todos los seeders heredan de `FictitiousSeeder` y solo corren en `local` o `testing`.
 
 ## Consecuencias
 

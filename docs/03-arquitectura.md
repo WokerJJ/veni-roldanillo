@@ -42,28 +42,29 @@ El mapa base lo produce y publica el repositorio [veni-mapa](https://github.com/
 
 ## Modelo de datos
 
-Implementado en la Fase 0 (#6); decisiones en el ADR 0009. Convenciones: precios en pesos colombianos enteros (sin decimales, `CHECK >= 0`); fechas `timestamp with time zone` (la sesión de PostgreSQL usa la zona de la aplicación); estados como `varchar` con `CHECK` y enums PHP en los modelos; campos traducibles `_es` (obligatorio) y `_en` (opcional); `is_fictitious` marca los datos de ejemplo.
+Implementado en la Fase 0 (#6); decisiones en el ADR 0009. Convenciones: precios en pesos colombianos enteros (sin decimales, `CHECK >= 0`); fechas `timestamp with time zone` (la sesión de PostgreSQL usa la zona de la aplicación); estados como `varchar` con `CHECK` y enums PHP en los modelos; campos traducibles `_es` (obligatorio) y `_en` (opcional); `is_fictitious` marca los datos de ejemplo. La primera migración crea las extensiones `postgis` y `btree_gist` (el usuario de la base necesita permiso para crearlas; ver el README).
 
 | Tabla | Campos principales | Restricciones e índices |
 | --- | --- | --- |
 | `categories` | slug, name_es/en, position | slug único con formato |
+| `category_restaurant` | category_id, restaurant_id | un restaurante puede tener varias categorías; PK (category_id, restaurant_id) e índice en restaurant_id; categoría en uso con `RESTRICT`, restaurante en cascada |
 | `neighborhoods` | name, slug, area (geography MultiPolygon, opcional), is_fictitious | name y slug únicos; GiST en area |
-| `restaurants` | name, slug, category_id, description_es/en, address, reference, location (geography Point 4326), phone, whatsapp, price_level, delivery, delivery_notes_es/en, payment_methods (jsonb), status (unclaimed/claimed/hidden), plan (free/featured), verified_at, updated_by_owner_at, is_fictitious | slug único con formato; GiST en location; índices en status y (category_id, status); whatsapp solo dígitos; price_level 1-4; categoría con `RESTRICT` |
+| `restaurants` | name, slug, description_es/en, address, reference, location (geography Point 4326), phone, whatsapp, price_level, delivery, delivery_notes_es/en, payment_methods (jsonb, lista del enum `PaymentMethod`: cash/nequi/daviplata/card), status (unclaimed/claimed/hidden), plan (free/featured), verified_at, updated_by_owner_at, is_fictitious | slug único con formato; GiST en location; sin índice en status (el filtro `status <> 'hidden'` no lo usa); whatsapp celular colombiano `57` + diez dígitos (el modelo normaliza «+57 300 …»); price_level 1-4; payment_methods solo con valores del enum |
 | `restaurant_user` | restaurant_id, user_id, role (owner/staff) | PK compuesta; cascada |
-| `opening_hours` | restaurant_id, weekday (0 = domingo), opens_at, closes_at | varias franjas por día; puede pasar la medianoche |
-| `special_hours` | restaurant_id, on_date, closed, opens_at, closes_at, note_es/en | cerrado sin horas o abierto con ambas |
+| `opening_hours` | restaurant_id, weekday (0 = domingo), opens_at, closes_at | varias franjas por día sin solaparse (`EXCLUDE` con GiST); una franja puede pasar la medianoche |
+| `special_hours` | restaurant_id, on_date, closed, opens_at, closes_at, note_es/en | cerrado sin horas o abierto con ambas; por fecha, o un solo «cerrado» o franjas que no se solapan (`EXCLUDE`) |
 | `menu_sections` | restaurant_id, name_es/en, position | |
 | `dishes` | restaurant_id, menu_section_id, name_es/en, description_es/en, price, photo_path, tags (jsonb), available, sold_out_until, position | FK compuesta (sección del mismo restaurante) |
 | `option_groups` | dish_id, name_es/en, required, min_choices, max_choices, position | obligatorio si y solo si min_choices >= 1; max >= min |
 | `options` | option_group_id, name_es/en, price_delta, available, position | price_delta >= 0 |
 | `daily_menus` | restaurant_id, served_on, description_es/en, price | único por restaurante y fecha; índice en served_on |
 | `promotions` | restaurant_id, title_es/en, starts_at, ends_at | ends_at > starts_at |
-| `delivery_zones` | restaurant_id, neighborhood_id, fee | único por restaurante y barrio; barrio con `RESTRICT` |
-| `restaurant_claims` | restaurant_id, user_id, status (pending/approved/rejected), message, reviewed_by, reviewed_at | una pendiente por usuario y restaurante; resuelta si y solo si tiene reviewed_at |
-| `order_intents` | restaurant_id, user_id (nullable), device_hash, confirmed (null/sí/no), created_at | sin direcciones, contenido del pedido ni ubicación; al borrar el usuario queda anónima |
+| `delivery_zones` | restaurant_id, neighborhood_id, fee | único por restaurante y barrio; barrio con `RESTRICT`. Las zonas mandan sobre `restaurants.delivery`: con zonas, el restaurante lleva a esos barrios con ese costo; `delivery` solo indica que hace domicilios mientras no haya zonas cargadas |
+| `restaurant_claims` | restaurant_id, user_id, status (pending/approved/rejected), message, reviewed_by, reviewed_at | una pendiente por usuario y restaurante; resuelta si y solo si tiene reviewed_at; índices en restaurant_id, user_id y reviewed_by |
+| `order_intents` | restaurant_id, user_id (nullable), device_hash, confirmed (null/sí/no), created_at | sin direcciones, contenido del pedido ni ubicación; al borrar el usuario queda anónima (un trigger borra también device_hash) |
 | `users` | + role (user/admin), locale (es/en) | ser dueño o empleado va en `restaurant_user` |
 
-Autorización: `RestaurantPolicy` (el dueño solo edita el suyo; el administrador todo; borrar solo el administrador).
+Autorización: `RestaurantPolicy` (el dueño solo edita el suyo; el administrador todo; borrar solo el administrador). El contenido del restaurante (secciones, platos, grupos de opciones, opciones, almuerzos del día, promociones, horarios, horarios especiales y zonas) usa `RestaurantContentPolicy`, que delega en `RestaurantPolicy` a través de `BelongsToRestaurant::owningRestaurant()`; crear recibe el restaurante de la ruta. Los platos se crean con `$restaurant->dishes()->create()` (`restaurant_id` no es asignable). Menús y opciones se ordenan por `position` y luego `id`.
 
 ### Pendiente para fases posteriores
 
