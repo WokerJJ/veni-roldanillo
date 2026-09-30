@@ -1,9 +1,115 @@
-@import 'tailwindcss';
+/* Tailwind solo escanea el código del frontend y las vistas Blade. */
+@import 'tailwindcss' source(none);
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
-@source '../../storage/framework/views/*.php';
+/* Única fuente de verdad de la marca: aquí no se repiten valores. */
+@import '../../brand/tokens.css';
 
-@theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+/*
+ * Fuentes autohospedadas (public/fonts, licencia OFL junto a los archivos).
+ * Un solo woff2 variable por familia con el subconjunto latino, que cubre
+ * el español (á, é, í, ó, ú, ñ, ü, ¿, ¡). Pesos según brand/README.md.
+ */
+@font-face {
+    font-family: 'Bricolage Grotesque';
+    font-style: normal;
+    font-weight: 700 800;
+    font-display: swap;
+    src: url('/fonts/bricolage-grotesque-latin-700-800.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Figtree';
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+    src: url('/fonts/figtree-latin-400-700.woff2') format('woff2');
+}
+
+@source '../js';
+@source '../views';
+
+/* El modo oscuro lo decide data-theme en <html> (ver resources/js/composables/useTheme.ts). */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Colores por rol, derivados de los tokens de la marca. Contraste de texto
+ * (WCAG) medido sobre canvas y surface: todos ≥ 4.5:1. El acento (arrebol en
+ * claro) solo se usa en formas y en el contorno de foco, nunca en texto pequeño.
+ */
+:root {
+    color-scheme: light;
+    --canvas: var(--veni-blanco);
+    --surface: var(--veni-lila);
+    --ink: var(--veni-ciruela);
+    --ink-muted: var(--veni-ciruela-suave);
+    --accent: var(--veni-arrebol);
+    --line: color-mix(in oklab, var(--veni-ciruela) 15%, transparent);
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+    --canvas: var(--veni-ciruela);
+    --surface: color-mix(in oklab, var(--veni-ciruela), var(--veni-blanco) 8%);
+    --ink: var(--veni-blanco);
+    --ink-muted: var(--veni-lila);
+    --accent: var(--veni-mango);
+    --line: color-mix(in oklab, var(--veni-lila) 20%, transparent);
+}
+
+/*
+ * Tokens de la marca como utilidades de Tailwind (bg-veni-ciruela,
+ * rounded-veni-md, font-display, min-h-touch…). `inline` hace que las
+ * utilidades usen var(--veni-*) directamente.
+ */
+@theme inline {
+    --color-veni-ciruela: var(--veni-ciruela);
+    --color-veni-ciruela-suave: var(--veni-ciruela-suave);
+    --color-veni-arrebol: var(--veni-arrebol);
+    --color-veni-mango: var(--veni-mango);
+    --color-veni-lila: var(--veni-lila);
+    --color-veni-blanco: var(--veni-blanco);
+
+    --font-display: var(--veni-font-display);
+    --font-sans: var(--veni-font-body);
+
+    --radius-veni-sm: var(--veni-radius-sm);
+    --radius-veni-md: var(--veni-radius-md);
+    --radius-veni-lg: var(--veni-radius-lg);
+
+    --spacing-touch: var(--veni-touch-min);
+
+    --color-canvas: var(--canvas);
+    --color-surface: var(--surface);
+    --color-ink: var(--ink);
+    --color-ink-muted: var(--ink-muted);
+    --color-line: var(--line);
+
+    /* El acento no es color de texto: solo hay outline-accent y bg-accent. */
+    --outline-color-accent: var(--accent);
+    --background-color-accent: var(--accent);
+}
+
+@layer base {
+    html {
+        @apply bg-canvas font-sans text-ink antialiased;
+    }
+
+    h1,
+    h2,
+    h3 {
+        @apply font-display font-extrabold text-balance;
+    }
+
+    :focus-visible {
+        @apply outline-2 outline-offset-2 outline-accent;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        ::before,
+        ::after {
+            animation-duration: 0.01ms !important;
+            transition-duration: 0.01ms !important;
+        }
+    }
 }

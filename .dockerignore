@@ -7,6 +7,9 @@
 # Documentación
 docs
 brand
+# La compilación de Vite usa los tokens y los logos de la marca
+!brand/tokens.css
+!brand/logo
 *.md
 
 # Dependencias y compilados (se instalan dentro de la imagen)
@@ -27,6 +30,8 @@ storage/framework/sessions/*
 storage/framework/testing/*
 storage/framework/views/*
 storage/pail
+# Peticiones que graba Inertia DevTools en local (props y cabeceras)
+storage/inertia-devtools
 bootstrap/cache/*.php
 .phpunit.cache
 .phpunit.result.cache

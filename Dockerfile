@@ -69,8 +69,11 @@ WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci
 
-COPY vite.config.js ./
+COPY vite.config.ts tsconfig.json ./
 COPY resources ./resources
+# Tokens y logos de la marca que importan el CSS y los componentes.
+COPY brand/tokens.css ./brand/tokens.css
+COPY brand/logo ./brand/logo
 RUN npm run build
 
 # ---------------------------------------------------------------------------
@@ -78,8 +81,10 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 FROM base AS prod
 
+# Inertia DevTools graba cada petición en disco: nunca en producción.
 ENV APP_ENV=production \
-    APP_DEBUG=false
+    APP_DEBUG=false \
+    INERTIA_DEVTOOLS_ENABLED=false
 
 RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && rm /usr/bin/composer
