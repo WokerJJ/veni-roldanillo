@@ -1,10 +1,11 @@
 // ESLint 9 (flat config) para el frontend: TypeScript estricto y Vue 3.
 import js from '@eslint/js';
+import { defineConfig } from 'eslint/config';
 import pluginVue from 'eslint-plugin-vue';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-export default tseslint.config(
+export default defineConfig(
     {
         ignores: ['public/**', 'vendor/**', 'node_modules/**', 'bootstrap/ssr/**', 'storage/**'],
     },
@@ -17,7 +18,11 @@ export default tseslint.config(
             globals: globals.browser,
             parserOptions: {
                 parser: tseslint.parser,
-                projectService: true,
+                projectService: {
+                    // vite.config.ts corre en Node: usa tsconfig.node.json, no el del navegador.
+                    allowDefaultProject: ['vite.config.ts'],
+                    defaultProject: 'tsconfig.node.json',
+                },
                 tsconfigRootDir: import.meta.dirname,
                 extraFileExtensions: ['.vue'],
             },
@@ -36,6 +41,10 @@ export default tseslint.config(
         rules: {
             'vue/multi-word-component-names': 'off',
         },
+    },
+    {
+        files: ['vite.config.ts'],
+        languageOptions: { globals: globals.node },
     },
     {
         files: ['eslint.config.js'],

@@ -82,8 +82,11 @@
     --color-surface: var(--surface);
     --color-ink: var(--ink);
     --color-ink-muted: var(--ink-muted);
-    --color-accent: var(--accent);
     --color-line: var(--line);
+
+    /* El acento no es color de texto: solo hay outline-accent y bg-accent. */
+    --outline-color-accent: var(--accent);
+    --background-color-accent: var(--accent);
 }
 
 @layer base {
