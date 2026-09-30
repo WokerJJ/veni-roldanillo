@@ -2,10 +2,13 @@ import { computed, onBeforeUnmount, onMounted, readonly, ref } from 'vue';
 
 export type Theme = 'light' | 'dark';
 
-/** Clave en localStorage; la misma que lee el script inline de app.blade.php. */
+/**
+ * Clave en localStorage. El script inline de app.blade.php usa el mismo
+ * literal (tests/Feature/RootViewTest.php comprueba que coincidan).
+ */
 export const THEME_STORAGE_KEY = 'veni:theme';
 
-const darkQuery = '(prefers-color-scheme: dark)';
+const DARK_QUERY = '(prefers-color-scheme: dark)';
 
 function isTheme(value: unknown): value is Theme {
     return value === 'light' || value === 'dark';
@@ -22,42 +25,75 @@ function readStoredTheme(): Theme | null {
     }
 }
 
-function systemTheme(): Theme {
-    return window.matchMedia(darkQuery).matches ? 'dark' : 'light';
+function applyTheme(value: Theme): void {
+    document.documentElement.dataset.theme = value;
 }
 
-function applyTheme(theme: Theme): void {
-    document.documentElement.dataset.theme = theme;
+// Estado compartido entre componentes. No toca window ni document al importar:
+// se inicializa en la primera llamada a useTheme().
+const theme = ref<Theme>('light');
+let initialized = false;
+// Elección manual en memoria: gana sobre el sistema aunque localStorage esté bloqueado.
+let hasManualChoice = false;
+
+function initialize(): void {
+    if (initialized) {
+        return;
+    }
+
+    initialized = true;
+    // Una sola regla: la que ya aplicó el script inline antes de pintar.
+    const current = document.documentElement.dataset.theme;
+    theme.value = isTheme(current) ? current : 'light';
+    hasManualChoice = readStoredTheme() !== null;
 }
 
-const theme = ref<Theme>(readStoredTheme() ?? systemTheme());
+function setTheme(value: Theme): void {
+    theme.value = value;
+    applyTheme(value);
+}
 
 /**
- * Tema claro u oscuro. Sin preferencia guardada sigue al sistema
- * (prefers-color-scheme); al alternar, la elección queda en el dispositivo.
+ * Tema claro u oscuro. Sin elección del usuario sigue al sistema
+ * (prefers-color-scheme); al alternar, la elección queda en el dispositivo
+ * y se sincroniza entre pestañas.
  */
 export function useTheme() {
-    const media = window.matchMedia(darkQuery);
+    initialize();
 
     const onSystemChange = (event: MediaQueryListEvent): void => {
-        if (readStoredTheme() === null) {
-            theme.value = event.matches ? 'dark' : 'light';
-            applyTheme(theme.value);
+        if (!hasManualChoice) {
+            setTheme(event.matches ? 'dark' : 'light');
         }
     };
 
+    // Otra pestaña cambió (o borró) la preferencia guardada.
+    const onStorage = (event: StorageEvent): void => {
+        if (event.key !== null && event.key !== THEME_STORAGE_KEY) {
+            return;
+        }
+
+        const stored = isTheme(event.newValue) ? event.newValue : null;
+        hasManualChoice = stored !== null;
+        setTheme(stored ?? (window.matchMedia(DARK_QUERY).matches ? 'dark' : 'light'));
+    };
+
+    let media: MediaQueryList | null = null;
+
     onMounted(() => {
-        applyTheme(theme.value);
+        media = window.matchMedia(DARK_QUERY);
         media.addEventListener('change', onSystemChange);
+        window.addEventListener('storage', onStorage);
     });
 
     onBeforeUnmount(() => {
-        media.removeEventListener('change', onSystemChange);
+        media?.removeEventListener('change', onSystemChange);
+        window.removeEventListener('storage', onStorage);
     });
 
     function toggleTheme(): void {
-        theme.value = theme.value === 'dark' ? 'light' : 'dark';
-        applyTheme(theme.value);
+        hasManualChoice = true;
+        setTheme(theme.value === 'dark' ? 'light' : 'dark');
 
         try {
             window.localStorage.setItem(THEME_STORAGE_KEY, theme.value);
