@@ -1,0 +1,31 @@
+name: Funcionalidad
+description: Algo nuevo que la app o los paneles deben hacer.
+title: "feat: "
+labels: ["type:feat"]
+body:
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: Objetivo
+      description: Qué se necesita, para quién y por qué.
+    validations:
+      required: true
+  - type: textarea
+    id: criterios
+    attributes:
+      label: Criterios de aceptación
+      description: Lista verificable. Incluye móvil, ES/EN y accesibilidad cuando aplique.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: notas
+    attributes:
+      label: Notas técnicas
+      description: Enfoque, ADR relacionado, alternativas.
+  - type: input
+    id: dependencias
+    attributes:
+      label: Depende de
+      placeholder: "#1, #2"

@@ -1,0 +1,18 @@
+/* Vení Roldanillo · tokens de marca
+   Importar en resources/css/app.css (o mapear en el @theme de Tailwind). */
+:root {
+  --veni-ciruela: #2A1638;
+  --veni-ciruela-suave: #6A5578;
+  --veni-arrebol: #F0525A;
+  --veni-mango: #F7A93B;
+  --veni-lila: #F3ECF6;
+  --veni-blanco: #FFFFFF;
+
+  --veni-font-display: 'Bricolage Grotesque', system-ui, sans-serif;
+  --veni-font-body: 'Figtree', system-ui, sans-serif;
+
+  --veni-radius-sm: 10px;
+  --veni-radius-md: 14px;
+  --veni-radius-lg: 22px;
+  --veni-touch-min: 44px;
+}

@@ -1,0 +1,17 @@
+# Laravel y Node (se completa al crear el proyecto)
+/vendor/
+/node_modules/
+/public/build/
+/public/hot
+/storage/*.key
+.env
+.env.*
+!.env.example
+.phpunit.result.cache
+/coverage/
+
+# Editores y sistema
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Reportar una vulnerabilidad
+    url: https://github.com/WokerJJ/veni-roldanillo/security/advisories/new
+    about: Las vulnerabilidades se reportan en privado, no en issues.
+  - name: Errores del mapa base (calles, nombres)
+    url: https://github.com/WokerJJ/veni-mapa/issues
+    about: El mapa base se genera en veni-mapa desde OpenStreetMap.
