@@ -34,6 +34,26 @@ Plataforma web instalable (PWA), bilingüe español/inglés, que reúne a **todo
 | Infraestructura | Docker Compose · VPS · Cloudflare (DNS, CDN, R2) |
 | Calidad | Pest · Larastan · Pint · GitHub Actions |
 
+## Desarrollo local
+
+Requisito: Docker con Docker Compose. PHP, Composer y PostgreSQL corren dentro de los contenedores.
+
+```bash
+cp .env.example .env
+docker compose build
+docker compose run --rm app php artisan key:generate   # instala las dependencias la primera vez
+docker compose up -d
+docker compose exec app php artisan migrate
+```
+
+La app queda en <http://localhost:8000>. PostgreSQL + PostGIS se publica en `127.0.0.1:5433` y Meilisearch en `127.0.0.1:7700`. La clave va antes de `up` porque Octane carga el cifrado al arrancar. Pruebas: `docker compose exec app php artisan test`.
+
+Las pruebas usan la base `veni_test` (PostgreSQL + PostGIS), que se crea sola al inicializar el volumen de `db`. Si el volumen ya existía, creala una vez (es idempotente):
+
+```bash
+docker compose exec db sh /docker-entrypoint-initdb.d/20-veni-test.sh
+```
+
 ## Documentación
 
 - [Visión y propuesta](docs/01-vision.md)

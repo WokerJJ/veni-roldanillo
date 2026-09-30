@@ -1,0 +1,41 @@
+# Archivos y carpetas ocultos (git, editores, herramientas locales),
+# salvo los que usa la compilación
+.*
+!.npmrc
+!.env.example
+
+# Documentación
+docs
+brand
+*.md
+
+# Dependencias y compilados (se instalan dentro de la imagen)
+vendor
+node_modules
+public/build
+public/hot
+public/storage
+public/frankenphp-worker.php
+
+# Secretos: nunca dentro de la imagen (el .env ya queda fuera con .*)
+auth.json
+
+# Estado local
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/testing/*
+storage/framework/views/*
+storage/pail
+bootstrap/cache/*.php
+.phpunit.cache
+.phpunit.result.cache
+coverage
+
+# Docker
+Dockerfile
+docker-compose*.yml
+
+# Pruebas (no van en la imagen de producción)
+tests
+phpunit.xml
