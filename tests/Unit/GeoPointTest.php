@@ -45,3 +45,12 @@ test('rechaza texto que no es geográfico', function () {
 test('rechaza coordenadas fuera de rango', function () {
     new GeoPoint(91, 0);
 })->throws(InvalidArgumentException::class);
+
+test('rechaza coordenadas que no son números finitos', function (float $latitude, float $longitude) {
+    new GeoPoint($latitude, $longitude);
+})->with([
+    'latitud NaN' => [NAN, -76.15],
+    'longitud NaN' => [4.41, NAN],
+    'latitud infinita' => [INF, -76.15],
+    'longitud infinita negativa' => [4.41, -INF],
+])->throws(InvalidArgumentException::class);

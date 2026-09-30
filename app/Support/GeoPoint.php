@@ -13,6 +13,11 @@ final readonly class GeoPoint
         public float $latitude,
         public float $longitude,
     ) {
+        // NaN falla todas las comparaciones y pasaría el rango: is_finite primero.
+        if (! is_finite($latitude) || ! is_finite($longitude)) {
+            throw new InvalidArgumentException('Las coordenadas deben ser números finitos.');
+        }
+
         if ($latitude < -90 || $latitude > 90 || $longitude < -180 || $longitude > 180) {
             throw new InvalidArgumentException('Coordenadas fuera de rango.');
         }

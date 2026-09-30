@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\ClaimStatus;
+use App\Enums\PaymentMethod;
 use App\Enums\RestaurantPlan;
 use App\Enums\RestaurantRole;
 use App\Enums\RestaurantStatus;
@@ -22,21 +23,92 @@ use App\Models\SpecialHour;
 use App\Models\User;
 use App\Support\GeoPoint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
-test('un restaurante pertenece a una categoría y castea estado y plan a enums', function () {
-    $category = Category::factory()->create();
-    $restaurant = Restaurant::factory()->for($category)->create();
+test('un restaurante tiene varias categorías y castea estado y plan a enums', function () {
+    [$typical, $grill] = Category::factory()->count(2)->create();
+    $restaurant = Restaurant::factory()->hasAttached($typical)->hasAttached($grill)->create();
+    $other = Restaurant::factory()->hasAttached($grill)->create();
 
     $fresh = Restaurant::query()->findOrFail($restaurant->id);
 
-    expect($fresh->category?->is($category))->toBeTrue()
-        ->and($category->restaurants()->pluck('id')->all())->toBe([$restaurant->id])
+    expect($fresh->categories()->pluck('categories.id')->sort()->values()->all())->toBe([$typical->id, $grill->id])
+        ->and($typical->restaurants()->pluck('restaurants.id')->all())->toBe([$restaurant->id])
+        ->and($grill->restaurants()->pluck('restaurants.id')->sort()->values()->all())->toBe([$restaurant->id, $other->id])
         ->and($fresh->status)->toBe(RestaurantStatus::Unclaimed)
-        ->and($fresh->plan)->toBe(RestaurantPlan::Free)
-        ->and($fresh->payment_methods)->toBeArray();
+        ->and($fresh->plan)->toBe(RestaurantPlan::Free);
+});
+
+test('los medios de pago son una colección del enum PaymentMethod', function () {
+    $restaurant = Restaurant::factory()->create(['payment_methods' => [PaymentMethod::Cash, PaymentMethod::Nequi]]);
+
+    $methods = Restaurant::query()->findOrFail($restaurant->id)->payment_methods;
+
+    expect($methods)->toBeInstanceOf(Collection::class)
+        ->and($methods?->all())->toBe([PaymentMethod::Cash, PaymentMethod::Nequi])
+        ->and(DB::table('restaurants')->where('id', $restaurant->id)->value('payment_methods'))->toBe('["cash", "nequi"]');
+});
+
+test('el WhatsApp se normaliza a 57 y diez dígitos', function (?string $input, ?string $stored) {
+    $restaurant = Restaurant::factory()->create(['whatsapp' => $input]);
+
+    expect(DB::table('restaurants')->where('id', $restaurant->id)->value('whatsapp'))->toBe($stored)
+        ->and($restaurant->fresh()?->whatsapp)->toBe($stored);
+})->with([
+    'con + y espacios' => ['+57 300 123 4567', '573001234567'],
+    'con guiones' => ['57-300-123-4567', '573001234567'],
+    'celular sin indicativo' => ['300 123 4567', '573001234567'],
+    'con paréntesis y puntos' => ['(+57) 300.123.4567', '573001234567'],
+    'ya normalizado' => ['573001234567', '573001234567'],
+    'vacío' => ['  ', null],
+    'nulo' => [null, null],
+]);
+
+test('los platos se crean desde el restaurante, con una sección suya', function () {
+    $section = MenuSection::factory()->create();
+
+    $dish = $section->restaurant->dishes()->create([
+        'menu_section_id' => $section->id,
+        'name_es' => 'Plato de prueba',
+        'price' => 12000,
+    ]);
+
+    expect($dish->restaurant_id)->toBe($section->restaurant_id)
+        ->and((new Dish)->isFillable('restaurant_id'))->toBeFalse()
+        ->and((new Restaurant)->isFillable('slug'))->toBeFalse();
+});
+
+test('secciones, platos, grupos y opciones salen en un orden estable', function () {
+    $restaurant = Restaurant::factory()->create();
+    $sections = MenuSection::factory()->count(3)->for($restaurant)->create(['position' => 0]);
+    $dishes = Dish::factory()->count(3)->for($sections[0])->create(['position' => 0]);
+    $groups = OptionGroup::factory()->count(3)->for($dishes[0])->create(['position' => 0]);
+    $options = Option::factory()->count(3)->for($groups[0])->create(['position' => 0]);
+
+    // Actualizar la primera fila la mueve al final del heap: sin desempate por
+    // id, PostgreSQL puede devolver los empates en cualquier orden.
+    foreach ([$sections[0], $dishes[0], $groups[0], $options[0]] as $first) {
+        $first->touch();
+    }
+
+    $relations = [
+        [$restaurant->menuSections(), $sections],
+        [$sections[0]->dishes(), $dishes],
+        [$dishes[0]->optionGroups(), $groups],
+        [$groups[0]->options(), $options],
+    ];
+
+    foreach ($relations as [$relation, $expected]) {
+        $orders = collect($relation->getQuery()->getQuery()->orders)
+            ->map(fn (array $order) => $order['column'].' '.$order['direction'])
+            ->all();
+
+        expect($orders)->toBe(['position asc', 'id asc'])
+            ->and($relation->pluck('id')->all())->toBe($expected->pluck('id')->all());
+    }
 });
 
 test('la ubicación se guarda como geography y vuelve como GeoPoint', function () {
