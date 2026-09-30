@@ -2,9 +2,9 @@
 
 namespace Database\Factories;
 
+use App\Enums\PaymentMethod;
 use App\Enums\RestaurantPlan;
 use App\Enums\RestaurantStatus;
-use App\Models\Category;
 use App\Models\Restaurant;
 use App\Support\GeoPoint;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -37,7 +37,6 @@ class RestaurantFactory extends Factory
         return [
             'name' => "Restaurante de Prueba {$base} (ficticio)",
             'slug' => Str::slug("prueba {$base} {$n}"),
-            'category_id' => Category::factory(),
             'description_es' => 'Ficha de ejemplo para desarrollo. No corresponde a un negocio real.',
             'description_en' => 'Sample listing for development. Not a real business.',
             'address' => 'Calle de Prueba # '.fake()->numberBetween(1, 20).'-'.fake()->numberBetween(1, 99),
@@ -47,7 +46,7 @@ class RestaurantFactory extends Factory
             'whatsapp' => '570000'.fake()->numerify('######'),
             'price_level' => fake()->numberBetween(1, 4),
             'delivery' => fake()->boolean(),
-            'payment_methods' => fake()->randomElements(['cash', 'nequi', 'daviplata', 'card'], fake()->numberBetween(1, 3)),
+            'payment_methods' => fake()->randomElements(PaymentMethod::cases(), fake()->numberBetween(1, 3)),
             'status' => RestaurantStatus::Unclaimed,
             'plan' => RestaurantPlan::Free,
             'is_fictitious' => true,

@@ -13,8 +13,6 @@ return new class extends Migration
             $table->id();
             $table->string('name', 120);
             $table->string('slug', 140)->unique();
-            // Restrict: borrar una categoría en uso dejaría fichas sin filtro.
-            $table->foreignId('category_id')->nullable()->constrained()->restrictOnDelete();
             $table->text('description_es')->nullable();
             $table->text('description_en')->nullable();
             // Dirección pública del negocio (no del usuario: esas nunca llegan al servidor).
@@ -23,7 +21,8 @@ return new class extends Migration
             // PostGIS geography(Point,4326): distancias en metros sin proyectar.
             $table->geography('location', 'point', 4326);
             $table->string('phone', 20)->nullable();
-            // Número para wa.me: solo dígitos con indicativo (57…), sin «+».
+            // Celular colombiano para wa.me: 57 + diez dígitos, sin «+» (el
+            // modelo normaliza lo que escriba el dueño).
             $table->string('whatsapp', 15)->nullable();
             $table->smallInteger('price_level')->nullable();
             $table->boolean('delivery')->default(false);
@@ -38,15 +37,34 @@ return new class extends Migration
             $table->boolean('is_fictitious')->default(false);
             $table->timestampsTz();
 
+            // Sin índice en status: el sitio filtra «todas menos las ocultas»
+            // (status <> 'hidden'), que casi no descarta filas y un B-tree no
+            // acelera. Si hace falta, uno parcial WHERE status = 'hidden'.
             $table->spatialIndex('location');
-            $table->index('status');
-            $table->index(['category_id', 'status']);
         });
 
         DB::statement("ALTER TABLE restaurants ADD CONSTRAINT restaurants_slug_format CHECK (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$')");
-        DB::statement("ALTER TABLE restaurants ADD CONSTRAINT restaurants_whatsapp_format CHECK (whatsapp ~ '^[0-9]{10,15}$')");
+        DB::statement("ALTER TABLE restaurants ADD CONSTRAINT restaurants_whatsapp_format CHECK (whatsapp ~ '^57[0-9]{10}$')");
         DB::statement('ALTER TABLE restaurants ADD CONSTRAINT restaurants_price_level_range CHECK (price_level BETWEEN 1 AND 4)');
         DB::statement("ALTER TABLE restaurants ADD CONSTRAINT restaurants_payment_methods_array CHECK (jsonb_typeof(payment_methods) = 'array')");
+        // Mismos valores que el enum PaymentMethod; añadir uno exige migración.
+        DB::statement(<<<'SQL'
+            ALTER TABLE restaurants ADD CONSTRAINT restaurants_payment_methods_known
+            CHECK (payment_methods <@ '["cash", "nequi", "daviplata", "card"]'::jsonb)
+            SQL);
+
+        // Tipos de comida de cada restaurante (puede tener varios).
+        Schema::create('category_restaurant', function (Blueprint $table) {
+            // Restrict: borrar una categoría en uso dejaría fichas sin filtro.
+            $table->foreignId('category_id')->constrained()->restrictOnDelete();
+            $table->foreignId('restaurant_id')->constrained()->cascadeOnDelete();
+
+            // La PK (category_id, restaurant_id) sirve al filtro por categoría;
+            // el índice de restaurant_id, a las categorías de una ficha y al
+            // borrado en cascada.
+            $table->primary(['category_id', 'restaurant_id']);
+            $table->index('restaurant_id');
+        });
 
         // Dueños y empleados de cada restaurante.
         Schema::create('restaurant_user', function (Blueprint $table) {
@@ -69,12 +87,25 @@ return new class extends Migration
             $table->time('opens_at');
             $table->time('closes_at');
             $table->timestampsTz();
-
-            $table->unique(['restaurant_id', 'weekday', 'opens_at']);
         });
 
         DB::statement('ALTER TABLE opening_hours ADD CONSTRAINT opening_hours_weekday_range CHECK (weekday BETWEEN 0 AND 6)');
         DB::statement('ALTER TABLE opening_hours ADD CONSTRAINT opening_hours_not_empty CHECK (opens_at <> closes_at)');
+        // Sin franjas solapadas en el mismo día. Cada franja es un rango sobre
+        // una fecha fija; si pasa la medianoche termina al día siguiente. Los
+        // rangos son [apertura, cierre): 11-15 y 15-18 no se solapan. El
+        // índice GiST de la restricción también sirve para buscar por
+        // restaurante y día (btree_gist aporta la igualdad).
+        DB::statement(<<<'SQL'
+            ALTER TABLE opening_hours ADD CONSTRAINT opening_hours_no_overlap EXCLUDE USING gist (
+                restaurant_id WITH =,
+                weekday WITH =,
+                tsrange(
+                    DATE '2000-01-01' + opens_at,
+                    DATE '2000-01-01' + closes_at + CASE WHEN closes_at < opens_at THEN interval '1 day' ELSE interval '0' END
+                ) WITH &&
+            )
+            SQL);
 
         // Excepciones por fecha: festivos, cierres temporales, horario distinto.
         Schema::create('special_hours', function (Blueprint $table) {
@@ -87,8 +118,6 @@ return new class extends Migration
             $table->string('note_es', 160)->nullable();
             $table->string('note_en', 160)->nullable();
             $table->timestampsTz();
-
-            $table->unique(['restaurant_id', 'on_date', 'opens_at'])->nullsNotDistinct();
         });
 
         // Cerrado sin horas, o abierto con ambas horas.
@@ -96,6 +125,22 @@ return new class extends Migration
             (closed AND opens_at IS NULL AND closes_at IS NULL)
             OR (NOT closed AND opens_at IS NOT NULL AND closes_at IS NOT NULL AND opens_at <> closes_at)
         )');
+        // Por fecha: o un solo «cerrado», o franjas que no se solapan. Un día
+        // cerrado ocupa el rango completo (dos días, por las franjas que pasan
+        // la medianoche), así que choca con cualquier otra fila de esa fecha.
+        DB::statement(<<<'SQL'
+            ALTER TABLE special_hours ADD CONSTRAINT special_hours_no_overlap EXCLUDE USING gist (
+                restaurant_id WITH =,
+                on_date WITH =,
+                (CASE WHEN closed
+                    THEN tsrange(TIMESTAMP '2000-01-01', TIMESTAMP '2000-01-03')
+                    ELSE tsrange(
+                        DATE '2000-01-01' + opens_at,
+                        DATE '2000-01-01' + closes_at + CASE WHEN closes_at < opens_at THEN interval '1 day' ELSE interval '0' END
+                    )
+                END) WITH &&
+            )
+            SQL);
     }
 
     public function down(): void
@@ -103,6 +148,7 @@ return new class extends Migration
         Schema::dropIfExists('special_hours');
         Schema::dropIfExists('opening_hours');
         Schema::dropIfExists('restaurant_user');
+        Schema::dropIfExists('category_restaurant');
         Schema::dropIfExists('restaurants');
     }
 };

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Casts\AsGeoPoint;
+use App\Enums\PaymentMethod;
 use App\Enums\RestaurantPlan;
 use App\Enums\RestaurantRole;
 use App\Enums\RestaurantStatus;
@@ -10,16 +11,21 @@ use Database\Factories\RestaurantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\AsEnumCollection;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Ficha de un restaurante. status, plan, verified_at e is_fictitious quedan
- * fuera de $fillable: los cambia el sistema o un administrador, nunca un
- * formulario del dueño.
+ * Ficha de un restaurante. slug, status, plan, verified_at e is_fictitious
+ * quedan fuera de $fillable: los cambia el sistema o un administrador, nunca
+ * un formulario del dueño (el slug es la URL pública de la ficha).
+ *
+ * Domicilios: delivery_zones manda. Si el restaurante tiene zonas, lleva a
+ * esos barrios con ese costo; delivery solo dice que hace domicilios mientras
+ * no haya zonas cargadas (costo por consultar).
  *
  * Larastan tipa las columnas enum de la migración como literales e ignora el
  * cast; los @property fijan el tipo del enum PHP.
@@ -28,7 +34,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property RestaurantPlan $plan
  */
 #[Fillable([
-    'name', 'slug', 'category_id', 'description_es', 'description_en',
+    'name', 'description_es', 'description_en',
     'address', 'reference', 'location', 'phone', 'whatsapp', 'price_level',
     'delivery', 'delivery_notes_es', 'delivery_notes_en', 'payment_methods',
 ])]
@@ -55,7 +61,7 @@ class Restaurant extends Model
             'location' => AsGeoPoint::class,
             'price_level' => 'integer',
             'delivery' => 'boolean',
-            'payment_methods' => 'array',
+            'payment_methods' => AsEnumCollection::of(PaymentMethod::class),
             'status' => RestaurantStatus::class,
             'plan' => RestaurantPlan::class,
             'verified_at' => 'datetime',
@@ -75,10 +81,38 @@ class Restaurant extends Model
         $query->where('status', '!=', RestaurantStatus::Hidden->value);
     }
 
-    /** @return BelongsTo<Category, $this> */
-    public function category(): BelongsTo
+    /**
+     * WhatsApp para wa.me: quita espacios, «+», guiones, puntos y paréntesis,
+     * y antepone 57 a un celular de diez dígitos (empieza por 3). Lo que no
+     * quede como 57 + diez dígitos lo rechaza el CHECK de la base.
+     *
+     * @return Attribute<never, string|null>
+     */
+    protected function whatsapp(): Attribute
     {
-        return $this->belongsTo(Category::class);
+        return Attribute::make(set: function (?string $value): ?string {
+            if ($value === null) {
+                return null;
+            }
+
+            $digits = (string) preg_replace('/[\s+\-.()]/', '', $value);
+
+            if ($digits === '') {
+                return null;
+            }
+
+            if (strlen($digits) === 10 && str_starts_with($digits, '3')) {
+                return '57'.$digits;
+            }
+
+            return $digits;
+        });
+    }
+
+    /** @return BelongsToMany<Category, $this> */
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class);
     }
 
     /**
@@ -113,13 +147,22 @@ class Restaurant extends Model
         return $this->hasMany(SpecialHour::class);
     }
 
-    /** @return HasMany<MenuSection, $this> */
+    /**
+     * Desempate por id: con la misma posición el orden sería arbitrario.
+     *
+     * @return HasMany<MenuSection, $this>
+     */
     public function menuSections(): HasMany
     {
-        return $this->hasMany(MenuSection::class)->orderBy('position');
+        return $this->hasMany(MenuSection::class)->orderBy('position')->orderBy('id');
     }
 
-    /** @return HasMany<Dish, $this> */
+    /**
+     * Único camino para crear platos (restaurant_id no es asignable):
+     * $restaurant->dishes()->create([...]). Ver Dish.
+     *
+     * @return HasMany<Dish, $this>
+     */
     public function dishes(): HasMany
     {
         return $this->hasMany(Dish::class);
