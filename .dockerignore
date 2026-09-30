@@ -7,6 +7,9 @@
 # Documentación
 docs
 brand
+# La compilación de Vite usa los tokens y los logos de la marca
+!brand/tokens.css
+!brand/logo
 *.md
 
 # Dependencias y compilados (se instalan dentro de la imagen)

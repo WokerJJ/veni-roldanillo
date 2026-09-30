@@ -69,8 +69,11 @@ WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci
 
-COPY vite.config.js ./
+COPY vite.config.ts tsconfig.json ./
 COPY resources ./resources
+# Tokens y logos de la marca que importan el CSS y los componentes.
+COPY brand/tokens.css ./brand/tokens.css
+COPY brand/logo ./brand/logo
 RUN npm run build
 
 # ---------------------------------------------------------------------------
