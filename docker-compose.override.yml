@@ -17,6 +17,10 @@ x-app-dev: &app-dev
 services:
   app:
     <<: *app-dev
+    # En Docker Desktop (Windows/macOS) el primer composer install sobre el
+    # volumen montado es lento: más margen antes de contar fallos del healthcheck.
+    healthcheck:
+      start_period: 120s
 
   worker:
     <<: *app-dev
