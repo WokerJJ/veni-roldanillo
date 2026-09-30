@@ -1,0 +1,190 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Solo en PR: en main cada push termina su corrida y deja su resultado.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GITLEAKS_VERSION: 8.30.1
+  # gitleaks_8.30.1_linux_x64.tar.gz según gitleaks_8.30.1_checksums.txt de la release.
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  ACTIONLINT_VERSION: 1.7.12
+  # actionlint_1.7.12_linux_amd64.tar.gz según actionlint_1.7.12_checksums.txt de la release.
+  ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+
+jobs:
+  # Laravel sobre la misma base que en local: PostgreSQL + PostGIS con veni_test.
+  backend:
+    name: Backend (Pint, Larastan, Pest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      db:
+        image: postgis/postgis:18-3.6
+        env:
+          # La imagen instala PostGIS en POSTGRES_DB al inicializar.
+          POSTGRES_DB: veni_test
+          POSTGRES_USER: veni
+          POSTGRES_PASSWORD: clave-solo-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U veni -d veni_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Las variables del entorno ganan sobre el .env (Dotenv inmutable).
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_USERNAME: veni
+      DB_PASSWORD: clave-solo-ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Mismas extensiones que la imagen de FrankenPHP (Dockerfile).
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          extensions: bcmath, intl, pcntl, pdo_pgsql, zip
+          coverage: none
+          tools: composer:v2
+      - name: Directorio de caché de Composer
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >>"$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+      - name: Dependencias
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Entorno
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi
+      - name: Pint
+        run: composer lint
+      - name: Larastan
+        run: composer analyse -- --no-progress --error-format=github
+      - name: Pest
+        run: composer test
+
+  frontend:
+    name: Frontend (ESLint, vue-tsc, Vitest, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Dependencias
+        run: npm ci --no-fund
+      - name: ESLint
+        run: npm run lint
+      - name: Tipos (vue-tsc)
+        run: npm run typecheck
+      - name: Vitest
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  # Seguridad en cada PR y push: un aviso o un secreto bloquea ci-ok. La
+  # revisión semanal de avisos nuevos vive aparte, en security.yml.
+  composer-audit:
+    name: composer audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+      # --locked revisa composer.lock sin instalar dependencias.
+      - name: Avisos de seguridad de Composer
+        run: composer audit --locked
+
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Avisos de seguridad de npm (high o más)
+        run: npm audit --audit-level=high
+
+  # CLI de gitleaks (licencia MIT) en lugar de gitleaks-action: no pide licencia
+  # ni permisos para comentar en los PR. Se verifica el SHA-256 del binario.
+  gitleaks:
+    name: Secretos (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Todo el historial: un secreto borrado en un commit posterior sigue filtrado.
+          fetch-depth: 0
+      - name: Instalar gitleaks
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$archive"
+          echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+      - name: Escanear el historial
+        run: |
+          "$RUNNER_TEMP/gitleaks" git --redact --verbose --exit-code 1 .
+
+  # Revisa los propios workflows: sintaxis, expresiones y shellcheck de los run.
+  actionlint:
+    name: Workflows (actionlint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Instalar actionlint
+        run: |
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/$archive"
+          echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" actionlint
+      - name: Revisar los workflows
+        run: |
+          "$RUNNER_TEMP/actionlint" -color
+
+  # Único check obligatorio en la protección de main: agrega el resultado de
+  # todos los jobs, así sumar jobs nuevos no obliga a tocar la protección.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [backend, frontend, composer-audit, npm-audit, gitleaks, actionlint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Todos los jobs pasaron
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Resultados: $RESULTS"
+          for result in $RESULTS; do
+            if [[ "$result" != "success" ]]; then
+              echo "::error::Algún job no terminó en success ($result)"
+              exit 1
+            fi
+          done

@@ -1,50 +1,37 @@
 <?php
 
-namespace Tests\Feature;
-
 use Illuminate\Encryption\MissingAppKeyException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
-use PDOException;
-use Tests\TestCase;
 
-class HealthCheckTest extends TestCase
-{
-    protected function setUp(): void
-    {
-        parent::setUp();
+beforeEach(function () {
+    // En producción /up reporta el fallo y responde 500; con debug activo
+    // relanzaría la excepción hacia la página de error de desarrollo.
+    config(['app.debug' => false]);
+    Exceptions::fake();
+});
 
-        // En producción /up reporta el fallo y responde 500; con debug activo
-        // relanzaría la excepción hacia la página de error de desarrollo.
-        config(['app.debug' => false]);
-        Exceptions::fake();
-    }
+test('/up responde 200 cuando la aplicación está sana', function () {
+    $this->get('/up')->assertOk();
 
-    public function test_up_returns_200_when_the_application_is_healthy(): void
-    {
-        $this->get('/up')->assertOk();
+    Exceptions::assertNothingReported();
+});
 
-        Exceptions::assertNothingReported();
-    }
+test('/up responde 500 sin clave de la aplicación', function () {
+    config(['app.key' => '']);
 
-    public function test_up_returns_500_without_an_application_key(): void
-    {
-        config(['app.key' => '']);
+    $this->get('/up')->assertInternalServerError();
 
-        $this->get('/up')->assertInternalServerError();
+    Exceptions::assertReported(MissingAppKeyException::class);
+});
 
-        Exceptions::assertReported(MissingAppKeyException::class);
-    }
+test('/up responde 500 cuando la base de datos no responde', function () {
+    $connection = DB::getDefaultConnection();
 
-    public function test_up_returns_500_when_the_database_is_unreachable(): void
-    {
-        $connection = DB::getDefaultConnection();
+    config(["database.connections.{$connection}.host" => 'host-inexistente.invalid']);
+    DB::purge($connection);
 
-        config(["database.connections.{$connection}.host" => 'host-inexistente.invalid']);
-        DB::purge($connection);
+    $this->get('/up')->assertInternalServerError();
 
-        $this->get('/up')->assertInternalServerError();
-
-        Exceptions::assertReported(PDOException::class);
-    }
-}
+    Exceptions::assertReported(PDOException::class);
+});

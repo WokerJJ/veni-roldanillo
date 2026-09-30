@@ -4,6 +4,11 @@
 
 <p align="center"><strong>Vení, comamos en Roldanillo</strong> · <em>Come eat in Roldanillo</em></p>
 
+<p align="center">
+  <a href="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/ci.yml"><img src="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/security.yml"><img src="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/security.yml/badge.svg?branch=main" alt="Seguridad"></a>
+</p>
+
 Plataforma web instalable (PWA), bilingüe español/inglés, que reúne a **todos los restaurantes de Roldanillo** (Valle del Cauca, Colombia) con menús, precios, mapa, horarios y calificaciones confiables, y permite **pedir a domicilio por WhatsApp sin comisiones** para el negocio.
 
 > Estado: planeación terminada, desarrollo del MVP en curso. Dominio: `veniroldanillo.co`
@@ -53,6 +58,22 @@ Las pruebas usan la base `veni_test` (PostgreSQL + PostGIS), que se crea sola al
 ```bash
 docker compose exec db sh /docker-entrypoint-initdb.d/20-veni-test.sh
 ```
+
+## Calidad
+
+Los mismos comandos corren en GitHub Actions (`ci.yml`); el check `ci-ok` resume todos los jobs.
+
+```bash
+docker compose exec app composer lint      # Pint (preset laravel); `composer format` corrige
+docker compose exec app composer analyse   # Larastan al nivel máximo
+docker compose exec app composer test      # Pest sobre veni_test
+npm run lint                               # ESLint
+npm run typecheck                          # vue-tsc
+npm test                                   # Vitest
+npm run build
+```
+
+`security.yml` revisa cada semana y en cada PR los avisos de `composer audit`, `npm audit` (desde high) y los secretos del historial con gitleaks.
 
 ## Documentación
 

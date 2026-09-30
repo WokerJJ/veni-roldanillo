@@ -1,0 +1,47 @@
+name: Seguridad
+
+# Revisión periódica e informativa: no corre en PR ni en push y no es un check
+# requerido. Los mismos controles (composer audit, npm audit y gitleaks) corren
+# en ci.yml y bloquean ci-ok; aquí solo se repiten los avisos de dependencias,
+# que pueden aparecer sin que cambie el código. gitleaks no se repite: el
+# historial solo cambia con un push, y ese push ya pasa por ci.yml.
+on:
+  schedule:
+    - cron: '0 11 * * 1' # lunes 06:00 en Bogotá
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  # Solo cancela en PR (hoy no dispara con PR; queda igual que ci.yml).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  composer-audit:
+    name: composer audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+      # --locked revisa composer.lock sin instalar dependencias.
+      - name: Avisos de seguridad de Composer
+        run: composer audit --locked
+
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Avisos de seguridad de npm (high o más)
+        run: npm audit --audit-level=high

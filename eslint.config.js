@@ -19,8 +19,8 @@ export default defineConfig(
             parserOptions: {
                 parser: tseslint.parser,
                 projectService: {
-                    // vite.config.ts corre en Node: usa tsconfig.node.json, no el del navegador.
-                    allowDefaultProject: ['vite.config.ts'],
+                    // vite.config.ts y vitest.config.ts corren en Node: usa tsconfig.node.json, no el del navegador.
+                    allowDefaultProject: ['vite.config.ts', 'vitest.config.ts'],
                     defaultProject: 'tsconfig.node.json',
                 },
                 tsconfigRootDir: import.meta.dirname,
@@ -43,7 +43,7 @@ export default defineConfig(
         },
     },
     {
-        files: ['vite.config.ts'],
+        files: ['vite.config.ts', 'vitest.config.ts'],
         languageOptions: { globals: globals.node },
     },
     {

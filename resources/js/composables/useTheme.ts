@@ -73,7 +73,13 @@ export function useTheme() {
             return;
         }
 
-        const stored = isTheme(event.newValue) ? event.newValue : null;
+        // Un valor desconocido no es una elección ni un borrado: se ignora
+        // para no perder la elección manual de esta pestaña.
+        if (event.newValue !== null && !isTheme(event.newValue)) {
+            return;
+        }
+
+        const stored = event.newValue;
         hasManualChoice = stored !== null;
         setTheme(stored ?? (window.matchMedia(DARK_QUERY).matches ? 'dark' : 'light'));
     };
