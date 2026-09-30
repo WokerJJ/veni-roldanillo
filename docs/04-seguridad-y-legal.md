@@ -2,7 +2,7 @@
 
 ## Seguridad
 
-- Roles: visitante, usuario verificado, dueño, empleado, moderador, administrador (spatie/laravel-permission + Policies).
+- Roles: visitante, usuario verificado, dueño, empleado, moderador, administrador. Hoy: rol global en `users.role` y dueño/empleado por restaurante, con Policies (ADR 0009); spatie/laravel-permission cuando lleguen moderadores y paneles.
 - Autorización en el servidor para todo; prevenir IDOR (un dueño no puede editar otro restaurante cambiando un ID).
 - Acceso sin contraseñas: código por WhatsApp (OTP) y passkeys; 2FA obligatorio para dueños y administradores.
 - Límites de tasa en login, envío de códigos, reseñas y reportes.

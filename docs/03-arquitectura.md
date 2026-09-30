@@ -40,30 +40,40 @@ El mapa base lo produce y publica el repositorio [veni-mapa](https://github.com/
 - Turf.js en el cliente para calcular zona de domicilio.
 - Sin geocodificación de pago: el dueño ubica su pin; el usuario elige barrio de una lista.
 
-## Modelo de datos inicial (borrador)
+## Modelo de datos
 
-| Entidad | Campos principales |
-| --- | --- |
-| `restaurants` | name, slug, category_id, description_es/en, address, reference, location (geography point), phone, whatsapp, price_level, delivery (bool), delivery_notes, payment_methods (json), status (unclaimed/claimed/hidden), plan (free/featured), verified_at, updated_by_owner_at |
-| `opening_hours` | restaurant_id, weekday, opens_at, closes_at |
-| `special_hours` | restaurant_id, date, opens_at, closes_at, closed (bool), note |
-| `menu_sections` | restaurant_id, name_es/en, position |
-| `dishes` | restaurant_id, menu_section_id, name_es/en, description_es/en, price, photo, tags (json), available (bool), sold_out_until (date) |
-| `option_groups` | dish_id, name_es/en, required (bool), min, max |
-| `options` | option_group_id, name_es/en, price_delta |
-| `daily_menus` | restaurant_id, date, description_es/en, price |
-| `promotions` | restaurant_id, title_es/en, starts_at, ends_at |
-| `delivery_zones` | restaurant_id, neighborhood_id, fee |
-| `neighborhoods` | name, area (geography polygon) |
-| `users` | phone (verificado), alias, locale, role, trust_score |
-| `restaurant_user` | restaurant_id, user_id, role (owner/staff) |
-| `order_intents` | restaurant_id, user_id (nullable), device_hash, created_at, confirmed (null/yes/no) |
-| `reviews` | restaurant_id, user_id, rating, tags (json), body, photo, verification (order/visit/nfc/none), weight, status (published/held/removed), locale |
-| `dish_votes` | review_id, dish_id, vote (+1/-1) |
-| `review_replies` | review_id, user_id, body |
-| `private_feedback` | review_id, body |
-| `nfc_tags` | restaurant_id, uid, key_ref, last_counter |
-| `visits` | user_id, restaurant_id, method (gps/nfc), verified (bool), created_at — sin coordenadas |
-| `audit log` | spatie/laravel-activitylog |
+Implementado en la Fase 0 (#6); decisiones en el ADR 0009. Convenciones: precios en pesos colombianos enteros (sin decimales, `CHECK >= 0`); fechas `timestamp with time zone` (la sesión de PostgreSQL usa la zona de la aplicación); estados como `varchar` con `CHECK` y enums PHP en los modelos; campos traducibles `_es` (obligatorio) y `_en` (opcional); `is_fictitious` marca los datos de ejemplo.
 
-Nota: `order_intents` no guarda direcciones ni contenido del pedido; solo que hubo intención de pedir.
+| Tabla | Campos principales | Restricciones e índices |
+| --- | --- | --- |
+| `categories` | slug, name_es/en, position | slug único con formato |
+| `neighborhoods` | name, slug, area (geography MultiPolygon, opcional), is_fictitious | name y slug únicos; GiST en area |
+| `restaurants` | name, slug, category_id, description_es/en, address, reference, location (geography Point 4326), phone, whatsapp, price_level, delivery, delivery_notes_es/en, payment_methods (jsonb), status (unclaimed/claimed/hidden), plan (free/featured), verified_at, updated_by_owner_at, is_fictitious | slug único con formato; GiST en location; índices en status y (category_id, status); whatsapp solo dígitos; price_level 1-4; categoría con `RESTRICT` |
+| `restaurant_user` | restaurant_id, user_id, role (owner/staff) | PK compuesta; cascada |
+| `opening_hours` | restaurant_id, weekday (0 = domingo), opens_at, closes_at | varias franjas por día; puede pasar la medianoche |
+| `special_hours` | restaurant_id, on_date, closed, opens_at, closes_at, note_es/en | cerrado sin horas o abierto con ambas |
+| `menu_sections` | restaurant_id, name_es/en, position | |
+| `dishes` | restaurant_id, menu_section_id, name_es/en, description_es/en, price, photo_path, tags (jsonb), available, sold_out_until, position | FK compuesta (sección del mismo restaurante) |
+| `option_groups` | dish_id, name_es/en, required, min_choices, max_choices, position | obligatorio si y solo si min_choices >= 1; max >= min |
+| `options` | option_group_id, name_es/en, price_delta, available, position | price_delta >= 0 |
+| `daily_menus` | restaurant_id, served_on, description_es/en, price | único por restaurante y fecha; índice en served_on |
+| `promotions` | restaurant_id, title_es/en, starts_at, ends_at | ends_at > starts_at |
+| `delivery_zones` | restaurant_id, neighborhood_id, fee | único por restaurante y barrio; barrio con `RESTRICT` |
+| `restaurant_claims` | restaurant_id, user_id, status (pending/approved/rejected), message, reviewed_by, reviewed_at | una pendiente por usuario y restaurante; resuelta si y solo si tiene reviewed_at |
+| `order_intents` | restaurant_id, user_id (nullable), device_hash, confirmed (null/sí/no), created_at | sin direcciones, contenido del pedido ni ubicación; al borrar el usuario queda anónima |
+| `users` | + role (user/admin), locale (es/en) | ser dueño o empleado va en `restaurant_user` |
+
+Autorización: `RestaurantPolicy` (el dueño solo edita el suyo; el administrador todo; borrar solo el administrador).
+
+### Pendiente para fases posteriores
+
+| Tabla | Campos principales | Cuándo |
+| --- | --- | --- |
+| `users` | phone (verificado), alias, trust_score | acceso por código de WhatsApp y reseñas |
+| `reviews` | restaurant_id, user_id, rating, tags (json), body, photo, verification (order/visit/nfc/none), weight, status (published/held/removed), locale | reseñas verificadas (ADR 0005) |
+| `dish_votes` | review_id, dish_id, vote (+1/-1) | reseñas |
+| `review_replies` | review_id, user_id, body | reseñas |
+| `private_feedback` | review_id, body | reseñas |
+| `nfc_tags` | restaurant_id, uid, key_ref, last_counter | verificación por NFC |
+| `visits` | user_id, restaurant_id, method (gps/nfc), verified (bool), created_at — sin coordenadas | verificación de visitas |
+| `audit log` | spatie/laravel-activitylog | paneles de dueño y administración |
