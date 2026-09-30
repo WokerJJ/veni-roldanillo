@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Laravel sobre la misma base que en local: PostgreSQL + PostGIS con veni_test.
+  backend:
+    name: Backend (Pint, Larastan, Pest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      db:
+        image: postgis/postgis:18-3.6
+        env:
+          # La imagen instala PostGIS en POSTGRES_DB al inicializar.
+          POSTGRES_DB: veni_test
+          POSTGRES_USER: veni
+          POSTGRES_PASSWORD: clave-solo-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U veni -d veni_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      # Las variables del entorno ganan sobre el .env (Dotenv inmutable).
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_USERNAME: veni
+      DB_PASSWORD: clave-solo-ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Mismas extensiones que la imagen de FrankenPHP (Dockerfile).
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          extensions: bcmath, intl, pcntl, pdo_pgsql, zip
+          coverage: none
+          tools: composer:v2
+      - name: Directorio de caché de Composer
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >>"$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+      - name: Dependencias
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Entorno
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi
+      - name: Pint
+        run: composer lint
+      - name: Larastan
+        run: composer analyse -- --no-progress --error-format=github
+      - name: Pest
+        run: composer test
+
+  frontend:
+    name: Frontend (ESLint, vue-tsc, Vitest, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Dependencias
+        run: npm ci --no-fund
+      - name: ESLint
+        run: npm run lint
+      - name: Tipos (vue-tsc)
+        run: npm run typecheck
+      - name: Vitest
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  # Único check obligatorio en la protección de main: agrega el resultado de
+  # todos los jobs, así sumar jobs nuevos no obliga a tocar la protección.
+  ci-ok:
+    name: ci-ok
+    if: always()
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Todos los jobs pasaron
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Resultados: $RESULTS"
+          for result in $RESULTS; do
+            if [[ "$result" != "success" ]]; then
+              echo "::error::Algún job no terminó en success ($result)"
+              exit 1
+            fi
+          done
