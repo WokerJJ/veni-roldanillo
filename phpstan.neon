@@ -1,0 +1,20 @@
+# Larastan al nivel máximo (10): con tan poco código cuesta dos correcciones, y
+# subirlo más adelante obligaría a arreglar o ignorar cada regla de golpe.
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: max
+    paths:
+        - app
+        - bootstrap/app.php
+        - config
+        - database
+        - routes
+    tmpDir: storage/framework/cache/phpstan
+    ignoreErrors:
+        # Route::inertia() es un macro de inertia-laravel: PHPStan lo ve como mixed.
+        -
+            identifier: method.nonObject
+            message: '#^Cannot call method name\(\) on mixed\.$#'
+            path: routes/web.php
