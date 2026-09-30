@@ -15,11 +15,6 @@ $tables = [
     'daily_menus', 'promotions', 'delivery_zones', 'restaurant_claims', 'order_intents',
 ];
 
-function installedExtensions(): array
-{
-    return collect(DB::select('SELECT extname FROM pg_extension'))->pluck('extname')->all();
-}
-
 test('las migraciones suben, bajan por completo y vuelven a subir', function () use ($tables) {
     $this->artisan('migrate:fresh')->assertSuccessful();
 
@@ -39,20 +34,29 @@ test('las migraciones suben, bajan por completo y vuelven a subir', function () 
     expect(Schema::hasTable('restaurants'))->toBeTrue();
 });
 
-test('la primera migración instala PostGIS y btree_gist', function () {
-    $this->artisan('migrate:fresh')->assertSuccessful();
-    $this->artisan('migrate:reset')->assertSuccessful();
+test('la primera migración instala PostGIS y btree_gist en una base nueva', function () {
+    // Una base creada desde template0 no trae extensiones, como una base
+    // gestionada en producción. No se quitan extensiones de la base de
+    // pruebas: la imagen postgis/postgis instala otras que dependen de ellas.
+    $database = 'veni_extensiones_'.bin2hex(random_bytes(4));
+    DB::statement("CREATE DATABASE {$database} TEMPLATE template0");
+    config(['database.connections.pgsql_nueva' => [...config('database.connections.pgsql'), 'database' => $database]]);
 
-    // Sin tablas que dependan de ellas, se pueden quitar para comprobar que
-    // las migraciones las vuelven a crear (una base nueva no las trae).
-    DB::statement('DROP EXTENSION IF EXISTS btree_gist');
-    DB::statement('DROP EXTENSION IF EXISTS postgis');
+    try {
+        $before = collect(DB::connection('pgsql_nueva')->select('SELECT extname FROM pg_extension'))->pluck('extname');
+        expect($before)->not->toContain('postgis');
 
-    expect(installedExtensions())->not->toContain('postgis');
+        $this->artisan('migrate', [
+            '--database' => 'pgsql_nueva',
+            '--path' => 'database/migrations/0000_00_00_000000_enable_postgis_extensions.php',
+        ])->assertSuccessful();
 
-    $this->artisan('migrate')->assertSuccessful();
-
-    expect(installedExtensions())->toContain('postgis', 'btree_gist');
+        $after = collect(DB::connection('pgsql_nueva')->select('SELECT extname FROM pg_extension'))->pluck('extname');
+        expect($after)->toContain('postgis', 'btree_gist');
+    } finally {
+        DB::purge('pgsql_nueva');
+        DB::statement("DROP DATABASE IF EXISTS {$database} WITH (FORCE)");
+    }
 });
 
 test('el down de users deja la tabla como antes', function () {
