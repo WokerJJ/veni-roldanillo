@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils';
+import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent } from 'vue';
 
@@ -61,6 +61,10 @@ function dispatchStorage(key: string | null, newValue: string | null): void {
 function appliedTheme(): string | undefined {
     return document.documentElement.dataset.theme;
 }
+
+// Desmonta cada componente al terminar: si no, los listeners de storage de
+// copias anteriores del módulo siguen vivos y tocan data-theme en otras pruebas.
+enableAutoUnmount(afterEach);
 
 beforeEach(() => {
     vi.resetModules();
@@ -150,14 +154,35 @@ describe('useTheme', () => {
     });
 
     it('ignora cambios de otras claves y valores inválidos', async () => {
-        fakeSystemTheme(false);
+        fakeSystemTheme(true);
+        // Arranca oscuro y sin elección: un valor que se tomara por válido o
+        // que devolviera al sistema dejaría algo distinto de 'light'.
+        document.documentElement.dataset.theme = 'dark';
         const { api, key } = await mountTheme();
+        api.toggleTheme();
+        expect(api.theme.value).toBe('light');
 
         dispatchStorage('otra:clave', 'dark');
         expect(api.theme.value).toBe('light');
 
         dispatchStorage(key, 'violeta');
         expect(api.theme.value).toBe('light');
+        expect(appliedTheme()).toBe('light');
+    });
+
+    it('un valor inválido de otra pestaña no borra la elección manual', async () => {
+        const system = fakeSystemTheme(false);
+        const { api, key } = await mountTheme();
+        api.toggleTheme();
+        expect(api.theme.value).toBe('dark');
+
+        dispatchStorage(key, 'violeta');
+        expect(api.theme.value).toBe('dark');
+
+        // La elección sigue siendo manual: el sistema no la pisa.
+        system.setDark(false);
+        expect(api.theme.value).toBe('dark');
+        expect(appliedTheme()).toBe('dark');
     });
 
     it('funciona con localStorage bloqueado: la elección vale en memoria', async () => {
@@ -165,8 +190,13 @@ describe('useTheme', () => {
         const blocked = (): never => {
             throw new DOMException('Acceso denegado', 'SecurityError');
         };
-        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(blocked);
-        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(blocked);
+        // stubGlobal y no spyOn(Storage.prototype): el Storage de happy-dom es un
+        // Proxy que guarda los métodos en la instancia al primer uso, y el bloqueo
+        // se filtraría a las pruebas siguientes. unstubGlobals lo deshace.
+        vi.stubGlobal('localStorage', {
+            getItem: vi.fn(blocked),
+            setItem: vi.fn(blocked),
+        });
 
         const { api } = await mountTheme();
 
