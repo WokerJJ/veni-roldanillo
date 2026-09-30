@@ -1,0 +1,85 @@
+# Servicios de Vení Roldanillo (docs/03-arquitectura.md).
+# Este archivo define la imagen de producción; docker-compose.override.yml
+# (se carga solo en local) monta el código y usa la etapa de desarrollo.
+# Los puertos se publican solo en 127.0.0.1.
+
+x-app: &app
+  build:
+    context: .
+    target: prod
+  image: veni-roldanillo-app
+  restart: unless-stopped
+  environment:
+    TZ: America/Bogota
+  volumes:
+    # El .env nunca entra en la imagen: se monta en tiempo de ejecución.
+    - ./.env:/app/.env:ro
+  depends_on:
+    db:
+      condition: service_healthy
+    meilisearch:
+      condition: service_healthy
+
+services:
+  app:
+    <<: *app
+    ports:
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
+
+  worker:
+    <<: *app
+    command: ["php", "artisan", "queue:work", "--tries=3", "--max-time=3600"]
+    # La imagen revisa /up en el puerto 8000; el worker no sirve HTTP.
+    healthcheck:
+      disable: true
+    depends_on:
+      app:
+        condition: service_healthy
+
+  scheduler:
+    <<: *app
+    command: ["php", "artisan", "schedule:work"]
+    healthcheck:
+      disable: true
+    depends_on:
+      app:
+        condition: service_healthy
+
+  db:
+    image: postgis/postgis:18-3.6
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-veni}
+      POSTGRES_USER: ${DB_USERNAME:-veni}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Definí DB_PASSWORD en el .env}
+      TZ: America/Bogota
+    volumes:
+      # PostgreSQL 18 guarda los datos en /var/lib/postgresql/18/docker.
+      - db_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.54
+    restart: unless-stopped
+    environment:
+      MEILI_ENV: ${MEILI_ENV:-production}
+      MEILI_MASTER_KEY: ${MEILISEARCH_KEY:?Definí MEILISEARCH_KEY en el .env}
+      MEILI_NO_ANALYTICS: "true"
+      TZ: America/Bogota
+    volumes:
+      - meilisearch_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:7700/health"]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 10
+
+volumes:
+  db_data:
+  meilisearch_data:

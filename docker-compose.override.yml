@@ -1,0 +1,33 @@
+# Desarrollo local: se aplica solo con `docker compose up` en este directorio.
+# Monta el código, usa la etapa dev del Dockerfile y publica db y meilisearch
+# en 127.0.0.1 para las herramientas del equipo.
+
+x-app-dev: &app-dev
+  build:
+    context: .
+    target: dev
+    args:
+      UID: ${UID:-1000}
+      GID: ${GID:-1000}
+  image: veni-roldanillo-app-dev
+  # !override reemplaza el .env de solo lectura: key:generate necesita escribirlo.
+  volumes: !override
+    - .:/app
+
+services:
+  app:
+    <<: *app-dev
+
+  worker:
+    <<: *app-dev
+
+  scheduler:
+    <<: *app-dev
+
+  db:
+    ports:
+      - "127.0.0.1:${FORWARD_DB_PORT:-5433}:5432"
+
+  meilisearch:
+    ports:
+      - "127.0.0.1:${FORWARD_MEILISEARCH_PORT:-7700}:7700"
