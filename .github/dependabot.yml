@@ -14,7 +14,9 @@ updates:
         patterns: ["*"]
 
   # Menores y parches en un solo PR por ecosistema; las mayores llegan aparte
-  # porque suelen pedir cambios de código.
+  # porque suelen pedir cambios de código, salvo las familias que solo
+  # funcionan juntas. Dependabot asigna cada paquete al primer grupo que
+  # coincide, por eso los grupos de mayores van antes.
   - package-ecosystem: composer
     directory: /
     schedule:
@@ -25,6 +27,10 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
+      # Pest y sus plugins publican la mayor a la vez.
+      pest-mayores:
+        patterns: ["pestphp/*"]
+        update-types: ["major"]
       composer-menores:
         update-types: ["minor", "patch"]
 
@@ -38,5 +44,9 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
+      # Vitest y el plugin de Vue dependen de la mayor de Vite.
+      vite-mayores:
+        patterns: ["vite", "vitest", "@vitejs/*"]
+        update-types: ["major"]
       npm-menores:
         update-types: ["minor", "patch"]
