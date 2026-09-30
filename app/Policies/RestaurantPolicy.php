@@ -45,18 +45,10 @@ class RestaurantPolicy
 
     /**
      * Borrar es solo del administrador (el dueño pide el retiro de la ficha).
+     * Sin restore ni forceDelete: no hay borrado lógico (para retirar una
+     * ficha sin borrarla está el estado hidden).
      */
     public function delete(User $user, Restaurant $restaurant): bool
-    {
-        return $user->isAdmin();
-    }
-
-    public function restore(User $user, Restaurant $restaurant): bool
-    {
-        return $user->isAdmin();
-    }
-
-    public function forceDelete(User $user, Restaurant $restaurant): bool
     {
         return $user->isAdmin();
     }

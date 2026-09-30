@@ -2,15 +2,19 @@
 
 namespace App\Models;
 
+use App\Models\Contracts\BelongsToRestaurant;
+use App\Policies\RestaurantContentPolicy;
 use Database\Factories\MenuSectionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['name_es', 'name_en', 'position'])]
-class MenuSection extends Model
+#[UsePolicy(RestaurantContentPolicy::class)]
+class MenuSection extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<MenuSectionFactory> */
     use HasFactory;
@@ -31,9 +35,19 @@ class MenuSection extends Model
         return $this->belongsTo(Restaurant::class);
     }
 
-    /** @return HasMany<Dish, $this> */
+    public function owningRestaurant(): Restaurant
+    {
+        return $this->restaurant()->firstOrFail();
+    }
+
+    /**
+     * Desempate por id: con la misma posición el orden sería el que
+     * PostgreSQL quiera y el menú cambiaría entre cargas.
+     *
+     * @return HasMany<Dish, $this>
+     */
     public function dishes(): HasMany
     {
-        return $this->hasMany(Dish::class)->orderBy('position');
+        return $this->hasMany(Dish::class)->orderBy('position')->orderBy('id');
     }
 }

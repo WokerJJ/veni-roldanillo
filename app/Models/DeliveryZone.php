@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use App\Models\Contracts\BelongsToRestaurant;
+use App\Policies\RestaurantContentPolicy;
 use Database\Factories\DeliveryZoneFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\Pivot;
@@ -13,7 +16,8 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
  * modelo propio y a la vez el pivote de Restaurant::neighborhoods().
  */
 #[Fillable(['neighborhood_id', 'fee'])]
-class DeliveryZone extends Pivot
+#[UsePolicy(RestaurantContentPolicy::class)]
+class DeliveryZone extends Pivot implements BelongsToRestaurant
 {
     /** @use HasFactory<DeliveryZoneFactory> */
     use HasFactory;
@@ -36,6 +40,11 @@ class DeliveryZone extends Pivot
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);
+    }
+
+    public function owningRestaurant(): Restaurant
+    {
+        return $this->restaurant()->firstOrFail();
     }
 
     /** @return BelongsTo<Neighborhood, $this> */

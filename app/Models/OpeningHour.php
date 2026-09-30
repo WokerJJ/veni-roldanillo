@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use App\Models\Contracts\BelongsToRestaurant;
+use App\Policies\RestaurantContentPolicy;
 use Database\Factories\OpeningHourFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +16,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * closes_at < opens_at la franja termina al día siguiente.
  */
 #[Fillable(['weekday', 'opens_at', 'closes_at'])]
-class OpeningHour extends Model
+#[UsePolicy(RestaurantContentPolicy::class)]
+class OpeningHour extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<OpeningHourFactory> */
     use HasFactory;
@@ -32,5 +36,10 @@ class OpeningHour extends Model
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);
+    }
+
+    public function owningRestaurant(): Restaurant
+    {
+        return $this->restaurant()->firstOrFail();
     }
 }

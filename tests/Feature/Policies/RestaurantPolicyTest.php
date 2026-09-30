@@ -3,6 +3,7 @@
 use App\Enums\RestaurantRole;
 use App\Models\Restaurant;
 use App\Models\User;
+use App\Policies\RestaurantPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 
@@ -55,8 +56,12 @@ test('el administrador puede todo', function () {
     expect($gate->allows('view', $restaurant))->toBeTrue()
         ->and($gate->allows('create', Restaurant::class))->toBeTrue()
         ->and($gate->allows('update', $restaurant))->toBeTrue()
-        ->and($gate->allows('delete', $restaurant))->toBeTrue()
-        ->and($gate->allows('forceDelete', $restaurant))->toBeTrue();
+        ->and($gate->allows('delete', $restaurant))->toBeTrue();
+});
+
+test('la Policy no ofrece restaurar ni borrar definitivo (no hay borrado lógico)', function () {
+    expect(method_exists(RestaurantPolicy::class, 'restore'))->toBeFalse()
+        ->and(method_exists(RestaurantPolicy::class, 'forceDelete'))->toBeFalse();
 });
 
 test('el dueño no borra su ficha (pide el retiro)', function () {

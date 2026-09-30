@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use App\Models\Contracts\BelongsToRestaurant;
+use App\Policies\RestaurantContentPolicy;
 use Database\Factories\OptionGroupFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,7 +17,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * o de adiciones opcionales con recargo.
  */
 #[Fillable(['name_es', 'name_en', 'required', 'min_choices', 'max_choices', 'position'])]
-class OptionGroup extends Model
+#[UsePolicy(RestaurantContentPolicy::class)]
+class OptionGroup extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<OptionGroupFactory> */
     use HasFactory;
@@ -38,9 +42,14 @@ class OptionGroup extends Model
         return $this->belongsTo(Dish::class);
     }
 
+    public function owningRestaurant(): Restaurant
+    {
+        return $this->dish()->firstOrFail()->owningRestaurant();
+    }
+
     /** @return HasMany<Option, $this> */
     public function options(): HasMany
     {
-        return $this->hasMany(Option::class)->orderBy('position');
+        return $this->hasMany(Option::class)->orderBy('position')->orderBy('id');
     }
 }
