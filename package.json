@@ -7,7 +7,9 @@
         "dev": "vite",
         "lint": "eslint . --max-warnings=0",
         "typecheck": "vue-tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
-        "test": "vitest run"
+        "test": "vitest run",
+        "icons:sync": "node scripts/icons-sync.mjs",
+        "icons:check": "node scripts/icons-sync.mjs --check"
     },
     "devDependencies": {
         "@eslint/js": "^9.39.5",
