@@ -1,0 +1,171 @@
+{
+    "repository": "Mteheran/colombia-icons",
+    "tag": "v0.27.0",
+    "commit": "4f90c54eb51aee652938eefa123bab79b8d985d4",
+    "license": {
+        "path": "LICENSE",
+        "sha256": "6e223e0e865d64601970667a7f11b742fba779a1861d3c353af282e7857fd9e3"
+    },
+    "icons": {
+        "agregar": {
+            "path": "icons/svg/genericos/agregar.svg",
+            "sha256": "53ee588f8de44ec5da6d8668e06e2f10448c4929fe3212bb20850d450d0315d8"
+        },
+        "aguardiente": {
+            "path": "icons/svg/gastronomia/aguardiente.svg",
+            "sha256": "129e244380eaf2255008813df1ee93af769b9b67de092acb6fcc649c8700b93e"
+        },
+        "ajiaco": {
+            "path": "icons/svg/gastronomia/ajiaco.svg",
+            "sha256": "bd134f09dfe7021006f4cf59d731c68e7fe65c3fef68d9af98bfd562e7952ef3"
+        },
+        "arepa": {
+            "path": "icons/svg/gastronomia/arepa.svg",
+            "sha256": "b8ce6138fcdb1bc3e91766c8e2379b9473711bf5142027e674cab25cb81ddc5c"
+        },
+        "arepa-boyacense": {
+            "path": "icons/svg/gastronomia/arepa-boyacense.svg",
+            "sha256": "e45be421f364f13c9bf30c3a24ef97d45384e5be78c1b98ff3521f311a618ea4"
+        },
+        "arepa-de-choclo": {
+            "path": "icons/svg/gastronomia/arepa-de-choclo.svg",
+            "sha256": "900b499c5013b9f2fb164a945359348d2381facda1f374dce63ab62ef18b7f4f"
+        },
+        "arepa-de-huevo": {
+            "path": "icons/svg/gastronomia/arepa-de-huevo.svg",
+            "sha256": "9eab788aab675055b8e7c7f7c6cb8fd8ac6621b3f50f910655d7a9bc0462962a"
+        },
+        "bandeja-paisa": {
+            "path": "icons/svg/gastronomia/bandeja-paisa.svg",
+            "sha256": "1433a3dda4cd2cc1ec07823466e73f4161b10e498505ca25f881f8a7d4a693f0"
+        },
+        "buscar": {
+            "path": "icons/svg/genericos/buscar.svg",
+            "sha256": "c646f699e7443085e51688a885a3e0d19b0a449df4d0234f26e78de3559f9394"
+        },
+        "carrito": {
+            "path": "icons/svg/genericos/carrito.svg",
+            "sha256": "9208f2ad77e56cd995f750c9904055d66ed7523857b19b3bdf0bf8c0923414d6"
+        },
+        "cerrar": {
+            "path": "icons/svg/genericos/cerrar.svg",
+            "sha256": "db476d3bdd1d835964ba25bb097df7e9bc1cd1b49515aea7bc5b5f4a07fee202"
+        },
+        "check": {
+            "path": "icons/svg/genericos/check.svg",
+            "sha256": "8ecfe2f7a5634459d4cb008b2731250964bf68e5d7acbd59610884adc6ae8511"
+        },
+        "chevron-abajo": {
+            "path": "icons/svg/genericos/chevron-abajo.svg",
+            "sha256": "31f30fe3388dd1e09ec698a79c85a3df156ab3a8633e18c70ef225290bc9fd1a"
+        },
+        "chevron-arriba": {
+            "path": "icons/svg/genericos/chevron-arriba.svg",
+            "sha256": "9b679c339162850edd6f1180005c7926005cb58750f6d58e5441659b0514817e"
+        },
+        "chevron-derecha": {
+            "path": "icons/svg/genericos/chevron-derecha.svg",
+            "sha256": "85a972447bdaade787fc7ba326986bb1385be73a215f25d8f23a09d1c7ddb1e9"
+        },
+        "chevron-izquierda": {
+            "path": "icons/svg/genericos/chevron-izquierda.svg",
+            "sha256": "ced6d3ab7a74e52e813adad712903fe94a98f938d8f998893fcb273ee61c86cb"
+        },
+        "chicharron": {
+            "path": "icons/svg/gastronomia/chicharron.svg",
+            "sha256": "a5a49d946d57fa555830530f61d927523310747e040765c372217a6f4ecc2f0e"
+        },
+        "compartir": {
+            "path": "icons/svg/genericos/compartir.svg",
+            "sha256": "fe11f59ce1b80d3936bbe7bc5ff1437a45fd0fc19ebc13597c6179232b5e4103"
+        },
+        "corazon": {
+            "path": "icons/svg/genericos/corazon.svg",
+            "sha256": "31cc219918b1ac3c6ce972807ad7a351d3a33d323c5fcea98a16bf1235384e02"
+        },
+        "empanada": {
+            "path": "icons/svg/gastronomia/empanada.svg",
+            "sha256": "405f8172d9d818410637816db76c7b0fe82ac723675d7338dcb605b49b38f89a"
+        },
+        "enlace-externo": {
+            "path": "icons/svg/genericos/enlace-externo.svg",
+            "sha256": "81b3662f8eefe593f0404f75ea3bcb9d3dcd4864eee5bde1073ddb9653695629"
+        },
+        "estrella": {
+            "path": "icons/svg/genericos/estrella.svg",
+            "sha256": "fedac2d1934ff2a7f42b0503c1fceb10287b45cc300ec2dd24ae4683ff682fd1"
+        },
+        "estrella-llena": {
+            "path": "icons/svg/genericos/estrella-llena.svg",
+            "sha256": "088db1a2d8b87aebe737fc89a2c72600612087d7c4c4d9137dbd7fd662392f2b"
+        },
+        "filtro": {
+            "path": "icons/svg/genericos/filtro.svg",
+            "sha256": "8ee7bfe1f5fe20203b561aab7c9dd1edc0fd489f8e5d7788a35f222a45bdb7df"
+        },
+        "grano-de-cafe": {
+            "path": "icons/svg/gastronomia/grano-de-cafe.svg",
+            "sha256": "576b669ebe170220cb037c6bcdf0ad4803215a1eabcc6c0ae031d78f44d82232"
+        },
+        "idioma": {
+            "path": "icons/svg/genericos/idioma.svg",
+            "sha256": "ea11a44fad540e75c8290166305eab3c4fbfbe2bf6a01a69ece2f7cb3603f513"
+        },
+        "informacion": {
+            "path": "icons/svg/genericos/informacion.svg",
+            "sha256": "6dbdc94ea098ea6f57bce26ff4edd7b4e3f0ec2f8b2a9b0b6b18c9b0250be172"
+        },
+        "luna": {
+            "path": "icons/svg/genericos/luna.svg",
+            "sha256": "3dcc23833ca725864087203c92e4505d751e7460dae30d89db9c80cd40d7b921"
+        },
+        "mapa": {
+            "path": "icons/svg/genericos/mapa.svg",
+            "sha256": "6a3017ef593ccee7577813157c3f29ca53021aa0f3bc31c8277e4011a298e4a4"
+        },
+        "marcador": {
+            "path": "icons/svg/genericos/marcador.svg",
+            "sha256": "dc6d9b3f6c96583f71d0915c8eda5e96270d048c3dc9ec1cec006dd6723c7869"
+        },
+        "menu-hamburguesa": {
+            "path": "icons/svg/genericos/menu-hamburguesa.svg",
+            "sha256": "57baefe51add461fe0af0c215930cdcb799cbd097bb92f87f9092ad782693609"
+        },
+        "patacon": {
+            "path": "icons/svg/gastronomia/patacon.svg",
+            "sha256": "1e59ce86d5f18bdcc8b01871b4ab5c1200dce738326ffd748439b6d1b0f36dc7"
+        },
+        "pescado-frito": {
+            "path": "icons/svg/gastronomia/pescado-frito.svg",
+            "sha256": "8b4773cfd1d9640ae0bc70c05418b2c1b10d8becfdcc5a5a66153c42ba5a44fd"
+        },
+        "quitar": {
+            "path": "icons/svg/genericos/quitar.svg",
+            "sha256": "3e02fe4ff35ef050f0cb993b125d8990f67b5ee99d59f79d864d64eff5b6c17d"
+        },
+        "reloj": {
+            "path": "icons/svg/genericos/reloj.svg",
+            "sha256": "db86ba142fa2a859d59e05b2e197220978c9c542b9fb8d519d9b31c4cd6753e4"
+        },
+        "sancocho": {
+            "path": "icons/svg/gastronomia/sancocho.svg",
+            "sha256": "adcdb59e2a25515b76ebb8e7dbc916da22ab4bad29fa6866e4cb7fc38bb7a299"
+        },
+        "sol": {
+            "path": "icons/svg/genericos/sol.svg",
+            "sha256": "dace77297dda750077ac417e29d7b99ff38f2155cc4f0a49d5b37769a1843862"
+        },
+        "taza-de-tinto": {
+            "path": "icons/svg/gastronomia/taza-de-tinto.svg",
+            "sha256": "0dc748b5508e32ac61787fabf1a79defd286d741c234e14f648bcdd9d5c67cb1"
+        },
+        "telefono": {
+            "path": "icons/svg/genericos/telefono.svg",
+            "sha256": "acff4ec4565f61742266b19298e92948db2c461a0903ee73fca14d35398081ad"
+        },
+        "ubicacion": {
+            "path": "icons/svg/genericos/ubicacion.svg",
+            "sha256": "d62759a79302a30a906eddb8fae50e5182a148b230ecd3836ad72b2cd6ef89d8"
+        }
+    }
+}
