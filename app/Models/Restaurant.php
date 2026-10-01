@@ -7,6 +7,7 @@ use App\Enums\PaymentMethod;
 use App\Enums\RestaurantPlan;
 use App\Enums\RestaurantRole;
 use App\Enums\RestaurantStatus;
+use App\Models\Concerns\HasTranslatableFields;
 use Database\Factories\RestaurantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -41,7 +42,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Restaurant extends Model
 {
     /** @use HasFactory<RestaurantFactory> */
-    use HasFactory;
+    use HasFactory, HasTranslatableFields;
 
     /** @var array<string, mixed> */
     protected $attributes = [
@@ -68,6 +69,16 @@ class Restaurant extends Model
             'updated_by_owner_at' => 'datetime',
             'is_fictitious' => 'boolean',
         ];
+    }
+
+    /**
+     * Campos con columnas _es y _en (ver HasTranslatableFields).
+     *
+     * @return list<string>
+     */
+    public function translatableFields(): array
+    {
+        return ['description', 'delivery_notes'];
     }
 
     /**

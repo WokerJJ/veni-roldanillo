@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTranslatableFields;
 use App\Models\Contracts\BelongsToRestaurant;
 use App\Policies\RestaurantContentPolicy;
 use Database\Factories\SpecialHourFactory;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SpecialHour extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<SpecialHourFactory> */
-    use HasFactory;
+    use HasFactory, HasTranslatableFields;
 
     /**
      * @return array<string, string>
@@ -30,6 +31,16 @@ class SpecialHour extends Model implements BelongsToRestaurant
             'on_date' => 'date',
             'closed' => 'boolean',
         ];
+    }
+
+    /**
+     * Campos con columnas _es y _en (ver HasTranslatableFields).
+     *
+     * @return list<string>
+     */
+    public function translatableFields(): array
+    {
+        return ['note'];
     }
 
     /** @return BelongsTo<Restaurant, $this> */

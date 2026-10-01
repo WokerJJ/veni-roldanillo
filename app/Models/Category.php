@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTranslatableFields;
 use Database\Factories\CategoryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Category extends Model
 {
     /** @use HasFactory<CategoryFactory> */
-    use HasFactory;
+    use HasFactory, HasTranslatableFields;
 
     /**
      * @return array<string, string>
@@ -25,6 +26,16 @@ class Category extends Model
         return [
             'position' => 'integer',
         ];
+    }
+
+    /**
+     * Campos con columnas _es y _en (ver HasTranslatableFields).
+     *
+     * @return list<string>
+     */
+    public function translatableFields(): array
+    {
+        return ['name'];
     }
 
     /** @return BelongsToMany<Restaurant, $this> */

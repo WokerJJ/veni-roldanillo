@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTranslatableFields;
 use App\Models\Contracts\BelongsToRestaurant;
 use App\Policies\RestaurantContentPolicy;
 use Database\Factories\PromotionFactory;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Promotion extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<PromotionFactory> */
-    use HasFactory;
+    use HasFactory, HasTranslatableFields;
 
     /**
      * @return array<string, string>
@@ -27,6 +28,16 @@ class Promotion extends Model implements BelongsToRestaurant
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Campos con columnas _es y _en (ver HasTranslatableFields).
+     *
+     * @return list<string>
+     */
+    public function translatableFields(): array
+    {
+        return ['title'];
     }
 
     /** @return BelongsTo<Restaurant, $this> */
