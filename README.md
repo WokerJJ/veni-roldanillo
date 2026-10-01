@@ -59,6 +59,10 @@ Las pruebas usan la base `veni_test` (PostgreSQL + PostGIS), que se crea sola al
 docker compose exec db sh /docker-entrypoint-initdb.d/20-veni-test.sh
 ```
 
+La primera migración crea las extensiones `postgis` y `btree_gist` (`CREATE EXTENSION IF NOT EXISTS`), así que el usuario de la base necesita permiso para crear extensiones: en Docker lo tiene (es el superusuario de la imagen); en un servidor administrado, o se le da ese permiso o un administrador crea las dos extensiones antes de migrar. Al revertir, las extensiones se quedan: son de toda la base y pueden usarlas otros.
+
+`php artisan db:seed` carga datos ficticios y solo corre con `APP_ENV` en `local` o `testing`; las cuentas sembradas (`@example.test`) tienen contraseñas aleatorias que no se muestran.
+
 ## Calidad
 
 Los mismos comandos corren en GitHub Actions (`ci.yml`); el check `ci-ok` resume todos los jobs.

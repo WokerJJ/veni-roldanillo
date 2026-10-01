@@ -97,6 +97,10 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Las columnas son timestamp with time zone y Laravel envía las
+            // fechas sin desfase: la sesión debe usar la zona de la aplicación
+            // para que se guarden bien aunque el servidor esté en UTC (CI).
+            'timezone' => env('APP_TIMEZONE', 'America/Bogota'),
         ],
 
         'sqlsrv' => [

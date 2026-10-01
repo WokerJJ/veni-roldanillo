@@ -12,3 +12,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0006](0006-nombre-marca.md) | Nombre y marca: Vení Roldanillo | Aceptada |
 | [0007](0007-mapa-desde-veni-mapa.md) | El mapa base se consume de las releases de veni-mapa | Aceptada |
 | [0008](0008-ubicacion-y-rutas-en-el-dispositivo.md) | Ubicación del usuario y rutas calculadas en el dispositivo | Aceptada |
+| [0009](0009-modelo-de-datos-inicial.md) | Modelo de datos inicial en PostgreSQL + PostGIS | Aceptada |
