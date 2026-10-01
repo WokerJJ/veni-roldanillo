@@ -73,7 +73,7 @@ docker compose exec app composer analyse   # Larastan al nivel máximo
 docker compose exec app composer test      # Pest sobre veni_test
 npm run lint                               # ESLint
 npm run typecheck                          # vue-tsc
-npm test                                   # Vitest
+npm test                                   # Vitest (incluye la verificación de los íconos)
 npm run build
 ```
 
@@ -90,6 +90,10 @@ npm run build
 - [Análisis de mercado](docs/07-mercado.md)
 - [Decisiones de arquitectura (ADR)](docs/adr/)
 - [Guía de marca](brand/README.md)
+
+## Créditos
+
+- **Íconos:** [colombia-icons](https://github.com/Mteheran/colombia-icons), licencia MIT, © Miguel Teheran. Los que usa la app están copiados en [`resources/icons/colombia`](resources/icons/colombia) desde una versión fija, con su licencia ([ADR 0011](docs/adr/0011-iconos-colombia-icons.md)).
 
 ## Autor
 
