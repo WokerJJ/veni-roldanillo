@@ -2,12 +2,12 @@
 
 ## Fase 0 · Base técnica
 
-- [ ] Proyecto Laravel 13 + Docker Compose (app, worker, scheduler, db PostGIS, meilisearch)
-- [ ] Inertia + Vue 3 + TypeScript + Tailwind con tokens de marca y fuentes autohospedadas
-- [ ] Pest, Larastan, Pint, ESLint, vue-tsc y workflow de GitHub Actions
-- [ ] i18n ES/EN configurado (backend y frontend)
+- [x] Proyecto Laravel 13 + Docker Compose (app, worker, scheduler, db PostGIS, meilisearch)
+- [x] Inertia + Vue 3 + TypeScript + Tailwind con tokens de marca y fuentes autohospedadas
+- [x] Pest, Larastan, Pint, ESLint, vue-tsc y workflow de GitHub Actions
+- [x] i18n ES/EN configurado (backend y frontend)
 - [ ] PWA: manifest con íconos de `brand/png`, service worker, modo sin conexión básico
-- [ ] Modelo de datos inicial, factories y seeders con datos ficticios
+- [x] Modelo de datos inicial, factories y seeders con datos ficticios
 
 ## Fase 1 · MVP
 
