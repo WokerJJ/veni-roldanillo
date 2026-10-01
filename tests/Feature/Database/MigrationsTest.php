@@ -62,13 +62,47 @@ test('la primera migración instala PostGIS y btree_gist en una base nueva', fun
 test('el down de users deja la tabla como antes', function () {
     $this->artisan('migrate:fresh')->assertSuccessful();
 
-    $this->artisan('migrate:rollback', ['--path' => 'database/migrations/2026_09_30_100000_add_role_and_locale_to_users_table.php'])
-        ->assertSuccessful();
+    // Las dos migraciones que cambian users: bajar solo la primera dejaría la segunda como aplicada.
+    $this->artisan('migrate:rollback', ['--path' => [
+        'database/migrations/2026_09_30_100000_add_role_and_locale_to_users_table.php',
+        'database/migrations/2026_10_01_100000_make_users_locale_nullable.php',
+    ]])->assertSuccessful();
 
     expect(Schema::hasColumn('users', 'role'))->toBeFalse()
         ->and(Schema::getColumnType('users', 'created_at'))->toBe('timestamp');
 
     $this->artisan('migrate')->assertSuccessful();
 
-    expect(Schema::getColumnType('users', 'created_at'))->toBe('timestamptz');
+    expect(Schema::getColumnType('users', 'created_at'))->toBe('timestamptz')
+        ->and(collect(Schema::getColumns('users'))->firstWhere('name', 'locale')['nullable'])->toBeTrue();
+});
+
+test('el down del idioma opcional vuelve a exigirlo, con español para quien no eligió', function () {
+    $this->artisan('migrate:fresh')->assertSuccessful();
+
+    $locale = fn () => collect(Schema::getColumns('users'))->firstWhere('name', 'locale');
+    expect($locale()['nullable'])->toBeTrue()
+        ->and($locale()['default'])->toBeNull();
+
+    DB::table('users')->insert(['name' => 'Sin idioma (ficticio)', 'email' => 'sin-idioma@example.test', 'password' => '-']);
+    DB::table('users')->insert(['name' => 'En inglés (ficticio)', 'email' => 'en-ingles@example.test', 'password' => '-', 'locale' => 'en']);
+
+    $this->artisan('migrate:rollback', ['--path' => 'database/migrations/2026_10_01_100000_make_users_locale_nullable.php'])
+        ->assertSuccessful();
+
+    expect($locale()['nullable'])->toBeFalse()
+        ->and($locale()['default'])->toContain("'es'")
+        ->and(DB::table('users')->orderBy('email')->pluck('locale', 'email')->all())->toBe([
+            'en-ingles@example.test' => 'en',
+            'sin-idioma@example.test' => 'es',
+        ]);
+
+    $this->artisan('migrate')->assertSuccessful();
+
+    // Al volver a subir no se borra ninguna preferencia: no se distingue el español elegido del que venía por defecto.
+    expect($locale()['nullable'])->toBeTrue()
+        ->and($locale()['default'])->toBeNull()
+        ->and(DB::table('users')->where('email', 'sin-idioma@example.test')->value('locale'))->toBe('es');
+
+    DB::table('users')->delete();
 });
