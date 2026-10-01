@@ -62,7 +62,7 @@ Implementado en la Fase 0 (#6); decisiones en el ADR 0009. Convenciones: precios
 | `delivery_zones` | restaurant_id, neighborhood_id, fee | único por restaurante y barrio; barrio con `RESTRICT`. Las zonas mandan sobre `restaurants.delivery`: con zonas, el restaurante lleva a esos barrios con ese costo; `delivery` solo indica que hace domicilios mientras no haya zonas cargadas |
 | `restaurant_claims` | restaurant_id, user_id, status (pending/approved/rejected), message, reviewed_by, reviewed_at | una pendiente por usuario y restaurante; resuelta si y solo si tiene reviewed_at; índices en restaurant_id, user_id y reviewed_by |
 | `order_intents` | restaurant_id, user_id (nullable), device_hash, confirmed (null/sí/no), created_at | sin direcciones, contenido del pedido ni ubicación; al borrar el usuario queda anónima (un trigger borra también device_hash) |
-| `users` | + role (user/admin), locale (es/en) | ser dueño o empleado va en `restaurant_user` |
+| `users` | + role (user/admin), locale (es/en o nulo: decide el dispositivo, ADR 0010) | ser dueño o empleado va en `restaurant_user` |
 
 Autorización: `RestaurantPolicy` (el dueño solo edita el suyo; el administrador todo; borrar solo el administrador). El contenido del restaurante (secciones, platos, grupos de opciones, opciones, almuerzos del día, promociones, horarios, horarios especiales y zonas) usa `RestaurantContentPolicy`, que delega en `RestaurantPolicy` a través de `BelongsToRestaurant::owningRestaurant()`; crear recibe el restaurante de la ruta. Los platos se crean con `$restaurant->dishes()->create()` (`restaurant_id` no es asignable). Menús y opciones se ordenan por `position` y luego `id`.
 
