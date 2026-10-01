@@ -22,6 +22,9 @@ interface FakePageProps {
     translations: Record<string, string>;
 }
 
+type FakeEventName = 'beforeUpdate' | 'navigate';
+type FakeListener = (event: { detail: { page: { props: FakePageProps } } }) => void;
+
 function createPage() {
     const props: FakePageProps = { locale: 'es', translations: { ...es } };
 
@@ -34,16 +37,67 @@ function createPage() {
  */
 export let page = createPage();
 
+let listeners: { type: FakeEventName; callback: FakeListener }[] = [];
+
 export const router = {
     put: vi.fn(),
+    reload: vi.fn(),
+    on(type: FakeEventName, callback: FakeListener): () => void {
+        const listener = { type, callback };
+        listeners.push(listener);
+
+        return () => {
+            listeners = listeners.filter((registered) => registered !== listener);
+        };
+    },
 };
 
 export function usePage() {
     return page;
 }
 
-/** Página nueva en español y router sin llamadas, como al cargar la app. */
+function fire(type: FakeEventName, props: FakePageProps): void {
+    for (const listener of listeners.filter((registered) => registered.type === type)) {
+        listener.callback({ detail: { page: { props } } });
+    }
+}
+
+function show(props: FakePageProps): void {
+    page.props.locale = props.locale;
+    page.props.translations = props.translations;
+}
+
+/**
+ * Lo que hace Inertia al recibir una página del servidor: avisa con
+ * «beforeUpdate», la muestra y, solo si agrega una entrada al historial (no
+ * reemplaza la actual), avisa con «navigate».
+ */
+export function receiveFromServer(locale: Locale, { replace = false } = {}): void {
+    const props: FakePageProps = { locale, translations: { ...messages[locale] } };
+
+    fire('beforeUpdate', props);
+    show(props);
+
+    if (!replace) {
+        fire('navigate', props);
+    }
+}
+
+/**
+ * Lo que hace Inertia con atrás y adelante: muestra la página que guardó en
+ * el historial, sin pedirla al servidor, y avisa con «navigate».
+ */
+export function restoreFromHistory(locale: Locale): void {
+    const props: FakePageProps = { locale, translations: { ...messages[locale] } };
+
+    show(props);
+    fire('navigate', props);
+}
+
+/** Página nueva en español, sin oyentes y con el router sin llamadas, como al cargar la app. */
 export function reset(): void {
     page = createPage();
+    listeners = [];
     router.put.mockReset();
+    router.reload.mockReset();
 }

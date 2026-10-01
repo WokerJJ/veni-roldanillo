@@ -34,12 +34,28 @@ function mountHeading(useI18n: typeof I18nModule.useI18n) {
     );
 }
 
+/** La <meta name="description"> que pinta el servidor en la vista raíz, en español. */
+function serverDescription(fake: typeof FakeInertia): HTMLMetaElement {
+    const meta = document.createElement('meta');
+    meta.name = 'description';
+    meta.content = fake.messages.es['meta.description'];
+    document.head.append(meta);
+
+    return meta;
+}
+
 enableAutoUnmount(afterEach);
 
 beforeEach(() => {
     vi.resetModules();
     // Lo que deja el servidor en <html lang> antes de que arranque Vue.
     document.documentElement.lang = 'es';
+    // En desarrollo, una clave sin traducción avisa en la consola (translate.test.ts).
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+});
+
+afterEach(() => {
+    document.head.querySelector('meta[name="description"]')?.remove();
 });
 
 describe('useI18n', () => {
@@ -57,6 +73,13 @@ describe('useI18n', () => {
         fake.page.props.translations = {};
 
         expect(useI18n().t('home.title')).toBe('home.title');
+    });
+
+    it('t() solo acepta las claves de lang/es.json', async () => {
+        const { useI18n } = await load();
+
+        // @ts-expect-error «no.existe» no es una clave: si t() aceptara cualquier texto, vue-tsc fallaría en esta línea.
+        expect(useI18n().t('no.existe')).toBe('no.existe');
     });
 
     it('al cambiar el idioma sin recargar, cambian los textos y <html lang>', async () => {
@@ -82,5 +105,102 @@ describe('useI18n', () => {
         await nextTick();
 
         expect(document.documentElement.lang).toBe('en');
+    });
+
+    it('al cambiar el idioma sin recargar, cambia la descripción del documento', async () => {
+        const { fake, useI18n } = await load();
+        const meta = serverDescription(fake);
+        mountHeading(useI18n);
+
+        fake.receiveFromServer('en', { replace: true });
+        await nextTick();
+
+        expect(meta.content).toBe(fake.messages.en['meta.description']);
+        expect(document.head.querySelectorAll('meta[name="description"]')).toHaveLength(1);
+    });
+
+    it('deja la descripción que pintó el servidor si no llegan traducciones', async () => {
+        const { fake, useI18n } = await load();
+        const meta = serverDescription(fake);
+        mountHeading(useI18n);
+
+        fake.page.props.translations = {};
+        await nextTick();
+
+        expect(meta.content).toBe(fake.messages.es['meta.description']);
+    });
+});
+
+describe('useI18n · cambio de idioma e historial', () => {
+    it('pide el idioma al servidor en PUT /locale y reemplaza la entrada del historial', async () => {
+        const { fake, useI18n } = await load();
+
+        useI18n().setLocale('en');
+
+        // Sin reemplazar, «atrás» volvería a la misma página guardada en el idioma anterior.
+        expect(fake.router.put).toHaveBeenCalledExactlyOnceWith(
+            '/locale',
+            { locale: 'en' },
+            { preserveScroll: true, preserveState: true, replace: true },
+        );
+    });
+
+    it('al volver a una página guardada en otro idioma pide recargarla', async () => {
+        const { fake, useI18n } = await load();
+        useI18n();
+
+        // El selector: el servidor responde en inglés la página actual.
+        fake.receiveFromServer('en', { replace: true });
+        expect(fake.router.reload).not.toHaveBeenCalled();
+
+        // Atrás: Inertia muestra la página anterior, guardada en español.
+        fake.restoreFromHistory('es');
+
+        expect(fake.router.reload).toHaveBeenCalledOnce();
+    });
+
+    it('la respuesta de esa recarga no pide otra, aunque llegue en el idioma de la página guardada', async () => {
+        const { fake, useI18n } = await load();
+        useI18n();
+        fake.receiveFromServer('en', { replace: true });
+        fake.restoreFromHistory('es');
+
+        // La URL guardada lleva ?lang=es: el servidor responde en español.
+        fake.receiveFromServer('es', { replace: true });
+        // Y en inglés, como entrada nueva del historial.
+        fake.receiveFromServer('en');
+
+        expect(fake.router.reload).toHaveBeenCalledOnce();
+    });
+
+    it('al volver a una página guardada en el idioma actual no recarga', async () => {
+        const { fake, useI18n } = await load();
+        useI18n();
+
+        fake.restoreFromHistory('es');
+
+        expect(fake.router.reload).not.toHaveBeenCalled();
+    });
+
+    it('una visita en la que el servidor cambia el idioma (?lang) no recarga', async () => {
+        const { fake, useI18n } = await load();
+        useI18n();
+
+        fake.receiveFromServer('en');
+        await nextTick();
+
+        expect(fake.router.reload).not.toHaveBeenCalled();
+        expect(document.documentElement.lang).toBe('en');
+    });
+
+    it('sigue el historial una sola vez aunque traduzcan varios componentes', async () => {
+        const { fake, useI18n } = await load();
+        mountHeading(useI18n);
+        mountHeading(useI18n);
+        fake.receiveFromServer('en', { replace: true });
+
+        fake.restoreFromHistory('es');
+
+        expect(fake.router.reload).toHaveBeenCalledOnce();
     });
 });

@@ -15,25 +15,29 @@ export type TranslationKey = keyof typeof es;
 
 /**
  * Ruta de LocaleController (routes/web.php). El servidor usa el mismo literal:
- * tests/Feature/I18n/LocaleSwitchTest.php comprueba que coincidan.
+ * lo fijan tests/Feature/I18n/LocaleSwitchTest.php (la ruta) y
+ * useI18n.test.ts (la petición).
  */
 export const LOCALE_ENDPOINT = '/locale';
 
-let documentLangScope: EffectScope | undefined;
+/** Texto de <meta name="description"> en resources/views/app.blade.php. */
+const DESCRIPTION_KEY: TranslationKey = 'meta.description';
+
+let documentScope: EffectScope | undefined;
 
 /**
- * Mantiene <html lang> al día cuando el idioma cambia sin recargar (selector
- * o historial). El servidor ya lo pinta en la primera carga. Es un watcher
- * global, fuera del ciclo de vida de los componentes, que arranca con el
- * primer componente que traduce.
+ * Mantiene <html lang> y la descripción del documento al día cuando el idioma
+ * cambia sin recargar (selector o historial). El servidor ya los pinta en la
+ * primera carga. Son watchers globales, fuera del ciclo de vida de los
+ * componentes, que arrancan con el primer componente que traduce.
  */
-function syncDocumentLang(): void {
-    if (documentLangScope) {
+function syncDocument(): void {
+    if (documentScope) {
         return;
     }
 
-    documentLangScope = effectScope(true);
-    documentLangScope.run(() => {
+    documentScope = effectScope(true);
+    documentScope.run(() => {
         const page = usePage();
 
         watch(
@@ -43,6 +47,41 @@ function syncDocumentLang(): void {
             },
             { immediate: true },
         );
+
+        watch(
+            () => page.props.translations[DESCRIPTION_KEY],
+            (description) => {
+                if (description !== undefined) {
+                    document.head.querySelector('meta[name="description"]')?.setAttribute('content', description);
+                }
+            },
+        );
+
+        reloadPagesSavedInAnotherLocale(page.props.locale);
+    });
+}
+
+/**
+ * Con atrás y adelante, Inertia muestra la página que guardó en el historial
+ * sin pedirla al servidor: si se guardó antes de cambiar de idioma, trae el
+ * idioma y los textos de entonces. Se compara con el último idioma que
+ * respondió el servidor y, si es otro, se pide la página de nuevo.
+ *
+ * No hay bucle: «beforeUpdate» solo llega con respuestas del servidor y antes
+ * que «navigate», así que una página recién recibida nunca difiere; y si la
+ * recarga falla (sin red) no hay respuesta ni «navigate» que la repita.
+ */
+function reloadPagesSavedInAnotherLocale(initialLocale: Locale): void {
+    let serverLocale = initialLocale;
+
+    router.on('beforeUpdate', (event) => {
+        serverLocale = event.detail.page.props.locale;
+    });
+
+    router.on('navigate', (event) => {
+        if (event.detail.page.props.locale !== serverLocale) {
+            router.reload();
+        }
     });
 }
 
@@ -52,7 +91,7 @@ function syncDocumentLang(): void {
  * cambiar de idioma, se le pide al servidor.
  */
 export function useI18n() {
-    syncDocumentLang();
+    syncDocument();
 
     const page = usePage();
 
@@ -62,14 +101,16 @@ export function useI18n() {
 
     /**
      * Cambia el idioma sin recargar: el servidor lo guarda (cookie y cuenta) y
-     * responde la misma página con los textos del idioma nuevo.
+     * responde la misma página con los textos del idioma nuevo, que reemplaza
+     * la entrada del historial: «atrás» no vuelve a la misma página en el
+     * idioma anterior.
      */
     function setLocale(locale: Locale): void {
         if (locale === page.props.locale) {
             return;
         }
 
-        router.put(LOCALE_ENDPOINT, { locale }, { preserveScroll: true, preserveState: true });
+        router.put(LOCALE_ENDPOINT, { locale }, { preserveScroll: true, preserveState: true, replace: true });
     }
 
     return {
