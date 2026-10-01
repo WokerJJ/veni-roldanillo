@@ -17,10 +17,17 @@ function escapeRegExp(value: string): string {
  * reemplaza `:nombre`, `:Nombre` (primera letra en mayúscula) y `:NOMBRE`
  * (todo en mayúsculas) en una sola pasada, probando primero los marcadores
  * más largos. Si la clave no existe devuelve la clave, que se nota a simple
- * vista (las pruebas de lang/ evitan que llegue a producción).
+ * vista (las pruebas de lang/ evitan que llegue a producción), y en desarrollo
+ * avisa en la consola; en producción el aviso no entra al bundle.
  */
 export function translate(translations: Translations, key: string, replacements: Replacements = {}): string {
-    const line = Object.hasOwn(translations, key) ? (translations[key] ?? key) : key;
+    const found = Object.hasOwn(translations, key) ? translations[key] : undefined;
+
+    if (found === undefined && import.meta.env.DEV) {
+        console.warn(`[i18n] Falta la traducción de «${key}».`);
+    }
+
+    const line = found ?? key;
     const values = new Map<string, string>();
 
     for (const [name, raw] of Object.entries(replacements)) {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { translate } from './translate';
 
@@ -9,6 +9,15 @@ const translations = {
     'full': ':name_full (:name)',
     'pair': ':first y :second',
 };
+
+beforeEach(() => {
+    // Las claves que faltan avisan en la consola: se espía para comprobarlo sin ensuciar la salida.
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+});
+
+afterEach(() => {
+    vi.unstubAllEnvs();
+});
 
 describe('translate', () => {
     it('devuelve el texto de la clave', () => {
@@ -43,5 +52,28 @@ describe('translate', () => {
     it('no confunde propiedades heredadas del objeto con claves', () => {
         expect(translate(translations, 'constructor')).toBe('constructor');
         expect(translate(translations, 'toString')).toBe('toString');
+    });
+
+    it('en desarrollo avisa en la consola de la clave que falta', () => {
+        vi.stubEnv('DEV', true);
+
+        translate(translations, 'home.missing');
+
+        expect(console.warn).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('home.missing'));
+    });
+
+    it('en producción no avisa: la clave que falta solo se muestra', () => {
+        vi.stubEnv('DEV', false);
+
+        expect(translate(translations, 'home.missing')).toBe('home.missing');
+        expect(console.warn).not.toHaveBeenCalled();
+    });
+
+    it('no avisa si la clave existe', () => {
+        vi.stubEnv('DEV', true);
+
+        translate(translations, 'home.title');
+
+        expect(console.warn).not.toHaveBeenCalled();
     });
 });
