@@ -3,11 +3,14 @@
 namespace App\Support;
 
 use App\Enums\Locale;
-use Illuminate\Support\Facades\Lang;
+use Illuminate\Support\Facades\File;
 
 /**
  * Textos de la interfaz de un idioma: las mismas líneas de lang/{idioma}.json
  * que usa __() en el servidor, para compartirlas con Vue (ADR 0010).
+ *
+ * Se lee solo ese archivo y no el cargador de traducciones: los JSON que
+ * registran los paquetes (loadJsonTranslationsFrom) no viajan al navegador.
  */
 final class Translations
 {
@@ -16,7 +19,8 @@ final class Translations
      */
     public static function for(Locale $locale): array
     {
-        $lines = Lang::getLoader()->load($locale->value, '*', '*');
+        $path = lang_path("{$locale->value}.json");
+        $lines = File::exists($path) ? File::json($path, JSON_THROW_ON_ERROR) : [];
         $translations = [];
 
         foreach ($lines as $key => $line) {
