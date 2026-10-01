@@ -15,7 +15,7 @@ Este es un proyecto de portafolio con todos los derechos reservados (ver [LICENS
 
 ## Idioma
 
-Documentación, commits e issues en español. Código (clases, variables, tablas, rutas) en inglés. Todo texto visible pasa por los archivos de idioma (`lang/es`, `lang/en`).
+Documentación, commits e issues en español. Código (clases, variables, tablas, rutas) en inglés. Todo texto visible pasa por los archivos de idioma `lang/es.json` y `lang/en.json`, con claves con puntos (`home.title`) y las mismas claves en los dos (ADR 0010).
 
 ## Decisiones
 
