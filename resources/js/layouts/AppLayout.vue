@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 
+import LocaleSwitcher from '@/components/LocaleSwitcher.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 import { useI18n } from '@/composables/useI18n';
 import wordmark from '@brand/logo/veni-wordmark.svg';
@@ -31,7 +32,10 @@ const year = new Date().getFullYear();
                         class="hidden h-10 w-auto dark:block"
                     >
                 </Link>
-                <ThemeToggle />
+                <div class="flex items-center gap-2">
+                    <LocaleSwitcher />
+                    <ThemeToggle />
+                </div>
             </div>
         </header>
 

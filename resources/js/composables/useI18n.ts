@@ -1,4 +1,4 @@
-import { usePage } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
 import type { EffectScope } from 'vue';
 import { computed, effectScope, watch } from 'vue';
 
@@ -12,6 +12,12 @@ export type Locale = 'es' | 'en';
 
 /** Claves de lang/es.json; la prueba de paridad garantiza las mismas en inglés. */
 export type TranslationKey = keyof typeof es;
+
+/**
+ * Ruta de LocaleController (routes/web.php). El servidor usa el mismo literal:
+ * tests/Feature/I18n/LocaleSwitchTest.php comprueba que coincidan.
+ */
+export const LOCALE_ENDPOINT = '/locale';
 
 let documentLangScope: EffectScope | undefined;
 
@@ -42,7 +48,8 @@ function syncDocumentLang(): void {
 
 /**
  * Idioma y textos de la interfaz (ADR 0010). El servidor resuelve el idioma y
- * comparte sus traducciones como props de Inertia; aquí solo se leen.
+ * comparte sus traducciones como props de Inertia; aquí se leen y, para
+ * cambiar de idioma, se le pide al servidor.
  */
 export function useI18n() {
     syncDocumentLang();
@@ -53,8 +60,21 @@ export function useI18n() {
         return translate(page.props.translations, key, replacements);
     }
 
+    /**
+     * Cambia el idioma sin recargar: el servidor lo guarda (cookie y cuenta) y
+     * responde la misma página con los textos del idioma nuevo.
+     */
+    function setLocale(locale: Locale): void {
+        if (locale === page.props.locale) {
+            return;
+        }
+
+        router.put(LOCALE_ENDPOINT, { locale }, { preserveScroll: true, preserveState: true });
+    }
+
     return {
         locale: computed(() => page.props.locale),
         t,
+        setLocale,
     };
 }
