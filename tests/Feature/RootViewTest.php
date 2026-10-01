@@ -40,6 +40,18 @@ test('declara el español como idioma del documento', function () {
         ->assertSee('<html lang="es"', false);
 });
 
+test('la descripción del documento llega en el idioma de la petición', function (string $locale) {
+    $description = trans('meta.description', [], $locale);
+
+    // Si faltara la traducción, trans() devolvería la clave.
+    expect($description)->not->toBe('meta.description');
+
+    $this->get('/?lang='.$locale)
+        ->assertOk()
+        ->assertSee('<html lang="'.$locale.'"', false)
+        ->assertSee('<meta name="description" content="'.e($description).'">', false);
+})->with(['es', 'en']);
+
 test('aplica el tema guardado antes de pintar', function () {
     $this->get('/')
         ->assertOk()
