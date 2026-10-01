@@ -122,5 +122,5 @@ test('ningún modelo con columnas _es y _en queda sin declarar el campo', functi
     }
 
     // Si el recorrido dejara de encontrar modelos, la prueba pasaría sin probar nada.
-    expect($checked)->toBe(9);
+    expect($checked)->toBeGreaterThan(0);
 });

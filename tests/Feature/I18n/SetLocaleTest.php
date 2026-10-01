@@ -1,8 +1,12 @@
 <?php
 
 use App\Enums\Locale;
+use App\Http\Middleware\SetLocale;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\App;
 use Illuminate\Testing\TestResponse;
 
 /*
@@ -10,6 +14,9 @@ use Illuminate\Testing\TestResponse;
 | Accept-Language y español por defecto.
 |
 | La cookie va sin cifrar (como la envía el navegador): withUnencryptedCookie.
+|
+| Los helpers de un archivo de prueba son funciones globales: llevan el nombre
+| del archivo como prefijo para no chocar con los de otro.
 */
 
 uses(RefreshDatabase::class);
@@ -19,7 +26,7 @@ beforeEach(function () {
 });
 
 /** El idioma se ve en <html lang> (antes de que corra Vue) y en Content-Language. */
-function assertServedIn(TestResponse $response, string $locale): void
+function setLocaleAssertServedIn(TestResponse $response, string $locale): void
 {
     $response->assertOk()
         ->assertHeader('Content-Language', $locale)
@@ -27,11 +34,11 @@ function assertServedIn(TestResponse $response, string $locale): void
 }
 
 test('sin preferencias responde en español', function () {
-    assertServedIn($this->get('/'), 'es');
+    setLocaleAssertServedIn($this->get('/'), 'es');
 });
 
 test('Accept-Language elige el idioma según la preferencia del teléfono', function (string $header, string $expected) {
-    assertServedIn($this->withHeader('Accept-Language', $header)->get('/'), $expected);
+    setLocaleAssertServedIn($this->withHeader('Accept-Language', $header)->get('/'), $expected);
 })->with([
     'inglés de EE. UU.' => ['en-US,en;q=0.9', 'en'],
     'español de Colombia' => ['es-CO,es;q=0.9,en;q=0.8', 'es'],
@@ -42,10 +49,24 @@ test('Accept-Language elige el idioma según la preferencia del teléfono', func
     'comodín' => ['*', 'es'],
 ]);
 
+test('sin la cabecera Accept-Language responde en español', function () {
+    // Las peticiones de prueba siempre llevan la cabecera (vacía, por
+    // Tests\TestCase): se arma una sin ella y pasa directo por el middleware.
+    $request = Request::create('/');
+    $request->headers->remove('Accept-Language');
+    App::setLocale('en');
+
+    $response = (new SetLocale)->handle($request, fn () => new Response);
+
+    expect($request->headers->has('Accept-Language'))->toBeFalse()
+        ->and(App::getLocale())->toBe('es')
+        ->and($response->headers->get('Content-Language'))->toBe('es');
+});
+
 test('la cuenta con sesión gana sobre Accept-Language', function () {
     $user = User::factory()->create(['locale' => Locale::En]);
 
-    assertServedIn(
+    setLocaleAssertServedIn(
         $this->actingAs($user)->withHeader('Accept-Language', 'es-CO')->get('/'),
         'en',
     );
@@ -54,7 +75,7 @@ test('la cuenta con sesión gana sobre Accept-Language', function () {
 test('la cookie gana sobre la cuenta y sobre Accept-Language', function () {
     $user = User::factory()->create(['locale' => Locale::Es]);
 
-    assertServedIn(
+    setLocaleAssertServedIn(
         $this->actingAs($user)
             ->withUnencryptedCookie('locale', 'en')
             ->withHeader('Accept-Language', 'es-CO')
@@ -66,7 +87,7 @@ test('la cookie gana sobre la cuenta y sobre Accept-Language', function () {
 test('?lang gana sobre la cookie y la fija por un año', function () {
     $response = $this->withUnencryptedCookie('locale', 'es')->get('/?lang=en');
 
-    assertServedIn($response, 'en');
+    setLocaleAssertServedIn($response, 'en');
     $response->assertCookie('locale', 'en', false);
 
     $cookie = $response->getCookie('locale', false);
@@ -81,7 +102,7 @@ test('?lang gana sobre la cookie y la fija por un año', function () {
 test('?lang no cambia el idioma guardado en la cuenta', function () {
     $user = User::factory()->create(['locale' => Locale::Es]);
 
-    assertServedIn($this->actingAs($user)->get('/?lang=en'), 'en');
+    setLocaleAssertServedIn($this->actingAs($user)->get('/?lang=en'), 'en');
 
     expect($user->fresh()?->locale)->toBe(Locale::Es);
 });
@@ -95,7 +116,7 @@ test('sin ?lang no escribe la cookie', function () {
 test('un ?lang inválido se ignora: decide la cookie y no se reescribe', function (string $query) {
     $response = $this->withUnencryptedCookie('locale', 'en')->get('/?'.$query);
 
-    assertServedIn($response, 'en');
+    setLocaleAssertServedIn($response, 'en');
     $response->assertCookieMissing('locale');
 })->with([
     'idioma sin soporte' => ['lang=fr'],
@@ -104,7 +125,7 @@ test('un ?lang inválido se ignora: decide la cookie y no se reescribe', functio
 ]);
 
 test('una cookie inválida se ignora: decide Accept-Language', function () {
-    assertServedIn(
+    setLocaleAssertServedIn(
         $this->withUnencryptedCookie('locale', 'fr')->withHeader('Accept-Language', 'en')->get('/'),
         'en',
     );

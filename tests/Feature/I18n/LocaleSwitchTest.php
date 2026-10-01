@@ -3,7 +3,7 @@
 use App\Enums\Locale;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Route;
 
 /*
 | Cambio de idioma desde el selector (ADR 0010): PUT /locale guarda la cookie
@@ -77,7 +77,10 @@ test('rechaza un idioma sin soporte y no guarda nada', function (mixed $locale) 
     'arreglo' => [['en']],
 ]);
 
-test('la ruta coincide con la que usa el selector del frontend', function () {
+test('el selector cambia el idioma solo con PUT /locale', function () {
+    $route = Route::getRoutes()->getByName('locale.update');
+
+    // El mismo método y literal que pide el frontend: useI18n.test.ts comprueba la petición.
     expect(route('locale.update', absolute: false))->toBe('/locale')
-        ->and(File::get(resource_path('js/composables/useI18n.ts')))->toContain("LOCALE_ENDPOINT = '/locale'");
+        ->and($route?->methods())->toBe(['PUT']);
 });

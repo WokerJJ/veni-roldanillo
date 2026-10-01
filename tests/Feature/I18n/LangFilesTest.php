@@ -1,19 +1,32 @@
 <?php
 
+use App\Enums\Locale;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Finder\Finder;
 
 /*
-| Los textos de la interfaz viven en lang/es.json y lang/en.json (ADR 0010).
-| Estas pruebas hacen que CI falle si un idioma tiene una clave que el otro
-| no tiene, si cambian los marcadores (:year) entre idiomas o si el código usa
-| una clave que no existe.
+| Los textos de la interfaz viven en lang/{idioma}.json, un archivo por cada
+| idioma de App\Enums\Locale (ADR 0010). Estas pruebas hacen que CI falle si un
+| idioma tiene una clave que otro no tiene, si cambian los marcadores (:year)
+| entre idiomas o si el código usa una clave que no existe. Un idioma nuevo en
+| el enum entra solo en todas ellas.
+|
+| Los helpers de un archivo de prueba son funciones globales: llevan el nombre
+| del archivo como prefijo para no chocar con los de otro.
 */
 
-const LOCALES = ['es', 'en'];
+/**
+ * Idiomas de la interfaz, como texto (para los nombres de los datasets).
+ *
+ * @return list<string>
+ */
+function langFilesLocales(): array
+{
+    return array_column(Locale::cases(), 'value');
+}
 
 /** @return array<array-key, mixed> */
-function langLines(string $locale): array
+function langFilesLines(string $locale): array
 {
     $lines = json_decode(File::get(lang_path("{$locale}.json")), true, flags: JSON_THROW_ON_ERROR);
 
@@ -25,7 +38,7 @@ function langLines(string $locale): array
  *
  * @return list<string>
  */
-function placeholdersIn(string $line): array
+function langFilesPlaceholdersIn(string $line): array
 {
     preg_match_all('/:([A-Za-z_][A-Za-z0-9_]*)/', $line, $matches);
     $names = array_unique(array_map(strtolower(...), $matches[1]));
@@ -40,7 +53,7 @@ function placeholdersIn(string $line): array
  *
  * @return list<string>
  */
-function translationKeysIn(string $source): array
+function langFilesKeysIn(string $source): array
 {
     preg_match_all(
         '/(?<![\w$.>:])(?:__|trans_choice|trans|@lang|t)\(\s*([\'"])(.+?)(?<!\\\\)\1/',
@@ -52,7 +65,7 @@ function translationKeysIn(string $source): array
 }
 
 /** @return list<string> */
-function translationKeysUsedInCode(): array
+function langFilesKeysUsedInCode(): array
 {
     $files = Finder::create()
         ->files()
@@ -65,7 +78,7 @@ function translationKeysUsedInCode(): array
     $keys = [];
 
     foreach ($files as $file) {
-        array_push($keys, ...translationKeysIn($file->getContents()));
+        array_push($keys, ...langFilesKeysIn($file->getContents()));
     }
 
     $keys = array_values(array_unique($keys));
@@ -74,16 +87,21 @@ function translationKeysUsedInCode(): array
     return $keys;
 }
 
-test('lang/es.json y lang/en.json tienen exactamente las mismas claves', function () {
-    $es = array_keys(langLines('es'));
-    $en = array_keys(langLines('en'));
-
-    expect(array_values(array_diff($es, $en)))->toBe([], 'Claves que faltan en lang/en.json')
-        ->and(array_values(array_diff($en, $es)))->toBe([], 'Claves que faltan en lang/es.json');
+test('hay más de un idioma que comparar', function () {
+    // Con un solo idioma en el enum, las comparaciones de abajo pasarían sin comparar nada.
+    expect(count(langFilesLocales()))->toBeGreaterThan(1);
 });
 
+test('el idioma tiene exactamente las mismas claves que el de origen', function (string $locale) {
+    $source = array_keys(langFilesLines(Locale::DEFAULT->value));
+    $keys = array_keys(langFilesLines($locale));
+
+    expect(array_values(array_diff($source, $keys)))->toBe([], "Claves que faltan en lang/{$locale}.json")
+        ->and(array_values(array_diff($keys, $source)))->toBe([], "Claves de lang/{$locale}.json que no están en el idioma de origen");
+})->with(langFilesLocales());
+
 test('cada texto es una cadena no vacía', function (string $locale) {
-    $lines = langLines($locale);
+    $lines = langFilesLines($locale);
 
     expect($lines)->not->toBeEmpty();
 
@@ -91,16 +109,16 @@ test('cada texto es una cadena no vacía', function (string $locale) {
         expect($line)->toBeString("{$locale}.json: «{$key}» no es texto")
             ->and(trim((string) $line))->not->toBe('', "{$locale}.json: «{$key}» está vacía");
     }
-})->with(LOCALES);
+})->with(langFilesLocales());
 
-test('los dos idiomas usan los mismos marcadores', function () {
-    $en = langLines('en');
+test('el idioma usa los mismos marcadores que el de origen', function (string $locale) {
+    $lines = langFilesLines($locale);
 
-    foreach (langLines('es') as $key => $line) {
-        expect(placeholdersIn((string) ($en[$key] ?? '')))
-            ->toBe(placeholdersIn((string) $line), "Marcadores distintos en «{$key}»");
+    foreach (langFilesLines(Locale::DEFAULT->value) as $key => $line) {
+        expect(langFilesPlaceholdersIn((string) ($lines[$key] ?? '')))
+            ->toBe(langFilesPlaceholdersIn((string) $line), "Marcadores distintos en «{$key}» de lang/{$locale}.json");
     }
-});
+})->with(langFilesLocales());
 
 test('el buscador de claves reconoce las llamadas de PHP, Blade y Vue', function () {
     $source = <<<'SRC'
@@ -109,17 +127,18 @@ test('el buscador de claves reconoce las llamadas de PHP, Blade y Vue', function
         $page->t('no.metodo') i18n.t('no.objeto') $t('no.global') get('no.otra') parse('no.otra')
         SRC;
 
-    expect(translationKeysIn($source))->toBe([
+    expect(langFilesKeysIn($source))->toBe([
         'meta.description', 'layout.footer', 'home.title', 'home.items', 'home.logo_alt', 'home.heading',
     ]);
 });
 
 test('toda clave usada en el código existe en los archivos de idioma', function () {
-    $used = translationKeysUsedInCode();
+    $used = langFilesKeysUsedInCode();
 
     // Si el buscador dejara de encontrar claves, la prueba pasaría sin probar nada.
     expect($used)->toContain('meta.description', 'layout.skip_to_content', 'home.title');
 
-    expect(array_values(array_diff($used, array_keys(langLines('es')))))
-        ->toBe([], 'Claves usadas en el código que no están en lang/es.json ni lang/en.json');
+    // Basta el idioma de origen: la prueba de paridad obliga a que estén en todos.
+    expect(array_values(array_diff($used, array_keys(langFilesLines(Locale::DEFAULT->value)))))
+        ->toBe([], 'Claves usadas en el código que no están en los archivos de idioma');
 });
