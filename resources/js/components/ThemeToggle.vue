@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { useI18n } from '@/composables/useI18n';
 import { useTheme } from '@/composables/useTheme';
 
+const { t } = useI18n();
 const { isDark, toggleTheme } = useTheme();
 </script>
 
@@ -10,7 +12,7 @@ const { isDark, toggleTheme } = useTheme();
         type="button"
         class="inline-flex min-h-touch min-w-touch items-center justify-center rounded-full text-ink transition-colors hover:bg-surface"
         :aria-pressed="isDark"
-        aria-label="Modo oscuro"
+        :aria-label="t('theme.dark_mode')"
         @click="toggleTheme"
     >
         <svg

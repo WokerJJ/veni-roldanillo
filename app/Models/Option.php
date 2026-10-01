@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTranslatableFields;
 use App\Models\Contracts\BelongsToRestaurant;
 use App\Policies\RestaurantContentPolicy;
 use Database\Factories\OptionFactory;
@@ -19,7 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Option extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<OptionFactory> */
-    use HasFactory;
+    use HasFactory, HasTranslatableFields;
 
     /**
      * @return array<string, string>
@@ -31,6 +32,16 @@ class Option extends Model implements BelongsToRestaurant
             'available' => 'boolean',
             'position' => 'integer',
         ];
+    }
+
+    /**
+     * Campos con columnas _es y _en (ver HasTranslatableFields).
+     *
+     * @return list<string>
+     */
+    public function translatableFields(): array
+    {
+        return ['name'];
     }
 
     /** @return BelongsTo<OptionGroup, $this> */

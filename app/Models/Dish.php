@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTranslatableFields;
 use App\Models\Contracts\BelongsToRestaurant;
 use App\Policies\RestaurantContentPolicy;
 use Database\Factories\DishFactory;
@@ -35,7 +36,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Dish extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<DishFactory> */
-    use HasFactory;
+    use HasFactory, HasTranslatableFields;
 
     /** @var array<string, mixed> */
     protected $attributes = [
@@ -55,6 +56,16 @@ class Dish extends Model implements BelongsToRestaurant
             'sold_out_until' => 'date',
             'position' => 'integer',
         ];
+    }
+
+    /**
+     * Campos con columnas _es y _en (ver HasTranslatableFields).
+     *
+     * @return list<string>
+     */
+    public function translatableFields(): array
+    {
+        return ['name', 'description'];
     }
 
     /** @return BelongsTo<Restaurant, $this> */

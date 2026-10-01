@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Enums\Locale;
 use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -33,7 +32,8 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
             'role' => UserRole::User,
-            'locale' => Locale::Es,
+            // Sin idioma elegido: decide el dispositivo (ADR 0010).
+            'locale' => null,
         ];
     }
 

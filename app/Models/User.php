@@ -21,8 +21,10 @@ use Illuminate\Notifications\Notifiable;
  * Larastan tipa las columnas enum de la migración como literales e ignora el
  * cast; los @property fijan el tipo del enum PHP.
  *
+ * locale nulo: la persona no ha elegido idioma y decide el dispositivo (ADR 0010).
+ *
  * @property UserRole $role
- * @property Locale $locale
+ * @property Locale|null $locale
  */
 #[Fillable(['name', 'email', 'password', 'locale'])]
 #[Hidden(['password', 'remember_token'])]
@@ -34,7 +36,6 @@ class User extends Authenticatable
     /** @var array<string, mixed> */
     protected $attributes = [
         'role' => 'user',
-        'locale' => 'es',
     ];
 
     /**
