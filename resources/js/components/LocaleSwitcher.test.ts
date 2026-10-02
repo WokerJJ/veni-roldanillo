@@ -51,6 +51,17 @@ describe('LocaleSwitcher', () => {
         }
     });
 
+    it('lleva el ícono de idioma como adorno: el nombre lo da el grupo', async () => {
+        const { wrapper, group } = await mountSwitcher();
+        const icon = group().get('svg');
+
+        expect(icon.attributes('data-icon')).toBe('idioma');
+        expect(icon.attributes('aria-hidden')).toBe('true');
+        expect(icon.findAll('path').length).toBeGreaterThan(0);
+        // Fuera de los botones: no cambia su texto ni su nombre.
+        expect(wrapper.findAll('button svg')).toHaveLength(0);
+    });
+
     it('nombra cada idioma en su propio idioma', async () => {
         const { button } = await mountSwitcher();
 

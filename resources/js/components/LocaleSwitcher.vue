@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Icon from '@/components/Icon.vue';
 import type { Locale } from '@/composables/useI18n';
 import { useI18n } from '@/composables/useI18n';
 
@@ -18,6 +19,8 @@ const options: readonly { value: Locale; code: string; name: string }[] = [
 <template>
     <!-- Botones de alternar: aria-pressed marca el idioma actual. -->
     <div role="group" :aria-label="t('locale.switcher')" class="inline-flex items-center rounded-full border border-line">
+        <!-- Adorno que dice «idioma» sin palabras; el nombre lo da el grupo. -->
+        <Icon name="idioma" :size="20" class="mr-1 ml-3 shrink-0 text-ink-muted" />
         <button
             v-for="option in options"
             :key="option.value"

@@ -14,3 +14,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0008](0008-ubicacion-y-rutas-en-el-dispositivo.md) | Ubicación del usuario y rutas calculadas en el dispositivo | Aceptada |
 | [0009](0009-modelo-de-datos-inicial.md) | Modelo de datos inicial en PostgreSQL + PostGIS | Aceptada |
 | [0010](0010-idioma-de-la-interfaz.md) | Idioma de la interfaz: resuelto en el servidor, textos en JSON compartidos con Vue | Aceptada |
+| [0011](0011-iconos-colombia-icons.md) | Íconos: colombia-icons copiados desde una versión fija | Aceptada |

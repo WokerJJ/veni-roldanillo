@@ -15,7 +15,8 @@ export default defineConfig({
     },
     test: {
         environment: 'happy-dom',
-        include: ['resources/js/**/*.test.ts'],
+        // scripts/: pruebas de los scripts de Node (icons-sync), en entorno node.
+        include: ['resources/js/**/*.test.ts', 'scripts/**/*.test.mjs'],
         restoreMocks: true,
         unstubGlobals: true,
     },

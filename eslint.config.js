@@ -43,11 +43,22 @@ export default defineConfig(
         },
     },
     {
+        // Icon pinta SVG del repositorio verificados por sha256 y validados por
+        // scripts/icons-sync.mjs (ADR 0011); en el resto, v-html sigue prohibido.
+        // Su nombre de una palabra no choca con ningún elemento de HTML ni de SVG.
+        files: ['resources/js/components/Icon.vue'],
+        rules: {
+            'vue/no-v-html': 'off',
+            'vue/multi-word-component-names': 'off',
+        },
+    },
+    {
         files: ['vite.config.ts', 'vitest.config.ts'],
         languageOptions: { globals: globals.node },
     },
     {
-        files: ['eslint.config.js'],
+        // JavaScript de Node sin tsconfig: sin las reglas que necesitan tipos.
+        files: ['eslint.config.js', 'scripts/**/*.mjs'],
         ...tseslint.configs.disableTypeChecked,
         languageOptions: { globals: globals.node },
     },
