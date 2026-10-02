@@ -16,6 +16,8 @@ vi.mock('pmtiles', () => ({
 const TEMPLATE = 'https://tiles.example.test/style/veni-{theme}-{locale}.json';
 const CENTER = [-76.1547, 4.4128];
 const BOUNDS = [-76.3, 4.3, -76, 4.55];
+/** Otra esquina del pueblo, adonde quien usa el mapa lo pudo haber llevado. */
+const ELSEWHERE: [number, number] = [-76.1493, 4.4172];
 
 function styleUrl(theme: 'claro' | 'oscuro', locale: 'es' | 'en'): string {
     return `https://tiles.example.test/style/veni-${theme}-${locale}.json`;
@@ -162,9 +164,17 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
     delete document.documentElement.dataset.theme;
 });
+
+/** Lo que avisa MapLibre cuando abre la fuente de los tiles (llegó el índice del PMTiles). */
+const SOURCE_OPENED = { dataType: 'source', sourceDataType: 'metadata', sourceId: 'protomaps' };
+/** El plazo corre con un reloj de mentira; lo demás (import(), promesas) sigue su curso. */
+function useFakeClock(): void {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+}
 
 describe('MapView', () => {
     describe('carga', () => {
@@ -194,6 +204,8 @@ describe('MapView', () => {
             expect(created.options.center).toEqual(CENTER);
             expect(created.options.zoom).toBe(13.5);
             expect(created.options.maxBounds).toEqual(BOUNDS);
+            expect(created.getCenter()).toEqual(CENTER);
+            expect(created.getZoom()).toBe(13.5);
             expect(created.container.parentElement?.getAttribute('aria-label')).toBe('Mapa de Roldanillo');
         });
 
@@ -220,6 +232,30 @@ describe('MapView', () => {
             expect(region().attributes('aria-busy')).toBe('false');
             expect(skeleton().exists()).toBe(false);
             expect(created.container.classList.contains('invisible')).toBe(false);
+        });
+
+        it('deja ver el mapa en cuanto abre la fuente de los tiles, sin esperar a que termine de cargar', async () => {
+            const { map, region, skeleton } = await mountMap();
+            const created = await map();
+
+            // Llegó el índice del PMTiles: MapLibre ya pinta el fondo y va trayendo los tiles.
+            created.fire('sourcedata', SOURCE_OPENED);
+            await flushPromises();
+
+            expect(skeleton().exists()).toBe(false);
+            expect(region().attributes('aria-busy')).toBe('false');
+            expect(created.container.classList.contains('invisible')).toBe(false);
+        });
+
+        it('otro aviso de la fuente (que empezó a pedirla) todavía no lo deja ver', async () => {
+            const { map, skeleton } = await mountMap();
+            const created = await map();
+
+            created.fire('sourcedata', { dataType: 'source', sourceDataType: 'visibility', sourceId: 'protomaps' });
+            await flushPromises();
+
+            expect(skeleton().exists()).toBe(true);
+            expect(created.container.classList.contains('invisible')).toBe(true);
         });
 
         it('registra el protocolo de PMTiles y le da a MapLibre la URL de su worker', async () => {
@@ -294,6 +330,9 @@ describe('MapView', () => {
             const { loadedMap, toggleTheme, maplibre } = await mountMap();
             const created = await loadedMap();
 
+            // Quien usa el mapa se fue a otra esquina del pueblo y se acercó.
+            created.userMovesTo({ center: ELSEWHERE, zoom: 16 });
+
             await toggleTheme();
             await vi.waitFor(() => {
                 expect(created.setStyle).toHaveBeenCalledOnce();
@@ -304,6 +343,10 @@ describe('MapView', () => {
             expect(maplibre.maps).toHaveLength(1);
             expect(created.remove).not.toHaveBeenCalled();
 
+            // El estilo nuevo trae el centro del pueblo: la cámara sigue donde la dejaron.
+            expect(created.getCenter()).toEqual(ELSEWHERE);
+            expect(created.getZoom()).toBe(16);
+
             for (const move of [created.jumpTo, created.easeTo, created.flyTo, created.setCenter, created.setZoom, created.fitBounds]) {
                 expect(move).not.toHaveBeenCalled();
             }
@@ -313,6 +356,8 @@ describe('MapView', () => {
             const { loadedMap, inertia, maplibre, region } = await mountMap();
             const created = await loadedMap();
 
+            created.userMovesTo({ center: ELSEWHERE, zoom: 16 });
+
             inertia.receiveFromServer('en', { replace: true });
             await vi.waitFor(() => {
                 expect(created.setStyle).toHaveBeenCalledOnce();
@@ -321,6 +366,8 @@ describe('MapView', () => {
             expect(created.setStyle).toHaveBeenCalledWith(styleFrom(styleUrl('claro', 'en')), { diff: false });
             expect(maplibre.maps).toHaveLength(1);
             expect(created.jumpTo).not.toHaveBeenCalled();
+            expect(created.getCenter()).toEqual(ELSEWHERE);
+            expect(created.getZoom()).toBe(16);
             expect(region().attributes('aria-label')).toBe('Map of Roldanillo');
             expect([...created.container.querySelectorAll('button')].map((button) => button.title)).toEqual(['Zoom in', 'Zoom out']);
             expect([...created.container.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'))).toEqual([
@@ -362,6 +409,19 @@ describe('MapView', () => {
             });
         });
 
+        it('con el mapa a la vista y todavía cargando, el cambio de tema se aplica sin esperar', async () => {
+            const { map, toggleTheme } = await mountMap();
+            const created = await map();
+
+            created.fire('sourcedata', SOURCE_OPENED);
+            await flushPromises();
+            await toggleTheme();
+
+            await vi.waitFor(() => {
+                expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'es')), { diff: false });
+            });
+        });
+
         it('si el estilo nuevo no llega, el mapa sigue con el anterior', async () => {
             const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
             const { loadedMap, toggleTheme, alert, region } = await mountMap();
@@ -377,6 +437,109 @@ describe('MapView', () => {
             expect(created.remove).not.toHaveBeenCalled();
             expect(alert().exists()).toBe(false);
             expect(region().attributes('aria-busy')).toBe('false');
+        });
+
+        it.each([
+            ['vuelve la conexión', (): void => void window.dispatchEvent(new Event('online'))],
+            [
+                'el navegador recupera el contexto de WebGL',
+                (created: FakeMapLibre.Map): void => {
+                    created.fire('webglcontextrestored');
+                },
+            ],
+        ] as const)('si el estilo nuevo no llegó, lo vuelve a pedir cuando %s', async (_when, happen) => {
+            const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { loadedMap, toggleTheme } = await mountMap();
+            const created = await loadedMap();
+
+            styles.fail(503);
+            await toggleTheme();
+            await vi.waitFor(() => {
+                expect(error).toHaveBeenCalledOnce();
+            });
+
+            styles.recover();
+            happen(created);
+            await vi.waitFor(() => {
+                expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'es')), { diff: false });
+            });
+
+            expect(styles.urls()).toEqual([styleUrl('claro', 'es'), styleUrl('oscuro', 'es'), styleUrl('oscuro', 'es')]);
+        });
+
+        it('con el estilo al día, que vuelva la conexión o el contexto de WebGL no pide nada', async () => {
+            const { loadedMap, toggleTheme } = await mountMap();
+            const created = await loadedMap();
+
+            await toggleTheme();
+            await vi.waitFor(() => {
+                expect(created.setStyle).toHaveBeenCalledOnce();
+            });
+
+            window.dispatchEvent(new Event('online'));
+            created.fire('webglcontextrestored');
+            await flushPromises();
+
+            expect(styles.urls()).toEqual([styleUrl('claro', 'es'), styleUrl('oscuro', 'es')]);
+            expect(created.setStyle).toHaveBeenCalledOnce();
+        });
+
+        it('con dos cambios seguidos, si el último no llega queda el anterior y al volver la conexión se pone al día', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { loadedMap, toggleTheme, inertia } = await mountMap();
+            const created = await loadedMap();
+
+            styles.hold();
+            await toggleTheme();
+            inertia.receiveFromServer('en', { replace: true });
+            await vi.waitFor(() => {
+                expect(styles.pending.map((request) => request.url)).toEqual([styleUrl('oscuro', 'es'), styleUrl('oscuro', 'en')]);
+            });
+
+            // El último pedido falla y el anterior, que sí es válido, llega después.
+            styles.pending[1]?.respond({ ok: false, status: 503 });
+            styles.pending[0]?.respond();
+            await flushPromises();
+
+            expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'es')), { diff: false });
+
+            window.dispatchEvent(new Event('online'));
+            await vi.waitFor(() => {
+                expect(styles.pending).toHaveLength(3);
+            });
+            expect(styles.pending[2]?.url).toBe(styleUrl('oscuro', 'en'));
+
+            styles.pending[2]?.respond();
+            await flushPromises();
+
+            expect(created.setStyle).toHaveBeenCalledTimes(2);
+            expect(created.setStyle).toHaveBeenLastCalledWith(styleFrom(styleUrl('oscuro', 'en')), { diff: false });
+        });
+
+        it('un estilo viejo que llega tarde no reemplaza al que se aplicó después de que fallara', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { loadedMap, toggleTheme, inertia } = await mountMap();
+            const created = await loadedMap();
+
+            styles.hold();
+            await toggleTheme();
+            inertia.receiveFromServer('en', { replace: true });
+            await vi.waitFor(() => {
+                expect(styles.pending).toHaveLength(2);
+            });
+
+            // El último falla, vuelve la conexión y el reintento llega antes que el primero.
+            styles.pending[1]?.respond({ ok: false, status: 503 });
+            await flushPromises();
+            window.dispatchEvent(new Event('online'));
+            await vi.waitFor(() => {
+                expect(styles.pending).toHaveLength(3);
+            });
+            styles.pending[2]?.respond();
+            styles.pending[0]?.respond();
+            await flushPromises();
+
+            expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'en')), { diff: false });
         });
     });
 
@@ -462,6 +625,38 @@ describe('MapView', () => {
             expect(maplibre.removeProtocol).toHaveBeenCalledExactlyOnceWith('pmtiles');
         });
 
+        it.each([
+            ['es', 'Por ahora no podemos mostrarte el mapa en este dispositivo.', 'Reintentar'],
+            ['en', "We can't show the map on this device right now.", 'Try again'],
+        ] as const)('sin WebGL el mensaje (%s) no le echa la culpa a la conexión', async (locale, message, retry) => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { alert } = await mountMap({ locale, mapError: new Error('Failed to initialize WebGL') });
+
+            await vi.waitFor(() => {
+                expect(alert().exists()).toBe(true);
+            });
+
+            expect(alert().get('p').text()).toBe(message);
+            expect(alert().get('button').text()).toBe(retry);
+        });
+
+        it('tras un fallo que no era de conexión, si el reintento falla por la conexión el mensaje cambia', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { alert } = await mountMap({ mapError: new Error('Failed to initialize WebGL') });
+
+            await vi.waitFor(() => {
+                expect(alert().exists()).toBe(true);
+            });
+
+            styles.fail(503);
+            await alert().get('button').trigger('click');
+            await vi.waitFor(() => {
+                expect(alert().exists()).toBe(true);
+            });
+
+            expect(alert().get('p').text()).toBe('No pudimos cargar el mapa. Revisá tu conexión y volvé a intentar.');
+        });
+
         it('si los tiles no abren muestra el error y libera el mapa', async () => {
             const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
             const { map, alert, maplibre } = await mountMap();
@@ -477,6 +672,86 @@ describe('MapView', () => {
             expect(maplibre.removeProtocol).toHaveBeenCalledExactlyOnceWith('pmtiles');
             // El de MapLibre, que con un oyente propio ya no lo escribe, y el del componente.
             expect(error).toHaveBeenCalledTimes(2);
+        });
+
+        it('ya a la vista, si la fuente falla antes de terminar de cargar muestra el error y libera el mapa', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { map, alert } = await mountMap();
+            const created = await map();
+
+            created.fire('sourcedata', SOURCE_OPENED);
+            await flushPromises();
+            expect(alert().exists()).toBe(false);
+
+            created.fire('error', { error: new Error('Failed to fetch'), sourceId: 'protomaps' });
+            created.fire('load');
+            await flushPromises();
+
+            expect(alert().exists()).toBe(true);
+            expect(created.remove).toHaveBeenCalledOnce();
+        });
+
+        it('si el mapa no empieza a pintar en 20 s muestra el error con el botón de reintentar y lo libera', async () => {
+            const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            useFakeClock();
+            const { map, alert, skeleton, maplibre } = await mountMap();
+            const created = await map();
+
+            // Ni la fuente ni «load»: una petición colgada o un estilo que MapLibre no acepta.
+            vi.advanceTimersByTime(19_000);
+            await flushPromises();
+            expect(alert().exists()).toBe(false);
+            expect(skeleton().exists()).toBe(true);
+
+            vi.advanceTimersByTime(1_000);
+            await flushPromises();
+
+            expect(alert().get('button').text()).toBe('Reintentar');
+            expect(created.remove).toHaveBeenCalledOnce();
+            expect(maplibre.removeProtocol).toHaveBeenCalledExactlyOnceWith('pmtiles');
+            expect(String(error.mock.calls.at(-1)?.[1])).toContain('20 s');
+        });
+
+        it('con el mapa ya a la vista no corre el plazo: los tiles pueden tardar con mala señal', async () => {
+            useFakeClock();
+            const { map, alert } = await mountMap();
+            const created = await map();
+
+            created.fire('sourcedata', SOURCE_OPENED);
+            await flushPromises();
+            vi.advanceTimersByTime(120_000);
+            await flushPromises();
+
+            expect(alert().exists()).toBe(false);
+            expect(created.remove).not.toHaveBeenCalled();
+            expect(created.container.classList.contains('invisible')).toBe(false);
+        });
+
+        it('si el worker de MapLibre no carga muestra el error sin esperar al plazo', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { map, alert } = await mountMap();
+            const created = await map();
+
+            // La fuente abre (no pasa por el worker) y el mapa queda a la vista, pero sin worker nunca habrá tiles.
+            created.fire('sourcedata', SOURCE_OPENED);
+            created.fire('error', { error: new Error('Worker failed to load. Check that the worker URL is correct.') });
+            await flushPromises();
+
+            expect(alert().exists()).toBe(true);
+            expect(created.remove).toHaveBeenCalledOnce();
+        });
+
+        it('otro error sin fuente (un ícono que no baja) no tumba el mapa', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { map, alert } = await mountMap();
+            const created = await map();
+
+            created.fire('error', { error: new Error('Unable to load sprite') });
+            created.fire('load');
+            await flushPromises();
+
+            expect(alert().exists()).toBe(false);
+            expect(created.remove).not.toHaveBeenCalled();
         });
 
         it('un tile suelto que falla no tumba el mapa', async () => {
@@ -507,6 +782,8 @@ describe('MapView', () => {
             expect(styles.fetchMock).not.toHaveBeenCalled();
             expect(maplibre.maps).toHaveLength(0);
             expect(String(error.mock.calls[0]?.[1])).toContain('VITE_MAP_STYLE_URL');
+            // No es la conexión de quien visita: a la app le falta configuración.
+            expect(alert().get('p').text()).toBe('Por ahora no podemos mostrarte el mapa en este dispositivo.');
         });
     });
 
@@ -521,6 +798,26 @@ describe('MapView', () => {
 
             expect(created.remove).toHaveBeenCalledOnce();
             expect(maplibre.removeProtocol).toHaveBeenCalledExactlyOnceWith('pmtiles');
+        });
+
+        it('ya desmontado, que vuelva la conexión no pide el estilo que había quedado pendiente', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { wrapper, loadedMap, toggleTheme } = await mountMap();
+            await loadedMap();
+
+            styles.fail(503);
+            await toggleTheme();
+            await vi.waitFor(() => {
+                expect(styles.urls()).toHaveLength(2);
+            });
+            await flushPromises();
+
+            wrapper.unmount();
+            styles.recover();
+            window.dispatchEvent(new Event('online'));
+            await flushPromises();
+
+            expect(styles.urls()).toHaveLength(2);
         });
 
         it('si se desmonta mientras baja el estilo, cancela la descarga y no crea el mapa', async () => {

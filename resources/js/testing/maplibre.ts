@@ -48,19 +48,55 @@ class FakeNavigationControl {
     }
 }
 
+/** Lo que un estilo, las opciones del mapa o un movimiento dicen de la cámara. */
+interface CameraChange {
+    center?: unknown;
+    zoom?: unknown;
+}
+
 class FakeMap {
     readonly container: HTMLElement;
     readonly controls: FakeNavigationControl[] = [];
     readonly touchZoomRotate = { disableRotation: vi.fn() };
     readonly keyboard = { disableRotation: vi.fn() };
-    readonly setStyle = vi.fn();
-    // Lo que movería la cámara: las pruebas comprueban que nadie lo llama.
-    readonly jumpTo = vi.fn();
-    readonly easeTo = vi.fn();
-    readonly flyTo = vi.fn();
-    readonly setCenter = vi.fn();
-    readonly setZoom = vi.fn();
-    readonly fitBounds = vi.fn();
+
+    // La cámara, como en MapLibre: arranca en 0,0 con zoom 0 y «sin tocar»
+    // hasta que algo la mueve (las opciones, la app o quien usa el mapa).
+    private center: unknown = [0, 0];
+    private zoom: unknown = 0;
+    private cameraUntouched = true;
+
+    /**
+     * Como MapLibre cada vez que carga un estilo: el `center` y el `zoom` del
+     * estilo mandan solo mientras nadie haya tocado la cámara. Por eso cambiar
+     * de estilo no devuelve el mapa al centro del pueblo.
+     */
+    readonly setStyle = vi.fn((style: CameraChange) => {
+        if (this.cameraUntouched) {
+            this.moveCamera(style);
+        }
+    });
+    // Lo que mueve la cámara: las pruebas comprueban que la app no lo llama
+    // y, con getCenter() y getZoom(), que la cámara sigue donde estaba.
+    readonly jumpTo = vi.fn((camera: CameraChange) => {
+        this.moveCamera(camera);
+    });
+    readonly easeTo = vi.fn((camera: CameraChange) => {
+        this.moveCamera(camera);
+    });
+    readonly flyTo = vi.fn((camera: CameraChange) => {
+        this.moveCamera(camera);
+    });
+    readonly setCenter = vi.fn((center: unknown) => {
+        this.moveCamera({ center });
+    });
+    readonly setZoom = vi.fn((zoom: unknown) => {
+        this.moveCamera({ zoom });
+    });
+    readonly fitBounds = vi.fn((bounds: unknown) => {
+        // Sin proyección no hay centro que calcular: queda la marca de que se movió.
+        this.moveCamera({ center: bounds });
+    });
     /** Como MapLibre: deja el contenedor vacío. */
     readonly remove = vi.fn(() => {
         this.container.replaceChildren();
@@ -81,7 +117,38 @@ class FakeMap {
         this.container = options.container as HTMLElement;
         this.canvas.setAttribute('aria-label', 'Map');
         this.container.append(this.canvas);
+        // Primero la cámara de las opciones; la del estilo, solo si no vino en ellas.
+        this.moveCamera(options);
+
+        if (typeof options.style === 'object' && options.style !== null) {
+            this.setStyle(options.style);
+            this.setStyle.mockClear();
+        }
+
         maps.push(this);
+    }
+
+    getCenter(): unknown {
+        return this.center;
+    }
+
+    getZoom(): unknown {
+        return this.zoom;
+    }
+
+    /** Lo que hace quien usa el mapa al arrastrarlo o acercarlo: mueve la cámara sin pasar por la app. */
+    userMovesTo(camera: { center: [number, number]; zoom: number }): void {
+        this.moveCamera(camera);
+    }
+
+    private moveCamera(camera: CameraChange): void {
+        if (camera.center === undefined && camera.zoom === undefined) {
+            return;
+        }
+
+        this.center = camera.center ?? this.center;
+        this.zoom = camera.zoom ?? this.zoom;
+        this.cameraUntouched = false;
     }
 
     getCanvas(): HTMLCanvasElement {

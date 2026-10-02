@@ -22,6 +22,11 @@ enableAutoUnmount(afterEach);
 beforeEach(() => {
     vi.resetModules();
     vi.stubEnv('VITE_MAP_STYLE_URL', 'https://tiles.example.test/veni-{theme}-{locale}.json');
+    // MapView pide el estilo al montarse, sin esperar al motor: aquí no sale a la red.
+    vi.stubGlobal(
+        'fetch',
+        vi.fn(() => new Promise(() => undefined)),
+    );
     vi.stubGlobal(
         'matchMedia',
         vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),

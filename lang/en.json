@@ -15,6 +15,7 @@
     "map.zoom_out": "Zoom out",
     "map.loading": "Loading the map…",
     "map.error": "We couldn't load the map. Check your connection and try again.",
+    "map.unavailable": "We can't show the map on this device right now.",
     "map.retry": "Try again",
     "credits.icons": "Icons from colombia-icons by Miguel Teheran, under the MIT License."
 }

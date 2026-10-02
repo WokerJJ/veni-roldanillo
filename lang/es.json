@@ -15,6 +15,7 @@
     "map.zoom_out": "Alejar",
     "map.loading": "Cargando el mapa…",
     "map.error": "No pudimos cargar el mapa. Revisá tu conexión y volvé a intentar.",
+    "map.unavailable": "Por ahora no podemos mostrarte el mapa en este dispositivo.",
     "map.retry": "Reintentar",
     "credits.icons": "Íconos de colombia-icons, de Miguel Teheran, con licencia MIT."
 }
