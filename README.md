@@ -46,12 +46,40 @@ Requisito: Docker con Docker Compose. PHP, Composer y PostgreSQL corren dentro d
 ```bash
 cp .env.example .env
 docker compose build
-docker compose run --rm app php artisan key:generate   # instala las dependencias la primera vez
+docker compose run --rm app php artisan key:generate   # la primera vez descarga las dependencias (medio minuto)
 docker compose up -d
 docker compose exec app php artisan migrate
 ```
 
-La app queda en <http://localhost:8000>. PostgreSQL + PostGIS se publica en `127.0.0.1:5433` y Meilisearch en `127.0.0.1:7700`. La clave va antes de `up` porque Octane carga el cifrado al arrancar. Pruebas: `docker compose exec app php artisan test`.
+La app queda en <http://localhost:8000>. PostgreSQL + PostGIS se publica en `127.0.0.1:5433` y Meilisearch en `127.0.0.1:7700`. Pruebas: `docker compose exec app php artisan test`.
+
+### Dependencias de Composer
+
+`vendor/` no está en la carpeta del proyecto: vive en un volumen de Docker (`veni-roldanillo_vendor`; el prefijo es el nombre de la carpeta). Leer sus más de 10 000 archivos a través del montaje de Docker Desktop hacía que cada petición tardara segundos. El contenedor instala las dependencias al arrancar si el volumen está vacío o si `composer.lock` cambió desde la última instalación, y Composer corre con el usuario del contenedor, sin `--user root`:
+
+```bash
+docker compose exec app composer require <paquete>      # agregar un paquete
+docker compose restart                                   # tras un pull o un cambio de rama que toque composer.lock
+docker compose exec app composer install                 # lo mismo, sin reiniciar
+docker compose down                                      # empezar de cero: al borrar el volumen,
+docker volume rm veni-roldanillo_vendor                  # el siguiente arranque reinstala todo
+```
+
+El editor no ve ese volumen. Si necesita `vendor/` para el autocompletado, se copia a la carpeta del proyecto (opcional, cerca de un minuto; repetilo cuando cambien las dependencias). El contenedor sigue usando el volumen, no la copia:
+
+```bash
+docker compose cp app:/app/vendor .
+```
+
+### Ver los cambios
+
+En desarrollo FrankenPHP corre en modo clásico: cada petición arranca Laravel de nuevo, así que un cambio en PHP, rutas, configuración, vistas o `.env` se ve en la siguiente petición, sin reiniciar nada. El modo worker de Octane, que deja la aplicación arrancada en memoria, queda para la imagen de producción (`docker-compose.yml` sin el override).
+
+`worker` sí es un proceso largo que carga el código una sola vez: tras cambiar un job, `docker compose restart worker`.
+
+Las vistas compiladas y los registros de Inertia DevTools se guardan en memoria (`tmpfs`) y se pierden al recrear el contenedor.
+
+### Base de datos
 
 Las pruebas usan la base `veni_test` (PostgreSQL + PostGIS), que se crea sola al inicializar el volumen de `db`. Si el volumen ya existía, creala una vez (es idempotente):
 
