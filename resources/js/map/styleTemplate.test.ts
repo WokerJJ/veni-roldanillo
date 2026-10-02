@@ -70,6 +70,8 @@ describe('vite.config.ts revisa VITE_MAP_STYLE_URL', () => {
 
     it('en desarrollo no se detiene: avisa en la terminal', async () => {
         vi.stubEnv('VITE_MAP_STYLE_URL', FIXED);
+        // El plugin de Laravel se niega a resolver el modo «serve» si detecta CI.
+        vi.stubEnv('LARAVEL_BYPASS_ENV_CHECK', '1');
 
         const warnings = await configure('serve');
 
