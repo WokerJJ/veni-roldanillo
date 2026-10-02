@@ -27,3 +27,13 @@ Diario de avance del proyecto: qué se hizo en cada bloque, decisiones y aprendi
 - `main` protegida: solo por PR, `ci-ok` obligatorio, historial lineal y sin force push. Agregar jobs nuevos no obliga a tocar la protección, porque todos pasan por `ci-ok`.
 - Aprendizaje: una prueba que pasa por casualidad es peor que no tenerla. Las pruebas del tema ahora se escriben primero en rojo y corren en orden aleatorio.
 - Anotado para después: nonce de CSP para el script del tema (#7) y fuentes con hash para la caché de la PWA (#5).
+
+## 2026-10-01 · Parte 3 · Datos e idiomas
+
+- **#6 integrado:** modelo de datos de la Fase 1 sobre PostgreSQL + PostGIS (ADR 0009). La integridad vive en la base: FK compuesta plato-sección, CHECK de WhatsApp colombiano y precios en pesos enteros, y `EXCLUDE` con `btree_gist` para que un día no quede «cerrado y abierto».
+- Tres revisiones (técnica, seguridad y datos con `EXPLAIN` sobre una base desechable) encontraron 19 observaciones. La más seria: los seeders hijos podían correr en producción y crear un admin con contraseña conocida; ahora todos se niegan fuera de `local` y `testing`.
+- Decisiones del modelo: varias categorías por restaurante (pivote), una Policy común para todo el contenido que edita el dueño y anonimización real al borrar una cuenta (trigger que anula `user_id` y `device_hash`).
+- **#4 integrado:** español e inglés con el idioma resuelto en el servidor (ADR 0010): `?lang`, cookie, cuenta, `Accept-Language`. Una sola fuente de textos para Laravel y Vue, `t()` tipada y sin dependencias nuevas. Una cuenta sin idioma elegido sigue al dispositivo.
+- Aprendizajes: una prueba no debe modificar objetos compartidos de la base (quitaba PostGIS y en CI fallaba; ahora usa una base temporal desde `template0`). Una migración ya publicada no se edita: se corrige con otra.
+- Encontrado al levantar una demo: el modo desarrollo en Windows es muy lento con `vendor/` montado (#32). La imagen de producción responde en 0,4 s.
+- Nuevo: los íconos de la interfaz saldrán de [colombia-icons](https://github.com/Mteheran/colombia-icons) (MIT), en curso en #34. La PWA (#5) pasa a la parte 4.
