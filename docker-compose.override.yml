@@ -16,6 +16,12 @@ x-app-dev: &app-dev
     # vendor/ fuera de la carpeta montada: leer sus miles de archivos a través
     # del montaje de Docker Desktop (Windows/macOS) hacía cada petición lentísima.
     - vendor:/app/vendor
+  # Se escriben en cada petición (vistas compiladas y registros de Inertia
+  # DevTools): en memoria, no a través del montaje. Se pierden al recrear el
+  # contenedor, y está bien: son regenerables.
+  tmpfs:
+    - /app/storage/framework/views:mode=1777
+    - /app/storage/inertia-devtools:mode=1777
 
 services:
   app:
