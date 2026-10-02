@@ -99,9 +99,9 @@ jobs:
       - name: Build
         run: npm run build
 
-  # Scripts de shell del entorno Docker y del despliegue. Las pruebas de los
-  # entrypoints ponen un composer o un php falso en el PATH: no necesitan
-  # Docker, PHP ni red.
+  # Scripts de shell del entorno Docker y del despliegue. Las pruebas ponen un
+  # composer, un php o un docker falso en el PATH: no necesitan Docker, PHP,
+  # un servidor ni red.
   # shellcheck es el que trae la imagen del runner, el mismo que usa
   # actionlint para los `run:` de los workflows: no se descarga ningún binario,
   # así que no hay SHA-256 que verificar. A cambio, su versión cambia con la
@@ -116,6 +116,8 @@ jobs:
         run: bash tests/docker/entrypoint-dev.test.sh
       - name: Pruebas del entrypoint de producción
         run: bash tests/docker/entrypoint-prod.test.sh
+      - name: Pruebas del script de despliegue
+        run: bash tests/docker/deploy.test.sh
       - name: shellcheck
         run: |
           shellcheck --version

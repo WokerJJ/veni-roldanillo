@@ -36,7 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Los secrets del servidor viven en este entorno (Settings → Environments),
-    # que además puede pedir la aprobación de una persona antes de cada corrida.
+    # que solo acepta ramas protegidas y pide la aprobación de un revisor antes
+    # de cada corrida.
     environment:
       name: production
       url: ${{ vars.DEPLOY_URL || 'https://veniroldanillo.co' }}
@@ -67,13 +68,20 @@ jobs:
         with:
           ref: v${{ inputs.version }}
 
+      # Además de comprobar que existe, se anota su digest: al servidor se le
+      # pide esa imagen exacta (X.Y.Z@sha256:…), no «lo que hoy diga la
+      # etiqueta», que alguien con permiso de escritura podría volver a publicar.
       - name: La versión existe en GHCR
+        id: image
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          docker manifest inspect "$IMAGE:$VERSION" >/dev/null \
+          digest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{.Manifest.Digest}}') \
             || { echo "::error::No existe $IMAGE:$VERSION: ¿terminó docker.yml para esa release?"; exit 1; }
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::Digest inesperado para $IMAGE:$VERSION: '$digest'"; exit 1; }
+          echo "ref=$IMAGE:$VERSION@$digest" >>"$GITHUB_OUTPUT"
+          echo "Se despliega \`$IMAGE:$VERSION@$digest\`" >>"$GITHUB_STEP_SUMMARY"
 
       # La llave privada es solo de este despliegue (docs/despliegue.md) y el
       # servidor se reconoce por su llave pública guardada en DEPLOY_KNOWN_HOSTS:
@@ -89,18 +97,24 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" >~/.ssh/id_ed25519
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >~/.ssh/known_hosts
 
-      - name: Copiar docker-compose.yml al servidor
+      # Los dos archivos del tag, a la carpeta del servidor: el script queda ahí
+      # y es el mismo que se puede correr a mano (`bash deploy.sh <imagen>`).
+      - name: Copiar docker-compose.yml y deploy.sh al servidor
         run: |
-          scp -P "$DEPLOY_SSH_PORT" docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.yml"
+          scp -P "$DEPLOY_SSH_PORT" docker-compose.yml scripts/deploy.sh "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
 
-      # scripts/deploy.sh corre en el servidor: anota la imagen en el .env,
-      # `docker compose pull`, `docker compose up -d` (el servicio migrate
-      # aplica las migraciones antes de que arranque la app) y espera /up.
+      # deploy.sh corre en el servidor, como archivo: `docker compose pull`,
+      # anota la imagen en el .env, `docker compose up -d` (el servicio migrate
+      # aplica las migraciones antes de que arranque la app) y espera /up. Si
+      # falla, el .env vuelve al anterior y los registros de los contenedores
+      # se quedan en el servidor: este registro es público.
       - name: Desplegar (pull, up, migración y /up)
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
         run: |
           # shellcheck disable=SC2029 # La ruta y la imagen se resuelven aquí, a propósito.
           ssh -p "$DEPLOY_SSH_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_PATH' && bash -s -- '$IMAGE:$VERSION'" <scripts/deploy.sh
+            "cd '$DEPLOY_PATH' && bash deploy.sh '$IMAGE_REF'" </dev/null
 
       - name: La app responde desde internet
         run: |
