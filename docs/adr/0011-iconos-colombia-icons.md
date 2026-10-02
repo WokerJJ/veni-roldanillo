@@ -23,13 +23,14 @@ La interfaz necesita íconos (tema, idioma, buscar, mapa, carrito, horario) y el
 
 - Los SVG viven en `resources/icons/colombia/`, tal como salen del repositorio de origen (sin optimizar ni editar), junto a su `LICENSE` y un `README.md` de procedencia. Solo se copian los que se usan y un conjunto inicial para lo que viene: 26 de interfaz y los 14 de gastronomía (16,3 kB en total), no los 291 del set.
 - `manifest.json` fija la versión: repositorio, tag (`v0.27.0`), el commit al que apuntaba el tag al copiar y, por cada ícono, su ruta de origen y el sha256 del archivo. Un tag se puede mover; un commit no: la descarga se hace contra el commit.
-- `npm run icons:sync` (`scripts/icons-sync.mjs`, sin dependencias) descarga **solo** los íconos del manifiesto y la licencia. Falla, sin escribir nada, si un ícono no existe en ese tag, si el tag ya no apunta al commit registrado o si un archivo no tiene el sha256 esperado; `--update` acepta esos cambios cuando se cambia el tag a propósito. También borra de la carpeta los SVG que el manifiesto ya no menciona.
-- `npm run icons:check` no usa la red ni escribe: compara los archivos versionados con el manifiesto (sha256, que no falte ni sobre ninguno) y valida cada SVG. Corre dentro de `npm test`, así que CI falla si alguien edita un ícono a mano o agrega uno sin pasarlo por el manifiesto.
+- `npm run icons:sync` (`scripts/icons-sync.mjs`, sin dependencias) descarga **solo** los íconos del manifiesto y la licencia. Falla, sin escribir nada, si un ícono no existe en ese tag, si el tag ya no apunta al commit registrado o si un archivo no tiene el sha256 esperado; `--update` acepta esos cambios cuando se cambia el tag a propósito e informa qué cambió (el commit anterior y el nuevo, los archivos distintos, los nuevos y los quitados). También borra de la carpeta los SVG que el manifiesto ya no menciona. Mira la carpeta antes de escribir y no sigue redirecciones: lo que copia sale de la dirección del manifiesto o de ninguna.
+- `npm run icons:check` no usa la red ni escribe: compara los archivos versionados con el manifiesto (sha256, que no falte ni sobre ninguno) y valida cada SVG. Corre dentro de `npm test`, así que CI falla si alguien edita un ícono a mano o agrega uno sin pasarlo por el manifiesto. Prueba coherencia, no procedencia: quien cambia un archivo puede cambiar también su sha256 en el manifiesto.
+- `npm run icons:verify` prueba la procedencia: descarga otra vez la licencia y cada ícono desde el commit fijado y los compara con los versionados, sin escribir. Falla si alguno difiere aunque su sha256 coincida con el manifiesto. Necesita la red, así que no corre en cada PR: corre cada semana en `security.yml` (informativo) y a mano al revisar un PR que toque los íconos.
 
 ### Componente `Icon`
 
 - `<Icon name="sol" />`. El tipo de `name` son las claves de `icons` del manifiesto (un `import type`: el JSON no entra al bundle), así que un nombre que no existe no compila y agregar un ícono al manifiesto lo agrega al tipo. No hay un archivo de tipos generado que mantener.
-- Hereda el color (`currentColor`); el tamaño va en píxeles con `size` (24 por defecto) o con clases (`class="size-5"`). Es decorativo por defecto (`aria-hidden="true"`, `focusable="false"`); con `label` pasa a ser una imagen con nombre (`role="img"` y `aria-label`).
+- Hereda el color (`currentColor`); el tamaño va en píxeles con `size` (24 por defecto) o con clases (`class="size-5"`). Es decorativo por defecto (`aria-hidden="true"`, `focusable="false"`); con `label` pasa a ser una imagen con nombre (`role="img"` y `aria-label`); una etiqueta en blanco cuenta como no tenerla.
 - Los atributos de la raíz (`fill`, `stroke`, `stroke-width`…) se leen de cada archivo, porque no todos son iguales: `estrella-llena` es de relleno, no de trazo.
 
 ### Qué entra al bundle inicial
@@ -49,7 +50,7 @@ Los íconos del layout (`sol`, `luna`, `idioma`) van en el bundle inicial: está
 El componente inserta el dibujo con `v-html`, que el linter prohíbe en el resto del proyecto (la excepción está en `eslint.config.js`, solo para `Icon.vue`). Es seguro porque lo que se inserta nunca es un dato:
 
 1. Es un archivo del repositorio, que pasa por revisión como cualquier otro código. `name` solo elige entre esos archivos.
-2. Viene de un commit fijo y su sha256 está en el manifiesto: si el archivo cambia, en el origen o en el repositorio, la verificación falla.
+2. Viene de un commit fijo. El sha256 del manifiesto dice que el archivo y el manifiesto coinciden (un cambio que no pase por el manifiesto hace fallar las pruebas), no de dónde salió el archivo: que sea idéntico al del origen lo comprueba `npm run icons:verify`.
 3. El script valida cada SVG contra una lista blanca, al descargarlo y en cada `--check`: solo elementos de dibujo (`path`, `circle`, `ellipse`, `line`, `polyline`, `polygon`, `rect`, `g`) y sus atributos de geometría y trazo. Rechaza `<script>`, `<style>`, `<foreignObject>`, `<use>`, atributos de evento (`on…=`), enlaces (`href`), estilos en línea, referencias `url()` y comentarios.
 
 La alternativa era interpretar el SVG en el navegador y construir los nodos uno por uno: más código en el bundle inicial para llegar al mismo resultado con archivos que ya están validados.
@@ -60,9 +61,9 @@ La licencia MIT pide conservar el aviso de copyright: el `LICENSE` original se c
 
 ## Consecuencias
 
-- Sin dependencias nuevas. La actualización es manual y deliberada: cambiar el tag en el manifiesto, `npm run icons:sync -- --update` y revisar el diff de los SVG en el PR. Dependabot no avisa de versiones nuevas del set.
+- Sin dependencias nuevas. La actualización es manual y deliberada: cambiar el tag en el manifiesto, `npm run icons:sync -- --update` (informa qué cambió) y revisar el diff de los SVG en el PR. Si el commit cambia sin haber cambiado el tag, el tag se movió en el origen: no se acepta sin revisar allá qué cambió. Dependabot no avisa de versiones nuevas del set.
 - Agregar un ícono es una entrada en el manifiesto (nombre y ruta de origen) y `npm run icons:sync`, que completa el sha256. No se copian SVG a mano.
 - Los archivos no se editan: si un ícono necesita un ajuste, se propone en el repositorio de origen. El grosor del trazo (1,5) es el del set.
 - Un ícono bajo demanda es una petición más la primera vez. Si uno queda a la vista al cargar una página, se pasa a la lista de críticos de `resources/js/icons/icons.ts`, que está escrita dos veces (los patrones de `import.meta.glob` tienen que ser literales). La caché de la PWA (#5) debe incluir los chunks de los íconos para que funcionen sin conexión.
-- Sin red, un ícono que no se había pedido queda vacío: conserva su espacio y su nombre accesible, pero no se ve. Por eso un ícono nunca debe ser lo único que identifica un control: los botones llevan su propio nombre.
+- Sin red, un ícono que no se había pedido queda vacío: conserva su espacio y su nombre accesible, pero no se ve; se vuelve a pedir cuando vuelve la red (evento `online`). Por eso un ícono nunca debe ser lo único que identifica un control: los botones llevan su propio nombre.
 - Si colombia-icons publica un paquete para Vue o uno con los SVG, se revisa esta decisión.
