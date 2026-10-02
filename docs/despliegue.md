@@ -117,7 +117,7 @@ END_COMMIT_OVERRIDE
 Una carpeta (`/srv/veni-roldanillo`) con dos archivos:
 
 - `docker-compose.yml`: lo copia `deploy.yml` en cada despliegue, el del tag que se despliega.
-- `.env`: se escribe una vez a mano, con permisos `600`. Nunca sale del servidor ni entra en la imagen.
+- `.env`: se escribe una vez a mano. Nunca sale del servidor ni entra en la imagen. Lo leen dos usuarios: `deploy`, que corre Compose y anota en él la versión, y el del contenedor (`app`, uid y gid 1000), que lo recibe montado. Por eso va con dueño `deploy`, grupo `1000` y permisos `640` (`chown deploy:1000 .env && chmod 640 .env`, como root). Si el contenedor no puede leerlo, no arranca y lo dice en `docker compose logs`.
 
 El `.env` parte de `.env.example` con estos cambios:
 

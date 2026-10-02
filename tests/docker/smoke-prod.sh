@@ -76,6 +76,8 @@ trap cleanup EXIT
 # comprueba que .env.example sirve para arrancar la imagen.
 sed -e "s|^APP_KEY=.*|APP_KEY=base64:$(openssl rand -base64 32)|" \
     -e "s|^APP_URL=.*|APP_URL=$base|" .env.example > "$tmp/env"
+# Lo lee el usuario del contenedor, que no es quien corre esta prueba.
+chmod 644 "$tmp/env"
 
 # --- Comprobaciones ------------------------------------------------------------
 

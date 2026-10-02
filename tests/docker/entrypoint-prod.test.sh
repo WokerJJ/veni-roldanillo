@@ -113,6 +113,31 @@ con_escape_ejecuta_el_comando_sin_preparar() {
     assert_command_ran || return 1
 }
 
+con_un_env_ilegible_no_arranca_y_avisa() {
+    echo 'APP_KEY=' > "$project/app/.env"
+    chmod 000 "$project/app/.env"
+    # Como root, o en Git Bash (Windows no aplica estos permisos), el archivo
+    # se sigue pudiendo leer: el caso no se puede armar.
+    if [ -r "$project/app/.env" ]; then
+        echo "       (omitida: aquí chmod 000 no impide leer el archivo)"
+        return 0
+    fi
+
+    run_entrypoint
+    assert_failed || return 1
+    assert_php_calls '' || return 1
+    assert_command_did_not_run || return 1
+    grep -q 'no puede leer' "$err" || fail "el mensaje no dice que el .env no se puede leer"
+}
+
+con_un_env_legible_arranca() {
+    echo 'APP_KEY=' > "$project/app/.env"
+
+    run_entrypoint
+    assert_ok || return 1
+    assert_command_ran || return 1
+}
+
 # --- Ejecución -----------------------------------------------------------------
 
 run_test() {
@@ -132,6 +157,8 @@ run_test prepara_laravel_y_despues_ejecuta_el_comando
 run_test si_optimize_falla_no_arranca
 run_test si_storage_link_falla_no_arranca
 run_test con_escape_ejecuta_el_comando_sin_preparar
+run_test con_un_env_ilegible_no_arranca_y_avisa
+run_test con_un_env_legible_arranca
 
 echo
 echo "$((total - failures)) de $total pruebas pasaron"

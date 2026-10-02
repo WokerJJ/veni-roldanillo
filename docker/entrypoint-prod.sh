@@ -11,6 +11,19 @@ if [ "${VENI_SKIP_OPTIMIZE:-}" = 1 ]; then
     exec "$@"
 fi
 
+# El .env se monta desde el servidor y lo lee el usuario del contenedor, que no
+# es el dueño del archivo. Si no puede leerlo, Laravel no falla: arranca con
+# los valores por defecto y el primer error visible sería una conexión
+# rechazada a una base que no es la configurada.
+if [ -e .env ] && [ ! -r .env ]; then
+    cat >&2 <<EOF
+entrypoint-prod: el usuario del contenedor ($(id -u):$(id -g)) no puede leer /app/.env.
+En el servidor, dale lectura a su grupo:
+  chgrp $(id -g) .env && chmod 640 .env
+EOF
+    exit 1
+fi
+
 # Configuración, eventos, rutas y vistas en caché: los workers de Octane y
 # queue:work arrancan leyendo un archivo ya resuelto en lugar de procesar el
 # .env y los archivos de rutas. No puede hacerse al construir la imagen: la
