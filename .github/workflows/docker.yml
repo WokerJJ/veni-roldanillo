@@ -4,7 +4,9 @@ name: Imagen
 # GitHub Container Registry: ghcr.io/wokerjj/veni-roldanillo.
 #
 # - push a main: publica `main` y `sha-<commit>`.
-# - tag vX.Y.Z: publica `X.Y.Z`, `X.Y` y `sha-<commit>`.
+# - tag vX.Y.Z: publica `X.Y.Z` y `X.Y`, y solo si el commit del tag está en
+#   main y esa versión todavía no existe en GHCR: una versión publicada no se
+#   reescribe, y un tag puesto sobre otra rama no publica nada.
 # - PR: solo construye, sin iniciar sesión ni publicar. Y solo si el PR toca
 #   la receta de la imagen o este workflow: cualquier otro cambio ya construye
 #   la imagen en la prueba de humo de ci.yml.
@@ -56,12 +58,18 @@ jobs:
       packages: write
     env:
       PUBLISH: ${{ github.event_name != 'pull_request' }}
+      # El tag de la release que se publica: el que pasa release.yml o el que
+      # empujó una persona. Vacío en un push a main y en un PR.
+      RELEASE_TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Llamado desde release.yml se construye el commit del tag, que puede
           # no ser el del push que disparó esa corrida.
           ref: ${{ inputs.tag || github.sha }}
+          # Todo el historial: hace falta para saber si el commit de una
+          # release está en main.
+          fetch-depth: 0
       # El commit que de verdad se construye: de aquí salen la etiqueta
       # sha-<commit> y la revisión que queda anotada en la imagen.
       - name: Commit que se construye
@@ -69,6 +77,17 @@ jobs:
         run: |
           echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
           echo "short=$(git rev-parse --short=7 HEAD)" >>"$GITHUB_OUTPUT"
+      # Crear un tag v* no pasa por la protección de main: cualquiera con
+      # permiso de escritura puede ponerlo sobre un commit que nunca tuvo PR ni
+      # CI. Una versión solo se publica si su commit ya está en main.
+      - name: La release sale de main
+        if: env.RELEASE_TAG != ''
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
+            || { echo "::error::El tag '$RELEASE_TAG' no es una versión vX.Y.Z."; exit 1; }
+          git fetch --quiet --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          git merge-base --is-ancestor HEAD origin/main \
+            || { echo "::error::El commit de $RELEASE_TAG no está en main: no se publica una versión desde otra rama."; exit 1; }
       # El mapa de la imagen (ADR 0007). Sin las variables va la demo pública de
       # veni-mapa, que sigue su rama main: se avisa, porque el mapa de esa
       # imagen puede cambiar sin que cambie la imagen. Cuando exista el hosting
@@ -97,8 +116,30 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      # X.Y.Z no cambia una vez publicada: mover o volver a empujar su tag no
+      # reemplaza la imagen que ya puede estar corriendo en el servidor. Lo
+      # que haya que corregir sale con una versión nueva.
+      - name: La versión no está publicada
+        if: env.RELEASE_TAG != ''
+        run: |
+          version=${RELEASE_TAG#v}
+          if docker buildx imagetools inspect "$IMAGE:$version" >/dev/null 2>"$RUNNER_TEMP/inspect.err"; then
+            echo "::error::$IMAGE:$version ya está publicada y una versión no se reescribe."
+            exit 1
+          fi
+          # Lo esperado es «not found». Otro error (el registro no responde)
+          # no detiene la release, pero queda a la vista.
+          grep -qi 'not found' "$RUNNER_TEMP/inspect.err" \
+            || echo "::warning::No se pudo confirmar que $IMAGE:$version no existe: $(tail -n 1 "$RUNNER_TEMP/inspect.err")"
       # Sin `latest`: el servidor fija una versión (docs/despliegue.md), y
       # `main` es la que sigue a la rama.
+      # `sha-<commit>` la publica solo el push a main. La release es otra
+      # construcción del mismo commit, y dos construcciones no dan el mismo
+      # digest: si también la publicara, la etiqueta apuntaría a una imagen u
+      # otra según qué corrida terminara de última. La alternativa, promover la
+      # imagen de main a X.Y.Z por digest (`imagetools create`), dejaría una
+      # sola imagen, pero la release tendría que esperar a la corrida de main,
+      # que arranca con el mismo push: dos workflows atados por una espera.
       - name: Etiquetas
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
@@ -109,7 +150,7 @@ jobs:
             type=ref,event=branch,enable=${{ inputs.tag == '' }}
             type=semver,pattern={{version}},value=${{ inputs.tag }}
             type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
-            type=raw,value=sha-${{ steps.commit.outputs.short }}
+            type=raw,value=sha-${{ steps.commit.outputs.short }},enable=${{ env.RELEASE_TAG == '' }}
           labels: |
             org.opencontainers.image.revision=${{ steps.commit.outputs.sha }}
       - name: Construir y publicar
@@ -118,6 +159,9 @@ jobs:
         with:
           context: .
           target: prod
+          # Una sola arquitectura: el servidor previsto es x86-64
+          # (docs/despliegue.md). Un VPS ARM pediría sumar linux/arm64 aquí.
+          platforms: linux/amd64
           push: ${{ env.PUBLISH == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
