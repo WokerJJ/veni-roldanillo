@@ -26,7 +26,16 @@ describe('mapStyleUrl', () => {
 
         expect(mapStyleUrl(fixed, 'dark', 'en')).toBe(fixed);
         expect(warn).toHaveBeenCalledOnce();
-        expect(warn.mock.calls[0]?.[0]).toContain('VITE_MAP_STYLE_URL');
+        expect(warn.mock.calls[0]?.[0]).toContain('VITE_MAP_STYLE_URL no trae {theme} ni {locale}');
+        expect(warn.mock.calls[0]?.[0]).toContain('.env.example');
+    });
+
+    it('con un solo marcador avisa cuál falta', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+        mapStyleUrl('https://tiles.example.test/style/veni-{theme}-es.json', 'dark', 'en');
+
+        expect(warn.mock.calls[0]?.[0]).toContain('VITE_MAP_STYLE_URL no trae {locale}');
     });
 
     it('con la plantilla completa no avisa', () => {

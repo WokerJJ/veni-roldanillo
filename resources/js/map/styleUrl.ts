@@ -1,6 +1,9 @@
 import type { Locale } from '@/composables/useI18n';
 import type { Theme } from '@/composables/useTheme';
 
+import { MapUnavailableError } from './errors';
+import { missingStylePlaceholders } from './styleTemplate';
+
 /** Nombre de cada tema en los estilos de veni-mapa: `veni-{claro,oscuro}-{es,en}.json`. */
 const STYLE_THEMES: Readonly<Record<Theme, string>> = { light: 'claro', dark: 'oscuro' };
 
@@ -11,17 +14,25 @@ const STYLE_THEMES: Readonly<Record<Theme, string>> = { light: 'claro', dark: 'o
  *
  *     https://tiles.veniroldanillo.co/vX.Y.Z/veni-{theme}-{locale}.json
  *
- * Sin marcadores vale como un estilo fijo: el mapa no acompaña al tema ni al
- * idioma, y en desarrollo se avisa en la consola. Sin plantilla lanza un
- * error: quien pinta el mapa lo muestra como «no se pudo cargar».
+ * Sin algún marcador el mapa se queda en un solo tema o un solo idioma: en
+ * desarrollo se avisa en la consola, y `vite build` se niega a compilar
+ * (vite.config.ts). Sin plantilla lanza un error: quien pinta el mapa lo
+ * muestra como no disponible.
  */
 export function mapStyleUrl(template: string | undefined, theme: Theme, locale: Locale): string {
     if (template === undefined || template.trim() === '') {
-        throw new Error('Falta VITE_MAP_STYLE_URL: el mapa no tiene estilo que cargar.');
+        throw new MapUnavailableError('Falta VITE_MAP_STYLE_URL: el mapa no tiene estilo que cargar.');
     }
 
-    if (import.meta.env.DEV && !(template.includes('{theme}') && template.includes('{locale}'))) {
-        console.warn('[mapa] VITE_MAP_STYLE_URL no trae {theme} y {locale}: el mapa no cambia con el tema ni el idioma.');
+    if (import.meta.env.DEV) {
+        const missing = missingStylePlaceholders(template);
+
+        if (missing.length > 0) {
+            console.warn(
+                `[mapa] VITE_MAP_STYLE_URL no trae ${missing.join(' ni ')}: el mapa no sigue al tema ni al idioma. ` +
+                    'Es una plantilla, …/veni-{theme}-{locale}.json: corregila en el .env (ver .env.example) y reiniciá npm run dev.',
+            );
+        }
     }
 
     return template.trim().replaceAll('{theme}', STYLE_THEMES[theme]).replaceAll('{locale}', locale);
