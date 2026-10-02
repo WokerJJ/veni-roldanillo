@@ -1,0 +1,63 @@
+/*
+ * La marca y la accesibilidad sobre los controles de MapLibre. Lo importa
+ * resources/js/map/engine.ts después de maplibre-gl.css y viaja en el mismo
+ * chunk perezoso: no pesa en el CSS inicial. Es CSS plano sobre los tokens y
+ * los colores por rol de app.css (--canvas, --ink…), sin utilidades de
+ * Tailwind; con igual especificidad que las reglas de MapLibre, gana por orden.
+ */
+
+.maplibregl-map {
+    font-family: var(--veni-font-body);
+}
+
+/* El foco del lienzo (teclado) se dibuja hacia adentro: afuera lo recorta el contenedor. */
+.maplibregl-canvas:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+/* Controles de zoom: áreas táctiles de 44 px (MapLibre las trae de 29 px) y colores del tema. */
+.maplibregl-ctrl-group {
+    border-radius: var(--veni-radius-sm);
+    background: var(--canvas);
+}
+
+.maplibregl-ctrl-group:not(:empty) {
+    box-shadow: 0 0 0 1px var(--line);
+}
+
+.maplibregl-ctrl-group button {
+    width: var(--veni-touch-min);
+    height: var(--veni-touch-min);
+}
+
+.maplibregl-ctrl-group button + button {
+    border-top-color: var(--line);
+}
+
+.maplibregl-ctrl-group button:focus:focus-visible {
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+.maplibregl-ctrl-group button:focus:first-child {
+    border-radius: var(--veni-radius-sm) var(--veni-radius-sm) 0 0;
+}
+
+.maplibregl-ctrl-group button:focus:last-child {
+    border-radius: 0 0 var(--veni-radius-sm) var(--veni-radius-sm);
+}
+
+/* Los íconos de MapLibre son oscuros: en el tema oscuro se invierten. */
+[data-theme='dark'] .maplibregl-ctrl-group .maplibregl-ctrl-icon {
+    filter: invert(1);
+}
+
+/* Atribución: siempre legible, en claro y en oscuro (contraste de --ink sobre --canvas). */
+.maplibregl-ctrl.maplibregl-ctrl-attrib {
+    background-color: color-mix(in oklab, var(--canvas) 85%, transparent);
+    color: var(--ink);
+}
+
+.maplibregl-ctrl-attrib a {
+    color: inherit;
+}

@@ -10,5 +10,12 @@
     "home.heading": "Come eat in Roldanillo",
     "home.intro": "Browse menus with prices and opening hours, and order from the town's restaurants on WhatsApp, with no commissions.",
     "home.coming_soon": "Coming soon",
+    "map.label": "Map of Roldanillo",
+    "map.canvas_label": "Interactive map. Move with the arrow keys and zoom with the plus and minus keys.",
+    "map.zoom_in": "Zoom in",
+    "map.zoom_out": "Zoom out",
+    "map.loading": "Loading the map…",
+    "map.error": "We couldn't load the map. Check your connection and try again.",
+    "map.retry": "Try again",
     "credits.icons": "Icons from colombia-icons by Miguel Teheran, under the MIT License."
 }

@@ -10,5 +10,12 @@
     "home.heading": "Vení, comamos en Roldanillo",
     "home.intro": "Mirá los menús con precios y horarios, y pedí por WhatsApp a los restaurantes del pueblo, sin comisiones.",
     "home.coming_soon": "Muy pronto",
+    "map.label": "Mapa de Roldanillo",
+    "map.canvas_label": "Mapa interactivo. Movete con las flechas y acercá o alejá con las teclas más y menos.",
+    "map.zoom_in": "Acercar",
+    "map.zoom_out": "Alejar",
+    "map.loading": "Cargando el mapa…",
+    "map.error": "No pudimos cargar el mapa. Revisá tu conexión y volvé a intentar.",
+    "map.retry": "Reintentar",
     "credits.icons": "Íconos de colombia-icons, de Miguel Teheran, con licencia MIT."
 }

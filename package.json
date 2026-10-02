@@ -37,6 +37,8 @@
     },
     "dependencies": {
         "@inertiajs/vue3": "^3.7.1",
+        "maplibre-gl": "^6.11.2",
+        "pmtiles": "^4.5.0",
         "vue": "^3.5.43"
     }
 }
