@@ -40,7 +40,11 @@ fi
 
 echo "Imagen: $image"
 
-docker compose pull --quiet
+# Solo la imagen de la aplicación. db y meilisearch no se bajan de nuevo: si
+# su etiqueta se volvió a publicar, un despliegue de la app cambiaría también
+# la base de datos y la reiniciaría. Se actualizan aparte y a propósito
+# (docs/despliegue.md); la primera vez las baja `up`, porque faltan.
+docker compose pull --quiet migrate app worker scheduler
 
 # up recrea los contenedores cuya imagen cambió: detiene app, worker y
 # scheduler, corre migrate y, si termina bien, arranca los nuevos. La versión

@@ -142,7 +142,7 @@ Las variables `VITE_*` no hacen falta en el servidor: ya quedaron dentro de la i
 3. Copia el `docker-compose.yml` de ese tag.
 4. Ejecuta [`scripts/deploy.sh`](../scripts/deploy.sh) en el servidor:
    - anota la imagen en el `.env` (`APP_IMAGE`);
-   - `docker compose pull`;
+   - `docker compose pull` de la imagen de la aplicación;
    - `docker compose up -d`: detiene `app`, `worker` y `scheduler`, corre **`migrate`** (`php artisan migrate --force`) y, solo si termina bien, arranca los nuevos;
    - espera a que la app responda `/up`.
 5. Pide `https://veniroldanillo.co/up` desde fuera.
@@ -150,6 +150,8 @@ Las variables `VITE_*` no hacen falta en el servidor: ya quedaron dentro de la i
 Mientras dura la migración y el arranque la app no responde: unos 8 segundos en la prueba local, sin migraciones pendientes. A cambio, la versión anterior nunca atiende con el esquema nuevo.
 
 Si la migración falla, ningún servicio arranca y el job termina con el registro de `migrate`. Para volver a la versión anterior se lanza el despliegue con esa versión; las migraciones no se revierten solas (`php artisan migrate:rollback` a mano, si corresponde).
+
+Un despliegue no toca `db` ni `meilisearch`: solo baja la imagen de la aplicación. Sus etiquetas (`postgis/postgis:18-3.6`, `getmeili/meilisearch:v1.54`) se pueden volver a publicar con parches, y bajarlas en cada despliegue cambiaría y reiniciaría la base de datos sin que nadie lo pidiera. Se actualizan aparte, con una copia de seguridad reciente: `docker compose pull db meilisearch && docker compose up -d`.
 
 `scripts/deploy.sh` no depende de GitHub: en el servidor, `bash deploy.sh ghcr.io/wokerjj/veni-roldanillo:X.Y.Z` hace lo mismo.
 
