@@ -80,6 +80,34 @@ test('precarga las fuentes autohospedadas', function () {
         ->assertSee('<link rel="preload" href="/fonts/bricolage-grotesque-latin-700-800.woff2" as="font" type="font/woff2" crossorigin>', false);
 });
 
+test('adelanta la conexión con el host del mapa', function (string $styleUrl, string $origin) {
+    // El estilo, los tiles, las fuentes y los sprites se piden con fetch a
+    // otro origen: `crossorigin` abre la conexión que esas peticiones usan.
+    config(['services.map.style_url' => $styleUrl]);
+
+    $this->get('/')
+        ->assertOk()
+        ->assertSee('<link rel="preconnect" href="'.$origin.'" crossorigin>', false);
+})->with([
+    'la demo de veni-mapa' => ['https://wokerjj.github.io/veni-mapa/style/veni-{theme}-{locale}.json', 'https://wokerjj.github.io'],
+    'una release fija' => ['https://tiles.example.test/v1.2.3/veni-{theme}-{locale}.json', 'https://tiles.example.test'],
+    'con puerto' => ['http://localhost:8765/style/veni-{theme}-{locale}.json', 'http://localhost:8765'],
+]);
+
+test('sin una URL del mapa que sirva no adelanta ninguna conexión', function (?string $styleUrl) {
+    config(['services.map.style_url' => $styleUrl]);
+
+    $this->get('/')
+        ->assertOk()
+        ->assertDontSee('rel="preconnect"', false);
+})->with([
+    'sin definir' => [null],
+    'vacía' => [''],
+    'sin host' => ['/style/veni-{theme}-{locale}.json'],
+    'otro esquema' => ['javascript://tiles.example.test/veni-{theme}-{locale}.json'],
+    'con comillas' => ['https://tiles.example.test"><script>alert(1)</script>/veni.json'],
+]);
+
 test('carga la entrada compilada y la página desde el manifest', function () {
     $this->get('/')
         ->assertOk()

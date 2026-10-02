@@ -27,6 +27,15 @@
         <link rel="preload" href="/fonts/figtree-latin-400-700.woff2" as="font" type="font/woff2" crossorigin>
         <link rel="preload" href="/fonts/bricolage-grotesque-latin-700-800.woff2" as="font" type="font/woff2" crossorigin>
 
+        {{--
+            El mapa (estilo, tiles, fuentes y sprites) se pide con fetch a otro
+            host: la conexión se abre ya, mientras baja el JavaScript.
+        --}}
+        @php($mapOrigin = \App\Support\MapOrigin::fromStyleUrl(config('services.map.style_url')))
+        @if ($mapOrigin !== null)
+            <link rel="preconnect" href="{{ $mapOrigin }}" crossorigin>
+        @endif
+
         @vite(['resources/js/app.ts', "resources/js/pages/{$page['component']}.vue"])
         <x-inertia::head>
             <title>{{ config('app.name', 'Vení Roldanillo') }}</title>
