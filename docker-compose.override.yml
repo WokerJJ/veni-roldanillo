@@ -10,15 +10,21 @@ x-app-dev: &app-dev
       UID: ${UID:-1000}
       GID: ${GID:-1000}
   image: veni-roldanillo-app-dev
+  # Un init como PID 1: sin él, la entrada del contenedor (PID 1) ignora el
+  # SIGTERM de `docker compose stop` mientras instala las dependencias y Docker
+  # agota el plazo de gracia antes de matarla.
+  init: true
   # !override reemplaza el .env de solo lectura: key:generate necesita escribirlo.
   volumes: !override
     - .:/app
     # vendor/ fuera de la carpeta montada: leer sus miles de archivos a través
     # del montaje de Docker Desktop (Windows/macOS) hacía cada petición lentísima.
     - vendor:/app/vendor
+    # Descargas de Composer: sobreviven aunque se borre el volumen vendor.
+    - composer_cache:/var/cache/composer
   # Se escriben en cada petición (vistas compiladas y registros de Inertia
-  # DevTools): en memoria, no a través del montaje. Se pierden al recrear el
-  # contenedor, y está bien: son regenerables.
+  # DevTools): en memoria, no a través del montaje. Se pierden cada vez que el
+  # contenedor se detiene o se reinicia, y está bien: son regenerables.
   tmpfs:
     - /app/storage/framework/views:mode=1777
     - /app/storage/inertia-devtools:mode=1777
@@ -27,14 +33,20 @@ services:
   app:
     <<: *app-dev
     # El primer arranque descarga las dependencias al volumen vendor: más
-    # margen antes de contar fallos del healthcheck. Ya sano, cada revisión
-    # arranca Laravel: cada 30 s basta y el contenedor queda quieto en reposo.
+    # margen antes de contar fallos del healthcheck, revisando cada 5 s para
+    # marcarlo sano apenas responda. Ya sano, cada revisión arranca Laravel:
+    # cada 30 s basta y el contenedor queda quieto en reposo.
     healthcheck:
       start_period: 120s
+      start_interval: 5s
       interval: 30s
 
   worker:
     <<: *app-dev
+    # queue:listen arranca Laravel de nuevo para cada trabajo: un cambio en un
+    # job se ve en el siguiente, sin reiniciar (queue:work, el de producción,
+    # carga el código una sola vez).
+    command: ["php", "artisan", "queue:listen", "--tries=3"]
 
   scheduler:
     <<: *app-dev
@@ -49,3 +61,4 @@ services:
 
 volumes:
   vendor:
+  composer_cache:
