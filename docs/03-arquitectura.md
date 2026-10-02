@@ -27,7 +27,7 @@ VPS 2 vCPU / 4 GB, Ubuntu LTS, SSH solo con llaves, UFW (80/443), fail2ban, actu
 
 El mapa base lo produce y publica el repositorio [veni-mapa](https://github.com/WokerJJ/veni-mapa) (ADR 0007): PMTiles de Roldanillo, estilos `veni-{claro,oscuro}-{es,en}.json` con la marca, fuentes, sprites y el grafo de rutas `roldanillo-rutas.json`, en releases versionadas con SHA-256.
 
-1. La app lo consume por `VITE_MAP_STYLE_URL` y `VITE_MAP_ROUTES_URL`, fijados a una versión (hoy **v0.2.0**; en producción, `tiles.veniroldanillo.co` en Cloudflare R2 con CORS limitado al dominio).
+1. La app lo consume por `VITE_MAP_STYLE_URL` y `VITE_MAP_ROUTES_URL`, fijados a una versión (hoy **v0.2.0**; en producción, `tiles.veniroldanillo.co` en Cloudflare R2 con CORS limitado al dominio). `VITE_MAP_STYLE_URL` es una plantilla, `…/veni-{theme}-{locale}.json`: la app pone `claro` u `oscuro` y `es` o `en`. Las dos se fijan al compilar los assets (en la imagen de producción, como argumentos de build con la demo publicada por defecto).
 2. MapLibre y PMTiles se cargan solo en las pantallas con mapa (carga perezosa). Tema e idioma los elige la app; el mapa no trae botones propios.
 3. Restaurantes como capa GeoJSON desde la API.
 4. Ubicación y rutas en el dispositivo (ADR 0008): la posición nunca sale del teléfono ni queda en la URL; el grafo se descarga al pedir la primera ruta.

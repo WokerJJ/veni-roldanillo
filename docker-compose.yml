@@ -7,6 +7,12 @@ x-app: &app
   build:
     context: .
     target: prod
+    args:
+      # URL del mapa (ADR 0007), fijadas al compilar los assets. Sin valor
+      # aquí: se toman del entorno o del .env si están definidas; si no,
+      # valen las que trae el Dockerfile por defecto.
+      - VITE_MAP_STYLE_URL
+      - VITE_MAP_ROUTES_URL
   image: veni-roldanillo-app
   restart: unless-stopped
   environment:
