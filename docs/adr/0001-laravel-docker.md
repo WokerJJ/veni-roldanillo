@@ -1,6 +1,6 @@
 # ADR 0001 · Laravel 13 con Docker en VPS
 
-**Estado:** aceptada
+**Estado:** aceptada; sustituida en parte por [0012](0012-desarrollo-en-modo-clasico.md)
 
 **Contexto:** el autor domina Laravel y tiene experiencia en Linux e infraestructura. Se busca estabilidad, bajo costo y un proyecto que demuestre habilidades de desarrollo y DevOps.
 

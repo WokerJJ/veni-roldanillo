@@ -4,7 +4,7 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 
 | ADR | Decisión | Estado |
 | --- | --- | --- |
-| [0001](0001-laravel-docker.md) | Laravel 13 con Docker en VPS | Aceptada |
+| [0001](0001-laravel-docker.md) | Laravel 13 con Docker en VPS | Sustituida en parte por 0012 |
 | [0002](0002-inertia-vue.md) | Inertia + Vue 3 + TypeScript como PWA | Aceptada |
 | [0003](0003-mapa-maplibre-pmtiles.md) | MapLibre + PMTiles autohospedado, sin API de Google Maps | Sustituida en parte por 0007 y 0008 |
 | [0004](0004-pedidos-whatsapp.md) | Pedidos por WhatsApp sin comisión | Aceptada |
@@ -15,3 +15,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0009](0009-modelo-de-datos-inicial.md) | Modelo de datos inicial en PostgreSQL + PostGIS | Aceptada |
 | [0010](0010-idioma-de-la-interfaz.md) | Idioma de la interfaz: resuelto en el servidor, textos en JSON compartidos con Vue | Aceptada |
 | [0011](0011-iconos-colombia-icons.md) | Íconos: colombia-icons copiados desde una versión fija | Aceptada |
+| [0012](0012-desarrollo-en-modo-clasico.md) | Desarrollo en modo clásico de FrankenPHP; Octane solo en producción | Aceptada |
