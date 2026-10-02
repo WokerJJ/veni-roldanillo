@@ -99,8 +99,9 @@ jobs:
       - name: Build
         run: npm run build
 
-  # Scripts de shell del entorno Docker. Las pruebas de los entrypoints ponen
-  # un composer o un php falso en el PATH: no necesitan Docker, PHP ni red.
+  # Scripts de shell del entorno Docker y del despliegue. Las pruebas de los
+  # entrypoints ponen un composer o un php falso en el PATH: no necesitan
+  # Docker, PHP ni red.
   # shellcheck es el que trae la imagen del runner, el mismo que usa
   # actionlint para los `run:` de los workflows: no se descarga ningún binario,
   # así que no hay SHA-256 que verificar. A cambio, su versión cambia con la
@@ -118,7 +119,7 @@ jobs:
       - name: shellcheck
         run: |
           shellcheck --version
-          shellcheck docker/*.sh tests/docker/*.sh
+          shellcheck docker/*.sh scripts/*.sh tests/docker/*.sh
 
   # La imagen de producción, levantada como en el servidor (docker-compose.yml
   # sin el override): Octane, la entrada con `artisan optimize`, el servicio
