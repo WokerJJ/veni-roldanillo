@@ -47,13 +47,14 @@ Requisitos: Docker con Docker Compose, y Node.js 24 para el frontend. PHP, Compo
 cp .env.example .env
 docker compose build
 docker compose run --rm app php artisan key:generate   # la primera vez descarga las dependencias (medio minuto)
-docker compose up -d
-docker compose exec app php artisan migrate
+docker compose up -d                                   # migra antes de arrancar la app
 npm ci
 npm run build                                          # o `npm run dev` (ver «Frontend»)
 ```
 
 La app queda en <http://localhost:8000>. PostgreSQL + PostGIS se publica en `127.0.0.1:5433` y Meilisearch en `127.0.0.1:7700`. Pruebas: `docker compose exec app php artisan test`.
+
+Cada `docker compose up` corre primero el servicio `migrate` (`php artisan migrate --force`, una sola ejecución) y `app`, `worker` y `scheduler` esperan a que termine bien. Si una migración falla, ninguno arranca y `docker compose logs migrate` dice por qué. Con el entorno ya arriba, una migración nueva se aplica con `docker compose exec app php artisan migrate`.
 
 ### Frontend
 
@@ -136,11 +137,10 @@ Como desarrollo no corre bajo Octane, un dato que se quede en memoria entre peti
 
 ```bash
 APP_PORT=8001 docker compose -f docker-compose.yml -p veni-prod up -d --build
-docker compose -f docker-compose.yml -p veni-prod exec app php artisan migrate --force
 docker compose -f docker-compose.yml -p veni-prod down -v    # al terminar; -v borra solo los volúmenes de veni-prod
 ```
 
-Queda en <http://localhost:8001>, con su propia base de datos y sin tocar el entorno de desarrollo. En PowerShell, `$env:APP_PORT = 8001` antes del primer comando.
+Queda en <http://localhost:8001>, ya migrada, con su propia base de datos y sin tocar el entorno de desarrollo. En PowerShell, `$env:APP_PORT = 8001` antes del primer comando.
 
 ### Base de datos
 

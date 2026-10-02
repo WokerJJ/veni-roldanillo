@@ -4,6 +4,7 @@
 
 | Servicio | Imagen / rol |
 | --- | --- |
+| `migrate` | Misma imagen, una sola ejecución en cada `docker compose up`: `php artisan migrate --force`. `app`, `worker` y `scheduler` esperan a que termine bien |
 | `app` | Laravel 13 en FrankenPHP: Octane en producción; modo clásico en desarrollo (ADR 0012). HTTPS automático (Caddy) en producción |
 | `worker` | Misma imagen: `php artisan queue:work` (notificaciones, imágenes, traducciones) |
 | `scheduler` | Misma imagen: `php artisan schedule:work` (backups, recordatorios, reactivar "agotado hoy") |
@@ -11,7 +12,11 @@
 | `meilisearch` | Búsqueda de restaurantes y platos |
 | `reverb` (opcional) | Tiempo real para avisos de demora, driver de base de datos |
 
-Una sola imagen para app, worker y scheduler. Dockerfile multi-etapa: Node (Vite) → Composer (sin dev) → runtime mínimo.
+Una sola imagen para migrate, app, worker y scheduler. Dockerfile multi-etapa: Node (Vite) → Composer (sin dev) → runtime mínimo, sin el `.env` y con un usuario sin root.
+
+Al arrancar, la entrada de la imagen de producción (`docker/entrypoint-prod.sh`) lee el `.env` montado, guarda en caché configuración, eventos, rutas y vistas (`php artisan optimize`) y enlaza `public/storage`; después ejecuta el comando del servicio. No se hace al construir la imagen porque la caché de configuración dejaría escritos en ella los valores del `.env`.
+
+Revisiones de salud: `app` responde `/up` (que también consulta la base); `db` responde por TCP, no por el socket, para no darse por lista mientras la imagen de PostGIS todavía inicializa el volumen; `worker` y `scheduler` comprueban que su proceso principal sea `queue:work` o `schedule:work`. Para estos dos basta con que el proceso siga vivo: `queue:work` termina solo cuando un trabajo pasa de su tiempo límite, pierde la conexión con la base, se pasa de memoria o cumple `--max-time`, y `restart: unless-stopped` lo relanza. Una señal de vida escrita por el worker en cada vuelta detectaría además un proceso colgado, pero daría falsas alarmas en modo de mantenimiento (ahí el worker no da vueltas) y Compose tampoco reinicia un contenedor por estar «unhealthy».
 
 ## CI/CD (GitHub Actions)
 

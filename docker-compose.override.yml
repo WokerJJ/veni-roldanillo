@@ -30,6 +30,12 @@ x-app-dev: &app-dev
     - /app/storage/inertia-devtools:mode=1777
 
 services:
+  # Migra con el código montado antes de que arranquen los demás. Es el primer
+  # contenedor en arrancar, así que también es el que instala las dependencias
+  # en el volumen vendor cuando faltan.
+  migrate:
+    <<: *app-dev
+
   app:
     <<: *app-dev
     # El primer arranque descarga las dependencias al volumen vendor: más
@@ -47,13 +53,24 @@ services:
     # job se ve en el siguiente, sin reiniciar (queue:work, el de producción,
     # carga el código una sola vez).
     command: ["php", "artisan", "queue:listen", "--tries=3"]
+    # La revisión de producción busca queue:work en el PID 1; aquí el PID 1 es
+    # el init y el comando es otro.
+    healthcheck: !override
+      disable: true
 
   scheduler:
     <<: *app-dev
+    healthcheck: !override
+      disable: true
 
   db:
     ports:
       - "127.0.0.1:${FORWARD_DB_PORT:-5433}:5432"
+    volumes:
+      # Crea la base de pruebas veni_test (tras 10_postgis.sh de la imagen).
+      # Solo en desarrollo: el servidor no necesita la base de pruebas ni la
+      # carpeta docker/.
+      - ./docker/postgres/20-veni-test.sh:/docker-entrypoint-initdb.d/20-veni-test.sh:ro
 
   meilisearch:
     ports:
