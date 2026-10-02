@@ -142,6 +142,14 @@ docker compose -f docker-compose.yml -p veni-prod down -v    # al terminar; -v b
 
 Queda en <http://localhost:8001>, ya migrada, con su propia base de datos y sin tocar el entorno de desarrollo. En PowerShell, `$env:APP_PORT = 8001` antes del primer comando.
 
+La prueba de humo hace ese recorrido sola, y es la que corre la CI en cada PR: levanta la imagen en un proyecto de Compose aparte (`veni-humo`, puerto 8189) con un `.env` temporal, espera `/up`, comprueba la migración y las cachés de Laravel, pide veinte veces la página de inicio alternando inglés y español (`<html lang>` y `Content-Language` tienen que seguir a cada petición) y borra todo al terminar:
+
+```bash
+docker build --target prod -t veni-humo .
+bash tests/docker/smoke-prod.sh veni-humo
+docker image rm veni-humo
+```
+
 ### Base de datos
 
 Las pruebas usan la base `veni_test` (PostgreSQL + PostGIS), que se crea sola al inicializar el volumen de `db`. Si el volumen ya existía, creala una vez (es idempotente):
@@ -163,6 +171,8 @@ docker compose exec app composer lint      # Pint (preset laravel); `composer fo
 docker compose exec app composer analyse   # Larastan al nivel máximo
 docker compose exec app composer test      # Pest sobre veni_test
 bash tests/docker/entrypoint-dev.test.sh   # arranque del contenedor de desarrollo (sin root)
+bash tests/docker/entrypoint-prod.test.sh  # arranque del contenedor de producción
+bash tests/docker/smoke-prod.sh <imagen>   # la imagen de producción bajo Octane (ver «Probar bajo Octane»)
 npm run lint                               # ESLint
 npm run typecheck                          # vue-tsc
 npm test                                   # Vitest (incluye la verificación de los íconos)

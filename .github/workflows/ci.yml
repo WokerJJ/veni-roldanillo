@@ -120,6 +120,33 @@ jobs:
           shellcheck --version
           shellcheck docker/*.sh tests/docker/*.sh
 
+  # La imagen de producción, levantada como en el servidor (docker-compose.yml
+  # sin el override): Octane, la entrada con `artisan optimize`, el servicio
+  # migrate y PostGIS. Pest corre sin Octane y desarrollo en modo clásico (ADR
+  # 0012); esta es la prueba que vería un dato que se queda en memoria de una
+  # petición a la siguiente. La imagen se construye con una etiqueta local y no
+  # se publica (eso es de docker.yml); las capas van a la caché de Actions.
+  smoke:
+    name: Imagen de producción (prueba de humo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Construir la imagen
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: prod
+          tags: veni-roldanillo:humo
+          # La deja en el Docker del runner, que es donde la levanta Compose.
+          load: true
+          provenance: false
+          cache-from: type=gha,scope=prod
+          cache-to: type=gha,scope=prod,mode=max
+      - name: Prueba de humo
+        run: bash tests/docker/smoke-prod.sh veni-roldanillo:humo
+
   # Seguridad en cada PR y push: un aviso o un secreto bloquea ci-ok. La
   # revisión semanal de avisos nuevos vive aparte, en security.yml.
   composer-audit:
@@ -194,7 +221,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [backend, frontend, scripts, composer-audit, npm-audit, gitleaks, actionlint]
+    needs: [backend, frontend, scripts, smoke, composer-audit, npm-audit, gitleaks, actionlint]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
