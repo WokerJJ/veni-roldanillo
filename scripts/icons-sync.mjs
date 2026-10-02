@@ -2,17 +2,21 @@
  * Íconos de colombia-icons copiados desde una versión fija (ADR 0011).
  *
  *   npm run icons:sync               Descarga los íconos del manifiesto desde su tag y verifica los sha256.
- *   npm run icons:sync -- --update   Además acepta un commit o unos sha256 distintos (al cambiar de tag).
+ *   npm run icons:sync -- --update   Además acepta un commit o unos sha256 distintos (al cambiar de tag) y dice cuáles.
  *   npm run icons:check              Sin red y sin escribir: lo versionado coincide con el manifiesto.
+ *   npm run icons:verify             Con red y sin escribir: lo versionado es idéntico al commit fijado del origen.
+ *
+ * --check prueba coherencia (carpeta y manifiesto dicen lo mismo); la
+ * procedencia (que eso mismo es lo que publicó el origen) la prueba --verify.
  *
  * El manifiesto (resources/icons/colombia/manifest.json) dice qué íconos se
  * copian y de qué versión; --dir apunta a otra carpeta (lo usan las pruebas).
  * Solo usa módulos de Node: no agrega dependencias.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const DEFAULT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../resources/icons/colombia');
@@ -73,9 +77,11 @@ const SHAPE_ATTRIBUTES = new Set([
     'stroke-linejoin',
     'stroke-dasharray',
 ]);
-const TAG_SHAPE = /^<(\/?)([A-Za-z][\w:-]*)((?:\s+[\w:-]+="[^"]*")*)\s*(\/?)>$/;
+// Separan solo espacio, tabulación y salto de línea, como en el navegador: «\s»
+// aceptaría también NBSP, BOM y otros espacios Unicode, que para él no separan nada.
+const TAG_SHAPE = /^<(\/?)([A-Za-z][\w:-]*)((?:[ \t\n]+[\w:-]+="[^"]*")*)[ \t\n]*(\/?)>$/;
 // Números, datos de trazo, colores y transformaciones; nada de «:», «&», «;» ni comillas.
-const SAFE_VALUE = /^[\w\s.,#%()+-]*$/;
+const SAFE_VALUE = /^[\w \t\n.,#%()+-]*$/;
 
 function sha256(content) {
     return createHash('sha256').update(content).digest('hex');
@@ -116,9 +122,14 @@ function validateSvg(svg) {
         problems.push('tiene referencias url()');
     }
 
+    // Icon separa la raíz con ^<svg: con un BOM o un espacio antes, el ícono no se pintaría.
+    if (!svg.startsWith('<svg ')) {
+        problems.push('no empieza exactamente por «<svg » (sin BOM ni espacios antes)');
+    }
+
     const tags = svg.match(/<[^>]*>/g) ?? [];
 
-    if (svg.replace(/<[^>]*>/g, '').trim() !== '') {
+    if (/[^ \t\n]/.test(svg.replace(/<[^>]*>/g, ''))) {
         problems.push('tiene texto fuera de las etiquetas');
     }
 
@@ -261,6 +272,45 @@ function orphans(dir, manifest) {
 }
 
 /**
+ * Lo que la sincronización tiene que quitar de la carpeta antes de escribir
+ * `targets`. Los nombres se comparan sin distinguir mayúsculas: en Windows y
+ * macOS «Sol.svg» y «sol.svg» son el mismo archivo, y borrar uno después de
+ * escribir el otro lo perdería.
+ *
+ * @param {string} dir
+ * @param {string[]} targets archivos que se van a escribir
+ * @returns {{ stale: string[], removed: string[], blocked: string[] }}
+ *   `stale`: archivos por borrar (SVG que sobran y nombres que solo difieren en
+ *   mayúsculas); `removed`: de esos, los que no se vuelven a escribir;
+ *   `blocked`: carpetas o enlaces en el lugar de un archivo.
+ */
+function leftovers(dir, targets) {
+    const exact = new Set(targets);
+    const folded = new Set(targets.map((file) => file.toLowerCase()));
+    const stale = [];
+    const blocked = [];
+
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const name = entry.name.toLowerCase();
+
+        if (!folded.has(name) && !name.endsWith('.svg')) {
+            continue;
+        }
+
+        if (!entry.isFile()) {
+            blocked.push(entry.name);
+        } else if (!exact.has(entry.name)) {
+            stale.push(entry.name);
+        }
+    }
+
+    stale.sort();
+    blocked.sort();
+
+    return { stale, removed: stale.filter((file) => !folded.has(file.toLowerCase())), blocked };
+}
+
+/**
  * Compara lo versionado con el manifiesto, sin red y sin escribir.
  *
  * @returns {string[]} problemas encontrados
@@ -304,20 +354,37 @@ function check(dir) {
     return problems;
 }
 
-async function download(url) {
-    const response = await fetch(url, {
-        headers: { 'User-Agent': 'veni-roldanillo-icons-sync' },
-        signal: AbortSignal.timeout(30_000),
-    });
+/**
+ * Una petición a GitHub sin seguir redirecciones: lo que se copia sale de la
+ * dirección pedida o de ninguna. api.github.com y raw.githubusercontent.com
+ * responden directo; una redirección (el repositorio cambió de nombre o de
+ * dueño) es un cambio de origen que se decide a mano en el manifiesto.
+ */
+async function request(fetch, url, headers = {}) {
+    try {
+        return await fetch(url, {
+            headers: { 'User-Agent': 'veni-roldanillo-icons-sync', ...headers },
+            redirect: 'error',
+            signal: AbortSignal.timeout(30_000),
+        });
+    } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        const cause = error instanceof Error && error.cause instanceof Error ? ` (${error.cause.message})` : '';
+
+        throw new Error(`No se pudo pedir ${url}: ${reason}${cause}`, { cause: error });
+    }
+}
+
+async function download(fetch, url) {
+    const response = await request(fetch, url);
 
     return { status: response.status, body: await response.text() };
 }
 
 /** Commit al que apunta hoy el tag: un tag se puede mover, un commit no. */
-async function resolveTag(repository, tag) {
-    const response = await fetch(`https://api.github.com/repos/${repository}/commits/refs/tags/${tag}`, {
-        headers: { Accept: 'application/vnd.github.sha', 'User-Agent': 'veni-roldanillo-icons-sync' },
-        signal: AbortSignal.timeout(30_000),
+async function resolveTag(fetch, repository, tag) {
+    const response = await request(fetch, `https://api.github.com/repos/${repository}/commits/refs/tags/${tag}`, {
+        Accept: 'application/vnd.github.sha',
     });
     const body = (await response.text()).trim();
 
@@ -332,20 +399,25 @@ async function resolveTag(repository, tag) {
  * Descarga la licencia y los íconos del manifiesto desde el commit del tag y,
  * solo si todo es válido, escribe los archivos y el manifiesto.
  *
- * @returns {Promise<{ problems: string[], summary: string }>}
+ * @param {string} dir
+ * @param {{ update?: boolean, fetch?: typeof globalThis.fetch }} [options] «fetch» lo cambian las pruebas.
+ * @returns {Promise<{ problems: string[], summary: string, changes: string[] }>}
+ *   `changes`: lo que quedó distinto de lo que decía el manifiesto, para revisarlo.
  */
-async function sync(dir, { update }) {
+async function sync(dir, { update = false, fetch = globalThis.fetch } = {}) {
     const manifest = readManifest(dir);
-    const commit = await resolveTag(manifest.repository, manifest.tag);
+    const commit = await resolveTag(fetch, manifest.repository, manifest.tag);
     const problems = [];
 
     if (manifest.commit !== undefined && manifest.commit !== commit && !update) {
         return {
             problems: [
-                `el tag ${manifest.tag} apunta a ${commit} y el manifiesto dice ${manifest.commit}: ` +
-                    'revisá el cambio y repetí con --update',
+                `el tag ${manifest.tag} apunta a ${commit} y el manifiesto dice ${manifest.commit}. ` +
+                    'Si cambiaste «tag» a propósito, repetí con --update y revisá los cambios que informa. ' +
+                    'Si no lo cambiaste, el tag se movió en el origen: no lo aceptes sin revisar allá qué cambió',
             ],
             summary: '',
+            changes: [],
         };
     }
 
@@ -357,7 +429,7 @@ async function sync(dir, { update }) {
 
     const downloads = await Promise.all(
         files.map(async ([file, entry, isIcon]) => {
-            const { status, body } = await download(`${base}/${entry.path}`);
+            const { status, body } = await download(fetch, `${base}/${entry.path}`);
 
             if (status === 404) {
                 problems.push(`${file}: ${entry.path} no existe en ${manifest.tag}`);
@@ -386,23 +458,44 @@ async function sync(dir, { update }) {
         }),
     );
 
+    // La carpeta se mira antes de tocarla: lo que estorba se informa aquí, no a medio escribir.
+    const { stale, removed, blocked } = leftovers(
+        dir,
+        files.map(([file]) => file),
+    );
+
+    problems.push(...blocked.map((file) => `${file}: no es un archivo (es una carpeta o un enlace): quitalo a mano`));
+
     if (problems.length > 0) {
-        return { problems, summary: '' };
+        return { problems, summary: '', changes: [] };
     }
 
+    for (const file of stale) {
+        rmSync(path.join(dir, file));
+    }
+
+    const changes = [];
+    const added = [];
     let bytes = 0;
+
+    if (manifest.commit !== undefined && manifest.commit !== commit) {
+        changes.push(`commit de ${manifest.tag}: ${manifest.commit} → ${commit}`);
+    }
 
     for (const { file, entry, content, hash } of downloads) {
         writeFileSync(path.join(dir, file), content);
+
+        if (entry.sha256 === undefined) {
+            added.push(`nuevo: ${file}`);
+        } else if (entry.sha256 !== hash) {
+            changes.push(`cambió: ${file}`);
+        }
+
         entry.sha256 = hash;
         bytes += file === LICENSE_FILE ? 0 : Buffer.byteLength(content);
     }
 
-    const removed = orphans(dir, manifest);
-
-    for (const file of removed) {
-        rmSync(path.join(dir, file));
-    }
+    changes.push(...added, ...removed.map((file) => `quitado: ${file}`));
 
     const sorted = Object.fromEntries(
         Object.entries(manifest.icons)
@@ -420,18 +513,64 @@ async function sync(dir, { update }) {
     writeFileSync(path.join(dir, MANIFEST_FILE), `${JSON.stringify(written, null, 4)}\n`);
 
     const count = Object.keys(sorted).length;
-    const extra = removed.length > 0 ? `; quitados: ${removed.join(', ')}` : '';
 
     return {
         problems: [],
-        summary: `${String(count)} íconos de ${manifest.repository} ${manifest.tag} (${commit.slice(0, 7)}), ${String(bytes)} bytes${extra}`,
+        summary: `${String(count)} íconos de ${manifest.repository} ${manifest.tag} (${commit.slice(0, 7)}), ${String(bytes)} bytes`,
+        changes,
     };
+}
+
+/**
+ * Procedencia: descarga cada archivo del manifiesto desde el commit fijado y lo
+ * compara con el de la carpeta, sin escribir. Que el sha256 coincida con el
+ * manifiesto no alcanza: quien cambia un archivo puede cambiar también su sha256.
+ *
+ * @param {string} dir
+ * @param {{ fetch?: typeof globalThis.fetch }} [options] «fetch» lo cambian las pruebas.
+ * @returns {Promise<string[]>} problemas encontrados
+ */
+async function verify(dir, { fetch = globalThis.fetch } = {}) {
+    const manifest = readManifest(dir);
+
+    if (manifest.commit === undefined) {
+        return ['el manifiesto no tiene «commit»: ejecutá npm run icons:sync'];
+    }
+
+    const base = `https://raw.githubusercontent.com/${manifest.repository}/${manifest.commit}`;
+    const files = [
+        [LICENSE_FILE, manifest.license],
+        ...Object.entries(manifest.icons).map(([name, entry]) => [`${name}.svg`, entry]),
+    ];
+
+    const problems = await Promise.all(
+        files.map(async ([file, entry]) => {
+            const target = path.join(dir, file);
+
+            if (!existsSync(target)) {
+                return `${file}: está en el manifiesto pero no en la carpeta`;
+            }
+
+            const { status, body } = await download(fetch, `${base}/${entry.path}`);
+
+            if (status !== 200) {
+                return `${file}: HTTP ${String(status)} al descargar ${entry.path} del commit ${manifest.commit}`;
+            }
+
+            return normalize(body) === readFileSync(target, 'utf8')
+                ? null
+                : `${file}: no es igual a ${entry.path} en el commit ${manifest.commit}`;
+        }),
+    );
+
+    return problems.filter((problem) => problem !== null);
 }
 
 async function main() {
     const { values } = parseArgs({
         options: {
             check: { type: 'boolean', default: false },
+            verify: { type: 'boolean', default: false },
             update: { type: 'boolean', default: false },
             dir: { type: 'string', default: DEFAULT_DIR },
         },
@@ -448,12 +587,26 @@ async function main() {
                 `Íconos al día: ${String(Object.keys(manifest.icons).length)} de ${manifest.repository} ${manifest.tag}.`,
             );
         }
+    } else if (values.verify) {
+        problems = await verify(dir);
+
+        if (problems.length === 0) {
+            const manifest = readManifest(dir);
+            const count = String(Object.keys(manifest.icons).length);
+            console.log(
+                `Íconos idénticos al origen: ${count} y la licencia, de ${manifest.repository} en ${manifest.commit}.`,
+            );
+        }
     } else {
         const result = await sync(dir, { update: values.update });
         problems = result.problems;
 
         if (problems.length === 0) {
             console.log(`Sincronizado: ${result.summary}.`);
+
+            if (result.changes.length > 0) {
+                console.log(`Cambios:\n  - ${result.changes.join('\n  - ')}`);
+            }
         }
     }
 
@@ -463,9 +616,20 @@ async function main() {
     }
 }
 
-try {
-    await main();
-} catch (error) {
-    console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 1;
+/** Solo al ejecutarlo con Node: las pruebas lo importan para llamar a sus funciones. */
+function isMain() {
+    const entry = process.argv[1];
+
+    return entry !== undefined && existsSync(entry) && import.meta.url === pathToFileURL(realpathSync(entry)).href;
 }
+
+if (isMain()) {
+    try {
+        await main();
+    } catch (error) {
+        console.error(error instanceof Error ? error.message : error);
+        process.exitCode = 1;
+    }
+}
+
+export { sync, verify };
