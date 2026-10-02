@@ -1,0 +1,28 @@
+{
+    "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+    "release-type": "simple",
+    "include-component-in-tag": false,
+    "include-v-in-tag": true,
+    "bump-minor-pre-major": true,
+    "initial-version": "0.1.0",
+    "pull-request-title-pattern": "chore(release): publicar ${version}",
+    "pull-request-header": "Release preparada por release-please. Al fusionar este PR se crean el tag y la release, y se publica la imagen de esa versión en GHCR.",
+    "changelog-sections": [
+        { "type": "feat", "section": "Funcionalidades" },
+        { "type": "fix", "section": "Correcciones" },
+        { "type": "perf", "section": "Rendimiento" },
+        { "type": "revert", "section": "Reversiones" },
+        { "type": "docs", "section": "Documentación", "hidden": true },
+        { "type": "ci", "section": "Integración continua", "hidden": true },
+        { "type": "chore", "section": "Mantenimiento", "hidden": true },
+        { "type": "refactor", "section": "Refactorización", "hidden": true },
+        { "type": "test", "section": "Pruebas", "hidden": true },
+        { "type": "build", "section": "Build", "hidden": true },
+        { "type": "style", "section": "Estilo", "hidden": true }
+    ],
+    "packages": {
+        ".": {
+            "package-name": "veni-roldanillo"
+        }
+    }
+}

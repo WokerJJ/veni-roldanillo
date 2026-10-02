@@ -1,0 +1,77 @@
+name: Release
+
+# release-please mantiene abierto un PR de release con la próxima versión y el
+# CHANGELOG.md, calculados desde los commits convencionales de main (uno por
+# PR, por el squash merge). Al fusionar ese PR crea el tag vX.Y.Z y la release
+# de GitHub, y el job "image" publica la imagen de esa versión en GHCR.
+#
+# Nadie crea tags ni releases a mano. Cómo se numeran las versiones y cómo
+# forzar una: docs/despliegue.md («Releases»).
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Una ejecución a la vez y sin cancelar: una release a medio crear no se
+# interrumpe. Si llega otro push mientras tanto, espera su turno.
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: release-please
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Rama del PR de release, tag y release.
+      contents: write
+      # Abrir y actualizar el PR de release.
+      pull-requests: write
+      # Crear las etiquetas del PR de release (autorelease: pending/tagged).
+      issues: write
+    # Un PR abierto con GITHUB_TOKEN no corre la CI sola, y sin el check ci-ok
+    # la protección de main no deja fusionarlo. Con una GitHub App (variable
+    # RELEASE_APP_CLIENT_ID y secret RELEASE_APP_PRIVATE_KEY), release-please
+    # abre el PR con otra identidad y la CI corre. Hoy no existen: se usa
+    # GITHUB_TOKEN y la CI del PR de release se lanza a mano
+    # (docs/despliegue.md, «Releases»).
+    env:
+      RELEASE_APP_CLIENT_ID: ${{ vars.RELEASE_APP_CLIENT_ID }}
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - name: Token de la GitHub App
+        id: app
+        if: env.RELEASE_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ env.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: rp
+        with:
+          token: ${{ steps.app.outputs.token || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # La imagen de la versión recién creada. Se llama desde aquí porque el tag
+  # lo crea GITHUB_TOKEN y eso no dispara docker.yml. Con la GitHub App el tag
+  # lo empuja la App, docker.yml arranca solo y este job se salta para no
+  # publicar dos veces.
+  image:
+    name: Imagen de la release
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true' && vars.RELEASE_APP_CLIENT_ID == ''
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
