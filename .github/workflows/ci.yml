@@ -99,6 +99,25 @@ jobs:
       - name: Build
         run: npm run build
 
+  # Scripts de shell del entorno Docker. Las pruebas del entrypoint de
+  # desarrollo ponen un composer falso en el PATH: no necesitan Docker, PHP ni
+  # red. shellcheck es el que trae la imagen del runner, el mismo que usa
+  # actionlint para los `run:` de los workflows: no se descarga ningún binario,
+  # así que no hay SHA-256 que verificar. A cambio, su versión cambia con la
+  # imagen del runner; queda escrita en el registro del job.
+  scripts:
+    name: Scripts (pruebas de shell, shellcheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Pruebas del entrypoint de desarrollo
+        run: bash tests/docker/entrypoint-dev.test.sh
+      - name: shellcheck
+        run: |
+          shellcheck --version
+          shellcheck docker/*.sh tests/docker/*.sh
+
   # Seguridad en cada PR y push: un aviso o un secreto bloquea ci-ok. La
   # revisión semanal de avisos nuevos vive aparte, en security.yml.
   composer-audit:
@@ -173,7 +192,7 @@ jobs:
   ci-ok:
     name: ci-ok
     if: always()
-    needs: [backend, frontend, composer-audit, npm-audit, gitleaks, actionlint]
+    needs: [backend, frontend, scripts, composer-audit, npm-audit, gitleaks, actionlint]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
