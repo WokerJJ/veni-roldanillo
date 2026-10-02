@@ -1,0 +1,132 @@
+name: Imagen
+
+# Construye la imagen de producción (etapa prod del Dockerfile) y la publica en
+# GitHub Container Registry: ghcr.io/wokerjj/veni-roldanillo.
+#
+# - push a main: publica `main` y `sha-<commit>`.
+# - tag vX.Y.Z: publica `X.Y.Z`, `X.Y` y `sha-<commit>`.
+# - PR: solo construye, sin iniciar sesión ni publicar. Y solo si el PR toca
+#   la receta de la imagen o este workflow: cualquier otro cambio ya construye
+#   la imagen en la prueba de humo de ci.yml.
+#
+# release.yml lo llama al crear una release (workflow_call): el tag lo crea
+# release-please con GITHUB_TOKEN, y lo que hace GITHUB_TOKEN no dispara otros
+# workflows, así que el push de ese tag nunca llegaría aquí. El disparo por
+# tag queda para un tag empujado por una persona.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/docker.yml
+      - Dockerfile
+      - .dockerignore
+      - docker/**
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag de la release que se publica (vX.Y.Z)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Con el tag en el nombre cuando lo llama release.yml: comparte `github.ref`
+  # (main) con el push que publica `main` y no deben esperarse entre sí.
+  group: docker-${{ inputs.tag || github.ref }}
+  # Solo en PR: una publicación empezada termina.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: ghcr.io/wokerjj/veni-roldanillo
+
+jobs:
+  image:
+    name: Imagen de producción
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # packages: write es el permiso para publicar en GHCR y solo lo tiene este
+    # job. En un PR no se usa (no hay login ni push), y en los PR de forks y de
+    # Dependabot GitHub entrega el token en solo lectura de todos modos.
+    permissions:
+      contents: read
+      packages: write
+    env:
+      PUBLISH: ${{ github.event_name != 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Llamado desde release.yml se construye el commit del tag, que puede
+          # no ser el del push que disparó esa corrida.
+          ref: ${{ inputs.tag || github.sha }}
+      # El commit que de verdad se construye: de aquí salen la etiqueta
+      # sha-<commit> y la revisión que queda anotada en la imagen.
+      - name: Commit que se construye
+        id: commit
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+          echo "short=$(git rev-parse --short=7 HEAD)" >>"$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Sesión en GHCR
+        if: env.PUBLISH == 'true'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      # Sin `latest`: el servidor fija una versión (docs/despliegue.md), y
+      # `main` es la que sigue a la rama.
+      - name: Etiquetas
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=ref,event=branch,enable=${{ inputs.tag == '' }}
+            type=semver,pattern={{version}},value=${{ inputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag }}
+            type=raw,value=sha-${{ steps.commit.outputs.short }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.commit.outputs.sha }}
+      - name: Construir y publicar
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          target: prod
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # URL del mapa (ADR 0007): Vite las escribe en el JavaScript al
+          # compilar, así que son parte de la imagen. Salen de las variables
+          # del repositorio (Settings → Secrets and variables → Actions →
+          # Variables); sin ellas, la demo pública de veni-mapa, el mismo
+          # valor por defecto del Dockerfile. Son públicas, no secretos.
+          build-args: |
+            VITE_MAP_STYLE_URL=${{ vars.VITE_MAP_STYLE_URL || 'https://wokerjj.github.io/veni-mapa/style/veni-{theme}-{locale}.json' }}
+            VITE_MAP_ROUTES_URL=${{ vars.VITE_MAP_ROUTES_URL || 'https://wokerjj.github.io/veni-mapa/roldanillo-rutas.json' }}
+          # La misma caché de capas que usa la prueba de humo de ci.yml.
+          cache-from: type=gha,scope=prod
+          cache-to: type=gha,scope=prod,mode=max
+      - name: Resumen
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            if [[ "$PUBLISH" == "true" ]]; then
+              echo "### Imagen publicada"
+            else
+              echo "### Imagen construida (sin publicar)"
+            fi
+            echo
+            while IFS= read -r tag; do
+              echo "- \`$tag\`"
+            done <<<"$TAGS"
+            echo
+            echo "Digest: \`${DIGEST:-sin publicar}\`"
+          } >>"$GITHUB_STEP_SUMMARY"
