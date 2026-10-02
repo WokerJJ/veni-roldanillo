@@ -7,6 +7,9 @@
 <p align="center">
   <a href="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/ci.yml"><img src="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/security.yml"><img src="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/security.yml/badge.svg?branch=main" alt="Seguridad"></a>
+  <a href="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/docker.yml"><img src="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/docker.yml/badge.svg?branch=main" alt="Imagen"></a>
+  <a href="https://github.com/WokerJJ/veni-roldanillo/releases/latest"><img src="https://img.shields.io/github/v/release/WokerJJ/veni-roldanillo?label=release" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licencia-propietaria-lightgrey" alt="Licencia: propietaria"></a>
 </p>
 
 Plataforma web instalable (PWA), bilingüe español/inglés, que reúne a **todos los restaurantes de Roldanillo** (Valle del Cauca, Colombia) con menús, precios, mapa, horarios y calificaciones confiables, y permite **pedir a domicilio por WhatsApp sin comisiones** para el negocio.
@@ -79,7 +82,7 @@ El mapa no vive en este repositorio: la app carga por URL el que publica [veni-m
 | `VITE_MAP_STYLE_URL` | Plantilla del estilo. La app cambia `{theme}` por `claro` u `oscuro` y `{locale}` por `es` o `en`, según el tema y el idioma de la interfaz: `https://…/veni-{theme}-{locale}.json`. |
 | `VITE_MAP_ROUTES_URL` | Grafo de rutas (`roldanillo-rutas.json`), para calcularlas en el dispositivo ([ADR 0008](docs/adr/0008-ubicacion-y-rutas-en-el-dispositivo.md)). |
 
-Los valores de `.env.example` apuntan a la demo pública de veni-mapa, que sigue su rama `main`: **no es una versión fija**, el mapa cambia cuando cambia la demo. El ADR 0007 la tolera mientras no haya un hosting versionado; fijar una release en producción, y comprobarlo, queda en [#7](https://github.com/WokerJJ/veni-roldanillo/issues/7).
+Los valores de `.env.example` apuntan a la demo pública de veni-mapa, que sigue su rama `main`: **no es una versión fija**, el mapa cambia cuando cambia la demo. El ADR 0007 la tolera mientras no haya un hosting versionado; cuando exista, la imagen publicada se fija a una release con dos variables del repositorio y `docker.yml` comprueba que lo sean ([Entrega y despliegue](docs/despliegue.md#el-mapa-dentro-de-la-imagen)).
 
 > **Al actualizar:** si tu `.env` es anterior a los marcadores y trae una URL fija (`…/veni-claro-es.json`), cambiala por la plantilla de `.env.example`. Sin `{theme}` y `{locale}` el mapa se quedaría en un solo tema y un solo idioma sin que nada falle, así que `npm run build` se detiene con un mensaje que dice qué falta, y `npm run dev` avisa en la terminal y en la consola del navegador.
 
@@ -181,11 +184,18 @@ npm run build
 
 `security.yml` revisa cada semana y en cada PR los avisos de `composer audit`, `npm audit` (desde high) y los secretos del historial con gitleaks.
 
+## Despliegue
+
+Cada push a `main` publica la imagen de producción en `ghcr.io/wokerjj/veni-roldanillo`, y [release-please](https://github.com/googleapis/release-please) mantiene un PR de release con la versión y el `CHANGELOG.md`; al fusionarlo salen el tag, la release y la imagen `X.Y.Z`. El despliegue al servidor está **preparado y desactivado**: se lanza a mano, por versión, y no corre mientras no exista la variable que lo activa. No hay secrets reales en el repositorio ni servicios de pago.
+
+Cómo se numeran las versiones, qué necesita el servidor, qué secrets hacen falta y cómo activarlo: [Entrega y despliegue](docs/despliegue.md).
+
 ## Documentación
 
 - [Visión y propuesta](docs/01-vision.md)
 - [Producto y funcionalidades](docs/02-producto.md)
 - [Arquitectura](docs/03-arquitectura.md)
+- [Entrega y despliegue](docs/despliegue.md)
 - [Seguridad y marco legal](docs/04-seguridad-y-legal.md)
 - [Roadmap y alcance del MVP](docs/05-roadmap.md)
 - [Alineación con el Plan de Desarrollo Municipal](docs/06-plan-desarrollo-municipal.md)
