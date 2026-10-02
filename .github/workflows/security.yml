@@ -5,6 +5,7 @@ name: Seguridad
 # en ci.yml y bloquean ci-ok; aquí solo se repiten los avisos de dependencias,
 # que pueden aparecer sin que cambie el código. gitleaks no se repite: el
 # historial solo cambia con un push, y ese push ya pasa por ci.yml.
+# Además comprueba la procedencia de los íconos, que necesita la red.
 on:
   schedule:
     - cron: '0 11 * * 1' # lunes 06:00 en Bogotá
@@ -45,3 +46,20 @@ jobs:
           node-version: 24
       - name: Avisos de seguridad de npm (high o más)
         run: npm audit --audit-level=high
+
+  # Procedencia de los íconos (ADR 0011): los SVG y la licencia versionados son
+  # idénticos a los del commit fijado de colombia-icons. ci.yml comprueba sin
+  # red que la carpeta y el manifiesto coinciden entre sí (icons:check, dentro
+  # de Vitest); compararlos con el origen necesita la red y por eso vive aquí.
+  icons-verify:
+    name: Íconos (procedencia)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      # El script solo usa módulos de Node: no hace falta instalar dependencias.
+      - name: Íconos idénticos a los del origen
+        run: npm run icons:verify
