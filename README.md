@@ -78,7 +78,11 @@ El mapa no vive en este repositorio: la app carga por URL el que publica [veni-m
 | `VITE_MAP_STYLE_URL` | Plantilla del estilo. La app cambia `{theme}` por `claro` u `oscuro` y `{locale}` por `es` o `en`, según el tema y el idioma de la interfaz: `https://…/veni-{theme}-{locale}.json`. |
 | `VITE_MAP_ROUTES_URL` | Grafo de rutas (`roldanillo-rutas.json`), para calcularlas en el dispositivo ([ADR 0008](docs/adr/0008-ubicacion-y-rutas-en-el-dispositivo.md)). |
 
-Los valores de `.env.example` apuntan a la demo publicada de veni-mapa. Vite las escribe en el JavaScript al compilar: tras cambiarlas hay que reiniciar `npm run dev` o repetir `npm run build`. En la imagen de producción son argumentos de build con esos mismos valores por defecto; para fijar una release se definen en el `.env` que lee `docker compose build` o se pasan con `--build-arg`:
+Los valores de `.env.example` apuntan a la demo pública de veni-mapa, que sigue su rama `main`: **no es una versión fija**, el mapa cambia cuando cambia la demo. El ADR 0007 la tolera mientras no haya un hosting versionado; fijar una release en producción, y comprobarlo, queda en [#7](https://github.com/WokerJJ/veni-roldanillo/issues/7).
+
+> **Al actualizar:** si tu `.env` es anterior a los marcadores y trae una URL fija (`…/veni-claro-es.json`), cambiala por la plantilla de `.env.example`. Sin `{theme}` y `{locale}` el mapa se quedaría en un solo tema y un solo idioma sin que nada falle, así que `npm run build` se detiene con un mensaje que dice qué falta, y `npm run dev` avisa en la terminal y en la consola del navegador.
+
+Vite las escribe en el JavaScript al compilar: tras cambiarlas hay que reiniciar `npm run dev` o repetir `npm run build`. Laravel lee además `VITE_MAP_STYLE_URL` (`config/services.php`) para que la vista raíz adelante la conexión con el host del mapa (`<link rel="preconnect">`); si no la encuentra, simplemente no lo pone. En la imagen de producción son argumentos de build con esos mismos valores por defecto; para fijar una release se definen en el `.env` que lee `docker compose build` o se pasan con `--build-arg`:
 
 ```bash
 docker build --target prod \
