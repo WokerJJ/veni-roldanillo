@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 
+import MapView from '@/components/MapView.vue';
 import { useI18n } from '@/composables/useI18n';
-import logo from '@brand/logo/veni-roldanillo.svg';
-import logoWhite from '@brand/logo/veni-roldanillo-blanco.svg';
+
+// El mapa ocupa todo el alto bajo la cabecera: el layout va sin pie de página.
+defineOptions({ layout: { immersive: true } });
 
 const { t } = useI18n();
 </script>
@@ -11,22 +13,24 @@ const { t } = useI18n();
 <template>
     <Head :title="t('home.title')" />
 
-    <section class="mx-auto flex max-w-5xl flex-col items-center gap-6 px-4 py-12 text-center sm:py-20">
-        <img :src="logo" :alt="t('home.logo_alt')" width="430" height="285" class="h-auto w-56 sm:w-72 dark:hidden">
-        <img
-            :src="logoWhite"
-            :alt="t('home.logo_alt')"
-            width="430"
-            height="285"
-            class="hidden h-auto w-56 sm:w-72 dark:block"
+    <div class="absolute inset-0">
+        <!--
+            Bienvenida sobre el mapa (va antes en el documento: el título se
+            lee primero). En un celular vertical queda abajo, a lo ancho, y
+            deja libre la franja de la atribución de OpenStreetMap; desde
+            480 px de ancho (también un celular acostado, que es bajo) queda
+            arriba a la izquierda, sin tocar los botones de zoom.
+        -->
+        <section
+            class="absolute inset-x-3 bottom-9 z-10 rounded-veni-md border border-line bg-canvas/95 p-4 shadow-lg min-[480px]:inset-x-auto min-[480px]:top-4 min-[480px]:bottom-auto min-[480px]:left-4 min-[480px]:max-w-sm"
         >
+            <h1 class="text-xl min-[480px]:text-2xl">{{ t('home.heading') }}</h1>
+            <p class="mt-1 text-sm text-ink-muted">{{ t('home.intro') }}</p>
+            <p class="mt-3 inline-block rounded-full bg-veni-mango px-3 py-1 text-sm font-semibold text-veni-ciruela">
+                {{ t('home.coming_soon') }}
+            </p>
+        </section>
 
-        <h1 class="text-4xl sm:text-5xl">{{ t('home.heading') }}</h1>
-
-        <p class="max-w-prose text-lg text-ink-muted">
-            {{ t('home.intro') }}
-        </p>
-
-        <p class="rounded-full bg-veni-mango px-4 py-2 font-semibold text-veni-ciruela">{{ t('home.coming_soon') }}</p>
-    </section>
+        <MapView />
+    </div>
 </template>

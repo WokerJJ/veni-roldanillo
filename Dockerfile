@@ -91,6 +91,15 @@ COPY resources ./resources
 # Tokens y logos de la marca que importan el CSS y los componentes.
 COPY brand/tokens.css ./brand/tokens.css
 COPY brand/logo ./brand/logo
+
+# Mapa de veni-mapa (ADR 0007). Vite escribe estas URL en el JavaScript al
+# compilar, y el .env no entra en la imagen: llegan como argumentos de build.
+# Son públicas. Por defecto, la demo publicada; en producción se fija una
+# release con --build-arg (o en el .env que lee docker compose). {theme} y
+# {locale} los reemplaza la app (resources/js/map/styleUrl.ts).
+ARG VITE_MAP_STYLE_URL="https://wokerjj.github.io/veni-mapa/style/veni-{theme}-{locale}.json"
+ARG VITE_MAP_ROUTES_URL="https://wokerjj.github.io/veni-mapa/roldanillo-rutas.json"
+
 RUN npm run build
 
 # ---------------------------------------------------------------------------

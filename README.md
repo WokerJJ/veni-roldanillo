@@ -69,6 +69,27 @@ Hace falta una de las dos. Sin `public/build/manifest.json` y sin el servidor de
 
 Mientras `npm run dev` está abierto manda él: escribe `public/hot` y la app carga los recursos desde ese servidor aunque exista una compilación. Al cerrarlo borra el archivo; si se cierra a la fuerza y `public/hot` queda, la app sigue apuntando a un servidor que ya no existe: borrá el archivo o volvé a ejecutar `npm run dev`.
 
+### Mapa
+
+El mapa no vive en este repositorio: la app carga por URL el que publica [veni-mapa](https://github.com/WokerJJ/veni-mapa) ([ADR 0007](docs/adr/0007-mapa-desde-veni-mapa.md)). Dos variables del `.env` dicen de dónde:
+
+| Variable | Qué es |
+| --- | --- |
+| `VITE_MAP_STYLE_URL` | Plantilla del estilo. La app cambia `{theme}` por `claro` u `oscuro` y `{locale}` por `es` o `en`, según el tema y el idioma de la interfaz: `https://…/veni-{theme}-{locale}.json`. |
+| `VITE_MAP_ROUTES_URL` | Grafo de rutas (`roldanillo-rutas.json`), para calcularlas en el dispositivo ([ADR 0008](docs/adr/0008-ubicacion-y-rutas-en-el-dispositivo.md)). |
+
+Los valores de `.env.example` apuntan a la demo pública de veni-mapa, que sigue su rama `main`: **no es una versión fija**, el mapa cambia cuando cambia la demo. El ADR 0007 la tolera mientras no haya un hosting versionado; fijar una release en producción, y comprobarlo, queda en [#7](https://github.com/WokerJJ/veni-roldanillo/issues/7).
+
+> **Al actualizar:** si tu `.env` es anterior a los marcadores y trae una URL fija (`…/veni-claro-es.json`), cambiala por la plantilla de `.env.example`. Sin `{theme}` y `{locale}` el mapa se quedaría en un solo tema y un solo idioma sin que nada falle, así que `npm run build` se detiene con un mensaje que dice qué falta, y `npm run dev` avisa en la terminal y en la consola del navegador.
+
+Vite las escribe en el JavaScript al compilar: tras cambiarlas hay que reiniciar `npm run dev` o repetir `npm run build`. Laravel lee además `VITE_MAP_STYLE_URL` (`config/services.php`) para que la vista raíz adelante la conexión con el host del mapa (`<link rel="preconnect">`); si no la encuentra, simplemente no lo pone. En la imagen de producción son argumentos de build con esos mismos valores por defecto; para fijar una release se definen en el `.env` que lee `docker compose build` o se pasan con `--build-arg`:
+
+```bash
+docker build --target prod \
+  --build-arg VITE_MAP_STYLE_URL='https://tiles.veniroldanillo.co/vX.Y.Z/veni-{theme}-{locale}.json' \
+  --build-arg VITE_MAP_ROUTES_URL='https://tiles.veniroldanillo.co/vX.Y.Z/roldanillo-rutas.json' .
+```
+
 ### Dependencias de Composer
 
 `vendor/` no está en la carpeta del proyecto: vive en un volumen de Docker. Leer sus más de 10 000 archivos a través del montaje de Docker Desktop hacía que cada petición tardara segundos. El contenedor instala las dependencias al arrancar si el volumen está vacío o si lo instalado ya no corresponde a `composer.lock`. Composer corre con el usuario del contenedor, nunca con `--user root`: dejaría en el volumen archivos que ese usuario no puede actualizar, y el contenedor se niega a instalar como root.
@@ -165,6 +186,7 @@ npm run build
 ## Créditos
 
 - **Íconos:** [colombia-icons](https://github.com/Mteheran/colombia-icons), licencia MIT, © Miguel Teheran. Los que usa la app están copiados en [`resources/icons/colombia`](resources/icons/colombia) desde una versión fija, con su licencia ([ADR 0011](docs/adr/0011-iconos-colombia-icons.md)).
+- **Mapa:** datos © colaboradores de [OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL), publicados como PMTiles por [veni-mapa](https://github.com/WokerJJ/veni-mapa). Se pinta con [MapLibre GL JS](https://maplibre.org/) y [PMTiles](https://github.com/protomaps/PMTiles), los dos con licencia BSD de 3 cláusulas.
 
 ## Autor
 

@@ -8,5 +8,9 @@ declare module '@inertiajs/core' {
             locale: Locale;
             translations: Translations;
         };
+        // Props que una página le pasa a AppLayout con defineOptions({ layout: { … } }).
+        layoutProps: {
+            immersive: boolean;
+        };
     }
 }

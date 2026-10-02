@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    // Mapa de veni-mapa (ADR 0007). La misma variable que Vite escribe en el
+    // JavaScript: aquí solo sirve para que la vista raíz adelante la conexión
+    // con ese host (App\Support\MapOrigin).
+    'map' => [
+        'style_url' => env('VITE_MAP_STYLE_URL'),
+    ],
+
 ];

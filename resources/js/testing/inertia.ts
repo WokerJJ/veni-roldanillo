@@ -8,7 +8,8 @@
  * vi.resetModules(): cada prueba empieza con reset().
  */
 import { vi } from 'vitest';
-import { reactive } from 'vue';
+import type { FunctionalComponent } from 'vue';
+import { h, reactive } from 'vue';
 
 import type { Locale } from '@/composables/useI18n';
 
@@ -55,6 +56,14 @@ export const router = {
 export function usePage() {
     return page;
 }
+
+/** <Head>: no toca el documento; deja el título como atributo, para poder leerlo. */
+export const Head: FunctionalComponent<{ title?: string }> = (props) => h('inertia-head', { title: props.title });
+Head.props = ['title'];
+
+/** <Link>: un enlace común, sin la navegación de Inertia. */
+export const Link: FunctionalComponent<{ href: string }> = (props, { slots }) => h('a', { href: props.href }, slots.default?.());
+Link.props = ['href'];
 
 function fire(type: FakeEventName, props: FakePageProps): void {
     for (const listener of listeners.filter((registered) => registered.type === type)) {
