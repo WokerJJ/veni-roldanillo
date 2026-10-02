@@ -3,13 +3,20 @@
 # Una sola imagen para app, worker y scheduler (docs/03-arquitectura.md).
 # Etapas: base → dev (desarrollo local) | vendor + assets → prod.
 
-ARG PHP_IMAGE=dunglas/frankenphp:1.12-php8.4-trixie
-ARG NODE_IMAGE=node:24-alpine
+# Las imágenes de base van fijadas por digest: una etiqueta se puede volver a
+# publicar con otro contenido, y la imagen de una release tiene que salir de
+# las mismas bases que pasaron la CI. Dependabot propone los digests nuevos
+# (.github/dependabot.yml), y por eso van escritas en cada FROM y no en un ARG.
+
+# ---------------------------------------------------------------------------
+# composer: solo aporta el binario a las etapas que instalan dependencias
+# ---------------------------------------------------------------------------
+FROM composer:2@sha256:af98f42dfff7c68ba8d53c2164fd9fde1087b7d449514baa38c418b1f6bc4bac AS composer
 
 # ---------------------------------------------------------------------------
 # base: FrankenPHP (PHP 8.4) con las extensiones del proyecto y usuario sin root
 # ---------------------------------------------------------------------------
-FROM ${PHP_IMAGE} AS base
+FROM dunglas/frankenphp:1.12-php8.4-trixie@sha256:035fcb2fab91aacf77d70ee555d51b9bb084d057b16cf8a644bf1f93e28d4e3e AS base
 
 ARG UID=1000
 ARG GID=1000
@@ -22,8 +29,6 @@ RUN install-php-extensions bcmath intl pcntl pdo_pgsql zip \
     && useradd --uid "${UID}" --gid app --create-home --shell /bin/bash app \
     # Caddy guarda certificados y configuración aquí: el usuario sin root debe poder escribir.
     && chown -R app:app /data/caddy /config/caddy
-
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
 
@@ -50,6 +55,7 @@ RUN cp "$PHP_INI_DIR/php.ini-development" "$PHP_INI_DIR/php.ini" \
     # directorios y Composer escribe sin root.
     && install -d -o app -g app /app/vendor "$COMPOSER_CACHE_DIR"
 
+COPY --from=composer /usr/bin/composer /usr/bin/composer
 COPY --chmod=0755 docker/entrypoint-dev.sh /usr/local/bin/entrypoint-dev
 
 USER app
@@ -66,6 +72,7 @@ CMD ["frankenphp", "php-server", "--root", "public/", "--listen", ":8000", "--ac
 # ---------------------------------------------------------------------------
 FROM base AS vendor
 
+COPY --from=composer /usr/bin/composer /usr/bin/composer
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-interaction --no-progress --no-scripts --no-autoloader --prefer-dist
 
@@ -81,7 +88,7 @@ RUN rm -rf docker \
 # ---------------------------------------------------------------------------
 # assets: compilación de Vite
 # ---------------------------------------------------------------------------
-FROM ${NODE_IMAGE} AS assets
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS assets
 
 WORKDIR /app
 
@@ -110,12 +117,15 @@ RUN npm run build
 FROM base AS prod
 
 # Inertia DevTools graba cada petición en disco: nunca en producción.
+# Los registros de Laravel van a stderr, es decir a `docker compose logs`: un
+# archivo dentro del contenedor se pierde cada vez que un despliegue lo recrea.
 ENV APP_ENV=production \
     APP_DEBUG=false \
-    INERTIA_DEVTOOLS_ENABLED=false
+    INERTIA_DEVTOOLS_ENABLED=false \
+    LOG_CHANNEL=stderr
 
-RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
-    && rm /usr/bin/composer
+# Composer no llega a esta etapa: solo lo copian dev y vendor.
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
 # De docker/ solo entra la entrada de producción, y en /usr/local/bin (de
 # root): el usuario de la aplicación la ejecuta pero no puede reescribirla.

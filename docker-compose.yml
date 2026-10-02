@@ -25,6 +25,11 @@ x-app: &app
     # El .env nunca entra en la imagen: se monta en tiempo de ejecución.
     # APP_ENV_FILE permite montar otro (la prueba de humo usa uno temporal).
     - ${APP_ENV_FILE:-./.env}:/app/.env:ro
+    # Lo que guarda la aplicación (storage/app: las fotos que suben los
+    # dueños) vive en un volumen: cada despliegue recrea los contenedores y
+    # dentro de ellos se perdería. Lo comparten app, que lo sirve, y worker,
+    # que lo procesa. Los registros no necesitan volumen: salen por stderr.
+    - app_storage:/app/storage/app
   depends_on:
     db:
       condition: service_healthy
@@ -62,17 +67,18 @@ services:
     command: ["php", "artisan", "queue:work", "--tries=3", "--max-time=3600"]
     # La revisión de la imagen (/up en el puerto 8000) no sirve aquí: el worker
     # no atiende HTTP. Se revisa que el proceso principal del contenedor (PID 1)
-    # sea queue:work: mientras la entrada prepara Laravel todavía no lo es, y
-    # así `docker compose up --wait` y `docker compose ps` distinguen «arrancó
-    # el contenedor» de «el worker ya está tomando trabajos». Que el proceso
-    # siga vivo basta como señal porque queue:work no se queda colgado en
-    # silencio: termina solo si un trabajo pasa de su tiempo límite, si pierde
-    # la conexión con la base, si se pasa de memoria o al cumplir --max-time, y
-    # restart lo relanza. Se lee /proc porque la imagen no trae ps ni pgrep, y
-    # sin shell de por medio: con `sh -c` el propio comando de la revisión
-    # contendría el texto buscado.
+    # sea php corriendo queue:work. Hacen falta las dos condiciones: mientras
+    # la entrada prepara Laravel, el PID 1 es `sh entrypoint-prod php artisan
+    # queue:work…`, que ya trae queue:work en su línea de comandos pero se
+    # llama sh; pasa a llamarse php (/proc/1/comm) con el exec del final. Así
+    # `docker compose up --wait` y `docker compose ps` distinguen «arrancó el
+    # contenedor» de «el worker ya está tomando trabajos». Que el proceso siga
+    # vivo basta como señal porque queue:work no se queda colgado en silencio:
+    # termina solo si un trabajo pasa de su tiempo límite, si pierde la
+    # conexión con la base, si se pasa de memoria o al cumplir --max-time, y
+    # restart lo relanza. Se lee /proc porque la imagen no trae ps ni pgrep.
     healthcheck:
-      test: ["CMD", "grep", "-qa", "queue:work", "/proc/1/cmdline"]
+      test: ["CMD-SHELL", "grep -qx php /proc/1/comm && grep -qa queue:work /proc/1/cmdline"]
       interval: 30s
       timeout: 5s
       start_period: 30s
@@ -82,9 +88,10 @@ services:
   scheduler:
     <<: *app
     command: ["php", "artisan", "schedule:work"]
-    # Igual que el worker: el proceso principal tiene que ser schedule:work.
+    # Igual que el worker: el proceso principal tiene que ser php corriendo
+    # schedule:work, no la entrada.
     healthcheck:
-      test: ["CMD", "grep", "-qa", "schedule:work", "/proc/1/cmdline"]
+      test: ["CMD-SHELL", "grep -qx php /proc/1/comm && grep -qa schedule:work /proc/1/cmdline"]
       interval: 30s
       timeout: 5s
       start_period: 30s
@@ -131,5 +138,6 @@ services:
       retries: 10
 
 volumes:
+  app_storage:
   db_data:
   meilisearch_data:
