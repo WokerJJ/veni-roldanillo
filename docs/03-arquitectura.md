@@ -4,7 +4,7 @@
 
 | Servicio | Imagen / rol |
 | --- | --- |
-| `app` | Laravel 13 en FrankenPHP + Octane; HTTPS automático (Caddy) en producción |
+| `app` | Laravel 13 en FrankenPHP: Octane en producción; modo clásico en desarrollo (ADR 0012). HTTPS automático (Caddy) en producción |
 | `worker` | Misma imagen: `php artisan queue:work` (notificaciones, imágenes, traducciones) |
 | `scheduler` | Misma imagen: `php artisan schedule:work` (backups, recordatorios, reactivar "agotado hoy") |
 | `db` | `postgis/postgis` (PostgreSQL + PostGIS), sin puerto expuesto a internet |
