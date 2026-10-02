@@ -1,8 +1,8 @@
 import type { VueWrapper } from '@vue/test-utils';
-import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { IconName } from '@/icons/icons';
+import type { IconArt, IconName } from '@/icons/icons';
 
 import manifest from '../../icons/colombia/manifest.json';
 
@@ -16,6 +16,23 @@ async function freshIcon() {
     const { loadIcon } = await import('@/icons/icons');
 
     return { Icon, loadIcon };
+}
+
+type Loader = (name: IconName) => Promise<IconArt>;
+
+const DRAWING: IconArt = { attributes: { viewBox: '0 0 24 24' }, body: '<path d="M4 4H20"/>' };
+
+/**
+ * El componente con un cargador de mentira y sin íconos en el bundle inicial:
+ * así se prueba qué hace cuando un chunk no llega (sin red).
+ */
+async function iconWithLoader(loadIcon: Loader) {
+    vi.doMock('@/icons/icons', () => ({ readyIcon: () => undefined, loadIcon }));
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const { default: Icon } = await import('./Icon.vue');
+
+    return Icon;
 }
 
 /** La raíz del componente (VueWrapper la deja sin tipo). */
@@ -34,6 +51,10 @@ enableAutoUnmount(afterEach);
 
 beforeEach(() => {
     vi.resetModules();
+});
+
+afterEach(() => {
+    vi.doUnmock('@/icons/icons');
 });
 
 describe('Icon', () => {
@@ -99,6 +120,27 @@ describe('Icon', () => {
         expect(wrapper.attributes('role')).toBeUndefined();
         expect(wrapper.attributes('aria-label')).toBeUndefined();
         expect(wrapper.attributes('aria-hidden')).toBe('true');
+    });
+
+    it.each([
+        ['espacios', '   '],
+        ['saltos de línea y tabulaciones', '\n\t'],
+    ])('una etiqueta en blanco (%s) tampoco: sigue siendo decorativo', async (_case, label) => {
+        const { Icon } = await freshIcon();
+        const wrapper = mount(Icon, { props: { name: 'sol', label } });
+
+        expect(wrapper.attributes('role')).toBeUndefined();
+        expect(wrapper.attributes('aria-label')).toBeUndefined();
+        expect(wrapper.attributes('aria-hidden')).toBe('true');
+    });
+
+    it('la etiqueta se usa sin los espacios de los extremos', async () => {
+        const { Icon } = await freshIcon();
+        const wrapper = mount(Icon, { props: { name: 'sol', label: '  Tema claro ' } });
+
+        expect(wrapper.attributes('role')).toBe('img');
+        expect(wrapper.attributes('aria-label')).toBe('Tema claro');
+        expect(wrapper.attributes('aria-hidden')).toBeUndefined();
     });
 
     it('mide 24 px por defecto y acepta otro tamaño', async () => {
@@ -174,6 +216,97 @@ describe('Icon', () => {
 
         expect(wrapper.attributes('data-icon')).toBe('luna');
         // La luna es un solo trazo; el ajiaco, varios.
+        expect(wrapper.findAll('path')).toHaveLength(1);
+    });
+
+    it('reintenta al volver la red', async () => {
+        const loadIcon = vi
+            .fn<Loader>()
+            .mockRejectedValueOnce(new TypeError('Failed to fetch dynamically imported module'))
+            .mockResolvedValue(DRAWING);
+        const Icon = await iconWithLoader(loadIcon);
+        const wrapper = mount(Icon, { props: { name: 'sancocho', label: 'Sancocho' } });
+        await flushPromises();
+
+        // Sin red: vacío, con su nombre accesible.
+        expect(loadIcon).toHaveBeenCalledTimes(1);
+        expect(svg(wrapper).childElementCount).toBe(0);
+        expect(wrapper.attributes('aria-label')).toBe('Sancocho');
+
+        window.dispatchEvent(new Event('online'));
+        await flushPromises();
+
+        expect(loadIcon).toHaveBeenCalledTimes(2);
+        expect(wrapper.findAll('path')).toHaveLength(1);
+
+        // Ya pintado, no lo vuelve a pedir.
+        window.dispatchEvent(new Event('online'));
+        await flushPromises();
+
+        expect(loadIcon).toHaveBeenCalledTimes(2);
+    });
+
+    it('si vuelve a fallar no insiste solo: un intento por cada vez que vuelve la red', async () => {
+        const loadIcon = vi.fn<Loader>().mockRejectedValue(new TypeError('Failed to fetch'));
+        const Icon = await iconWithLoader(loadIcon);
+        mount(Icon, { props: { name: 'sancocho' } });
+        await flushPromises();
+
+        expect(loadIcon).toHaveBeenCalledTimes(1);
+
+        window.dispatchEvent(new Event('online'));
+        await flushPromises();
+        await flushPromises();
+
+        expect(loadIcon).toHaveBeenCalledTimes(2);
+
+        window.dispatchEvent(new Event('online'));
+        await flushPromises();
+
+        expect(loadIcon).toHaveBeenCalledTimes(3);
+    });
+
+    it('al desmontar deja de esperar la red y quita su listener', async () => {
+        const added = vi.spyOn(window, 'addEventListener');
+        const removed = vi.spyOn(window, 'removeEventListener');
+        const loadIcon = vi.fn<Loader>().mockRejectedValue(new TypeError('Failed to fetch'));
+        const Icon = await iconWithLoader(loadIcon);
+        const wrapper = mount(Icon, { props: { name: 'sancocho' } });
+        await flushPromises();
+
+        const listeners = added.mock.calls.filter(([type]) => type === 'online').map(([, listener]) => listener);
+
+        expect(listeners).toHaveLength(1);
+
+        wrapper.unmount();
+
+        expect(removed.mock.calls.filter(([type]) => type === 'online').map(([, listener]) => listener)).toEqual(
+            listeners,
+        );
+
+        window.dispatchEvent(new Event('online'));
+        await flushPromises();
+
+        expect(loadIcon).toHaveBeenCalledTimes(1);
+    });
+
+    it('si cambia el nombre, deja de reintentar el anterior', async () => {
+        const loadIcon = vi.fn<Loader>((name) =>
+            name === 'ajiaco' ? Promise.resolve(DRAWING) : Promise.reject(new TypeError('Failed to fetch')),
+        );
+        const Icon = await iconWithLoader(loadIcon);
+        const wrapper = mount(Icon, { props: { name: 'sancocho' } });
+        await flushPromises();
+        await wrapper.setProps({ name: 'ajiaco' });
+        await flushPromises();
+
+        expect(wrapper.findAll('path')).toHaveLength(1);
+
+        window.dispatchEvent(new Event('online'));
+        await flushPromises();
+
+        expect(loadIcon.mock.calls).toEqual([['sancocho'], ['ajiaco']]);
+        expect(wrapper.attributes('data-icon')).toBe('ajiaco');
         expect(wrapper.findAll('path')).toHaveLength(1);
     });
 
