@@ -70,8 +70,10 @@ COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-interaction --no-progress --no-scripts --no-autoloader --prefer-dist
 
 COPY . .
-# docker/ (entrada de desarrollo y script de la base de pruebas) no se usa en
-# producción. No se excluye en .dockerignore porque la etapa dev copia de ahí.
+# docker/ no va dentro de /app: la entrada de desarrollo y el script de la base
+# de pruebas no se usan en producción, y la entrada de producción se copia
+# aparte en la etapa prod, fuera de la aplicación. No se excluye en
+# .dockerignore porque las etapas dev y prod copian de ahí.
 RUN rm -rf docker \
     && composer dump-autoload --no-dev --optimize \
     && php artisan package:discover --ansi
@@ -115,6 +117,10 @@ ENV APP_ENV=production \
 RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && rm /usr/bin/composer
 
+# De docker/ solo entra la entrada de producción, y en /usr/local/bin (de
+# root): el usuario de la aplicación la ejecuta pero no puede reescribirla.
+COPY --chmod=0755 docker/entrypoint-prod.sh /usr/local/bin/entrypoint-prod
+
 COPY --from=vendor --chown=app:app /app /app
 COPY --from=assets --chown=app:app /app/public/build /app/public/build
 
@@ -124,4 +130,8 @@ RUN cp vendor/laravel/octane/src/Commands/stubs/frankenphp-worker.php public/fra
 
 USER app
 
+# Con el .env ya montado, la entrada guarda en caché configuración, rutas,
+# vistas y eventos (php artisan optimize) y enlaza public/storage; después
+# ejecuta el comando del servicio.
+ENTRYPOINT ["entrypoint-prod"]
 CMD ["php", "artisan", "octane:frankenphp", "--host=0.0.0.0", "--port=8000"]
