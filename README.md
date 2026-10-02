@@ -145,7 +145,7 @@ docker compose -f docker-compose.yml -p veni-prod down -v    # al terminar; -v b
 
 Queda en <http://localhost:8001>, ya migrada, con su propia base de datos y sin tocar el entorno de desarrollo. En PowerShell, `$env:APP_PORT = 8001` antes del primer comando.
 
-La prueba de humo hace ese recorrido sola, y es la que corre la CI en cada PR: levanta la imagen en un proyecto de Compose aparte (`veni-humo`, puerto 8189) con un `.env` temporal, espera `/up`, comprueba la migración y las cachés de Laravel, pide veinte veces la página de inicio alternando inglés y español (`<html lang>` y `Content-Language` tienen que seguir a cada petición) y borra todo al terminar:
+La prueba de humo hace ese recorrido sola, y es la que corre la CI en cada PR: levanta la imagen en un proyecto de Compose aparte (`veni-humo`, puerto 8189) con un `.env` temporal, espera `/up`, comprueba la migración y las cachés de Laravel, pide veinte veces la página de inicio alternando inglés y español (`<html lang>`, `Content-Language`, la descripción y las traducciones de la página tienen que seguir a cada petición), comprueba que un archivo de `storage/app` sobrevive a recrear los contenedores y que `worker` y `scheduler` solo se dan por sanos cuando ya corren su comando, y borra todo al terminar:
 
 ```bash
 docker build --target prod -t veni-humo .
@@ -175,6 +175,7 @@ docker compose exec app composer analyse   # Larastan al nivel máximo
 docker compose exec app composer test      # Pest sobre veni_test
 bash tests/docker/entrypoint-dev.test.sh   # arranque del contenedor de desarrollo (sin root)
 bash tests/docker/entrypoint-prod.test.sh  # arranque del contenedor de producción
+bash tests/docker/deploy.test.sh           # script de despliegue, con un docker falso
 bash tests/docker/smoke-prod.sh <imagen>   # la imagen de producción bajo Octane (ver «Probar bajo Octane»)
 npm run lint                               # ESLint
 npm run typecheck                          # vue-tsc

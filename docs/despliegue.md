@@ -33,11 +33,22 @@ PR → main ──► docker.yml ──► ghcr.io/wokerjj/veni-roldanillo:main 
 | `X.Y.Z` | Una release. No cambia: es la que se despliega |
 | `X.Y` | La última release de esa serie |
 | `main` | El último commit de `main` |
-| `sha-<commit>` | Un commit concreto (7 caracteres) |
+| `sha-<commit>` | Un commit concreto de `main` (7 caracteres) |
 
-No hay `latest`: el servidor siempre fija una versión.
+No hay `latest`: el servidor siempre fija una versión. La imagen se publica solo para `linux/amd64`: el servidor tiene que ser x86-64 (un VPS ARM pediría sumar `linux/arm64` en `docker.yml`).
 
-Lo que la imagen **no** trae, y lo comprueba la prueba de humo en cada PR: el `.env` (se monta al arrancar), Composer, la entrada de desarrollo y un proceso con root (corre con el usuario `app`).
+`docker.yml` publica una versión solo si se cumplen dos cosas, y si no, se detiene sin publicar:
+
+- **El commit del tag está en `main`.** Crear un tag `v*` no pasa por la protección de `main`; así, un tag puesto sobre otra rama o sobre un commit sin PR no llega a GHCR.
+- **`X.Y.Z` todavía no existe en GHCR.** Una versión publicada no se reemplaza aunque alguien mueva o vuelva a empujar su tag; lo que haya que corregir sale con una versión nueva.
+
+`sha-<commit>` la publica solo el push a `main`. La imagen de una release es otra construcción del mismo commit: no es idéntica byte a byte a `sha-<commit>`, y por eso la release no vuelve a publicar esa etiqueta (apuntaría a una u otra según qué corrida terminara de última).
+
+Una etiqueta es un nombre; lo que identifica a una imagen es su digest (`sha256:…`, en el resumen de cada corrida de `docker.yml`). **Siempre que se pueda, se despliega por digest:** `deploy.yml` lo resuelve solo y le pide al servidor `X.Y.Z@sha256:…`; a mano, `bash deploy.sh ghcr.io/wokerjj/veni-roldanillo:X.Y.Z@sha256:…`.
+
+Las imágenes de base del `Dockerfile` (FrankenPHP, Node y Composer) también van fijadas por digest, y Dependabot propone el nuevo cuando la etiqueta se vuelve a publicar.
+
+Lo que la imagen **no** trae, y lo comprueba la prueba de humo en cada PR: el `.env` (se monta al arrancar), Composer (solo lo copian las etapas que instalan dependencias), la entrada de desarrollo y un proceso con root (corre con el usuario `app`).
 
 Al arrancar, la entrada de la imagen lee el `.env` montado, ejecuta `php artisan optimize` (configuración, eventos, rutas y vistas en caché) y `php artisan storage:link`, y después el comando del servicio. Por eso un cambio en el `.env` del servidor necesita recrear los contenedores, no solo reiniciarlos:
 
@@ -45,7 +56,12 @@ Al arrancar, la entrada de la imagen lee el `.env` montado, ejecuta `php artisan
 docker compose up -d --force-recreate app worker scheduler
 ```
 
-Para entrar sin pasar por esa preparación (un `.env` con el que la app no arranca): `docker compose run --rm -e VENI_SKIP_OPTIMIZE=1 app sh`.
+Para entrar sin pasar por esa preparación (un `.env` con el que la app no arranca): `docker compose run --rm --no-deps -e VENI_SKIP_OPTIMIZE=1 app sh`. Con `--no-deps` es solo una consola: sin él, `run` levanta antes los servicios de los que depende `app`, y eso incluye correr `migrate`.
+
+Dos cosas no viven dentro del contenedor, que cada despliegue recrea:
+
+- **Los registros de Laravel** salen por stderr (la imagen fija `LOG_CHANNEL=stderr`, y gana sobre el `.env`): se leen con `docker compose logs app worker scheduler`. No hay `storage/logs/laravel.log`.
+- **Lo que guarda la aplicación** en `storage/app` (las fotos que suben los dueños) está en el volumen `app_storage`, que comparten `app` y `worker`. La prueba de humo comprueba que un archivo sobrevive a recrear los contenedores. Entra en las copias de seguridad junto con la base.
 
 ### El mapa dentro de la imagen
 
@@ -80,33 +96,40 @@ Antes de 1.0:
 - `feat` sube la **menor**: 0.1.0 → 0.2.0.
 - `fix`, `perf` y `revert` suben el **parche**: 0.1.0 → 0.1.1.
 - Un cambio incompatible (`feat!` o el pie `BREAKING CHANGE:`) sube la menor, no la mayor.
-- `docs`, `ci`, `chore`, `refactor`, `test`, `build` y `style` no aparecen en el CHANGELOG ni abren una release por sí solos: no cambian lo que corre en el servidor. Las actualizaciones de Dependabot (`chore(deps)`) salen con la siguiente release.
+- `docs`, `ci`, `chore`, `refactor`, `test`, `build` y `style` no aparecen en el CHANGELOG ni abren una release por sí solos: no cambian lo que corre en el servidor.
+- Dependabot usa los dos prefijos (`.github/dependabot.yml`): `fix(deps)` para las dependencias de producción de Composer y npm y para las imágenes de base del `Dockerfile`, que sí cambian lo que corre y abren una release de parche; `chore(deps)` para los PR que solo traen dependencias de desarrollo y para las actions, que no abren ninguna.
 
 La primera release es la 0.1.0.
 
 ### Forzar una versión
 
-Solo hace falta para saltar a una versión que los commits no producen, como la 1.0.0. Se escribe `Release-As` como **última línea del cuerpo del PR**, después del checklist de la plantilla y separada por una línea en blanco:
+Solo hace falta para saltar a una versión que los commits no producen, como la 1.0.0. release-please busca el pie `Release-As` en el **mensaje del commit de `main`**, no en la descripción del PR. Aquí los PR se fusionan con squash y con un cuerpo escrito al fusionar (`gh pr merge --squash --body`), que reemplaza a la descripción del PR: lo que se escriba en la descripción no llega al commit. El pie va en ese cuerpo, como último bloque y tras una línea en blanco:
 
-```text
-Release-As: 1.0.0
+```bash
+gh pr merge <número> --squash \
+  --subject "feat: primera versión estable (#<número>)" \
+  --body "Resumen del cambio.
+
+Release-As: 1.0.0"
 ```
 
-Con squash merge el cuerpo del PR es el del commit, y release-please solo lee esa línea si está en el bloque final del cuerpo: en cualquier otro lugar la ignora sin avisar. Si quedó mal ubicada, se edita el cuerpo del PR ya fusionado y se agrega al final:
+Si el PR ya se fusionó sin el pie, el commit de `main` no se puede reescribir (historial lineal, sin force push). release-please acepta entonces un mensaje sustituto en la **descripción del PR ya fusionado**: se edita y se agrega al final este bloque; lo toma en la siguiente corrida de `release.yml` (el próximo push a `main`).
 
 ```text
 BEGIN_COMMIT_OVERRIDE
-<título del commit, igual que en main>
+feat: primera versión estable
 
 Release-As: 1.0.0
 END_COMMIT_OVERRIDE
 ```
 
+En los dos casos, el PR de release que release-please actualiza tiene que quedar con el título `chore(release): publicar 1.0.0`: si muestra otra versión, el pie no se leyó.
+
 ### Requisitos en GitHub
 
-- *Settings → Actions → General → Workflow permissions →* **Allow GitHub Actions to create and approve pull requests**. Hoy está desmarcado: sin eso `release.yml` falla al abrir el PR de release.
+- *Settings → Actions → General → Workflow permissions →* **Allow GitHub Actions to create and approve pull requests**. **Ya está activado**; sin eso `release.yml` falla al abrir el PR de release.
 - El PR de release lo abre `GITHUB_TOKEN`, y un PR abierto así no corre la CI sola: sin `ci-ok` la protección de `main` no deja fusionarlo. Dos salidas:
-  - **Sin configurar nada:** en el PR, *Checks* → **Approve and run**.
+  - **Sin configurar nada:** cerrar el PR de release y volver a abrirlo (*Close pull request* → *Reopen pull request*). Reabrirlo es un evento de una persona, no de `GITHUB_TOKEN`, y la CI corre. Hay que repetirlo si release-please actualiza el PR después, cuando entra otro cambio a `main`. Si GitHub ofrece en el PR el botón **Approve and run**, sirve igual.
   - **Con una GitHub App:** la misma receta que en veni-mapa. Una App sin webhook, con permisos de repositorio *Contents*, *Pull requests* e *Issues* en lectura y escritura, instalada solo en este repositorio; su *Client ID* en la variable `RELEASE_APP_CLIENT_ID` y su clave privada en el secret `RELEASE_APP_PRIVATE_KEY`. Con la App, el PR, el tag y la release quedan a su nombre, la CI corre sola y el tag dispara `docker.yml` directamente.
 - La primera vez que `docker.yml` publique, el paquete de GHCR nace privado. Para que el servidor lo baje sin credenciales: en el paquete, *Package settings → Change visibility → Public*.
 
@@ -114,10 +137,16 @@ END_COMMIT_OVERRIDE
 
 ### Qué hay en el servidor
 
-Una carpeta (`/srv/veni-roldanillo`) con dos archivos:
+Una carpeta (`/srv/veni-roldanillo`) con esto:
 
-- `docker-compose.yml`: lo copia `deploy.yml` en cada despliegue, el del tag que se despliega.
+- `docker-compose.yml` y `deploy.sh`: los copia `deploy.yml` en cada despliegue, los del tag que se despliega.
 - `.env`: se escribe una vez a mano. Nunca sale del servidor ni entra en la imagen. Lo leen dos usuarios: `deploy`, que corre Compose y anota en él la versión, y el del contenedor (`app`, uid y gid 1000), que lo recibe montado. Por eso va con dueño `deploy`, grupo `1000` y permisos `640` (`chown deploy:1000 .env && chmod 640 .env`, como root). Si el contenedor no puede leerlo, no arranca y lo dice en `docker compose logs`.
+- `.env.anterior`: la copia que deja cada despliegue del `.env` tal como estaba antes de cambiar de versión. Tiene los mismos secretos y los mismos permisos.
+- `deploy-logs/`: los registros de los contenedores de cada despliegue que falló, un archivo por intento, que solo lee `deploy` (carpeta `700`, archivos `600`). No se borran solos.
+
+La carpeta va con dueño `deploy`, grupo `1000` y el bit setgid (`chown deploy:1000 /srv/veni-roldanillo && chmod 2750 /srv/veni-roldanillo`, como root). El despliegue no edita el `.env`: escribe una copia y la pone en su lugar de un solo paso, para que un corte a la mitad nunca deje un `.env` a medio escribir. Con setgid la copia nace con el grupo de la carpeta, el `1000` que necesita el contenedor; sin él nacería con el grupo de `deploy`, y `deploy.sh` se detiene antes de reemplazar nada y lo dice.
+
+Los datos están en tres volúmenes de Docker: `db_data` (PostgreSQL), `meilisearch_data` y `app_storage` (lo que guarda la aplicación en `storage/app`).
 
 El `.env` parte de `.env.example` con estos cambios:
 
@@ -129,6 +158,7 @@ El `.env` parte de `.env.example` con estos cambios:
 | `DB_PASSWORD`, `MEILISEARCH_KEY` | Una cada una, de `openssl rand -base64 32` |
 | `MEILI_ENV` | `production` |
 | `LOG_LEVEL` | `warning` |
+| `LOG_CHANNEL` | `stderr` (la imagen ya lo fija; va igual para que el archivo diga la verdad) |
 | `APP_IMAGE` | `ghcr.io/wokerjj/veni-roldanillo:X.Y.Z`. La reescribe cada despliegue: es la versión que está corriendo |
 
 Las variables `VITE_*` no hacen falta en el servidor: ya quedaron dentro de la imagen.
@@ -137,27 +167,66 @@ Las variables `VITE_*` no hacen falta en el servidor: ya quedaron dentro de la i
 
 `deploy.yml` se lanza a mano con dos datos: la versión (`X.Y.Z`) y la palabra `desplegar`.
 
-1. Comprueba la confirmación, el formato de la versión y que esa imagen existe en GHCR.
+1. Comprueba la confirmación, el formato de la versión y que esa imagen existe en GHCR, y anota su digest: al servidor le pide `X.Y.Z@sha256:…`, esa imagen exacta.
 2. Abre SSH al servidor con una llave exclusiva del despliegue; al servidor lo reconoce por su llave pública guardada, no acepta la que le presenten.
-3. Copia el `docker-compose.yml` de ese tag.
-4. Ejecuta [`scripts/deploy.sh`](../scripts/deploy.sh) en el servidor:
-   - anota la imagen en el `.env` (`APP_IMAGE`);
-   - `docker compose pull` de la imagen de la aplicación;
+3. Copia a la carpeta del servidor el `docker-compose.yml` y el [`scripts/deploy.sh`](../scripts/deploy.sh) de ese tag (`scp`).
+4. Ejecuta en el servidor `bash deploy.sh <imagen>`, que:
+   - baja la imagen de la aplicación (`docker compose pull`) sin haber tocado nada: si no se puede bajar, el `.env` y lo que está corriendo quedan como estaban;
+   - copia el `.env` a `.env.anterior` y lo reemplaza, de un solo paso, por uno con el `APP_IMAGE` nuevo;
    - `docker compose up -d`: detiene `app`, `worker` y `scheduler`, corre **`migrate`** (`php artisan migrate --force`) y, solo si termina bien, arranca los nuevos;
    - espera a que la app responda `/up`.
 5. Pide `https://veniroldanillo.co/up` desde fuera.
 
 Mientras dura la migración y el arranque la app no responde: unos 8 segundos en la prueba local, sin migraciones pendientes. A cambio, la versión anterior nunca atiende con el esquema nuevo.
 
-Si la migración falla, ningún servicio arranca y el job termina con el registro de `migrate`. Para volver a la versión anterior se lanza el despliegue con esa versión; las migraciones no se revierten solas (`php artisan migrate:rollback` a mano, si corresponde).
+Si la migración falla, ningún servicio arranca; si la app no llega a responder `/up`, el despliegue también falla. En los dos casos `deploy.sh`:
+
+- deja el `.env` como estaba antes (desde `.env.anterior`), para que `APP_IMAGE` siga diciendo la última versión que funcionó;
+- guarda los registros de los contenedores en `deploy-logs/<fecha>-<hora>.log`, en el servidor, y **no los imprime**: el repositorio es público, el registro de Actions también, y el error de una migración puede traer datos de una persona (el valor que chocó con una restricción, por ejemplo). En Actions solo quedan la ruta de ese archivo y el estado de los servicios (`docker compose ps`). Se leen entrando al servidor.
+
+El `.env` vuelve solo; los contenedores y la base de datos, no.
+
+### Volver a la versión anterior
+
+Una imagen solo sabe deshacer las migraciones que trae. Por eso el orden es **primero deshacer las migraciones con la imagen nueva, después desplegar la anterior**; al revés, la imagen anterior no tiene esos archivos y `migrate:rollback` no encuentra qué deshacer.
+
+1. **Cuántas migraciones aplicó la versión nueva**: las del último lote, en `docker compose logs migrate` o en `deploy-logs/`. Con la imagen nueva (si el `.env` ya volvió a la anterior, se nombra en el comando):
+
+   ```bash
+   APP_IMAGE=ghcr.io/wokerjj/veni-roldanillo:<nueva> docker compose run --rm --no-deps app php artisan migrate:status
+   ```
+
+2. **Detener lo que escribe** y deshacer esas N migraciones, con la imagen nueva:
+
+   ```bash
+   docker compose stop app worker scheduler
+   APP_IMAGE=ghcr.io/wokerjj/veni-roldanillo:<nueva> docker compose run --rm --no-deps app php artisan migrate:rollback --step=N --force
+   ```
+
+   `--step=N` y no un `migrate:rollback` a secas: sin `--step` se deshace el último lote entero, y si la versión nueva no llegó a aplicar ninguna migración, ese lote es de una versión anterior.
+
+3. **Desplegar la anterior**: `deploy.yml` con esa versión, o `bash deploy.sh ghcr.io/wokerjj/veni-roldanillo:<anterior>` en el servidor. Su servicio `migrate` no encuentra nada pendiente.
+
+Si la versión nueva no traía migraciones, basta el paso 3.
+
+Dos reglas para que esto funcione el día que haga falta:
+
+- **Las migraciones de una versión tienen que ser compatibles con la versión anterior**: agregar (una tabla, una columna con valor por defecto o que admita nulos) y no quitar ni renombrar en la misma release lo que la anterior todavía usa. Lo que se quita, se quita una release después. Así, si el paso 2 no se puede dar, la versión anterior arranca igual sobre el esquema nuevo.
+- **Antes de desplegar una versión con migraciones, un `pg_dump`**: `migrate:rollback` devuelve el esquema, no los datos que un `down` borra (una columna eliminada vuelve vacía).
+
+  ```bash
+  docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom' > "veni-$(date +%Y%m%d-%H%M%S).dump"
+  ```
+
+  Hoy es un paso a mano: `deploy.sh` no lo hace. Si una versión trae migraciones se ve en su release, comparando `database/migrations` con la versión anterior.
 
 Un despliegue no toca `db` ni `meilisearch`: solo baja la imagen de la aplicación. Sus etiquetas (`postgis/postgis:18-3.6`, `getmeili/meilisearch:v1.54`) se pueden volver a publicar con parches, y bajarlas en cada despliegue cambiaría y reiniciaría la base de datos sin que nadie lo pidiera. Se actualizan aparte, con una copia de seguridad reciente: `docker compose pull db meilisearch && docker compose up -d`.
 
-`scripts/deploy.sh` no depende de GitHub: en el servidor, `bash deploy.sh ghcr.io/wokerjj/veni-roldanillo:X.Y.Z` hace lo mismo.
+`deploy.sh` no depende de GitHub: queda en la carpeta del servidor desde el primer despliegue, y `bash deploy.sh ghcr.io/wokerjj/veni-roldanillo:X.Y.Z` hace lo mismo a mano (mejor con el digest: `…:X.Y.Z@sha256:…`). Sus pruebas, con un `docker` falso, están en `tests/docker/deploy.test.sh` y corren en cada PR.
 
 ### Secrets y variables
 
-**Hoy no existe ninguno.** Los secrets son del entorno `production` (*Settings → Environments*): solo el job de despliegue puede leerlos. Las variables son del repositorio (*Settings → Secrets and variables → Actions → Variables*). Ningún valor va en el código.
+**Hoy no existe ninguno.** Los secrets son del entorno `production` (*Settings → Environments*): solo el job de despliegue puede leerlos. El entorno ya está creado, sin secrets: solo acepta corridas lanzadas desde ramas protegidas y cada una espera la aprobación de un revisor. Las variables son del repositorio (*Settings → Secrets and variables → Actions → Variables*). Ningún valor va en el código.
 
 | Nombre | Tipo | Qué es | Cómo se obtiene |
 | --- | --- | --- | --- |
@@ -165,7 +234,7 @@ Un despliegue no toca `db` ni `meilisearch`: solo baja la imagen de la aplicaci�
 | `DEPLOY_HOST` | Secret | Dirección del servidor (IP o nombre) | La da el proveedor del VPS |
 | `DEPLOY_USER` | Secret | Usuario SSH del despliegue, sin root | En el servidor: `adduser --disabled-password deploy && usermod -aG docker deploy` |
 | `DEPLOY_SSH_KEY` | Secret | Llave privada ed25519, solo para este despliegue | `ssh-keygen -t ed25519 -N '' -C 'despliegue veni-roldanillo' -f veni-deploy`; la pública (`veni-deploy.pub`) va en `~deploy/.ssh/authorized_keys` del servidor; la privada se carga con `gh secret set DEPLOY_SSH_KEY --env production < veni-deploy` y se borra del equipo |
-| `DEPLOY_KNOWN_HOSTS` | Secret | La llave pública del servidor, en formato `known_hosts` | `ssh-keyscan -t ed25519 <servidor>`, comparando la huella con la que da el propio servidor: `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` |
+| `DEPLOY_KNOWN_HOSTS` | Secret | La llave pública del servidor, en formato `known_hosts` | `ssh-keyscan -p <puerto> -t ed25519 <servidor>` (con el puerto de `DEPLOY_SSH_PORT`: si no es el 22, la línea tiene que salir como `[servidor]:puerto` o SSH no la reconoce), comparando la huella con la que da el propio servidor: `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` |
 | `DEPLOY_PATH` | Variable (opcional) | Carpeta del servidor | Por defecto `/srv/veni-roldanillo` |
 | `DEPLOY_SSH_PORT` | Variable (opcional) | Puerto SSH | Por defecto `22` |
 | `DEPLOY_URL` | Variable (opcional) | Dirección pública que se verifica al final | Por defecto `https://veniroldanillo.co` |
@@ -183,9 +252,9 @@ El usuario `deploy` está en el grupo `docker`, que en la práctica equivale a r
 
 ### Activarlo
 
-1. Servidor con Docker Engine y el plugin de Compose, el usuario `deploy` y la carpeta con su `.env`.
+1. Servidor x86-64 con Docker Engine y el plugin de Compose, el usuario `deploy` y la carpeta con su `.env`, con los dueños y permisos de [arriba](#qué-hay-en-el-servidor).
 2. Paquete de GHCR público, o `docker login ghcr.io` en el servidor con un token de solo lectura de paquetes.
-3. Entorno `production` con los cuatro secrets; conviene pedir en él la aprobación de una persona (*Required reviewers*) y limitarlo a la rama `main`, que es desde donde se lanza el workflow.
+3. Los cuatro secrets en el entorno `production`. El entorno ya existe, limitado a ramas protegidas y con revisor obligatorio (*Required reviewers*): el workflow se lanza desde `main` y espera esa aprobación.
 4. Variable `DEPLOY_ENABLED` = `true`.
 5. *Actions → Despliegue → Run workflow* con una versión publicada.
 
@@ -193,4 +262,5 @@ El usuario `deploy` está en el grupo `docker`, que en la práctica equivale a r
 
 - **Quién termina TLS y la seguridad HTTP ([#41](https://github.com/WokerJJ/veni-roldanillo/issues/41)):** `app` publica el puerto 8000 solo en `127.0.0.1`. Falta decidir qué va delante (Caddy en el servidor o un túnel de Cloudflare) y configurar proxies de confianza, cookies seguras, cabeceras, CSP y el límite de peticiones.
 - **Mapa en una versión fija:** cuando exista `tiles.veniroldanillo.co` ([arriba](#el-mapa-dentro-de-la-imagen)).
-- **Copias de seguridad y monitoreo:** descritos en [Arquitectura](03-arquitectura.md#servidor), sin implementar.
+- **Copias de seguridad y monitoreo:** descritos en [Arquitectura](03-arquitectura.md#servidor), sin implementar. Tienen que incluir el volumen `app_storage` además de la base, y el `pg_dump` previo a una versión con migraciones hoy es [a mano](#volver-a-la-versión-anterior).
+- **PASO RECOMENDADO PENDIENTE · proteger los tags `v*`:** hoy cualquiera con permiso de escritura puede crear, mover o borrar un tag `v*`. `docker.yml` ya limita el daño (solo publica commits de `main` y no reescribe una versión publicada) y el despliegue fija el digest, pero el tag en sí no está protegido. Falta un *ruleset* de tags (*Settings → Rules → Rulesets → New tag ruleset*) con el patrón `v*` que restrinja crear, actualizar y borrar. Como el tag de cada release lo crea `release.yml` con `GITHUB_TOKEN`, el ruleset necesita dejar pasar a quien lo crea (GitHub Actions hoy, o la GitHub App de releases): decidir eso es parte del paso.

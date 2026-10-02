@@ -31,19 +31,23 @@ Todavía no hay servidor, y el proyecto no usa servicios de pago ni guarda clave
 
 - **Una imagen, cuatro servicios.** `migrate`, `app`, `worker` y `scheduler` usan la etapa `prod`. `migrate` corre `php artisan migrate --force` una vez en cada `docker compose up`; los otros tres esperan a que termine bien (`service_completed_successfully`). También en desarrollo, con la imagen `dev`.
 - **La configuración se resuelve al arrancar.** La entrada de la imagen (`docker/entrypoint-prod.sh`) ejecuta `php artisan optimize` y `storage:link` con el `.env` montado, y después el comando. La imagen no contiene el `.env` ni cachés.
-- **Revisiones de salud.** `app`: `/up`. `db`: por TCP. `worker` y `scheduler`: que su proceso principal sea `queue:work` o `schedule:work`.
-- **La imagen se publica en GHCR** (`docker.yml`): `main` y `sha-<commit>` desde `main`; `X.Y.Z` y `X.Y` desde cada release. Sin `latest`.
+- **Revisiones de salud.** `app`: `/up`. `db`: por TCP. `worker` y `scheduler`: que su proceso principal (PID 1) sea `php` corriendo `queue:work` o `schedule:work`; mientras corre la entrada el PID 1 es un shell que ya trae ese comando en sus argumentos, y todavía no cuenta como sano.
+- **Lo que no puede perderse no vive en el contenedor.** Los registros de Laravel salen por stderr (`LOG_CHANNEL=stderr` en la imagen) y `storage/app` es un volumen que comparten `app` y `worker`.
+- **La imagen se publica en GHCR** (`docker.yml`): `main` y `sha-<commit>` desde `main`; `X.Y.Z` y `X.Y` desde cada release, solo si el commit del tag está en `main` y esa versión no existe todavía. Sin `latest`. Las imágenes de base van fijadas por digest.
 - **Las releases las abre release-please** (`release.yml`), tipo `simple`. Antes de 1.0, `feat` sube la menor y `fix` el parche; `docs`, `ci` y `chore` no abren release.
 - **La prueba de humo** (`tests/docker/smoke-prod.sh`) levanta la imagen con `docker-compose.yml` y PostGIS en cada PR, dentro de `ci-ok`.
-- **El despliegue es manual y por versión** (`deploy.yml`): se elige una versión ya publicada y se confirma por escrito. Queda desactivado hasta que exista la variable `DEPLOY_ENABLED`.
+- **El despliegue es manual y por versión** (`deploy.yml`): se elige una versión ya publicada y se confirma por escrito; al servidor se le pide por digest. `scripts/deploy.sh` baja la imagen antes de tocar el `.env`, lo deja como estaba si el arranque falla y guarda los registros en el servidor sin imprimirlos, porque el registro de Actions es público. Queda desactivado hasta que exista la variable `DEPLOY_ENABLED`.
 
 ## Consecuencias
 
 - La versión nueva nunca atiende sin su esquema, y la anterior nunca atiende con el nuevo: Compose detiene `app`, `worker` y `scheduler`, migra y arranca los nuevos. A cambio, **cada despliegue corta el servicio unos segundos** (unos 8 en la prueba local, sin migraciones pendientes). Un despliegue sin corte pediría dos copias de `app` y migraciones compatibles con la versión anterior; no se justifica todavía.
 - Si la migración falla, nada arranca: el sitio queda caído hasta desplegar otra versión o corregir la base. Las migraciones se prueban antes en la prueba de humo, pero sobre una base vacía.
+- **Volver atrás tiene un orden y dos reglas.** Una imagen solo sabe deshacer las migraciones que trae: primero `php artisan migrate:rollback --step=N --force` con la imagen **nueva**, después se despliega la anterior; al revés, la anterior no tiene esos archivos. Para que además se pueda volver sin ese paso, las migraciones de una versión tienen que ser compatibles con la versión anterior (agregar ahora, quitar una release después). Y antes de desplegar una versión con migraciones se hace un `pg_dump`: el `rollback` devuelve el esquema, no los datos que un `down` borra. Hoy las dos reglas dependen de quien revisa el PR y de quien despliega; ninguna está automatizada (`docs/despliegue.md`, «Volver a la versión anterior»).
+- La imagen de una release y `sha-<commit>` son dos construcciones del mismo commit y no son idénticas byte a byte. Promover por digest la imagen de `main` las igualaría, a cambio de atar la release a la espera de otra corrida; lo que sí queda fijo es lo que se despliega, que se pide por digest.
+- Los tags `v*` no están protegidos en GitHub: `docker.yml` no publica un tag que no esté en `main` ni reescribe una versión, pero falta un *ruleset* de tags (pendiente, en `docs/despliegue.md`).
 - Un cambio en el `.env` del servidor pide recrear los contenedores (`up -d --force-recreate`): la configuración quedó en caché al arrancar.
 - `docker compose up` también migra en desarrollo: una migración rota deja el entorno sin arrancar, con el error en `docker compose logs migrate`.
 - Un worker colgado sin terminar no se detecta. `queue:work` termina solo ante un trabajo que pasa de su tiempo límite, la pérdida de la conexión con la base, el exceso de memoria o `--max-time`, y `restart` lo relanza; si aparece un caso que no cubra, se revisa la señal de vida.
 - La prueba de humo suma la construcción de la imagen a cada PR (con caché de capas) y es la primera que corre bajo Octane.
-- El PR de release lo abre `GITHUB_TOKEN`, que no dispara la CI: hay que lanzarla a mano en ese PR o configurar una GitHub App (`docs/despliegue.md`).
+- El PR de release lo abre `GITHUB_TOKEN`, que no dispara la CI: hay que cerrar y reabrir ese PR para que corra, o configurar una GitHub App (`docs/despliegue.md`).
 - El servidor solo necesita `docker-compose.yml` y su `.env`. Quién termina TLS y la seguridad HTTP quedan para #41.
