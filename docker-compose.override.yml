@@ -13,12 +13,15 @@ x-app-dev: &app-dev
   # !override reemplaza el .env de solo lectura: key:generate necesita escribirlo.
   volumes: !override
     - .:/app
+    # vendor/ fuera de la carpeta montada: leer sus miles de archivos a través
+    # del montaje de Docker Desktop (Windows/macOS) hacía cada petición lentísima.
+    - vendor:/app/vendor
 
 services:
   app:
     <<: *app-dev
-    # En Docker Desktop (Windows/macOS) el primer composer install sobre el
-    # volumen montado es lento: más margen antes de contar fallos del healthcheck.
+    # El primer arranque descarga las dependencias al volumen vendor: más
+    # margen antes de contar fallos del healthcheck.
     healthcheck:
       start_period: 120s
 
@@ -35,3 +38,6 @@ services:
   meilisearch:
     ports:
       - "127.0.0.1:${FORWARD_MEILISEARCH_PORT:-7700}:7700"
+
+volumes:
+  vendor:

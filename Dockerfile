@@ -37,7 +37,10 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=5 \
 # ---------------------------------------------------------------------------
 FROM base AS dev
 
-RUN cp "$PHP_INI_DIR/php.ini-development" "$PHP_INI_DIR/php.ini"
+RUN cp "$PHP_INI_DIR/php.ini-development" "$PHP_INI_DIR/php.ini" \
+    # vendor/ se monta como volumen con nombre (docker-compose.override.yml):
+    # Docker lo crea con el dueño de este directorio y Composer escribe sin root.
+    && install -d -o app -g app /app/vendor
 
 COPY --chmod=0755 docker/entrypoint-dev.sh /usr/local/bin/entrypoint-dev
 
