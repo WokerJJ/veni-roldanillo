@@ -41,7 +41,7 @@ Plataforma web instalable (PWA), bilingüe español/inglés, que reúne a **todo
 
 ## Desarrollo local
 
-Requisito: Docker con Docker Compose. PHP, Composer y PostgreSQL corren dentro de los contenedores.
+Requisitos: Docker con Docker Compose, y Node.js 24 para el frontend. PHP, Composer y PostgreSQL corren dentro de los contenedores.
 
 ```bash
 cp .env.example .env
@@ -49,20 +49,50 @@ docker compose build
 docker compose run --rm app php artisan key:generate   # la primera vez descarga las dependencias (medio minuto)
 docker compose up -d
 docker compose exec app php artisan migrate
+npm ci
+npm run build                                          # o `npm run dev` (ver «Frontend»)
 ```
 
 La app queda en <http://localhost:8000>. PostgreSQL + PostGIS se publica en `127.0.0.1:5433` y Meilisearch en `127.0.0.1:7700`. Pruebas: `docker compose exec app php artisan test`.
 
+### Frontend
+
+Vite corre en el equipo, no en un contenedor:
+
+```bash
+npm ci
+npm run dev      # servidor de Vite con recarga en caliente, mientras se trabaja en el frontend
+npm run build    # o compilar una vez a public/build
+```
+
+Hace falta una de las dos. Sin `public/build/manifest.json` y sin el servidor de Vite, las páginas responden 500 («Vite manifest not found»), aunque `/up` siga en 200 y el contenedor aparezca sano.
+
+Mientras `npm run dev` está abierto manda él: escribe `public/hot` y la app carga los recursos desde ese servidor aunque exista una compilación. Al cerrarlo borra el archivo; si se cierra a la fuerza y `public/hot` queda, la app sigue apuntando a un servidor que ya no existe: borrá el archivo o volvé a ejecutar `npm run dev`.
+
 ### Dependencias de Composer
 
-`vendor/` no está en la carpeta del proyecto: vive en un volumen de Docker (`veni-roldanillo_vendor`; el prefijo es el nombre de la carpeta). Leer sus más de 10 000 archivos a través del montaje de Docker Desktop hacía que cada petición tardara segundos. El contenedor instala las dependencias al arrancar si el volumen está vacío o si `composer.lock` cambió desde la última instalación, y Composer corre con el usuario del contenedor, sin `--user root`:
+`vendor/` no está en la carpeta del proyecto: vive en un volumen de Docker. Leer sus más de 10 000 archivos a través del montaje de Docker Desktop hacía que cada petición tardara segundos. El contenedor instala las dependencias al arrancar si el volumen está vacío o si lo instalado ya no corresponde a `composer.lock`. Composer corre con el usuario del contenedor, nunca con `--user root`: dejaría en el volumen archivos que ese usuario no puede actualizar, y el contenedor se niega a instalar como root.
 
 ```bash
 docker compose exec app composer require <paquete>      # agregar un paquete
-docker compose restart                                   # tras un pull o un cambio de rama que toque composer.lock
-docker compose exec app composer install                 # lo mismo, sin reiniciar
-docker compose down                                      # empezar de cero: al borrar el volumen,
-docker volume rm veni-roldanillo_vendor                  # el siguiente arranque reinstala todo
+docker compose restart app worker scheduler              # tras un pull o un cambio de rama que toque composer.lock
+```
+
+`docker compose exec app composer install` también instala, pero por fuera del arranque: no actualiza el sello de la última instalación (el siguiente arranque repite `composer install`) ni reinicia `worker` y `scheduler`, que son procesos largos y siguen con lo que cargaron al arrancar. Lo indicado es el `restart`.
+
+Si `composer install` falla al arrancar (sin red, por ejemplo), el contenedor no arranca y `docker compose logs app` dice por qué. Para entrar igual:
+
+```bash
+docker compose run --rm -e VENI_SKIP_INSTALL=1 app <comando>   # ejecuta el comando sin revisar ni instalar
+docker compose run --rm --entrypoint sh app                    # una consola sin pasar por la entrada del contenedor
+```
+
+Para empezar de cero se borra el volumen y el siguiente arranque reinstala todo. Se llama `<proyecto>_vendor`, donde `<proyecto>` es el nombre del proyecto de Compose (por defecto el de la carpeta; lo muestra `docker compose ls`). Las descargas de Composer quedan en otro volumen (`composer_cache`), así que no se bajan de nuevo.
+
+```bash
+docker compose down
+docker volume ls -q -f label=com.docker.compose.volume=vendor   # el nombre exacto del volumen
+docker volume rm <nombre>
 ```
 
 El editor no ve ese volumen. Si necesita `vendor/` para el autocompletado, se copia a la carpeta del proyecto (opcional, cerca de un minuto; repetilo cuando cambien las dependencias). El contenedor sigue usando el volumen, no la copia:
@@ -73,11 +103,23 @@ docker compose cp app:/app/vendor .
 
 ### Ver los cambios
 
-En desarrollo FrankenPHP corre en modo clásico: cada petición arranca Laravel de nuevo, así que un cambio en PHP, rutas, configuración, vistas o `.env` se ve en la siguiente petición, sin reiniciar nada. El modo worker de Octane, que deja la aplicación arrancada en memoria, queda para la imagen de producción (`docker-compose.yml` sin el override).
+En desarrollo FrankenPHP corre en modo clásico ([ADR 0012](docs/adr/0012-desarrollo-en-modo-clasico.md)): cada petición arranca Laravel de nuevo, así que un cambio en PHP, rutas, configuración, vistas o `.env` se ve en la siguiente petición, sin reiniciar nada. El modo worker de Octane, que deja la aplicación arrancada en memoria, queda para la imagen de producción (`docker-compose.yml` sin el override).
 
-`worker` sí es un proceso largo que carga el código una sola vez: tras cambiar un job, `docker compose restart worker`.
+`worker` corre `queue:listen`, que arranca Laravel para cada trabajo: un cambio en un job se ve en el siguiente, sin reiniciar.
 
-Las vistas compiladas y los registros de Inertia DevTools se guardan en memoria (`tmpfs`) y se pierden al recrear el contenedor.
+Las vistas compiladas y los registros de Inertia DevTools se guardan en memoria (`tmpfs`): se pierden cada vez que el contenedor se detiene o se reinicia, no solo al recrearlo, y se vuelven a generar solos.
+
+### Probar bajo Octane
+
+Como desarrollo no corre bajo Octane, un dato que se quede en memoria entre peticiones (una propiedad `static`, un singleton con estado) no se nota ahí. Para probar con la imagen de producción en el mismo equipo se levanta como otro proyecto de Compose y en otro puerto:
+
+```bash
+APP_PORT=8001 docker compose -f docker-compose.yml -p veni-prod up -d --build
+docker compose -f docker-compose.yml -p veni-prod exec app php artisan migrate --force
+docker compose -f docker-compose.yml -p veni-prod down -v    # al terminar; -v borra solo los volúmenes de veni-prod
+```
+
+Queda en <http://localhost:8001>, con su propia base de datos y sin tocar el entorno de desarrollo. En PowerShell, `$env:APP_PORT = 8001` antes del primer comando.
 
 ### Base de datos
 
@@ -99,6 +141,7 @@ Los mismos comandos corren en GitHub Actions (`ci.yml`); el check `ci-ok` resume
 docker compose exec app composer lint      # Pint (preset laravel); `composer format` corrige
 docker compose exec app composer analyse   # Larastan al nivel máximo
 docker compose exec app composer test      # Pest sobre veni_test
+bash tests/docker/entrypoint-dev.test.sh   # arranque del contenedor de desarrollo (sin root)
 npm run lint                               # ESLint
 npm run typecheck                          # vue-tsc
 npm test                                   # Vitest (incluye la verificación de los íconos)
