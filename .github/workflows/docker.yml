@@ -69,6 +69,26 @@ jobs:
         run: |
           echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
           echo "short=$(git rev-parse --short=7 HEAD)" >>"$GITHUB_OUTPUT"
+      # El mapa de la imagen (ADR 0007). Sin las variables va la demo pública de
+      # veni-mapa, que sigue su rama main: se avisa, porque el mapa de esa
+      # imagen puede cambiar sin que cambie la imagen. Cuando exista el hosting
+      # versionado y se definan, tienen que apuntar a una release fija
+      # (…/vX.Y.Z/…): con cualquier otra cosa la construcción se detiene.
+      - name: Versión del mapa
+        env:
+          MAP_STYLE_URL: ${{ vars.VITE_MAP_STYLE_URL }}
+          MAP_ROUTES_URL: ${{ vars.VITE_MAP_ROUTES_URL }}
+        run: |
+          if [[ -z "$MAP_STYLE_URL" && -z "$MAP_ROUTES_URL" ]]; then
+            echo "::notice::Sin VITE_MAP_STYLE_URL ni VITE_MAP_ROUTES_URL: la imagen lleva el mapa de la demo de veni-mapa, que no es una versión fija."
+            exit 0
+          fi
+          for url in "$MAP_STYLE_URL" "$MAP_ROUTES_URL"; do
+            if [[ ! "$url" =~ /v[0-9]+\.[0-9]+\.[0-9]+/ ]]; then
+              echo "::error::Las variables VITE_MAP_STYLE_URL y VITE_MAP_ROUTES_URL tienen que definirse las dos y apuntar a una release fija del mapa (…/vX.Y.Z/…): '$url'"
+              exit 1
+            fi
+          done
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Sesión en GHCR
         if: env.PUBLISH == 'true'
