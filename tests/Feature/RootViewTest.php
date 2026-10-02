@@ -25,6 +25,14 @@ beforeEach(function () {
             'file' => 'assets/Home-prueba.js',
             'src' => 'resources/js/pages/Home.vue',
             'isDynamicEntry' => true,
+            // El mapa: la página lo pide con import() al montarse.
+            'dynamicImports' => ['resources/js/map/engine.ts'],
+        ],
+        'resources/js/map/engine.ts' => [
+            'file' => 'assets/engine-prueba.js',
+            'src' => 'resources/js/map/engine.ts',
+            'isDynamicEntry' => true,
+            'css' => ['assets/engine-prueba.css'],
         ],
     ]));
     $this->app->usePublicPath($this->publicPath);
@@ -78,4 +86,13 @@ test('carga la entrada compilada y la página desde el manifest', function () {
         ->assertSee('build/assets/app-prueba.js', false)
         ->assertSee('build/assets/app-prueba.css', false)
         ->assertSee('build/assets/Home-prueba.js', false);
+});
+
+test('no carga ni precarga el mapa: MapLibre solo baja en las pantallas que lo pintan', function () {
+    // ADR 0007. Quien visita una página sin mapa no debe descargar su código
+    // ni su CSS; en las que lo tienen, lo pide el componente al montarse.
+    $this->get('/')
+        ->assertOk()
+        ->assertSee('build/assets/Home-prueba.js', false)
+        ->assertDontSee('engine-prueba', false);
 });
