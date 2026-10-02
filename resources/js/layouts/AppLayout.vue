@@ -7,12 +7,19 @@ import { useI18n } from '@/composables/useI18n';
 import wordmark from '@brand/logo/veni-wordmark.svg';
 import wordmarkWhite from '@brand/logo/veni-wordmark-blanco.svg';
 
+/**
+ * `immersive`: la página ocupa todo el alto que deja la cabecera (el mapa) y
+ * el layout va sin pie de página ni scroll propio. La página lo pide con
+ * `defineOptions({ layout: { immersive: true } })`.
+ */
+const { immersive } = defineProps<{ immersive?: boolean }>();
+
 const { t } = useI18n();
 const year = new Date().getFullYear();
 </script>
 
 <template>
-    <div class="flex min-h-dvh flex-col">
+    <div class="flex flex-col" :class="immersive ? 'h-dvh' : 'min-h-dvh'">
         <a
             href="#contenido"
             class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:inline-flex focus:min-h-touch focus:items-center focus:rounded-veni-sm focus:bg-veni-ciruela focus:px-4 focus:font-semibold focus:text-veni-blanco"
@@ -39,11 +46,11 @@ const year = new Date().getFullYear();
             </div>
         </header>
 
-        <main id="contenido" tabindex="-1" class="flex-1 focus:outline-none">
+        <main id="contenido" tabindex="-1" class="flex-1 focus:outline-none" :class="{ 'relative min-h-0': immersive }">
             <slot />
         </main>
 
-        <footer class="border-t border-line">
+        <footer v-if="!immersive" class="border-t border-line">
             <div class="mx-auto max-w-5xl px-4 py-6 text-sm text-ink-muted">
                 <p>{{ t('layout.footer', { year }) }}</p>
             </div>
