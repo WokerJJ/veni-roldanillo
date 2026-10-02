@@ -28,10 +28,12 @@ VPS 2 vCPU / 4 GB, Ubuntu LTS, SSH solo con llaves, UFW (80/443), fail2ban, actu
 El mapa base lo produce y publica el repositorio [veni-mapa](https://github.com/WokerJJ/veni-mapa) (ADR 0007): PMTiles de Roldanillo, estilos `veni-{claro,oscuro}-{es,en}.json` con la marca, fuentes, sprites y el grafo de rutas `roldanillo-rutas.json`, en releases versionadas con SHA-256.
 
 1. La app lo consume por `VITE_MAP_STYLE_URL` y `VITE_MAP_ROUTES_URL`, fijados a una versión (hoy **v0.2.0**; en producción, `tiles.veniroldanillo.co` en Cloudflare R2 con CORS limitado al dominio). `VITE_MAP_STYLE_URL` es una plantilla, `…/veni-{theme}-{locale}.json`: la app pone `claro` u `oscuro` y `es` o `en`. Las dos se fijan al compilar los assets (en la imagen de producción, como argumentos de build con la demo publicada por defecto).
-2. MapLibre y PMTiles se cargan solo en las pantallas con mapa (carga perezosa). Tema e idioma los elige la app; el mapa no trae botones propios.
+2. MapLibre y PMTiles se cargan solo en las pantallas con mapa (carga perezosa): el componente `MapView` importa el motor (`resources/js/map/engine.ts`) con `import()` al montarse, y una prueba que compila el frontend falla si llegan al bundle inicial. Tema e idioma los elige la app, que cambia de estilo sin mover la cámara; el mapa no trae botones propios, solo los de zoom y la atribución. La cámara inicial y los límites salen del estilo (`center`, `zoom` y `metadata["veni:bounds"]`).
 3. Restaurantes como capa GeoJSON desde la API.
 4. Ubicación y rutas en el dispositivo (ADR 0008): la posición nunca sale del teléfono ni queda en la URL; el grafo se descarga al pedir la primera ruta.
 5. Atribución obligatoria: "© colaboradores de OpenStreetMap" (ODbL), sin ocultar el control.
+
+Para la política de seguridad de contenido (pendiente, #7): el navegador pide con `fetch` el estilo, los tiles, las fuentes y los sprites al host del mapa (`connect-src`), el worker de MapLibre se sirve desde el mismo origen de la app (`worker-src 'self'`) y los íconos de los controles van en el CSS como `data:` (`img-src`).
 
 ## Geolocalización
 

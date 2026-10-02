@@ -182,6 +182,7 @@ npm run build
 ## Créditos
 
 - **Íconos:** [colombia-icons](https://github.com/Mteheran/colombia-icons), licencia MIT, © Miguel Teheran. Los que usa la app están copiados en [`resources/icons/colombia`](resources/icons/colombia) desde una versión fija, con su licencia ([ADR 0011](docs/adr/0011-iconos-colombia-icons.md)).
+- **Mapa:** datos © colaboradores de [OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL), publicados como PMTiles por [veni-mapa](https://github.com/WokerJJ/veni-mapa). Se pinta con [MapLibre GL JS](https://maplibre.org/) y [PMTiles](https://github.com/protomaps/PMTiles), los dos con licencia BSD de 3 cláusulas.
 
 ## Autor
 
