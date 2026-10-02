@@ -27,9 +27,11 @@ services:
   app:
     <<: *app-dev
     # El primer arranque descarga las dependencias al volumen vendor: más
-    # margen antes de contar fallos del healthcheck.
+    # margen antes de contar fallos del healthcheck. Ya sano, cada revisión
+    # arranca Laravel: cada 30 s basta y el contenedor queda quieto en reposo.
     healthcheck:
       start_period: 120s
+      interval: 30s
 
   worker:
     <<: *app-dev

@@ -38,6 +38,9 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=5 \
 FROM base AS dev
 
 RUN cp "$PHP_INI_DIR/php.ini-development" "$PHP_INI_DIR/php.ini" \
+    # OPcache revisa cada archivo en cada petición: por defecto espera 2 s y
+    # serviría el código anterior justo después de guardar un cambio.
+    && echo 'opcache.revalidate_freq=0' > "$PHP_INI_DIR/conf.d/zz-dev.ini" \
     # vendor/ se monta como volumen con nombre (docker-compose.override.yml):
     # Docker lo crea con el dueño de este directorio y Composer escribe sin root.
     && install -d -o app -g app /app/vendor
@@ -47,8 +50,11 @@ COPY --chmod=0755 docker/entrypoint-dev.sh /usr/local/bin/entrypoint-dev
 USER app
 
 ENTRYPOINT ["entrypoint-dev"]
-# --max-requests=1 reinicia el worker tras cada petición para ver los cambios sin reiniciar el contenedor.
-CMD ["php", "artisan", "octane:frankenphp", "--host=0.0.0.0", "--port=8000", "--max-requests=1"]
+# Modo clásico de FrankenPHP: cada petición arranca Laravel con el código del
+# momento. Los workers de Octane (producción) guardan la aplicación ya arrancada
+# y, tras editar rutas o configuración, seguían respondiendo con las anteriores;
+# su --watch no recibe eventos de un montaje de Docker Desktop en Windows.
+CMD ["frankenphp", "php-server", "--root", "public/", "--listen", ":8000", "--access-log"]
 
 # ---------------------------------------------------------------------------
 # vendor: dependencias de Composer sin las de desarrollo
