@@ -5,6 +5,7 @@
     "layout.footer": "© :year Vení Roldanillo · Made in Roldanillo, Valle del Cauca, Colombia",
     "theme.dark_mode": "Dark mode",
     "locale.switcher": "Language (Idioma)",
+    "locale.too_many_changes": "You changed the language too many times in a row. Wait a minute and try again.",
     "home.title": "Home",
     "home.heading": "Come eat in Roldanillo",
     "home.intro": "Browse menus with prices and opening hours, and order from the town's restaurants on WhatsApp, with no commissions.",

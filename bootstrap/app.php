@@ -8,6 +8,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -40,6 +41,12 @@ return Application::configure(basePath: dirname(__DIR__))
             SetLocale::class,
             HandleInertiaRequests::class,
         ]);
+
+        // Laravel adelanta el límite de peticiones (throttle) por prioridad, a
+        // antes del resto del grupo web; SetLocale va justo antes que él para
+        // que el aviso del 429 salga en el idioma de la petición. Sigue después
+        // de la sesión y la autenticación, de las que depende.
+        $middleware->prependToPriorityList(before: ThrottleRequests::class, prepend: SetLocale::class);
 
         // El idioma no es secreto y se valida al leerlo (ADR 0010).
         $middleware->encryptCookies(except: [SetLocale::COOKIE]);

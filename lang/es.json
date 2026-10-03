@@ -5,6 +5,7 @@
     "layout.footer": "© :year Vení Roldanillo · Hecho en Roldanillo, Valle del Cauca",
     "theme.dark_mode": "Modo oscuro",
     "locale.switcher": "Idioma (Language)",
+    "locale.too_many_changes": "Cambiaste de idioma muchas veces seguidas. Esperá un minuto y volvé a intentar.",
     "home.title": "Inicio",
     "home.heading": "Vení, comamos en Roldanillo",
     "home.intro": "Mirá los menús con precios y horarios, y pedí por WhatsApp a los restaurantes del pueblo, sin comisiones.",
