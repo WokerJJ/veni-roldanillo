@@ -119,10 +119,14 @@ FROM base AS prod
 # Inertia DevTools graba cada petición en disco: nunca en producción.
 # Los registros de Laravel van a stderr, es decir a `docker compose logs`: un
 # archivo dentro del contenedor se pierde cada vez que un despliegue lo recrea.
+# Las cookies (sesión, token CSRF e idioma) solo viajan por HTTPS (ADR 0014).
+# Como con APP_ENV, el .env no puede cambiar estos valores: Laravel no pisa una
+# variable que ya trae el entorno.
 ENV APP_ENV=production \
     APP_DEBUG=false \
     INERTIA_DEVTOOLS_ENABLED=false \
-    LOG_CHANNEL=stderr
+    LOG_CHANNEL=stderr \
+    SESSION_SECURE_COOKIE=true
 
 # Composer no llega a esta etapa: solo lo copian dev y vendor.
 RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
