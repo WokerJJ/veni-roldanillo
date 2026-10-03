@@ -6,11 +6,20 @@
         <meta name="description" content="{{ __('meta.description') }}">
 
         {{--
+            Nonce de la política de seguridad de contenido de esta respuesta
+            (SetContentSecurityPolicy). De aquí lo leen Vite, para los CSS y
+            módulos que carga después, e Inertia (resources/js/csp.ts). Va en
+            el atributo nonce, que el navegador oculta a los selectores de CSS.
+        --}}
+        <meta property="csp-nonce" nonce="{{ Vite::cspNonce() }}">
+
+        {{--
             Tema antes de pintar para evitar el destello: la preferencia guardada
             en el dispositivo o, si no hay, la del sistema. Misma clave que
-            resources/js/composables/useTheme.ts.
+            resources/js/composables/useTheme.ts. Es el único script en línea:
+            lleva el nonce para que la CSP lo deje correr.
         --}}
-        <script>
+        <script nonce="{{ Vite::cspNonce() }}">
             (function () {
                 var theme = null;
                 try {

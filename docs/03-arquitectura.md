@@ -5,7 +5,7 @@
 | Servicio | Imagen / rol |
 | --- | --- |
 | `migrate` | Misma imagen, una sola ejecución en cada `docker compose up`: `php artisan migrate --force`. `app`, `worker` y `scheduler` esperan a que termine bien |
-| `app` | Laravel 13 en FrankenPHP: Octane en producción; modo clásico en desarrollo (ADR 0012). HTTPS automático (Caddy) en producción |
+| `app` | Laravel 13 en FrankenPHP: Octane en producción; modo clásico en desarrollo (ADR 0012). HTTP en `127.0.0.1:8000`, detrás del proxy que termina TLS (ADR 0014) |
 | `worker` | Misma imagen: `php artisan queue:work` (notificaciones, imágenes, traducciones) |
 | `scheduler` | Misma imagen: `php artisan schedule:work` (backups, recordatorios, reactivar "agotado hoy") |
 | `db` | `postgis/postgis` (PostgreSQL + PostGIS), sin puerto expuesto a internet |
@@ -29,7 +29,7 @@ El detalle, los secrets (hoy no existe ninguno) y cómo activarlo están en [Ent
 
 ## Servidor
 
-VPS 2 vCPU / 4 GB, Ubuntu LTS, SSH solo con llaves, UFW (80/443), fail2ban, actualizaciones automáticas. Cloudflare delante (DNS, CDN, protección). Backups: `pg_dump` diario a Cloudflare R2 + snapshots semanales; restauración probada mensualmente. Monitoreo: Sentry, healthchecks de Docker, UptimeRobot.
+VPS 2 vCPU / 4 GB, Ubuntu LTS, SSH solo con llaves, UFW (80/443), fail2ban, actualizaciones automáticas. Cloudflare delante (DNS, CDN, protección). TLS termina en un proxy delante de la app (Caddy en el servidor o un túnel de Cloudflare), en el que la app confía por `TRUSTED_PROXIES` (ADR 0014). Backups: `pg_dump` diario a Cloudflare R2 + snapshots semanales; restauración probada mensualmente. Monitoreo: Sentry, healthchecks de Docker, UptimeRobot.
 
 ## Mapa autohospedado
 
@@ -41,7 +41,7 @@ El mapa base lo produce y publica el repositorio [veni-mapa](https://github.com/
 4. Ubicación y rutas en el dispositivo (ADR 0008): la posición nunca sale del teléfono ni queda en la URL; el grafo se descarga al pedir la primera ruta.
 5. Atribución obligatoria: "© colaboradores de OpenStreetMap" (ODbL), sin ocultar el control. Sus enlaces miden unos 20 px de alto, menos que los 44 px de las áreas táctiles de la app: son enlaces dentro de una línea de texto, la excepción «en línea» del criterio 2.5.8 de WCAG 2.2 (tamaño del objetivo), y agrandarlos taparía el mapa. Los botones de zoom sí miden 44 px.
 
-Para la política de seguridad de contenido (pendiente, #41): el navegador pide con `fetch` el estilo, los tiles, las fuentes y los sprites al host del mapa (`connect-src`), el worker de MapLibre se sirve desde el mismo origen de la app (`worker-src 'self'`) y los íconos de los controles van en el CSS como `data:` (`img-src`).
+Para la política de seguridad de contenido (ADR 0014): el navegador pide con `fetch` el estilo, los tiles, las fuentes, los sprites y el grafo de rutas al host del mapa (`connect-src`, también en `img-src`); la CSP toma ese host de `VITE_MAP_STYLE_URL` y `VITE_MAP_ROUTES_URL`, que la imagen de producción guarda en su entorno. El worker de MapLibre se sirve desde el mismo origen de la app (`worker-src 'self'`); en desarrollo sale del servidor de Vite y MapLibre lo arranca desde una URL `blob:`. Los íconos de los controles van en el CSS como `data:` y, en navegadores sin `createImageBitmap`, los sprites se arman con una URL `blob:` (`img-src`).
 
 ## Geolocalización
 

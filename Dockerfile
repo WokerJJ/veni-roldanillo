@@ -8,6 +8,15 @@
 # las mismas bases que pasaron la CI. Dependabot propone los digests nuevos
 # (.github/dependabot.yml), y por eso van escritas en cada FROM y no en un ARG.
 
+# Mapa de veni-mapa (ADR 0007), con la demo publicada por defecto; en
+# producción se fija una release con --build-arg (o en el .env que lee docker
+# compose). Son públicas. Las usan dos etapas: assets, donde Vite las escribe
+# en el JavaScript, y prod, que las deja en el entorno del contenedor para que
+# Laravel adelante la conexión con ese host y la CSP lo deje pedir el mapa.
+# Así la app en ejecución nombra siempre el mismo mapa que trae el JavaScript.
+ARG VITE_MAP_STYLE_URL="https://wokerjj.github.io/veni-mapa/style/veni-{theme}-{locale}.json"
+ARG VITE_MAP_ROUTES_URL="https://wokerjj.github.io/veni-mapa/roldanillo-rutas.json"
+
 # ---------------------------------------------------------------------------
 # composer: solo aporta el binario a las etapas que instalan dependencias
 # ---------------------------------------------------------------------------
@@ -101,13 +110,12 @@ COPY resources ./resources
 COPY brand/tokens.css ./brand/tokens.css
 COPY brand/logo ./brand/logo
 
-# Mapa de veni-mapa (ADR 0007). Vite escribe estas URL en el JavaScript al
-# compilar, y el .env no entra en la imagen: llegan como argumentos de build.
-# Son públicas. Por defecto, la demo publicada; en producción se fija una
-# release con --build-arg (o en el .env que lee docker compose). {theme} y
-# {locale} los reemplaza la app (resources/js/map/styleUrl.ts).
-ARG VITE_MAP_STYLE_URL="https://wokerjj.github.io/veni-mapa/style/veni-{theme}-{locale}.json"
-ARG VITE_MAP_ROUTES_URL="https://wokerjj.github.io/veni-mapa/roldanillo-rutas.json"
+# Mapa de veni-mapa (arriba, al principio del archivo). Vite escribe estas URL
+# en el JavaScript al compilar, y el .env no entra en la imagen: llegan como
+# argumentos de build. {theme} y {locale} los reemplaza la app
+# (resources/js/map/styleUrl.ts).
+ARG VITE_MAP_STYLE_URL
+ARG VITE_MAP_ROUTES_URL
 
 RUN npm run build
 
@@ -119,13 +127,20 @@ FROM base AS prod
 # Inertia DevTools graba cada petición en disco: nunca en producción.
 # Los registros de Laravel van a stderr, es decir a `docker compose logs`: un
 # archivo dentro del contenedor se pierde cada vez que un despliegue lo recrea.
+# Las cookies (sesión, token CSRF e idioma) solo viajan por HTTPS (ADR 0014).
+# Como con APP_ENV, el .env no puede cambiar estos valores: Laravel no pisa una
+# variable que ya trae el entorno.
 ENV APP_ENV=production \
     APP_DEBUG=false \
     INERTIA_DEVTOOLS_ENABLED=false \
-    LOG_CHANNEL=stderr
+    LOG_CHANNEL=stderr \
+    SESSION_SECURE_COOKIE=true
 
 # Composer no llega a esta etapa: solo lo copian dev y vendor.
-RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+# expose_php: sin la cabecera X-Powered-By, que anuncia la versión exacta de
+# PHP a quien busque una con fallas conocidas (php.ini-production la deja).
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && echo 'expose_php = Off' > "$PHP_INI_DIR/conf.d/zz-prod.ini"
 
 # De docker/ solo entra la entrada de producción, y en /usr/local/bin (de
 # root): el usuario de la aplicación la ejecuta pero no puede reescribirla.
@@ -133,6 +148,15 @@ COPY --chmod=0755 docker/entrypoint-prod.sh /usr/local/bin/entrypoint-prod
 
 COPY --from=vendor --chown=app:app /app /app
 COPY --from=assets --chown=app:app /app/public/build /app/public/build
+
+# Las mismas URL del mapa con que se compiló el JavaScript, en el entorno del
+# contenedor (config/services.php): la vista raíz adelanta la conexión con ese
+# host y la CSP lo deja pedir. Como APP_ENV, el .env no puede cambiarlas: un
+# valor distinto en el servidor nombraría un mapa que el JavaScript no usa.
+ARG VITE_MAP_STYLE_URL
+ARG VITE_MAP_ROUTES_URL
+ENV VITE_MAP_STYLE_URL=${VITE_MAP_STYLE_URL} \
+    VITE_MAP_ROUTES_URL=${VITE_MAP_ROUTES_URL}
 
 # El worker de Octane para FrankenPHP se deja listo en la imagen.
 RUN cp vendor/laravel/octane/src/Commands/stubs/frankenphp-worker.php public/frankenphp-worker.php \

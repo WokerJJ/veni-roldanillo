@@ -1,15 +1,26 @@
 import '../css/app.css';
 
-import { createInertiaApp } from '@inertiajs/vue3';
+import { createInertiaApp, router } from '@inertiajs/vue3';
 import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
 
+import { cspNonce } from '@/csp';
+import { openDevErrorsAsPages } from '@/devErrors';
 import AppLayout from '@/layouts/AppLayout.vue';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Vení Roldanillo';
 
 // El color de la barra de progreso sale del token de la marca (brand/tokens.css).
 const progressColor = getComputedStyle(document.documentElement).getPropertyValue('--veni-arrebol').trim();
+
+// La barra de progreso inserta un <style>: con el nonce la CSP lo deja pasar.
+const nonce = cspNonce();
+
+// En desarrollo, el error de una visita se abre como página y no en el
+// diálogo de Inertia, donde la CSP no deja leerlo (resources/js/devErrors.ts).
+if (import.meta.env.DEV) {
+    openDevErrorsAsPages(router);
+}
 
 void createInertiaApp({
     title: (title) => (title ? `${title} · ${appName}` : appName),
@@ -33,4 +44,5 @@ void createInertiaApp({
     progress: {
         color: progressColor,
     },
+    ...(nonce === undefined ? {} : { nonce }),
 });

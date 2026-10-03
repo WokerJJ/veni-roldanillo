@@ -5,6 +5,7 @@
     "layout.footer": "© :year Vení Roldanillo · Hecho en Roldanillo, Valle del Cauca",
     "theme.dark_mode": "Modo oscuro",
     "locale.switcher": "Idioma (Language)",
+    "locale.too_many_changes": "Cambiaste de idioma muchas veces seguidas. Esperá un minuto y volvé a intentar.",
     "home.title": "Inicio",
     "home.heading": "Vení, comamos en Roldanillo",
     "home.intro": "Mirá los menús con precios y horarios, y pedí por WhatsApp a los restaurantes del pueblo, sin comisiones.",
@@ -17,5 +18,16 @@
     "map.error": "No pudimos cargar el mapa. Revisá tu conexión y volvé a intentar.",
     "map.unavailable": "Por ahora no podemos mostrarte el mapa en este dispositivo.",
     "map.retry": "Reintentar",
-    "credits.icons": "Íconos de colombia-icons, de Miguel Teheran, con licencia MIT."
+    "credits.icons": "Íconos de colombia-icons, de Miguel Teheran, con licencia MIT.",
+    "errors.home": "Volvé al inicio",
+    "errors.not_found.title": "No encontramos esta página",
+    "errors.not_found.message": "La dirección no existe o cambió. Volvé al inicio y buscá desde ahí.",
+    "errors.page_expired.title": "La página se venció",
+    "errors.page_expired.message": "Pasó mucho tiempo desde que abriste esta página. Recargala y volvé a intentar.",
+    "errors.too_many_requests.title": "Muchas peticiones seguidas",
+    "errors.too_many_requests.message": "Hiciste muchas peticiones en poco tiempo. Esperá un momento y volvé a intentar.",
+    "errors.server_error.title": "Algo falló de nuestro lado",
+    "errors.server_error.message": "No es culpa tuya. Volvé a intentar en un ratico.",
+    "errors.maintenance.title": "Estamos haciendo unos ajustes",
+    "errors.maintenance.message": "Volvé en un ratico, ya casi terminamos."
 }

@@ -4,8 +4,10 @@ namespace App\Support;
 
 /**
  * Origen (esquema, host y puerto) del que la app descarga el mapa de
- * veni-mapa (ADR 0007), para que la vista raíz adelante la conexión con
- * `<link rel="preconnect">` mientras baja el JavaScript.
+ * veni-mapa (ADR 0007): la vista raíz adelanta la conexión con
+ * `<link rel="preconnect">` mientras baja el JavaScript, y la política de
+ * seguridad de contenido deja pedir ahí el estilo, los tiles, las fuentes,
+ * los sprites y el grafo de rutas.
  */
 final class MapOrigin
 {
@@ -15,26 +17,23 @@ final class MapOrigin
      */
     public static function fromStyleUrl(mixed $styleUrl): ?string
     {
-        if (! is_string($styleUrl)) {
-            return null;
-        }
+        return Origin::fromUrl($styleUrl);
+    }
 
-        $parts = parse_url(trim($styleUrl));
+    /**
+     * Orígenes del estilo y del grafo de rutas (`VITE_MAP_ROUTES_URL`), sin
+     * repetir. Una release de veni-mapa sirve todo lo demás (tiles, fuentes y
+     * sprites) desde el mismo host que el estilo.
+     *
+     * @return list<string>
+     */
+    public static function configured(): array
+    {
+        $origins = [
+            Origin::fromUrl(config('services.map.style_url')),
+            Origin::fromUrl(config('services.map.routes_url')),
+        ];
 
-        if (! is_array($parts) || ! isset($parts['scheme'], $parts['host'])) {
-            return null;
-        }
-
-        $scheme = strtolower($parts['scheme']);
-
-        if (! in_array($scheme, ['http', 'https'], true)) {
-            return null;
-        }
-
-        if (filter_var($parts['host'], FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false) {
-            return null;
-        }
-
-        return $scheme.'://'.$parts['host'].(isset($parts['port']) ? ':'.$parts['port'] : '');
+        return array_values(array_unique(array_filter($origins, fn (?string $origin) => $origin !== null)));
     }
 }
