@@ -78,9 +78,19 @@ failures=0
 trap cleanup EXIT
 
 # El .env de ejemplo con una clave de aplicación recién generada: de paso
-# comprueba que .env.example sirve para arrancar la imagen.
+# comprueba que .env.example sirve para arrancar la imagen. Además:
+# - TRUSTED_PROXIES=127.0.0.1: las peticiones que se hacen desde dentro del
+#   contenedor de app hacen de proxy de confianza (ADR 0014); las que llegan
+#   desde este equipo, por el puerto publicado, no lo son.
+# - Un mapa y unas cookies que la imagen no deja cambiar: el preconnect y la
+#   CSP tienen que nombrar el mapa con que se compiló el JavaScript, y las
+#   cookies salir con Secure aunque el .env diga otra cosa.
 sed -e "s|^APP_KEY=.*|APP_KEY=base64:$(openssl rand -base64 32)|" \
-    -e "s|^APP_URL=.*|APP_URL=$base|" .env.example > "$tmp/env"
+    -e "s|^APP_URL=.*|APP_URL=$base|" \
+    -e "s|^TRUSTED_PROXIES=.*|TRUSTED_PROXIES=127.0.0.1|" \
+    -e "s|^VITE_MAP_STYLE_URL=.*|VITE_MAP_STYLE_URL=https://otro-mapa.example.test/veni-{theme}-{locale}.json|" \
+    .env.example > "$tmp/env"
+echo 'SESSION_SECURE_COOKIE=false' >> "$tmp/env"
 # Lo lee el usuario del contenedor, que no es quien corre esta prueba.
 chmod 644 "$tmp/env"
 
@@ -301,6 +311,165 @@ still_running() {
     done
 }
 
+# --- Seguridad HTTP (ADR 0014) -------------------------------------------------
+
+# Una variable del entorno de la imagen, sin la entrada ni el .env.
+image_env() {
+    # shellcheck disable=SC2016 # $1 lo resuelve el shell del contenedor.
+    docker run --rm --entrypoint sh "$image" -c 'printenv "$1" || true' sh "$1"
+}
+
+# Cabeceras y cuerpo de una petición a $1 desde este equipo, sin \r. Lo que
+# sigue a $1 son opciones de curl (cabeceras de más).
+page() {
+    local path=$1
+    shift
+    curl --silent --show-error --include --max-time 10 "$@" "$base$path" | tr -d '\r'
+}
+
+# Lo mismo, pero desde dentro del contenedor de app: llega desde 127.0.0.1,
+# el proxy de confianza de esta prueba. Las cabeceras son las de un proxy que
+# recibió la petición por HTTPS para veniroldanillo.test.
+page_via_trusted_proxy() {
+    compose exec -T app curl --silent --show-error --include --max-time 10 \
+        --header 'X-Forwarded-Proto: https' --header 'X-Forwarded-Host: veniroldanillo.test' \
+        --header 'X-Forwarded-Port: 443' --header 'X-Forwarded-For: 203.0.113.7' \
+        "http://127.0.0.1:8000$1" | tr -d '\r'
+}
+
+headers_of() {
+    sed '/^$/q' <<< "$1"
+}
+
+# Valor de la cabecera $1 en la respuesta $2 (la primera, sin el nombre).
+header_value() {
+    headers_of "$2" | grep -i "^$1:" | head -n 1 | cut -d: -f2- | sed 's/^ *//'
+}
+
+security_headers() {
+    local response expected
+    response=$(page /) || return 1
+    for expected in 'X-Content-Type-Options: nosniff' 'X-Frame-Options: DENY' \
+        'Referrer-Policy: strict-origin-when-cross-origin'; do
+        headers_of "$response" | grep -qixF "$expected" || {
+            echo "    falta «$expected»"
+            return 1
+        }
+    done
+    header_value Permissions-Policy "$response" | grep -q 'geolocation=(self).*camera=()\|camera=().*geolocation=(self)' || {
+        echo "    Permissions-Policy no deja la ubicación solo a este origen o no apaga la cámara"
+        return 1
+    }
+}
+
+# HSTS solo cuando la petición llegó por HTTPS a un proxy de confianza. Desde
+# este equipo, aunque diga X-Forwarded-Proto: https, la app no le cree.
+hsts_only_behind_trusted_proxy() {
+    header_value Strict-Transport-Security "$(page_via_trusted_proxy /)" | grep -qx 'max-age=31536000; includeSubDomains' || {
+        echo "    sin HSTS detrás del proxy de confianza"
+        return 1
+    }
+    [ -z "$(header_value Strict-Transport-Security "$(page / --header 'X-Forwarded-Proto: https')")" ] || {
+        echo "    HSTS por HTTP, desde una IP que no es de confianza"
+        return 1
+    }
+}
+
+# Las URL que genera la app (aquí, las de los assets de @vite) siguen al proxy
+# de confianza y, a la petición siguiente del mismo worker, ya no.
+urls_follow_trusted_proxy() {
+    grep -q 'src="https://veniroldanillo.test/build/assets/' <<< "$(page_via_trusted_proxy /)" || {
+        echo "    detrás del proxy de confianza las URL no salen con https://veniroldanillo.test"
+        return 1
+    }
+    grep -q "src=\"$base/build/assets/" <<< "$(page / --header 'X-Forwarded-Proto: https' --header 'X-Forwarded-Host: veniroldanillo.test')" || {
+        echo "    desde una IP que no es de confianza las URL siguieron sus X-Forwarded-*"
+        return 1
+    }
+}
+
+# Sesión, token CSRF e idioma (?lang fija la cookie): Secure y SameSite=Lax
+# aunque el .env diga SESSION_SECURE_COOKIE=false.
+secure_cookies() {
+    local cookies
+    cookies=$(headers_of "$(page '/?lang=en')" | grep -i '^set-cookie:') || true
+    if [ "$(grep -c . <<< "$cookies")" -lt 3 ] || ! grep -qi '^set-cookie: locale=' <<< "$cookies"; then
+        echo "    no llegaron la sesión, el token CSRF y el idioma: $cookies"
+        return 1
+    fi
+    if grep -vi '; secure' <<< "$cookies" | grep -q .; then
+        echo "    cookies sin Secure: $(grep -vi '; secure' <<< "$cookies")"
+        return 1
+    fi
+    if grep -vi '; samesite=lax' <<< "$cookies" | grep -q .; then
+        echo "    cookies sin SameSite=Lax: $(grep -vi '; samesite=lax' <<< "$cookies")"
+        return 1
+    fi
+}
+
+nonce_of() {
+    sed -n "s/.*'nonce-\([A-Za-z0-9]*\)'.*/\1/p" <<< "$1"
+}
+
+# La política activa (no la de solo informe), sin nada en línea sin nonce, con
+# el host del mapa de la imagen, y el mismo nonce en el HTML.
+csp_with_nonce() {
+    local response policy nonce
+    response=$(page /) || return 1
+    policy=$(header_value Content-Security-Policy "$response")
+    [ -n "$policy" ] || {
+        echo "    sin Content-Security-Policy"
+        return 1
+    }
+    if grep -q "unsafe-inline\|unsafe-eval" <<< "$policy"; then
+        echo "    la política permite código en línea: $policy"
+        return 1
+    fi
+    grep -q "connect-src 'self' $map_origin" <<< "$policy" || {
+        echo "    connect-src no nombra el mapa de la imagen ($map_origin): $policy"
+        return 1
+    }
+    nonce=$(nonce_of "$policy")
+    if [ -z "$nonce" ] \
+        || ! grep -qF "<meta property=\"csp-nonce\" nonce=\"$nonce\">" <<< "$response" \
+        || ! grep -qF "<script nonce=\"$nonce\">" <<< "$response" \
+        || ! grep -q "<script type=\"module\" src=\"[^\"]*\" nonce=\"$nonce\"" <<< "$response"; then
+        echo "    el HTML no lleva el nonce de la cabecera («$nonce»)"
+        return 1
+    fi
+}
+
+# Bajo Octane la app queda arrancada entre peticiones: el nonce no puede
+# repetirse de una a la siguiente.
+nonce_changes() {
+    local i nonce previous=''
+    for i in 1 2 3 4; do
+        nonce=$(nonce_of "$(header_value Content-Security-Policy "$(page /)")")
+        if [ -z "$nonce" ] || [ "$nonce" = "$previous" ]; then
+            echo "    nonce vacío o repetido entre peticiones: «$nonce»"
+            return 1
+        fi
+        previous=$nonce
+    done
+}
+
+# El preconnect nombra el host del mapa que trae la imagen (no el del .env), y
+# es el mismo mapa que quedó escrito en el JavaScript.
+map_preconnect() {
+    [ -n "$map_origin" ] || {
+        echo "    la imagen no trae VITE_MAP_STYLE_URL en su entorno"
+        return 1
+    }
+    grep -qF "<link rel=\"preconnect\" href=\"$map_origin\" crossorigin>" <<< "$(page /)" || {
+        echo "    falta <link rel=\"preconnect\" href=\"$map_origin\" crossorigin>"
+        return 1
+    }
+    in_app "grep -rqF '$map_style_url' public/build/assets" || {
+        echo "    el JavaScript no trae el estilo $map_style_url"
+        return 1
+    }
+}
+
 # --- Ejecución -----------------------------------------------------------------
 
 echo "Imagen $image, proyecto $project, $base"
@@ -310,6 +479,10 @@ check "la imagen no corre como root" in_image 'test "$(id -u)" != 0'
 check "la imagen no trae la entrada de desarrollo" in_image 'test ! -e /app/docker/entrypoint-dev.sh'
 check "la imagen no trae un .env" in_image 'test ! -e /app/.env'
 check "la imagen no trae Composer" in_image '! command -v composer > /dev/null'
+
+# El mapa con que se compiló el JavaScript, que la imagen deja en su entorno.
+map_style_url=$(image_env VITE_MAP_STYLE_URL)
+map_origin=$(sed -nE 's#^(https?://[^/]+)/.*#\1#p' <<< "$map_style_url")
 
 # up espera a db sana y a que migrate termine bien antes de arrancar los demás.
 compose up --detach --no-build --quiet-pull
@@ -328,6 +501,13 @@ check "public/storage enlazado" in_app 'test -L public/storage'
 check "entorno production aunque el .env diga local" in_app 'php artisan env | grep -q production'
 check "los registros salen por stderr aunque el .env diga otro canal" in_app 'php artisan config:show logging.default | grep -q stderr'
 check "$requests peticiones alternando en y es" alternating_requests
+check "cabeceras de seguridad en la página" security_headers
+check "HSTS solo detrás del proxy de confianza" hsts_only_behind_trusted_proxy
+check "URL con https detrás del proxy de confianza; desde otra IP, no" urls_follow_trusted_proxy
+check "cookies Secure y SameSite=Lax aunque el .env diga otra cosa" secure_cookies
+check "CSP activa con nonce y el host del mapa, sin nada en línea" csp_with_nonce
+check "un nonce nuevo en cada petición bajo Octane" nonce_changes
+check "preconnect al mapa de la imagen aunque el .env diga otro" map_preconnect
 check "un archivo de storage/app/public sobrevive a recrear app y worker" uploads_survive_recreate
 check "worker sano" wait_healthy worker
 check "scheduler sano" wait_healthy scheduler
