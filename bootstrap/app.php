@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\SetContentSecurityPolicy;
 use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\SetSecurityHeaders;
 use Illuminate\Foundation\Application;
@@ -27,9 +28,12 @@ return Application::configure(basePath: dirname(__DIR__))
                 | Request::HEADER_X_FORWARDED_PROTO,
         );
 
-        // Las cabeceras de seguridad envuelven a todo el resto, para que
-        // también las lleven los errores y el modo de mantenimiento.
-        $middleware->prepend(SetSecurityHeaders::class);
+        // Las cabeceras de seguridad y la CSP envuelven a todo el resto, para
+        // que también las lleven los errores y el modo de mantenimiento.
+        $middleware->prepend([
+            SetSecurityHeaders::class,
+            SetContentSecurityPolicy::class,
+        ]);
 
         // SetLocale antes que Inertia: las props compartidas usan el idioma.
         $middleware->web(append: [

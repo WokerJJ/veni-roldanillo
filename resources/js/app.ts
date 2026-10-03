@@ -4,12 +4,16 @@ import { createInertiaApp } from '@inertiajs/vue3';
 import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
 
+import { cspNonce } from '@/csp';
 import AppLayout from '@/layouts/AppLayout.vue';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Vení Roldanillo';
 
 // El color de la barra de progreso sale del token de la marca (brand/tokens.css).
 const progressColor = getComputedStyle(document.documentElement).getPropertyValue('--veni-arrebol').trim();
+
+// La barra de progreso inserta un <style>: con el nonce la CSP lo deja pasar.
+const nonce = cspNonce();
 
 void createInertiaApp({
     title: (title) => (title ? `${title} · ${appName}` : appName),
@@ -33,4 +37,5 @@ void createInertiaApp({
     progress: {
         color: progressColor,
     },
+    ...(nonce === undefined ? {} : { nonce }),
 });
