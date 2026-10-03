@@ -74,6 +74,8 @@ Vite escribe las URL del mapa en el JavaScript al compilar, así que son parte d
 
 Hoy no están definidas: la imagen lleva la demo pública de veni-mapa, que sigue su rama `main` y no es una versión fija ([ADR 0007](adr/0007-mapa-desde-veni-mapa.md)), y `docker.yml` lo deja como aviso en cada corrida. Cuando exista el hosting versionado del mapa se definen las dos; desde ese momento `docker.yml` se detiene si alguna no apunta a una release fija (`…/vX.Y.Z/…`).
 
+Los mismos valores quedan además en el entorno de la imagen ([ADR 0014](adr/0014-seguridad-http-detras-del-proxy.md)): de ahí los lee Laravel para adelantar la conexión con el host del mapa (`<link rel="preconnect">`) y para que la política de seguridad de contenido deje pedirlo. El `.env` del servidor no los cambia, así la app nombra siempre el mismo mapa que trae el JavaScript; para cambiar de mapa hay que construir otra imagen.
+
 ### Probarla en local
 
 ```bash
@@ -81,7 +83,7 @@ docker build --target prod -t veni-humo .
 bash tests/docker/smoke-prod.sh veni-humo
 ```
 
-La prueba levanta `docker-compose.yml` sin el override en un proyecto aparte, con un `.env` temporal, y lo borra al terminar. Es la misma que corre `ci.yml`.
+La prueba levanta `docker-compose.yml` sin el override en un proyecto aparte, con un `.env` temporal, y lo borra al terminar. Es la misma que corre `ci.yml`. Además de que arranca y migra, comprueba la seguridad HTTP de la imagen bajo Octane: las cabeceras, HSTS y las URL con `https://` solo detrás de un proxy de confianza, las cookies con `Secure`, la CSP activa con un nonce nuevo en cada petición, el `preconnect` al mapa y la caché de assets y fuentes.
 
 ## Releases
 
@@ -160,8 +162,42 @@ El `.env` parte de `.env.example` con estos cambios:
 | `LOG_LEVEL` | `warning` |
 | `LOG_CHANNEL` | `stderr` (la imagen ya lo fija; va igual para que el archivo diga la verdad) |
 | `APP_IMAGE` | `ghcr.io/wokerjj/veni-roldanillo:X.Y.Z`. La reescribe cada despliegue: es la versión que está corriendo |
+| `TRUSTED_PROXIES` | La IP o el rango desde el que llega el proxy que termina TLS ([abajo](#delante-de-la-app-tls-y-proxies-de-confianza)). Nunca `*` |
+| `SESSION_SECURE_COOKIE` | `true` (la imagen ya lo fija y el `.env` no lo cambia; va igual para que el archivo diga la verdad) |
+| `CSP_REPORT_ONLY` | `false`. Con `true` la política de contenido solo informa en la consola del navegador, sin bloquear: para probar un cambio de la política, nunca como estado normal |
 
-Las variables `VITE_*` no hacen falta en el servidor: ya quedaron dentro de la imagen.
+Las variables `VITE_*` no hacen falta en el servidor: ya quedaron dentro de la imagen, en el JavaScript y en su entorno. Si el `.env` las trae, valen las de la imagen.
+
+### Delante de la app: TLS y proxies de confianza
+
+La app no termina TLS ([ADR 0014](adr/0014-seguridad-http-detras-del-proxy.md)): sirve HTTP en el puerto 8000, publicado solo en `127.0.0.1` del servidor, y delante va un proxy que atiende HTTPS y le pasa la petición. El proxy le dice a la app la IP del cliente y que la petición llegó por HTTPS con las cabeceras `X-Forwarded-For`, `-Proto`, `-Host` y `-Port`, y la app solo se las cree a las IP de `TRUSTED_PROXIES`. Sin eso genera URL `http://`, no manda HSTS y cuenta los límites de peticiones con la IP del proxy, la misma para todos.
+
+Desde dónde ve llegar la app al proxy depende de dónde corre el proxy:
+
+| Delante de la app | `TRUSTED_PROXIES` |
+| --- | --- |
+| Caddy instalado en el servidor (`reverse_proxy 127.0.0.1:8000`) o un túnel de Cloudflare (`cloudflared` hacia `http://127.0.0.1:8000`) | La puerta de enlace de la red de Compose: con el proxy de puertos de Docker (el que viene por defecto), las conexiones al puerto publicado llegan al contenedor desde esa IP. Se lee con `docker network inspect veni-roldanillo_default --format '{{(index .IPAM.Config 0).Gateway}}'` (por ejemplo `172.18.0.1`). Si la red se recrea (`docker compose down`), Docker puede darle otra subred: el rango de sus redes, `172.16.0.0/12`, evita reconfigurar a cambio de confiar en todos los contenedores del servidor, que son todos de esta app |
+| Cloudflare con proxy (nube naranja) y Caddy en el servidor | Lo mismo, y Caddy tiene que pasar la IP del visitante y no la del borde de Cloudflare: en Caddy, `trusted_proxies` con los rangos de Cloudflare y `header_up X-Forwarded-For {client_ip}` en el `reverse_proxy` |
+| Un proxy dentro del propio contenedor (la prueba de humo) | `127.0.0.1` |
+
+Caddy, con un `Caddyfile` mínimo, obtiene y renueva el certificado solo y manda esas cabeceras sin configurar nada más:
+
+```caddyfile
+veniroldanillo.co {
+    reverse_proxy 127.0.0.1:8000
+}
+```
+
+Para comprobar desde fuera que la app ve las peticiones como HTTPS de un proxy de confianza: la respuesta trae HSTS solo en ese caso.
+
+```bash
+curl -sI https://veniroldanillo.co | grep -i strict-transport-security
+# strict-transport-security: max-age=31536000; includeSubDomains
+```
+
+Sin esa línea, `TRUSTED_PROXIES` no coincide con la IP desde la que llega el proxy.
+
+Lo que sirve Caddy desde `public/` sin pasar por Laravel lleva su propia caché (`config/octane.php`): los assets de `/build/assets`, que llevan el hash del contenido en el nombre, un año como `immutable`; las fuentes de `/fonts`, sin hash, una semana y después se revalidan. Un CDN delante (Cloudflare) respeta esas cabeceras.
 
 ### Qué hace un despliegue
 
@@ -260,7 +296,7 @@ El usuario `deploy` está en el grupo `docker`, que en la práctica equivale a r
 
 ### Lo que falta antes de un servidor real
 
-- **Quién termina TLS y la seguridad HTTP ([#41](https://github.com/WokerJJ/veni-roldanillo/issues/41)):** `app` publica el puerto 8000 solo en `127.0.0.1`. Falta decidir qué va delante (Caddy en el servidor o un túnel de Cloudflare) y configurar proxies de confianza, cookies seguras, cabeceras, CSP y el límite de peticiones.
+- **El proxy que termina TLS:** decidido que va delante de la app y cómo confía en él ([ADR 0014](adr/0014-seguridad-http-detras-del-proxy.md), [arriba](#delante-de-la-app-tls-y-proxies-de-confianza)); falta elegir entre Caddy en el servidor y un túnel de Cloudflare, instalarlo y escribir `TRUSTED_PROXIES` en el `.env`.
 - **Mapa en una versión fija:** cuando exista `tiles.veniroldanillo.co` ([arriba](#el-mapa-dentro-de-la-imagen)).
 - **Copias de seguridad y monitoreo:** descritos en [Arquitectura](03-arquitectura.md#servidor), sin implementar. Tienen que incluir el volumen `app_storage` además de la base, y el `pg_dump` previo a una versión con migraciones hoy es [a mano](#volver-a-la-versión-anterior).
 - **PASO RECOMENDADO PENDIENTE · proteger los tags `v*`:** hoy cualquiera con permiso de escritura puede crear, mover o borrar un tag `v*`. `docker.yml` ya limita el daño (solo publica commits de `main` y no reescribe una versión publicada) y el despliegue fija el digest, pero el tag en sí no está protegido. Falta un *ruleset* de tags (*Settings → Rules → Rulesets → New tag ruleset*) con el patrón `v*` que restrinja crear, actualizar y borrar. Como el tag de cada release lo crea `release.yml` con `GITHUB_TOKEN`, el ruleset necesita dejar pasar a quien lo crea (GitHub Actions hoy, o la GitHub App de releases): decidir eso es parte del paso.

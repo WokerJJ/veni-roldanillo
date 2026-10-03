@@ -17,3 +17,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0011](0011-iconos-colombia-icons.md) | Íconos: colombia-icons copiados desde una versión fija | Aceptada |
 | [0012](0012-desarrollo-en-modo-clasico.md) | Desarrollo en modo clásico de FrankenPHP; Octane solo en producción | Aceptada |
 | [0013](0013-entrega-por-imagen-versionada.md) | Entrega por imagen versionada: migración antes de arrancar, releases automáticas y despliegue a mano | Aceptada |
+| [0014](0014-seguridad-http-detras-del-proxy.md) | Seguridad HTTP: TLS en el proxy de delante, proxies de confianza explícitos y CSP con nonce | Aceptada |

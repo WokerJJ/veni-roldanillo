@@ -73,6 +73,8 @@ Hace falta una de las dos. Sin `public/build/manifest.json` y sin el servidor de
 
 Mientras `npm run dev` está abierto manda él: escribe `public/hot` y la app carga los recursos desde ese servidor aunque exista una compilación. Al cerrarlo borra el archivo; si se cierra a la fuerza y `public/hot` queda, la app sigue apuntando a un servidor que ya no existe: borrá el archivo o volvé a ejecutar `npm run dev`.
 
+La política de seguridad de contenido (CSP, [ADR 0014](docs/adr/0014-seguridad-http-detras-del-proxy.md)) está activa también en desarrollo y deja pasar al servidor que nombra `public/hot` (`http://localhost:5173`: `vite.config.ts` fija `localhost` porque una CSP no puede nombrar `[::1]`). Si algo no carga, la consola del navegador dice qué bloqueó; con `CSP_REPORT_ONLY=true` en el `.env` solo lo informa, sin bloquear.
+
 ### Mapa
 
 El mapa no vive en este repositorio: la app carga por URL el que publica [veni-mapa](https://github.com/WokerJJ/veni-mapa) ([ADR 0007](docs/adr/0007-mapa-desde-veni-mapa.md)). Dos variables del `.env` dicen de dónde:
@@ -86,7 +88,7 @@ Los valores de `.env.example` apuntan a la demo pública de veni-mapa, que sigue
 
 > **Al actualizar:** si tu `.env` es anterior a los marcadores y trae una URL fija (`…/veni-claro-es.json`), cambiala por la plantilla de `.env.example`. Sin `{theme}` y `{locale}` el mapa se quedaría en un solo tema y un solo idioma sin que nada falle, así que `npm run build` se detiene con un mensaje que dice qué falta, y `npm run dev` avisa en la terminal y en la consola del navegador.
 
-Vite las escribe en el JavaScript al compilar: tras cambiarlas hay que reiniciar `npm run dev` o repetir `npm run build`. Laravel lee además `VITE_MAP_STYLE_URL` (`config/services.php`) para que la vista raíz adelante la conexión con el host del mapa (`<link rel="preconnect">`); si no la encuentra, simplemente no lo pone. En la imagen de producción son argumentos de build con esos mismos valores por defecto; para fijar una release se definen en el `.env` que lee `docker compose build` o se pasan con `--build-arg`:
+Vite las escribe en el JavaScript al compilar: tras cambiarlas hay que reiniciar `npm run dev` o repetir `npm run build`. Laravel las lee además (`config/services.php`) para que la vista raíz adelante la conexión con el host del mapa (`<link rel="preconnect">`) y para que la CSP deje pedirle el mapa; si no las encuentra, no pone el enlace y la CSP no abre ningún host. En la imagen de producción son argumentos de build con esos mismos valores por defecto, que la imagen guarda también en su entorno; para fijar una release se definen en el `.env` que lee `docker compose build` o se pasan con `--build-arg`:
 
 ```bash
 docker build --target prod \
