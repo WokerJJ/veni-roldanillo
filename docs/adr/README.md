@@ -16,3 +16,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0010](0010-idioma-de-la-interfaz.md) | Idioma de la interfaz: resuelto en el servidor, textos en JSON compartidos con Vue | Aceptada |
 | [0011](0011-iconos-colombia-icons.md) | Íconos: colombia-icons copiados desde una versión fija | Aceptada |
 | [0012](0012-desarrollo-en-modo-clasico.md) | Desarrollo en modo clásico de FrankenPHP; Octane solo en producción | Aceptada |
+| [0013](0013-entrega-por-imagen-versionada.md) | Entrega por imagen versionada: migración antes de arrancar, releases automáticas y despliegue a mano | Aceptada |

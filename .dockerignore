@@ -44,3 +44,6 @@ docker-compose*.yml
 # Pruebas (no van en la imagen de producción)
 tests
 phpunit.xml
+
+# Releases (el manifiesto ya queda fuera con .*)
+release-please-config.json

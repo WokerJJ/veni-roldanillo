@@ -7,6 +7,9 @@
 <p align="center">
   <a href="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/ci.yml"><img src="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <a href="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/security.yml"><img src="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/security.yml/badge.svg?branch=main" alt="Seguridad"></a>
+  <a href="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/docker.yml"><img src="https://github.com/WokerJJ/veni-roldanillo/actions/workflows/docker.yml/badge.svg?branch=main" alt="Imagen"></a>
+  <a href="https://github.com/WokerJJ/veni-roldanillo/releases/latest"><img src="https://img.shields.io/github/v/release/WokerJJ/veni-roldanillo?label=release" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licencia-propietaria-lightgrey" alt="Licencia: propietaria"></a>
 </p>
 
 Plataforma web instalable (PWA), bilingüe español/inglés, que reúne a **todos los restaurantes de Roldanillo** (Valle del Cauca, Colombia) con menús, precios, mapa, horarios y calificaciones confiables, y permite **pedir a domicilio por WhatsApp sin comisiones** para el negocio.
@@ -47,13 +50,14 @@ Requisitos: Docker con Docker Compose, y Node.js 24 para el frontend. PHP, Compo
 cp .env.example .env
 docker compose build
 docker compose run --rm app php artisan key:generate   # la primera vez descarga las dependencias (medio minuto)
-docker compose up -d
-docker compose exec app php artisan migrate
+docker compose up -d                                   # migra antes de arrancar la app
 npm ci
 npm run build                                          # o `npm run dev` (ver «Frontend»)
 ```
 
 La app queda en <http://localhost:8000>. PostgreSQL + PostGIS se publica en `127.0.0.1:5433` y Meilisearch en `127.0.0.1:7700`. Pruebas: `docker compose exec app php artisan test`.
+
+Cada `docker compose up` corre primero el servicio `migrate` (`php artisan migrate --force`, una sola ejecución) y `app`, `worker` y `scheduler` esperan a que termine bien. Si una migración falla, ninguno arranca y `docker compose logs migrate` dice por qué. Con el entorno ya arriba, una migración nueva se aplica con `docker compose exec app php artisan migrate`.
 
 ### Frontend
 
@@ -78,7 +82,7 @@ El mapa no vive en este repositorio: la app carga por URL el que publica [veni-m
 | `VITE_MAP_STYLE_URL` | Plantilla del estilo. La app cambia `{theme}` por `claro` u `oscuro` y `{locale}` por `es` o `en`, según el tema y el idioma de la interfaz: `https://…/veni-{theme}-{locale}.json`. |
 | `VITE_MAP_ROUTES_URL` | Grafo de rutas (`roldanillo-rutas.json`), para calcularlas en el dispositivo ([ADR 0008](docs/adr/0008-ubicacion-y-rutas-en-el-dispositivo.md)). |
 
-Los valores de `.env.example` apuntan a la demo pública de veni-mapa, que sigue su rama `main`: **no es una versión fija**, el mapa cambia cuando cambia la demo. El ADR 0007 la tolera mientras no haya un hosting versionado; fijar una release en producción, y comprobarlo, queda en [#7](https://github.com/WokerJJ/veni-roldanillo/issues/7).
+Los valores de `.env.example` apuntan a la demo pública de veni-mapa, que sigue su rama `main`: **no es una versión fija**, el mapa cambia cuando cambia la demo. El ADR 0007 la tolera mientras no haya un hosting versionado; cuando exista, la imagen publicada se fija a una release con dos variables del repositorio y `docker.yml` comprueba que lo sean ([Entrega y despliegue](docs/despliegue.md#el-mapa-dentro-de-la-imagen)).
 
 > **Al actualizar:** si tu `.env` es anterior a los marcadores y trae una URL fija (`…/veni-claro-es.json`), cambiala por la plantilla de `.env.example`. Sin `{theme}` y `{locale}` el mapa se quedaría en un solo tema y un solo idioma sin que nada falle, así que `npm run build` se detiene con un mensaje que dice qué falta, y `npm run dev` avisa en la terminal y en la consola del navegador.
 
@@ -136,11 +140,18 @@ Como desarrollo no corre bajo Octane, un dato que se quede en memoria entre peti
 
 ```bash
 APP_PORT=8001 docker compose -f docker-compose.yml -p veni-prod up -d --build
-docker compose -f docker-compose.yml -p veni-prod exec app php artisan migrate --force
 docker compose -f docker-compose.yml -p veni-prod down -v    # al terminar; -v borra solo los volúmenes de veni-prod
 ```
 
-Queda en <http://localhost:8001>, con su propia base de datos y sin tocar el entorno de desarrollo. En PowerShell, `$env:APP_PORT = 8001` antes del primer comando.
+Queda en <http://localhost:8001>, ya migrada, con su propia base de datos y sin tocar el entorno de desarrollo. En PowerShell, `$env:APP_PORT = 8001` antes del primer comando.
+
+La prueba de humo hace ese recorrido sola, y es la que corre la CI en cada PR: levanta la imagen en un proyecto de Compose aparte (`veni-humo`, puerto 8189) con un `.env` temporal, espera `/up`, comprueba la migración y las cachés de Laravel, pide veinte veces la página de inicio alternando inglés y español (`<html lang>`, `Content-Language`, la descripción y las traducciones de la página tienen que seguir a cada petición), comprueba que un archivo de `storage/app` sobrevive a recrear los contenedores y que `worker` y `scheduler` solo se dan por sanos cuando ya corren su comando, y borra todo al terminar:
+
+```bash
+docker build --target prod -t veni-humo .
+bash tests/docker/smoke-prod.sh veni-humo
+docker image rm veni-humo
+```
 
 ### Base de datos
 
@@ -163,6 +174,9 @@ docker compose exec app composer lint      # Pint (preset laravel); `composer fo
 docker compose exec app composer analyse   # Larastan al nivel máximo
 docker compose exec app composer test      # Pest sobre veni_test
 bash tests/docker/entrypoint-dev.test.sh   # arranque del contenedor de desarrollo (sin root)
+bash tests/docker/entrypoint-prod.test.sh  # arranque del contenedor de producción
+bash tests/docker/deploy.test.sh           # script de despliegue, con un docker falso
+bash tests/docker/smoke-prod.sh <imagen>   # la imagen de producción bajo Octane (ver «Probar bajo Octane»)
 npm run lint                               # ESLint
 npm run typecheck                          # vue-tsc
 npm test                                   # Vitest (incluye la verificación de los íconos)
@@ -171,11 +185,18 @@ npm run build
 
 `security.yml` revisa cada semana y en cada PR los avisos de `composer audit`, `npm audit` (desde high) y los secretos del historial con gitleaks.
 
+## Despliegue
+
+Cada push a `main` publica la imagen de producción en `ghcr.io/wokerjj/veni-roldanillo`, y [release-please](https://github.com/googleapis/release-please) mantiene un PR de release con la versión y el `CHANGELOG.md`; al fusionarlo salen el tag, la release y la imagen `X.Y.Z`. El despliegue al servidor está **preparado y desactivado**: se lanza a mano, por versión, y no corre mientras no exista la variable que lo activa. No hay secrets reales en el repositorio ni servicios de pago.
+
+Cómo se numeran las versiones, qué necesita el servidor, qué secrets hacen falta y cómo activarlo: [Entrega y despliegue](docs/despliegue.md).
+
 ## Documentación
 
 - [Visión y propuesta](docs/01-vision.md)
 - [Producto y funcionalidades](docs/02-producto.md)
 - [Arquitectura](docs/03-arquitectura.md)
+- [Entrega y despliegue](docs/despliegue.md)
 - [Seguridad y marco legal](docs/04-seguridad-y-legal.md)
 - [Roadmap y alcance del MVP](docs/05-roadmap.md)
 - [Alineación con el Plan de Desarrollo Municipal](docs/06-plan-desarrollo-municipal.md)

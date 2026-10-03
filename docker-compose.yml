@@ -1,5 +1,6 @@
 # Servicios de Vení Roldanillo (docs/03-arquitectura.md).
-# Este archivo define la imagen de producción; docker-compose.override.yml
+# Este archivo define la imagen de producción y es todo lo que necesita el
+# servidor, junto con el .env (docs/despliegue.md); docker-compose.override.yml
 # (se carga solo en local) monta el código y usa la etapa de desarrollo.
 # Los puertos se publican solo en 127.0.0.1.
 
@@ -13,20 +14,49 @@ x-app: &app
       # valen las que trae el Dockerfile por defecto.
       - VITE_MAP_STYLE_URL
       - VITE_MAP_ROUTES_URL
-  image: veni-roldanillo-app
+  # En el servidor APP_IMAGE apunta a la imagen publicada, con su versión
+  # (ghcr.io/wokerjj/veni-roldanillo:X.Y.Z): `docker compose pull` la baja en
+  # lugar de construirla. Sin la variable, la que se construye aquí.
+  image: ${APP_IMAGE:-veni-roldanillo-app}
   restart: unless-stopped
   environment:
     TZ: America/Bogota
   volumes:
     # El .env nunca entra en la imagen: se monta en tiempo de ejecución.
-    - ./.env:/app/.env:ro
+    # APP_ENV_FILE permite montar otro (la prueba de humo usa uno temporal).
+    - ${APP_ENV_FILE:-./.env}:/app/.env:ro
+    # Lo que guarda la aplicación (storage/app: las fotos que suben los
+    # dueños) vive en un volumen: cada despliegue recrea los contenedores y
+    # dentro de ellos se perdería. Lo comparten app, que lo sirve, y worker,
+    # que lo procesa. Los registros no necesitan volumen: salen por stderr.
+    - app_storage:/app/storage/app
   depends_on:
     db:
       condition: service_healthy
     meilisearch:
       condition: service_healthy
+    # Nadie atiende peticiones ni trabajos hasta que la base tenga el esquema
+    # del código que arranca. Si la migración falla, ninguno arranca.
+    migrate:
+      condition: service_completed_successfully
 
 services:
+  # Una sola ejecución en cada `docker compose up`: aplica las migraciones
+  # pendientes y termina. Un único contenedor migra, así que no hay dos
+  # réplicas compitiendo por la misma migración. Sin nada pendiente termina
+  # igual en 0.
+  migrate:
+    <<: *app
+    command: ["php", "artisan", "migrate", "--force"]
+    # unless-stopped lo relanzaría al terminar, aunque termine bien.
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    # La imagen revisa /up en el puerto 8000; este servicio no sirve HTTP.
+    healthcheck:
+      disable: true
+
   app:
     <<: *app
     ports:
@@ -35,16 +65,38 @@ services:
   worker:
     <<: *app
     command: ["php", "artisan", "queue:work", "--tries=3", "--max-time=3600"]
-    # La imagen revisa /up en el puerto 8000; el worker no sirve HTTP.
-    # Worker y scheduler heredan de x-app la espera a db y meilisearch sanos.
+    # La revisión de la imagen (/up en el puerto 8000) no sirve aquí: el worker
+    # no atiende HTTP. Se revisa que el proceso principal del contenedor (PID 1)
+    # sea php corriendo queue:work. Hacen falta las dos condiciones: mientras
+    # la entrada prepara Laravel, el PID 1 es `sh entrypoint-prod php artisan
+    # queue:work…`, que ya trae queue:work en su línea de comandos pero se
+    # llama sh; pasa a llamarse php (/proc/1/comm) con el exec del final. Así
+    # `docker compose up --wait` y `docker compose ps` distinguen «arrancó el
+    # contenedor» de «el worker ya está tomando trabajos». Que el proceso siga
+    # vivo basta como señal porque queue:work no se queda colgado en silencio:
+    # termina solo si un trabajo pasa de su tiempo límite, si pierde la
+    # conexión con la base, si se pasa de memoria o al cumplir --max-time, y
+    # restart lo relanza. Se lee /proc porque la imagen no trae ps ni pgrep.
     healthcheck:
-      disable: true
+      test: ["CMD-SHELL", "grep -qx php /proc/1/comm && grep -qa queue:work /proc/1/cmdline"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      start_interval: 2s
+      retries: 3
 
   scheduler:
     <<: *app
     command: ["php", "artisan", "schedule:work"]
+    # Igual que el worker: el proceso principal tiene que ser php corriendo
+    # schedule:work, no la entrada.
     healthcheck:
-      disable: true
+      test: ["CMD-SHELL", "grep -qx php /proc/1/comm && grep -qa schedule:work /proc/1/cmdline"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      start_interval: 2s
+      retries: 3
 
   db:
     image: postgis/postgis:18-3.6
@@ -57,10 +109,12 @@ services:
     volumes:
       # PostgreSQL 18 guarda los datos en /var/lib/postgresql/18/docker.
       - db_data:/var/lib/postgresql
-      # Crea la base de pruebas veni_test (tras 10_postgis.sh de la imagen).
-      - ./docker/postgres/20-veni-test.sh:/docker-entrypoint-initdb.d/20-veni-test.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      # Por TCP (-h): al inicializar el volumen la imagen levanta un servidor
+      # provisional que solo escucha en el socket, instala PostGIS y lo apaga.
+      # Por el socket, pg_isready ya respondía ahí y migrate arrancaba justo
+      # cuando el servidor se reiniciaba.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
       timeout: 5s
       start_period: 30s
@@ -84,5 +138,6 @@ services:
       retries: 10
 
 volumes:
+  app_storage:
   db_data:
   meilisearch_data:

@@ -8,6 +8,8 @@
 - [x] i18n ES/EN configurado (backend y frontend)
 - [ ] PWA: manifest con íconos de `brand/png`, service worker, modo sin conexión básico
 - [x] Modelo de datos inicial, factories y seeders con datos ficticios
+- [x] Imagen de producción en GHCR con prueba de humo en CI, releases con release-please y despliegue preparado (desactivado hasta que exista el servidor)
+- [ ] Seguridad HTTP en producción: proxies de confianza, cookies seguras, cabeceras y CSP
 
 ## Fase 1 · MVP
 

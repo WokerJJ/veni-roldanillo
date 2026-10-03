@@ -13,10 +13,31 @@ updates:
       actions:
         patterns: ["*"]
 
+  # Imágenes de base del Dockerfile, fijadas por digest: cuando una etiqueta se
+  # vuelve a publicar (parches del sistema, de PHP o de Node), Dependabot
+  # propone el digest nuevo. Cambia lo que corre en el servidor: `fix`, para
+  # que salga en una release.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Bogota
+    labels: ["type:chore", "area:deps"]
+    commit-message:
+      prefix: "fix(deps)"
+    groups:
+      imagenes-base:
+        patterns: ["*"]
+
   # Menores y parches en un solo PR por ecosistema; las mayores llegan aparte
   # porque suelen pedir cambios de código, salvo las familias que solo
   # funcionan juntas. Dependabot asigna cada paquete al primer grupo que
   # coincide, por eso los grupos de mayores van antes.
+  # El prefijo decide si hay release (docs/despliegue.md, «Numeración»): una
+  # dependencia de producción cambia lo que corre en el servidor y va como
+  # `fix(deps)`, que abre una release de parche; un PR que solo trae
+  # dependencias de desarrollo va como `chore(deps)` y no abre ninguna.
   - package-ecosystem: composer
     directory: /
     schedule:
@@ -25,7 +46,8 @@ updates:
       timezone: America/Bogota
     labels: ["type:chore", "area:deps"]
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "fix(deps)"
+      prefix-development: "chore(deps)"
     groups:
       # Pest y sus plugins publican la mayor a la vez.
       pest-mayores:
@@ -42,7 +64,8 @@ updates:
       timezone: America/Bogota
     labels: ["type:chore", "area:deps"]
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "fix(deps)"
+      prefix-development: "chore(deps)"
     groups:
       # Vitest y el plugin de Vue dependen de la mayor de Vite.
       vite-mayores:

@@ -1,0 +1,126 @@
+name: Despliegue
+
+# PREPARADO Y DESACTIVADO. Hoy no hay servidor: el job no corre mientras no
+# exista la variable de repositorio DEPLOY_ENABLED con el valor `true`, y
+# ninguno de los secrets que nombra existe. Qué es cada uno, cómo se genera y
+# qué hay que preparar en el servidor antes de activarlo: docs/despliegue.md.
+#
+# Cuando esté activo se lanza a mano (Actions → Despliegue → Run workflow) con
+# una versión ya publicada en GHCR. No despliega solo al fusionar ni al crear
+# una release: poner una versión en producción es una decisión de una persona.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Versión publicada en GHCR que se despliega (X.Y.Z, sin la v)
+        required: true
+        type: string
+      confirm:
+        description: Escribí «desplegar» para confirmar
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Un despliegue a la vez, y uno empezado no se interrumpe.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Despliegue en producción
+    # El interruptor: DEPLOY_ENABLED no existe, así que el job se salta.
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Los secrets del servidor viven en este entorno (Settings → Environments),
+    # que solo acepta ramas protegidas y pide la aprobación de un revisor antes
+    # de cada corrida.
+    environment:
+      name: production
+      url: ${{ vars.DEPLOY_URL || 'https://veniroldanillo.co' }}
+    permissions:
+      contents: read
+      # Solo para comprobar que la versión existe en GHCR antes de tocar el servidor.
+      packages: read
+    env:
+      IMAGE: ghcr.io/wokerjj/veni-roldanillo
+      VERSION: ${{ inputs.version }}
+      DEPLOY_URL: ${{ vars.DEPLOY_URL || 'https://veniroldanillo.co' }}
+      # Carpeta del servidor con docker-compose.yml y el .env.
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/srv/veni-roldanillo' }}
+      DEPLOY_SSH_PORT: ${{ vars.DEPLOY_SSH_PORT || '22' }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+    steps:
+      - name: Confirmación y versión
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          [[ "$CONFIRM" == "desplegar" ]] || { echo "::error::Sin confirmación: escribí «desplegar» en el campo confirm."; exit 1; }
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo "::error::Versión inválida: '$VERSION' (se espera X.Y.Z)."; exit 1; }
+          [[ -n "$DEPLOY_HOST" && -n "$DEPLOY_USER" ]] || { echo "::error::Faltan los secrets DEPLOY_HOST o DEPLOY_USER (docs/despliegue.md)."; exit 1; }
+
+      # El docker-compose.yml y el script del tag que se despliega, no los de main.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: v${{ inputs.version }}
+
+      # Además de comprobar que existe, se anota su digest: al servidor se le
+      # pide esa imagen exacta (X.Y.Z@sha256:…), no «lo que hoy diga la
+      # etiqueta», que alguien con permiso de escritura podría volver a publicar.
+      - name: La versión existe en GHCR
+        id: image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          digest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{.Manifest.Digest}}') \
+            || { echo "::error::No existe $IMAGE:$VERSION: ¿terminó docker.yml para esa release?"; exit 1; }
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::Digest inesperado para $IMAGE:$VERSION: '$digest'"; exit 1; }
+          echo "ref=$IMAGE:$VERSION@$digest" >>"$GITHUB_OUTPUT"
+          echo "Se despliega \`$IMAGE:$VERSION@$digest\`" >>"$GITHUB_STEP_SUMMARY"
+
+      # La llave privada es solo de este despliegue (docs/despliegue.md) y el
+      # servidor se reconoce por su llave pública guardada en DEPLOY_KNOWN_HOSTS:
+      # no se acepta a ciegas la que presente quien responda en esa dirección.
+      - name: Llave SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]] || { echo "::error::Faltan los secrets DEPLOY_SSH_KEY o DEPLOY_KNOWN_HOSTS (docs/despliegue.md)."; exit 1; }
+          install -m 700 -d ~/.ssh
+          install -m 600 /dev/null ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_SSH_KEY" >~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" >~/.ssh/known_hosts
+
+      # Los dos archivos del tag, a la carpeta del servidor: el script queda ahí
+      # y es el mismo que se puede correr a mano (`bash deploy.sh <imagen>`).
+      - name: Copiar docker-compose.yml y deploy.sh al servidor
+        run: |
+          scp -P "$DEPLOY_SSH_PORT" docker-compose.yml scripts/deploy.sh "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+
+      # deploy.sh corre en el servidor, como archivo: `docker compose pull`,
+      # anota la imagen en el .env, `docker compose up -d` (el servicio migrate
+      # aplica las migraciones antes de que arranque la app) y espera /up. Si
+      # falla, el .env vuelve al anterior y los registros de los contenedores
+      # se quedan en el servidor: este registro es público.
+      - name: Desplegar (pull, up, migración y /up)
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
+        run: |
+          # shellcheck disable=SC2029 # La ruta y la imagen se resuelven aquí, a propósito.
+          ssh -p "$DEPLOY_SSH_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && bash deploy.sh '$IMAGE_REF'" </dev/null
+
+      - name: La app responde desde internet
+        run: |
+          curl --fail --silent --show-error --output /dev/null \
+            --retry 5 --retry-delay 5 --retry-all-errors "$DEPLOY_URL/up"
+
+      - name: Borrar la llave del runner
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519
