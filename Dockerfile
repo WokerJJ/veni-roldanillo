@@ -137,7 +137,10 @@ ENV APP_ENV=production \
     SESSION_SECURE_COOKIE=true
 
 # Composer no llega a esta etapa: solo lo copian dev y vendor.
-RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+# expose_php: sin la cabecera X-Powered-By, que anuncia la versión exacta de
+# PHP a quien busque una con fallas conocidas (php.ini-production la deja).
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && echo 'expose_php = Off' > "$PHP_INI_DIR/conf.d/zz-prod.ini"
 
 # De docker/ solo entra la entrada de producción, y en /usr/local/bin (de
 # root): el usuario de la aplicación la ejecuta pero no puede reescribirla.

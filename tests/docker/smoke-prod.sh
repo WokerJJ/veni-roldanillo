@@ -360,6 +360,10 @@ security_headers() {
         echo "    Permissions-Policy no deja la ubicación solo a este origen o no apaga la cámara"
         return 1
     }
+    [ -z "$(header_value X-Powered-By "$response")" ] || {
+        echo "    la respuesta anuncia la versión de PHP: X-Powered-By: $(header_value X-Powered-By "$response")"
+        return 1
+    }
 }
 
 # HSTS solo cuando la petición llegó por HTTPS a un proxy de confianza. Desde
@@ -539,7 +543,7 @@ check "public/storage enlazado" in_app 'test -L public/storage'
 check "entorno production aunque el .env diga local" in_app 'php artisan env | grep -q production'
 check "los registros salen por stderr aunque el .env diga otro canal" in_app 'php artisan config:show logging.default | grep -q stderr'
 check "$requests peticiones alternando en y es" alternating_requests
-check "cabeceras de seguridad en la página" security_headers
+check "cabeceras de seguridad en la página, sin la versión de PHP" security_headers
 check "HSTS solo detrás del proxy de confianza" hsts_only_behind_trusted_proxy
 check "URL con https detrás del proxy de confianza; desde otra IP, no" urls_follow_trusted_proxy
 check "cookies Secure y SameSite=Lax aunque el .env diga otra cosa" secure_cookies
