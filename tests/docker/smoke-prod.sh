@@ -470,6 +470,44 @@ map_preconnect() {
     }
 }
 
+# Solo las cabeceras de un archivo que sirve Caddy sin pasar por Laravel.
+static_headers() {
+    curl --silent --show-error --max-time 10 --output /dev/null --dump-header - "$base$1" | tr -d '\r'
+}
+
+# Caché de lo que sirve Caddy (config/octane.php): un año e immutable para los
+# assets con hash, una semana y revalidación para las fuentes, y nosniff en
+# los dos. Un asset que no existe no se guarda.
+static_cache() {
+    local asset headers expected
+    asset=$(in_app 'ls public/build/assets/*.js | head -n 1') || return 1
+    headers=$(static_headers "/${asset#public/}")
+    expected='public, max-age=31536000, immutable'
+    [ "$(header_value Cache-Control "$headers")" = "$expected" ] || {
+        echo "    /${asset#public/}: Cache-Control no es «$expected»"
+        return 1
+    }
+    headers_of "$headers" | grep -qix 'X-Content-Type-Options: nosniff' || {
+        echo "    /${asset#public/}: sin nosniff"
+        return 1
+    }
+    headers=$(static_headers /fonts/figtree-latin-400-700.woff2)
+    expected='public, max-age=604800, must-revalidate'
+    [ "$(header_value Cache-Control "$headers")" = "$expected" ] || {
+        echo "    /fonts: Cache-Control no es «$expected»"
+        return 1
+    }
+    [ -n "$(header_value ETag "$headers")" ] || {
+        echo "    /fonts: sin ETag para revalidar"
+        return 1
+    }
+    headers=$(static_headers /build/assets/no-existe.js)
+    if header_value Cache-Control "$headers" | grep -q immutable; then
+        echo "    un asset que no existe salió con caché de un año"
+        return 1
+    fi
+}
+
 # --- Ejecución -----------------------------------------------------------------
 
 echo "Imagen $image, proyecto $project, $base"
@@ -508,6 +546,7 @@ check "cookies Secure y SameSite=Lax aunque el .env diga otra cosa" secure_cooki
 check "CSP activa con nonce y el host del mapa, sin nada en línea" csp_with_nonce
 check "un nonce nuevo en cada petición bajo Octane" nonce_changes
 check "preconnect al mapa de la imagen aunque el .env diga otro" map_preconnect
+check "caché de assets y fuentes servidos por Caddy" static_cache
 check "un archivo de storage/app/public sobrevive a recrear app y worker" uploads_survive_recreate
 check "worker sano" wait_healthy worker
 check "scheduler sano" wait_healthy scheduler
