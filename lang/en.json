@@ -35,5 +35,6 @@
     "offline.retry": "Try again",
     "pwa.update_available": "There is a new version of Vení.",
     "pwa.update": "Update",
-    "pwa.dismiss": "Not now"
+    "pwa.dismiss": "Not now",
+    "locale.offline": "You are offline, so we cannot change the language. Try again when the signal is back."
 }

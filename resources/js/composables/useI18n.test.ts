@@ -184,8 +184,39 @@ describe('useI18n · cambio de idioma e historial', () => {
         expect(fake.router.put).toHaveBeenCalledExactlyOnceWith(
             '/locale',
             { locale: 'en' },
-            { preserveScroll: true, preserveState: true, replace: true },
+            expect.objectContaining({ preserveScroll: true, preserveState: true, replace: true }),
         );
+    });
+
+    it('sin red no pide nada y avisa a quien eligió el idioma', async () => {
+        vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+        const { fake, useI18n } = await load();
+        const onOffline = vi.fn();
+
+        useI18n().setLocale('en', { onOffline });
+
+        expect(fake.router.put).not.toHaveBeenCalled();
+        expect(onOffline).toHaveBeenCalledOnce();
+    });
+
+    it('si la petición no llega, avisa y corta el error de Inertia', async () => {
+        const { fake, useI18n } = await load();
+        const onOffline = vi.fn();
+
+        useI18n().setLocale('en', { onOffline });
+        const options = fake.router.put.mock.lastCall?.[2] as { onNetworkError: (error: Error) => boolean | undefined };
+
+        expect(options.onNetworkError(new Error('Network Error'))).toBe(false);
+        expect(onOffline).toHaveBeenCalledOnce();
+    });
+
+    it('sin quien avise, el error de red sigue su curso en Inertia', async () => {
+        const { fake, useI18n } = await load();
+
+        useI18n().setLocale('en');
+        const options = fake.router.put.mock.lastCall?.[2] as { onNetworkError: (error: Error) => boolean | undefined };
+
+        expect(options.onNetworkError(new Error('Network Error'))).toBeUndefined();
     });
 
     it('al volver a una página guardada en otro idioma pide recargarla', async () => {

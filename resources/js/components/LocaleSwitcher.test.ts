@@ -104,3 +104,91 @@ describe('LocaleSwitcher', () => {
         expect(document.documentElement.lang).toBe('es');
     });
 });
+
+/*
+| Cambiar de idioma exige red (ADR 0010): los textos del otro idioma vienen
+| del servidor. Sin conexión el selector avisa en vez de fallar en silencio.
+*/
+describe('LocaleSwitcher · sin conexión', () => {
+    function goOffline(): void {
+        vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    }
+
+    it('antes del aviso, la región de estado está vacía y no se ve', async () => {
+        const { wrapper } = await mountSwitcher();
+        const status = wrapper.get('[role="status"]');
+
+        expect(status.text()).toBe('');
+        expect(status.classes()).toContain('sr-only');
+    });
+
+    it('sin red no pide nada y avisa en la región de estado', async () => {
+        goOffline();
+        const { fake, wrapper, button } = await mountSwitcher();
+
+        await button('en').trigger('click');
+
+        const status = wrapper.get('[role="status"]');
+        expect(fake.router.put).not.toHaveBeenCalled();
+        expect(status.text()).toBe('Sin conexión no podemos cambiar el idioma. Probá de nuevo cuando vuelva la señal.');
+        expect(status.classes()).not.toContain('sr-only');
+        expect(button('es').attributes('aria-pressed')).toBe('true');
+    });
+
+    it('avisa también si la petición no llega aunque el teléfono diga que hay red', async () => {
+        const { fake, wrapper, button } = await mountSwitcher();
+        let handled: boolean | undefined;
+        fake.router.put.mockImplementation((_url: string, _data: unknown, options: { onNetworkError: (error: Error) => boolean | undefined }) => {
+            handled = options.onNetworkError(new Error('Network Error'));
+        });
+
+        await button('en').trigger('click');
+
+        expect(wrapper.get('[role="status"]').text()).toContain('Sin conexión');
+        // false: Inertia no sigue con su evento global ni rechaza la visita.
+        expect(handled).toBe(false);
+    });
+
+    it('el aviso sale en el idioma de la página', async () => {
+        goOffline();
+        const { fake, wrapper, button } = await mountSwitcher();
+        fake.page.props.locale = 'en';
+        fake.page.props.translations = { ...fake.messages.en };
+        await nextTick();
+
+        await button('es').trigger('click');
+
+        expect(wrapper.get('[role="status"]').text()).toBe('You are offline, so we cannot change the language. Try again when the signal is back.');
+    });
+
+    it('se va cuando vuelve la señal', async () => {
+        goOffline();
+        const { wrapper, button } = await mountSwitcher();
+        await button('en').trigger('click');
+
+        window.dispatchEvent(new Event('online'));
+        await nextTick();
+
+        expect(wrapper.get('[role="status"]').text()).toBe('');
+    });
+
+    it('se va solo a los 10 s', async () => {
+        vi.useFakeTimers();
+
+        try {
+            goOffline();
+            const { wrapper, button } = await mountSwitcher();
+            await button('en').trigger('click');
+
+            vi.advanceTimersByTime(9_999);
+            await nextTick();
+            expect(wrapper.get('[role="status"]').text()).not.toBe('');
+
+            vi.advanceTimersByTime(1);
+            await nextTick();
+            expect(wrapper.get('[role="status"]').text()).toBe('');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});

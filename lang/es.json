@@ -35,5 +35,6 @@
     "offline.retry": "Reintentar",
     "pwa.update_available": "Hay una versión nueva de Vení.",
     "pwa.update": "Actualizar",
-    "pwa.dismiss": "Ahora no"
+    "pwa.dismiss": "Ahora no",
+    "locale.offline": "Sin conexión no podemos cambiar el idioma. Probá de nuevo cuando vuelva la señal."
 }
