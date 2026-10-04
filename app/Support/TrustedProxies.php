@@ -5,9 +5,10 @@ namespace App\Support;
 use InvalidArgumentException;
 
 /**
- * Proxies de los que la aplicación acepta las cabeceras `X-Forwarded-*`
- * (ADR 0014): la IP del cliente, el esquema (https), el host y el puerto con
- * que llegó la petición al proxy que termina TLS.
+ * Proxies de los que la aplicación acepta `X-Forwarded-For` y
+ * `X-Forwarded-Proto` (ADR 0014): la IP del cliente y el esquema (https) con
+ * que llegó la petición al proxy que termina TLS. El host no: sale de `Host`
+ * (bootstrap/app.php y App\Support\TrustedHosts).
  *
  * Sale de `TRUSTED_PROXIES`, una lista de IP o rangos CIDR separados por
  * comas. Sin valor no se confía en nadie: las cabeceras se ignoran y la IP es
