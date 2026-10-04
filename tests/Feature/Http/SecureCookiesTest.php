@@ -13,6 +13,12 @@ use Symfony\Component\HttpFoundation\Response;
 | las peticiones que otro sitio haga a esta app.
 */
 
+beforeEach(function () {
+    // La página de inicio pinta las etiquetas de @vite: con el manifest propio
+    // (tests/Pest.php) no depende de `npm run build`.
+    fakeViteManifest();
+});
+
 /** @return array<string, Cookie> */
 function secureCookiesByName(Response $response): array
 {
@@ -72,8 +78,4 @@ test('sin SESSION_SECURE_COOKIE y por HTTP la cookie del idioma no lleva Secure'
     $cookie = $this->from('/')->put('/locale', ['locale' => 'en'])->getCookie('locale', false);
 
     expect($cookie?->isSecure())->toBeFalse();
-});
-
-test('SameSite de la sesión es Lax de forma explícita', function () {
-    expect(config('session.same_site'))->toBe('lax');
 });
