@@ -25,8 +25,27 @@ function readStoredTheme(): Theme | null {
     }
 }
 
+/**
+ * La barra del sistema (los `<meta name="theme-color">` de app.blade.php)
+ * sigue al tema de la app. La vista raíz la pinta según el sistema, con
+ * `media`; si en la app rige otro tema, las dos toman el fondo de la cabecera
+ * (--canvas, resources/css/app.css) de ese tema.
+ */
+function applyThemeColor(): void {
+    const color = getComputedStyle(document.documentElement).getPropertyValue('--canvas').trim();
+
+    if (color === '') {
+        return;
+    }
+
+    for (const meta of document.head.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+        meta.content = color;
+    }
+}
+
 function applyTheme(value: Theme): void {
     document.documentElement.dataset.theme = value;
+    applyThemeColor();
 }
 
 // Estado compartido entre componentes. No toca window ni document al importar:
@@ -46,6 +65,7 @@ function initialize(): void {
     const current = document.documentElement.dataset.theme;
     theme.value = isTheme(current) ? current : 'light';
     hasManualChoice = readStoredTheme() !== null;
+    applyThemeColor();
 }
 
 function setTheme(value: Theme): void {

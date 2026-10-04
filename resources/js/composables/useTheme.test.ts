@@ -222,3 +222,73 @@ describe('useTheme', () => {
         expect(api.theme.value).toBe('light');
     });
 });
+
+/*
+| La barra del sistema: app.blade.php la pinta según el sistema (media) y el
+| tema de la app la ajusta. Los colores, como en resources/css/app.css: el
+| fondo de la cabecera (--canvas) de cada tema.
+*/
+describe('color de la barra del sistema', () => {
+    const LIGHT = '#FFFFFF';
+    const DARK = '#2A1638';
+    let fixtures: HTMLElement[] = [];
+
+    function themeColors(): string[] {
+        return [...document.head.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')].map((meta) => meta.content);
+    }
+
+    beforeEach(() => {
+        const style = document.createElement('style');
+        style.textContent = `:root { --canvas: ${LIGHT}; } :root[data-theme='dark'] { --canvas: ${DARK}; }`;
+
+        const light = document.createElement('meta');
+        light.name = 'theme-color';
+        light.content = LIGHT;
+        light.media = '(prefers-color-scheme: light)';
+
+        const dark = document.createElement('meta');
+        dark.name = 'theme-color';
+        dark.content = DARK;
+        dark.media = '(prefers-color-scheme: dark)';
+
+        fixtures = [style, light, dark];
+        document.head.append(...fixtures);
+    });
+
+    afterEach(() => {
+        fixtures.forEach((element) => {
+            element.remove();
+        });
+    });
+
+    it('al alternar, las dos toman el fondo del tema elegido', async () => {
+        fakeSystemTheme(false);
+        const { api } = await mountTheme();
+
+        api.toggleTheme();
+        expect(themeColors()).toEqual([DARK, DARK]);
+
+        api.toggleTheme();
+        expect(themeColors()).toEqual([LIGHT, LIGHT]);
+    });
+
+    it('al arrancar sigue al tema que aplicó el script de la vista raíz', async () => {
+        // Sistema claro y oscuro guardado en el dispositivo.
+        fakeSystemTheme(false);
+        window.localStorage.setItem('veni:theme', 'dark');
+        document.documentElement.dataset.theme = 'dark';
+
+        await mountTheme();
+
+        expect(themeColors()).toEqual([DARK, DARK]);
+    });
+
+    it('sin elección propia sigue al sistema cuando cambia', async () => {
+        const system = fakeSystemTheme(false);
+        await mountTheme();
+
+        system.setDark(true);
+
+        expect(themeColors()).toEqual([DARK, DARK]);
+    });
+});
