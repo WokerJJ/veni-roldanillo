@@ -106,9 +106,12 @@ RUN npm ci
 
 COPY vite.config.ts tsconfig.json ./
 COPY resources ./resources
-# Tokens y logos de la marca que importan el CSS y los componentes.
+# Tokens y logos de la marca que importan el CSS y los componentes, y los
+# íconos de la app instalable que la compilación copia a public/build/icons
+# (.dockerignore solo deja pasar esos).
 COPY brand/tokens.css ./brand/tokens.css
 COPY brand/logo ./brand/logo
+COPY brand/png ./brand/png
 
 # Mapa de veni-mapa (arriba, al principio del archivo). Vite escribe estas URL
 # en el JavaScript al compilar, y el .env no entra en la imagen: llegan como

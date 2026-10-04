@@ -6,6 +6,18 @@
         <meta name="description" content="{{ __('meta.description') }}">
 
         {{--
+            App instalable (#5): el manifest y el color de la barra del sistema,
+            el del fondo de la cabecera en claro y en oscuro. Si se elige otro
+            tema en la app, useTheme ajusta los dos. iOS no lee los íconos del
+            manifest: el suyo va aparte. Enlaces relativos, como los de las
+            páginas de error.
+        --}}
+        <link rel="manifest" href="/manifest.webmanifest">
+        <meta name="theme-color" content="{{ \App\Support\WebApp::themeColor('light') }}" media="(prefers-color-scheme: light)">
+        <meta name="theme-color" content="{{ \App\Support\WebApp::themeColor('dark') }}" media="(prefers-color-scheme: dark)">
+        <link rel="apple-touch-icon" href="{{ \App\Support\WebApp::iconUrl(\App\Support\WebApp::APPLE_TOUCH_ICON) }}">
+
+        {{--
             Nonce de la política de seguridad de contenido de esta respuesta
             (SetContentSecurityPolicy). De aquí lo leen Vite, para los CSS y
             módulos que carga después, e Inertia (resources/js/csp.ts). Va en

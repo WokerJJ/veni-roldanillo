@@ -97,3 +97,26 @@ test('no carga ni precarga el mapa: MapLibre solo baja en las pantallas que lo p
         ->assertSee('build/assets/Home-prueba.js', false)
         ->assertDontSee('engine-prueba', false);
 });
+
+test('enlaza el manifest de la app instalable', function () {
+    $this->get('/')
+        ->assertOk()
+        ->assertSee('<link rel="manifest" href="/manifest.webmanifest">', false);
+});
+
+test('pinta la barra del sistema con el fondo de la cabecera en claro y en oscuro', function () {
+    $tokens = json_decode(File::get(base_path('brand/tokens.json')), true, flags: JSON_THROW_ON_ERROR);
+    $light = $tokens['color']['blanco']['$value'];
+    $dark = $tokens['color']['ciruela']['$value'];
+
+    $this->get('/')
+        ->assertOk()
+        ->assertSee('<meta name="theme-color" content="'.$light.'" media="(prefers-color-scheme: light)">', false)
+        ->assertSee('<meta name="theme-color" content="'.$dark.'" media="(prefers-color-scheme: dark)">', false);
+});
+
+test('da a iOS el ícono de la pantalla de inicio', function () {
+    $this->get('/')
+        ->assertOk()
+        ->assertSee('<link rel="apple-touch-icon" href="/build/icons/favicon-180.png">', false);
+});

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
 import tailwindcss from '@tailwindcss/vite';
@@ -91,6 +92,31 @@ function checkMapStyleUrl(): Plugin {
     };
 }
 
+/**
+ * Íconos de la app instalable (#5), tal como los exporta la marca en
+ * brand/png: los del manifest (App\Support\WebApp::ICONS) y el de iOS
+ * (WebApp::APPLE_TOUCH_ICON). Se copian al compilar, con el mismo nombre, a
+ * public/build/icons: así no hay una segunda copia en git que se desactualice.
+ * Sin hash en el nombre, como espera quien ya instaló la app.
+ */
+const BRAND_ICONS = ['veni-icono-192.png', 'veni-icono-512.png', 'veni-icono-maskable-512.png', 'favicon-180.png'];
+
+function copyBrandIcons(): Plugin {
+    return {
+        name: 'veni:copy-brand-icons',
+        apply: 'build',
+        generateBundle() {
+            for (const icon of BRAND_ICONS) {
+                this.emitFile({
+                    type: 'asset',
+                    fileName: `icons/${icon}`,
+                    source: readFileSync(fileURLToPath(new URL(`./brand/png/${icon}`, import.meta.url))),
+                });
+            }
+        },
+    };
+}
+
 export default defineConfig({
     plugins: [
         laravel({
@@ -101,6 +127,7 @@ export default defineConfig({
         tailwindcss(),
         shareMapWorkerCode(),
         checkMapStyleUrl(),
+        copyBrandIcons(),
     ],
     resolve: {
         alias: {
