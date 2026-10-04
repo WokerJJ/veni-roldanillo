@@ -26,6 +26,8 @@ timeout=${SMOKE_TIMEOUT:-180}
 # Segundos que worker y scheduler tienen que seguir arriba después de sanos.
 stable_wait=15
 base="http://127.0.0.1:$port"
+# Host público de la prueba (APP_URL), el que el proxy pasa en Host.
+site=veniroldanillo.test
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
@@ -49,6 +51,8 @@ fi
 
 tmp=$(mktemp -d)
 env_file="$tmp/env"
+# El nonce de la CSP de cada página que pide la prueba, uno por línea.
+nonces="$tmp/nonces"
 # Docker en Windows necesita la ruta de Windows (C:/…), no la de Git Bash.
 if command -v cygpath > /dev/null 2>&1; then
     env_file=$(cygpath -m "$env_file")
@@ -79,6 +83,9 @@ trap cleanup EXIT
 
 # El .env de ejemplo con una clave de aplicación recién generada: de paso
 # comprueba que .env.example sirve para arrancar la imagen. Además:
+# - APP_URL con el host público, como en el servidor: la app solo atiende ese
+#   host y los del propio equipo (127.0.0.1, por donde entran estas
+#   peticiones y la revisión de salud de la imagen).
 # - TRUSTED_PROXIES=127.0.0.1: las peticiones que se hacen desde dentro del
 #   contenedor de app hacen de proxy de confianza (ADR 0014); las que llegan
 #   desde este equipo, por el puerto publicado, no lo son.
@@ -86,7 +93,7 @@ trap cleanup EXIT
 #   CSP tienen que nombrar el mapa con que se compiló el JavaScript, y las
 #   cookies salir con Secure aunque el .env diga otra cosa.
 sed -e "s|^APP_KEY=.*|APP_KEY=base64:$(openssl rand -base64 32)|" \
-    -e "s|^APP_URL=.*|APP_URL=$base|" \
+    -e "s|^APP_URL=.*|APP_URL=https://$site|" \
     -e "s|^TRUSTED_PROXIES=.*|TRUSTED_PROXIES=127.0.0.1|" \
     -e "s|^VITE_MAP_STYLE_URL=.*|VITE_MAP_STYLE_URL=https://otro-mapa.example.test/veni-{theme}-{locale}.json|" \
     .env.example > "$tmp/env"
@@ -181,6 +188,7 @@ responds_in() {
         echo "    $path: la petición falló"
         return 1
     }
+    remember_nonce "$response"
     status=$(sed -n '1s/^HTTP[^ ]* \([0-9]*\).*/\1/p' <<< "$response")
     [ "$status" = 200 ] || {
         echo "    $path respondió ${status:-sin estado}"
@@ -322,19 +330,32 @@ image_env() {
 # Cabeceras y cuerpo de una petición a $1 desde este equipo, sin \r. Lo que
 # sigue a $1 son opciones de curl (cabeceras de más).
 page() {
-    local path=$1
+    local path=$1 response
     shift
-    curl --silent --show-error --include --max-time 10 "$@" "$base$path" | tr -d '\r'
+    response=$(curl --silent --show-error --include --max-time 10 "$@" "$base$path" | tr -d '\r') || return 1
+    remember_nonce "$response"
+    printf '%s\n' "$response"
 }
 
 # Lo mismo, pero desde dentro del contenedor de app: llega desde 127.0.0.1,
 # el proxy de confianza de esta prueba. Las cabeceras son las de un proxy que
-# recibió la petición por HTTPS para veniroldanillo.test.
+# recibió la petición por HTTPS para el host público: lo pasa en Host, tal
+# cual (otro con proxy_host=…), y el esquema y la IP del cliente en
+# X-Forwarded-*. Lo que sigue a $1 son opciones de curl (cabeceras de más).
 page_via_trusted_proxy() {
-    compose exec -T app curl --silent --show-error --include --max-time 10 \
-        --header 'X-Forwarded-Proto: https' --header 'X-Forwarded-Host: veniroldanillo.test' \
-        --header 'X-Forwarded-Port: 443' --header 'X-Forwarded-For: 203.0.113.7' \
-        "http://127.0.0.1:8000$1" | tr -d '\r'
+    local path=$1
+    shift
+    local response
+    response=$(compose exec -T app curl --silent --show-error --include --max-time 10 \
+        --header "Host: ${proxy_host:-$site}" --header 'X-Forwarded-Proto: https' \
+        --header 'X-Forwarded-For: 203.0.113.7' "$@" \
+        "http://127.0.0.1:8000$path" | tr -d '\r') || return 1
+    remember_nonce "$response"
+    printf '%s\n' "$response"
+}
+
+status_of() {
+    sed -n '1s/^HTTP[^ ]* \([0-9]*\).*/\1/p' <<< "$1"
 }
 
 headers_of() {
@@ -382,12 +403,34 @@ hsts_only_behind_trusted_proxy() {
 # Las URL que genera la app (aquí, las de los assets de @vite) siguen al proxy
 # de confianza y, a la petición siguiente del mismo worker, ya no.
 urls_follow_trusted_proxy() {
-    grep -q 'src="https://veniroldanillo.test/build/assets/' <<< "$(page_via_trusted_proxy /)" || {
-        echo "    detrás del proxy de confianza las URL no salen con https://veniroldanillo.test"
+    grep -q "src=\"https://$site/build/assets/" <<< "$(page_via_trusted_proxy /)" || {
+        echo "    detrás del proxy de confianza las URL no salen con https://$site"
         return 1
     }
-    grep -q "src=\"$base/build/assets/" <<< "$(page / --header 'X-Forwarded-Proto: https' --header 'X-Forwarded-Host: veniroldanillo.test')" || {
+    grep -q "src=\"$base/build/assets/" <<< "$(page / --header 'X-Forwarded-Proto: https' --header 'X-Forwarded-For: 203.0.113.7')" || {
         echo "    desde una IP que no es de confianza las URL siguieron sus X-Forwarded-*"
+        return 1
+    }
+}
+
+# El host lo da Host, que el proxy pasa tal cual: X-Forwarded-Host y -Port no
+# se aceptan ni del proxy de confianza, y un Host que no es el de APP_URL ni
+# el del propio equipo recibe 400.
+host_only_from_app_url() {
+    local response
+    response=$(page_via_trusted_proxy / --header 'X-Forwarded-Host: otro-sitio.example.test' --header 'X-Forwarded-Port: 8443')
+    grep -q "src=\"https://$site/build/assets/" <<< "$response" || {
+        echo "    con X-Forwarded-Host del proxy de confianza las URL no salen con https://$site"
+        return 1
+    }
+    response=$(page / --header 'Host: otro-sitio.example.test') || return 1
+    [ "$(status_of "$response")" = 400 ] || {
+        echo "    un Host que no es el de APP_URL respondió $(status_of "$response"), no 400"
+        return 1
+    }
+    response=$(proxy_host=otro-sitio.example.test page_via_trusted_proxy /)
+    [ "$(status_of "$response")" = 400 ] || {
+        echo "    detrás del proxy, un Host que no es el de APP_URL respondió $(status_of "$response"), no 400"
         return 1
     }
 }
@@ -413,6 +456,15 @@ secure_cookies() {
 
 nonce_of() {
     sed -n "s/.*'nonce-\([A-Za-z0-9]*\)'.*/\1/p" <<< "$1"
+}
+
+# Anota el nonce de la CSP de la respuesta $1, si trae.
+remember_nonce() {
+    local nonce
+    nonce=$(nonce_of "$(header_value Content-Security-Policy "$1")")
+    if [ -n "$nonce" ]; then
+        echo "$nonce" >> "$nonces"
+    fi
 }
 
 # La política activa (no la de solo informe), sin nada en línea sin nonce, con
@@ -443,18 +495,21 @@ csp_with_nonce() {
     fi
 }
 
-# Bajo Octane la app queda arrancada entre peticiones: el nonce no puede
-# repetirse de una a la siguiente.
-nonce_changes() {
-    local i nonce previous=''
-    for i in 1 2 3 4; do
-        nonce=$(nonce_of "$(header_value Content-Security-Policy "$(page /)")")
-        if [ -z "$nonce" ] || [ "$nonce" = "$previous" ]; then
-            echo "    nonce vacío o repetido entre peticiones: «$nonce»"
-            return 1
-        fi
-        previous=$nonce
-    done
+# Bajo Octane la app queda arrancada entre peticiones: ningún nonce se repite
+# en todas las páginas que pidió la prueba, de cualquier worker y en
+# cualquier orden (no solo de una petición a la siguiente).
+nonces_never_repeat() {
+    local count repeated
+    count=$(grep -c . "$nonces" 2> /dev/null || true)
+    [ "${count:-0}" -ge "$requests" ] || {
+        echo "    solo se juntaron ${count:-0} nonces (se esperaban al menos $requests)"
+        return 1
+    }
+    repeated=$(sort "$nonces" | uniq -d)
+    [ -z "$repeated" ] || {
+        echo "    nonces repetidos en $count peticiones: $(tr '\n' ' ' <<< "$repeated")"
+        return 1
+    }
 }
 
 # El preconnect nombra el host del mapa que trae la imagen (no el del .env), y
@@ -512,6 +567,55 @@ static_cache() {
     fi
 }
 
+# Lo que suben los dueños (public/storage) lo sirve Caddy con su propia
+# política (config/octane.php): aunque fuera HTML o SVG, se abre en un sandbox
+# sin scripts ni nada de afuera. Con el archivo que deja
+# uploads_survive_recreate.
+storage_sandboxed() {
+    local headers expected
+    headers=$(curl --silent --show-error --head --max-time 10 "$base/storage/humo.txt" | tr -d '\r') || return 1
+    expected="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
+    [ "$(header_value Content-Security-Policy "$headers")" = "$expected" ] || {
+        echo "    /storage/humo.txt: Content-Security-Policy no es «$expected»: $(header_value Content-Security-Policy "$headers")"
+        return 1
+    }
+    headers_of "$headers" | grep -qix 'X-Content-Type-Options: nosniff' || {
+        echo "    /storage/humo.txt: sin nosniff"
+        return 1
+    }
+}
+
+# Las páginas de error (resources/views/errors): en el idioma de la petición
+# aunque SetLocale no corra en el 404, con los tokens de la marca (la imagen
+# trae brand/tokens.css) y la política, con su nonce en el estilo.
+error_pages() {
+    local locale response title nonce
+    for locale in es en en es; do
+        response=$(page /no-existe --header "Accept-Language: $locale") || return 1
+        [ "$(status_of "$response")" = 404 ] || {
+            echo "    /no-existe respondió $(status_of "$response"), no 404"
+            return 1
+        }
+        title=$(sed -n 's/^ *"errors\.not_found\.title": "\(.*\)",\{0,1\}$/\1/p' "lang/$locale.json")
+        # Blade escapa el apóstrofo (en inglés, couldn't).
+        title=${title//\'/"&#039;"}
+        if ! grep -q "<html lang=\"$locale\"" <<< "$response" \
+            || ! grep -qF "<title>$title</title>" <<< "$response"; then
+            echo "    el 404 no salió en $locale («$title»)"
+            return 1
+        fi
+        grep -q -- '--veni-ciruela:' <<< "$response" || {
+            echo "    el 404 no trae los colores de brand/tokens.css"
+            return 1
+        }
+        nonce=$(nonce_of "$(header_value Content-Security-Policy "$response")")
+        grep -qF "<style nonce=\"$nonce\">" <<< "$response" || {
+            echo "    el estilo del 404 no lleva el nonce de la cabecera («$nonce»)"
+            return 1
+        }
+    done
+}
+
 # --- Ejecución -----------------------------------------------------------------
 
 echo "Imagen $image, proyecto $project, $base"
@@ -546,12 +650,16 @@ check "$requests peticiones alternando en y es" alternating_requests
 check "cabeceras de seguridad en la página, sin la versión de PHP" security_headers
 check "HSTS solo detrás del proxy de confianza" hsts_only_behind_trusted_proxy
 check "URL con https detrás del proxy de confianza; desde otra IP, no" urls_follow_trusted_proxy
+check "el host sale de Host y solo el de APP_URL; sin X-Forwarded-Host ni -Port" host_only_from_app_url
+check "app sana: la revisión de salud de la imagen pide /up a 127.0.0.1" wait_healthy app
 check "cookies Secure y SameSite=Lax aunque el .env diga otra cosa" secure_cookies
 check "CSP activa con nonce y el host del mapa, sin nada en línea" csp_with_nonce
-check "un nonce nuevo en cada petición bajo Octane" nonce_changes
 check "preconnect al mapa de la imagen aunque el .env diga otro" map_preconnect
 check "caché de assets y fuentes servidos por Caddy" static_cache
+check "páginas de error en es y en, con la marca y la política" error_pages
 check "un archivo de storage/app/public sobrevive a recrear app y worker" uploads_survive_recreate
+check "storage se sirve en un sandbox, con nosniff" storage_sandboxed
+check "ningún nonce se repite en las páginas de toda la prueba (Octane)" nonces_never_repeat
 check "worker sano" wait_healthy worker
 check "scheduler sano" wait_healthy scheduler
 healthy_at=$SECONDS
