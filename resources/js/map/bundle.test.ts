@@ -269,6 +269,25 @@ describe('worker de MapLibre', () => {
 });
 
 /*
+| La página sin conexión (#5) carga resources/js/offline.ts como script
+| clásico en <head>, para elegir idioma y tema antes de pintar: un import o un
+| export ahí sería un error de sintaxis y la página saldría sin idioma.
+*/
+describe('página sin conexión', () => {
+    it('su script es un solo archivo sin import ni export', () => {
+        const offline = chunkOf('/resources/js/offline.ts');
+
+        expect(offline.imports).toEqual([]);
+        expect(offline.dynamicImports).toEqual([]);
+        expect(offline.code).not.toMatch(/^\s*(?:import|export)\b|\bimport\s*\(/m);
+    });
+
+    it('pesa menos de 1 kB comprimido', () => {
+        expect(gzipKb([chunkOf('/resources/js/offline.ts')])).toBeLessThan(1);
+    });
+});
+
+/*
 | Regla 8 de producto: la app tiene que servir con datos móviles y mala señal.
 | El límite de Vite (chunkSizeWarningLimit) solo avisa, y por archivo: estos
 | presupuestos fallan, y miden lo que de verdad viaja (gzip). Si una prueba de

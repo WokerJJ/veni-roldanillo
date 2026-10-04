@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
@@ -125,14 +126,40 @@ function copyBrandIcons(): Plugin {
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 
 /**
+ * Página sin conexión (resources/views/offline.blade.php, la sirve Laravel) y
+ * lo que ella carga del build: un script clásico y su hoja de estilos.
+ */
+const OFFLINE_URL = '/offline';
+const OFFLINE_ENTRIES = ['resources/js/offline.ts', 'resources/css/offline.css'];
+
+/**
  * El shell que el service worker guarda al instalarse: la entrada y la página
  * de inicio con sus imports estáticos, CSS y logos (lo que vigila el
- * presupuesto del arranque en resources/js/map/bundle.test.ts). El mapa, los
- * íconos y las demás páginas se guardan la primera vez que se piden.
+ * presupuesto del arranque en resources/js/map/bundle.test.ts), más la página
+ * sin conexión. El mapa, los íconos y las demás páginas se guardan la primera
+ * vez que se piden.
  */
-const SHELL_ENTRIES = ['resources/js/app.ts', 'resources/js/pages/Home.vue'];
+const SHELL_ENTRIES = ['resources/js/app.ts', 'resources/js/pages/Home.vue', ...OFFLINE_ENTRIES];
 
 const DAY = 60 * 60 * 24;
+
+/**
+ * Versión de la página sin conexión en el precache. No es un archivo del
+ * build: la arma Laravel con la vista, los textos de lang/ y los archivos del
+ * shell que nombra (el script, el estilo y los logos, con su hash). Si cambia
+ * algo de eso, cambia la versión y el service worker la vuelve a pedir.
+ */
+function offlineRevision(shellUrls: readonly string[]): string {
+    const hash = createHash('sha256');
+
+    for (const file of ['resources/views/offline.blade.php', 'lang/es.json', 'lang/en.json']) {
+        hash.update(readFileSync(`${ROOT}${file}`));
+    }
+
+    hash.update(shellUrls.join('\n'));
+
+    return hash.digest('hex').slice(0, 16);
+}
 
 /**
  * Service worker de la app instalable (#5), con generateSW: Workbox lo arma
@@ -175,18 +202,30 @@ function serviceWorker(env: Record<string, string>): PluginOption {
                 (entries) => {
                     const manifest = JSON.parse(readFileSync(`${ROOT}public/build/manifest.json`, 'utf8')) as ViteManifest;
                     const shell = staticFiles(manifest, SHELL_ENTRIES).map((file) => `/build/${file}`);
+                    const offline = { url: OFFLINE_URL, revision: offlineRevision(shell), size: 0 };
 
-                    return { manifest: keepShell(entries, shell), warnings: [] };
+                    return { manifest: [...keepShell(entries, shell), offline], warnings: [] };
                 },
             ],
-            // Sin respaldo de una página guardada: el HTML depende del idioma y de la sesión.
+            // Las páginas no se guardan: el HTML depende del idioma (cookie) y
+            // de la sesión. Ni el respaldo de Workbox para una SPA, que serviría
+            // siempre la misma página guardada.
             navigateFallback: null,
+            // Mientras arranca el service worker, la navegación ya va por la red.
+            navigationPreload: true,
             // Un solo archivo, sin el runtime de Workbox aparte.
             inlineWorkboxRuntime: true,
             cleanupOutdatedCaches: true,
             // La primera vez toma la página ya abierta y guarda lo que ella pide después.
             clientsClaim: true,
             runtimeCaching: [
+                {
+                    // Navegaciones: siempre a la red, sin guardar la respuesta.
+                    // Si no hay red, la página sin conexión del precache.
+                    urlPattern: ({ request }) => request.mode === 'navigate',
+                    handler: 'NetworkOnly',
+                    options: { precacheFallback: { fallbackURL: OFFLINE_URL } },
+                },
                 {
                     // Chunks con hash que no van en el shell: el mapa, cada
                     // ícono, las otras páginas. Nunca cambian.
@@ -229,7 +268,7 @@ function serviceWorker(env: Record<string, string>): PluginOption {
 export default defineConfig(({ mode }) => ({
     plugins: [
         laravel({
-            input: ['resources/js/app.ts'],
+            input: ['resources/js/app.ts', ...OFFLINE_ENTRIES],
             refresh: true,
         }),
         vue(),

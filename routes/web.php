@@ -17,3 +17,10 @@ Route::put('/locale', LocaleController::class)
 Route::get('/manifest.webmanifest', WebManifestController::class)
     ->withoutMiddleware('web')
     ->name('pwa.manifest');
+
+// La página sin conexión, con los textos en los dos idiomas: el service worker
+// la guarda al instalarse y la muestra cuando una navegación falla sin red.
+// Sin el grupo web, como el manifest: no depende de la sesión ni del idioma.
+Route::view('/offline', 'offline')
+    ->withoutMiddleware('web')
+    ->name('pwa.offline');

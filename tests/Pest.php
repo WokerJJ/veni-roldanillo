@@ -67,6 +67,25 @@ function fakeViteManifest(): string
             'isDynamicEntry' => true,
             'css' => ['assets/engine-prueba.css'],
         ],
+        // La página sin conexión (#5): su script, su estilo y los logos.
+        'resources/js/offline.ts' => [
+            'file' => 'assets/offline-prueba.js',
+            'src' => 'resources/js/offline.ts',
+            'isEntry' => true,
+        ],
+        'resources/css/offline.css' => [
+            'file' => 'assets/offline-prueba.css',
+            'src' => 'resources/css/offline.css',
+            'isEntry' => true,
+        ],
+        'brand/logo/veni-wordmark.svg' => [
+            'file' => 'assets/veni-wordmark-prueba.svg',
+            'src' => 'brand/logo/veni-wordmark.svg',
+        ],
+        'brand/logo/veni-wordmark-blanco.svg' => [
+            'file' => 'assets/veni-wordmark-blanco-prueba.svg',
+            'src' => 'brand/logo/veni-wordmark-blanco.svg',
+        ],
     ]));
 
     app()->usePublicPath($publicPath);

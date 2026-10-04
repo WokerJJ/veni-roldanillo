@@ -131,6 +131,49 @@ describe('useI18n', () => {
     });
 });
 
+/*
+| La página sin conexión (resources/js/offline.ts) muestra el último idioma
+| con que respondió el servidor: sin red no tiene a quién preguntarle.
+*/
+describe('useI18n · idioma para la página sin conexión', () => {
+    beforeEach(() => {
+        window.localStorage.clear();
+    });
+
+    it('recuerda en el dispositivo el idioma con que respondió el servidor', async () => {
+        const { fake, useI18n } = await load();
+        const { LOCALE_STORAGE_KEY } = await import('./useI18n');
+        mountHeading(useI18n);
+
+        expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('es');
+
+        fake.receiveFromServer('en', { replace: true });
+        await nextTick();
+
+        expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('en');
+    });
+
+    it('sin almacenamiento, traduce igual', async () => {
+        vi.stubGlobal('localStorage', {
+            setItem: vi.fn(() => {
+                throw new DOMException('Acceso denegado', 'SecurityError');
+            }),
+        });
+        const { useI18n } = await load();
+
+        expect(mountHeading(useI18n).text()).toBe('Vení, comamos en Roldanillo');
+    });
+
+    it('usa la misma clave que la página sin conexión', async () => {
+        const { LOCALE_STORAGE_KEY } = await import('./useI18n');
+        const { THEME_STORAGE_KEY } = await import('./useTheme');
+        const offline = (await import('@/offline.ts?raw')).default;
+
+        expect(offline).toContain(`LOCALE_STORAGE_KEY = '${LOCALE_STORAGE_KEY}'`);
+        expect(offline).toContain(`THEME_STORAGE_KEY = '${THEME_STORAGE_KEY}'`);
+    });
+});
+
 describe('useI18n · cambio de idioma e historial', () => {
     it('pide el idioma al servidor en PUT /locale y reemplaza la entrada del historial', async () => {
         const { fake, useI18n } = await load();

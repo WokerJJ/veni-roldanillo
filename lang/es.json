@@ -29,5 +29,8 @@
     "errors.server_error.title": "Algo falló de nuestro lado",
     "errors.server_error.message": "No es culpa tuya. Volvé a intentar en un ratico.",
     "errors.maintenance.title": "Estamos haciendo unos ajustes",
-    "errors.maintenance.message": "Volvé en un ratico, ya casi terminamos."
+    "errors.maintenance.message": "Volvé en un ratico, ya casi terminamos.",
+    "offline.title": "Estás sin conexión",
+    "offline.message": "Revisá los datos o el wifi. Cuando vuelva la señal, la página se abre sola.",
+    "offline.retry": "Reintentar"
 }

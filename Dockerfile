@@ -112,6 +112,9 @@ COPY resources ./resources
 COPY brand/tokens.css ./brand/tokens.css
 COPY brand/logo ./brand/logo
 COPY brand/png ./brand/png
+# Los textos de la página sin conexión: su versión en el precache de la PWA
+# depende de ellos (vite.config.ts).
+COPY lang ./lang
 
 # Mapa de veni-mapa (arriba, al principio del archivo). Vite escribe estas URL
 # en el JavaScript al compilar, y el .env no entra en la imagen: llegan como

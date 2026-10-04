@@ -23,6 +23,22 @@ export const LOCALE_ENDPOINT = '/locale';
 /** Texto de <meta name="description"> en resources/views/app.blade.php. */
 const DESCRIPTION_KEY: TranslationKey = 'meta.description';
 
+/**
+ * Clave en localStorage del último idioma con que respondió el servidor. No
+ * decide nada en la app (el idioma lo resuelve el servidor, ADR 0010): la lee
+ * la página sin conexión (resources/js/offline.ts, con el mismo literal), que
+ * sin red no tiene a quién preguntarle.
+ */
+export const LOCALE_STORAGE_KEY = 'veni:locale';
+
+function rememberLocale(locale: Locale): void {
+    try {
+        window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch {
+        // Sin almacenamiento, la página sin conexión sigue al idioma del teléfono.
+    }
+}
+
 let documentScope: EffectScope | undefined;
 
 /**
@@ -44,6 +60,7 @@ function syncDocument(): void {
             () => page.props.locale,
             (locale) => {
                 document.documentElement.lang = locale;
+                rememberLocale(locale);
             },
             { immediate: true },
         );
