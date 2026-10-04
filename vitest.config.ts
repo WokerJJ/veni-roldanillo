@@ -11,6 +11,8 @@ export default defineConfig({
         alias: {
             '@': fileURLToPath(new URL('./resources/js', import.meta.url)),
             '@brand': fileURLToPath(new URL('./brand', import.meta.url)),
+            // Módulo virtual de vite-plugin-pwa, que aquí no se carga.
+            'virtual:pwa-register': fileURLToPath(new URL('./resources/js/testing/pwaRegister.ts', import.meta.url)),
         },
     },
     test: {

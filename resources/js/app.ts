@@ -7,6 +7,7 @@ import { createApp, h } from 'vue';
 import { cspNonce } from '@/csp';
 import { openDevErrorsAsPages } from '@/devErrors';
 import AppLayout from '@/layouts/AppLayout.vue';
+import { registerServiceWorker } from '@/pwa/serviceWorker';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Vení Roldanillo';
 
@@ -20,6 +21,11 @@ const nonce = cspNonce();
 // diálogo de Inertia, donde la CSP no deja leerlo (resources/js/devErrors.ts).
 if (import.meta.env.DEV) {
     openDevErrorsAsPages(router);
+}
+
+// App instalable y sin conexión (#5): solo con el build de producción.
+if (import.meta.env.PROD) {
+    registerServiceWorker();
 }
 
 void createInertiaApp({

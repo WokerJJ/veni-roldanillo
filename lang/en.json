@@ -32,5 +32,8 @@
     "errors.maintenance.message": "Come back in a little while, we're almost done.",
     "offline.title": "You are offline",
     "offline.message": "Check your mobile data or wifi. When the signal is back, the page opens by itself.",
-    "offline.retry": "Try again"
+    "offline.retry": "Try again",
+    "pwa.update_available": "There is a new version of Vení.",
+    "pwa.update": "Update",
+    "pwa.dismiss": "Not now"
 }

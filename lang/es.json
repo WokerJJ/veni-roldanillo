@@ -32,5 +32,8 @@
     "errors.maintenance.message": "Volvé en un ratico, ya casi terminamos.",
     "offline.title": "Estás sin conexión",
     "offline.message": "Revisá los datos o el wifi. Cuando vuelva la señal, la página se abre sola.",
-    "offline.retry": "Reintentar"
+    "offline.retry": "Reintentar",
+    "pwa.update_available": "Hay una versión nueva de Vení.",
+    "pwa.update": "Actualizar",
+    "pwa.dismiss": "Ahora no"
 }

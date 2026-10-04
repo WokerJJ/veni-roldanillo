@@ -73,6 +73,11 @@ return [
     |   si no cambió, recibe un 304 sin volver a bajarla. Una fuente nueva
     |   tarda como mucho una semana en llegar, y mientras tanto la anterior
     |   se ve igual de bien.
+    | - public/sw.js: el service worker de la PWA (#5). Con no-cache, el
+    |   navegador y cualquier caché de delante (Cloudflare) lo revalidan
+    |   siempre: una versión nueva llega en la visita siguiente y no días
+    |   después. Está en la raíz, así que su alcance es todo el sitio sin
+    |   Service-Worker-Allowed.
     | - public/storage: lo que suban los dueños (#18) se sirve con una
     |   política propia. Si un archivo resultara ser HTML o SVG con scripts,
     |   abierto directamente corre en un sandbox: sin scripts, sin el origen
@@ -102,6 +107,12 @@ return [
                     file
                 }
                 header @veni_fonts Cache-Control "public, max-age=604800, must-revalidate"
+
+                @veni_service_worker {
+                    path /sw.js
+                    file
+                }
+                header @veni_service_worker Cache-Control "no-cache"
 
                 @veni_storage {
                     path /storage/*
