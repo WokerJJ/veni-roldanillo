@@ -1,8 +1,13 @@
 {{--
-    Base de las páginas de error de Laravel (404, 419, 429, 500, 503…): reemplaza
-    a la del framework, que trae sus estilos en un <style> sin nonce y la CSP los
-    bloquearía (ADR 0014). Sin @vite: un error no depende de los assets
-    compilados. Colores de la marca (brand/tokens.css), claro y oscuro.
+    Base de las páginas de error de Laravel (404, 419, 429, 500, 503 en esta
+    carpeta, con sus textos en lang/{idioma}.json; las demás, las del framework):
+    reemplaza a la del framework, que trae sus estilos en un <style> sin nonce y
+    la CSP los bloquearía (ADR 0014). Sin @vite: un error no depende de los
+    assets compilados. Los colores salen de los tokens de la marca
+    (brand/tokens.css, que la imagen de producción trae), claro y oscuro. El
+    idioma lo resuelve SetLocale::forErrorPage() aunque SetLocale no haya corrido.
+    El enlace al inicio es relativo: con un Host que no es de confianza, generar
+    una URL completa volvería a fallar.
 --}}
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -13,18 +18,20 @@
         <title>@yield('title')</title>
 
         <style nonce="{{ Vite::cspNonce() }}">
+            {!! File::get(base_path('brand/tokens.css')) !!}
+
             :root {
                 color-scheme: light dark;
-                --canvas: #ffffff;
-                --ink: #2a1638;
-                --line: #d4cbd9;
+                --canvas: var(--veni-blanco);
+                --ink: var(--veni-ciruela);
+                --line: color-mix(in oklab, var(--veni-ciruela) 15%, transparent);
             }
 
             @media (prefers-color-scheme: dark) {
                 :root {
-                    --canvas: #2a1638;
-                    --ink: #ffffff;
-                    --line: #6a5578;
+                    --canvas: var(--veni-ciruela);
+                    --ink: var(--veni-blanco);
+                    --line: color-mix(in oklab, var(--veni-lila) 20%, transparent);
                 }
             }
 
@@ -35,28 +42,44 @@
                 place-items: center;
                 background: var(--canvas);
                 color: var(--ink);
-                font: 1.125rem/1.5 system-ui, sans-serif;
+                font: 1.125rem/1.5 var(--veni-font-body);
             }
 
             main {
-                display: flex;
-                align-items: center;
-                gap: 1rem;
-                padding: 1rem;
+                max-width: 32rem;
+                padding: 1.5rem;
+            }
+
+            p {
+                margin: 0 0 1rem;
+            }
+
+            .code {
+                padding-bottom: 0.5rem;
+                border-bottom: 1px solid var(--line);
+                font-weight: 700;
             }
 
             h1 {
-                margin: 0;
-                padding-right: 1rem;
-                border-right: 1px solid var(--line);
-                font-size: inherit;
+                margin: 0 0 0.5rem;
+                font: 700 1.5rem/1.25 var(--veni-font-display);
+            }
+
+            a {
+                display: inline-flex;
+                align-items: center;
+                min-height: var(--veni-touch-min);
+                color: inherit;
+                font-weight: 700;
             }
         </style>
     </head>
     <body>
         <main>
-            <h1>@yield('code')</h1>
+            <p class="code">@yield('code')</p>
+            <h1>@yield('title')</h1>
             <p>@yield('message')</p>
+            <a href="/">{{ __('errors.home') }}</a>
         </main>
     </body>
 </html>
