@@ -83,7 +83,7 @@ docker build --target prod -t veni-humo .
 bash tests/docker/smoke-prod.sh veni-humo
 ```
 
-La prueba levanta `docker-compose.yml` sin el override en un proyecto aparte, con un `.env` temporal, y lo borra al terminar. Es la misma que corre `ci.yml`. Además de que arranca y migra, comprueba la seguridad HTTP de la imagen bajo Octane: las cabeceras, HSTS y las URL con `https://` solo detrás de un proxy de confianza, las cookies con `Secure`, la CSP activa con un nonce nuevo en cada petición, el `preconnect` al mapa y la caché de assets y fuentes.
+La prueba levanta `docker-compose.yml` sin el override en un proyecto aparte, con un `.env` temporal, y lo borra al terminar. Es la misma que corre `ci.yml`. Además de que arranca y migra, comprueba la seguridad HTTP de la imagen bajo Octane: las cabeceras, HSTS y las URL con `https://` solo detrás de un proxy de confianza, el host solo de `APP_URL` (sin `X-Forwarded-Host`), las cookies con `Secure`, la CSP activa con un nonce que no se repite en ninguna de las páginas que pide, el `preconnect` al mapa, la caché de assets y fuentes, las páginas de error en los dos idiomas y `storage` en un sandbox.
 
 ## Releases
 
@@ -156,7 +156,7 @@ El `.env` parte de `.env.example` con estos cambios:
 | --- | --- |
 | `APP_ENV`, `APP_DEBUG` | `production` y `false` (la imagen ya los fija; van igual para que el archivo diga la verdad) |
 | `APP_KEY` | `docker run --rm --entrypoint php ghcr.io/wokerjj/veni-roldanillo:X.Y.Z artisan key:generate --show` |
-| `APP_URL` | `https://veniroldanillo.co` |
+| `APP_URL` | `https://veniroldanillo.co`. Es además el único host que la app atiende: con otro `Host` responde 400 ([abajo](#delante-de-la-app-tls-y-proxies-de-confianza)) |
 | `DB_PASSWORD`, `MEILISEARCH_KEY` | Una cada una, de `openssl rand -base64 32` |
 | `MEILI_ENV` | `production` |
 | `LOG_LEVEL` | `warning` |
@@ -164,20 +164,24 @@ El `.env` parte de `.env.example` con estos cambios:
 | `APP_IMAGE` | `ghcr.io/wokerjj/veni-roldanillo:X.Y.Z`. La reescribe cada despliegue: es la versión que está corriendo |
 | `TRUSTED_PROXIES` | La IP o el rango desde el que llega el proxy que termina TLS ([abajo](#delante-de-la-app-tls-y-proxies-de-confianza)). Nunca `*` |
 | `SESSION_SECURE_COOKIE` | `true` (la imagen ya lo fija y el `.env` no lo cambia; va igual para que el archivo diga la verdad) |
-| `CSP_REPORT_ONLY` | `false`. Con `true` la política de contenido solo informa en la consola del navegador, sin bloquear: para probar un cambio de la política, nunca como estado normal |
+| `CSP_REPORT_ONLY` | `false`. Con `true` la política de contenido solo informa en la consola del navegador, sin bloquear: para probar un cambio de la política, nunca como estado normal (la app lo avisa en `docker compose logs app` al arrancar). Se lee como booleano: `off`, `no` y `0` son no |
+| `CSP_REPORT_CANDIDATE` | `false`. Con `true` la política vigente sigue bloqueando y se manda además la candidata (el perfil `candidate`, en código) solo para informar |
+| `CSP_FRAME_ANCESTORS` | Vacía: ningún sitio puede mostrar la app en un iframe. Es solo para entornos locales |
 
 Las variables `VITE_*` no hacen falta en el servidor: ya quedaron dentro de la imagen, en el JavaScript y en su entorno. Si el `.env` las trae, valen las de la imagen.
 
 ### Delante de la app: TLS y proxies de confianza
 
-La app no termina TLS ([ADR 0014](adr/0014-seguridad-http-detras-del-proxy.md)): sirve HTTP en el puerto 8000, publicado solo en `127.0.0.1` del servidor, y delante va un proxy que atiende HTTPS y le pasa la petición. El proxy le dice a la app la IP del cliente y que la petición llegó por HTTPS con las cabeceras `X-Forwarded-For`, `-Proto`, `-Host` y `-Port`, y la app solo se las cree a las IP de `TRUSTED_PROXIES`. Sin eso genera URL `http://`, no manda HSTS y cuenta los límites de peticiones con la IP del proxy, la misma para todos.
+La app no termina TLS ([ADR 0014](adr/0014-seguridad-http-detras-del-proxy.md)): sirve HTTP en el puerto 8000, publicado solo en `127.0.0.1` del servidor, y delante va un proxy que atiende HTTPS y le pasa la petición. El proxy le pasa el host tal cual en `Host`, y la IP del cliente y que la petición llegó por HTTPS en `X-Forwarded-For` y `X-Forwarded-Proto`; la app solo se cree esas dos a las IP de `TRUSTED_PROXIES`. Sin eso genera URL `http://`, no manda HSTS y cuenta los límites de peticiones con la IP del proxy, la misma para todos.
+
+`X-Forwarded-Host` y `X-Forwarded-Port` no se aceptan de nadie, ni del proxy de confianza: Caddy y `cloudflared` ya mandan el host real en `Host`, y si alguno dejara pasar los que escribe el cliente, este elegiría el host de los enlaces que genera la app. Por lo mismo la app solo atiende el host de `APP_URL`, sin subdominios, y los del propio equipo (`127.0.0.1` y `localhost`, por donde piden `/up` la revisión de salud de la imagen y `deploy.sh`); con cualquier otro `Host` responde 400.
 
 Desde dónde ve llegar la app al proxy depende de dónde corre el proxy:
 
 | Delante de la app | `TRUSTED_PROXIES` |
 | --- | --- |
 | Caddy instalado en el servidor (`reverse_proxy 127.0.0.1:8000`) o un túnel de Cloudflare (`cloudflared` hacia `http://127.0.0.1:8000`) | La puerta de enlace de la red de Compose: con el proxy de puertos de Docker (el que viene por defecto), las conexiones al puerto publicado llegan al contenedor desde esa IP. Se lee con `docker network inspect veni-roldanillo_default --format '{{(index .IPAM.Config 0).Gateway}}'` (por ejemplo `172.18.0.1`). Si la red se recrea (`docker compose down`), Docker puede darle otra subred: el rango de sus redes, `172.16.0.0/12`, evita reconfigurar a cambio de confiar en todos los contenedores del servidor, que son todos de esta app |
-| Cloudflare con proxy (nube naranja) y Caddy en el servidor | Lo mismo, y Caddy tiene que pasar la IP del visitante y no la del borde de Cloudflare: en Caddy, `trusted_proxies` con los rangos de Cloudflare y `header_up X-Forwarded-For {client_ip}` en el `reverse_proxy` |
+| Cloudflare con proxy (nube naranja) y Caddy en el servidor | Lo mismo, y Caddy tiene que pasarle a la app la IP del visitante, no la del borde de Cloudflare ni una que escriba el visitante ([abajo](#con-cloudflare-delante-de-caddy)) |
 | Un proxy dentro del propio contenedor (la prueba de humo) | `127.0.0.1` |
 
 Caddy, con un `Caddyfile` mínimo, obtiene y renueva el certificado solo y manda esas cabeceras sin configurar nada más:
@@ -196,6 +200,47 @@ curl -sI https://veniroldanillo.co | grep -i strict-transport-security
 ```
 
 Sin esa línea, `TRUSTED_PROXIES` no coincide con la IP desde la que llega el proxy.
+
+#### Con Cloudflare delante de Caddy
+
+Con la nube naranja, a Caddy le llegan las conexiones desde el borde de Cloudflare, que agrega la IP del visitante **al final** de `X-Forwarded-For`; lo que venga antes lo escribió el visitante. Caddy tiene que confiar solo en los rangos de Cloudflare, sacar de ahí la IP del visitante leyendo la cabecera de derecha a izquierda y pasarle a la app solo esa:
+
+```caddyfile
+{
+    servers {
+        # Rangos de Cloudflare (https://www.cloudflare.com/ips/), revisados el 2026-10-03.
+        trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+        # De derecha a izquierda: la primera IP que no es de Cloudflare es la del visitante.
+        trusted_proxies_strict
+    }
+}
+
+veniroldanillo.co {
+    # Registro de accesos, con la IP que Caddy le atribuye a cada petición (client_ip).
+    log
+    reverse_proxy 127.0.0.1:8000 {
+        # A la app le llega solo esa IP, no la cadena entera.
+        header_up X-Forwarded-For {client_ip}
+    }
+}
+```
+
+Las dos piezas hacen falta. Sin `trusted_proxies`, Caddy toma por visitante al borde de Cloudflare y todos comparten su límite de peticiones. Sin `trusted_proxies_strict`, Caddy toma **la primera** IP de `X-Forwarded-For`, la que escribe el visitante: cualquiera podría elegir su IP y saltarse los límites.
+
+Se eligió `trusted_proxies_strict` sobre `client_ip_headers CF-Connecting-IP`, que también funciona (Cloudflare reescribe esa cabecera en cada petición): lee `X-Forwarded-For` igual que la app (de derecha a izquierda, saltando los proxies de confianza), así que la receta no cambia si un día se quita Cloudflare o se agrega otro proxy, y no depende de una cabecera de un solo proveedor. Los rangos de Cloudflare cambian poco, pero cambian: se revisan al actualizar el servidor. El módulo [caddy-cloudflare-ip](https://github.com/WeidiDeng/caddy-cloudflare-ip) los mantiene solo (`trusted_proxies cloudflare`), a cambio de compilar Caddy con `xcaddy`.
+
+Para comprobarlo, una petición con una IP inventada en `X-Forwarded-For` tiene que quedar registrada con la IP real:
+
+```bash
+# Desde tu equipo: la IP con que te ve Cloudflare, y una petición con otra inventada.
+curl -s https://veniroldanillo.co/cdn-cgi/trace | grep '^ip='
+curl -s -o /dev/null -H 'X-Forwarded-For: 203.0.113.99' https://veniroldanillo.co/
+
+# En el servidor: la IP que Caddy le atribuyó, la misma que le pasó a la app.
+journalctl -u caddy -n 50 -o cat | grep -o '"client_ip":"[^"]*"' | tail -n 1
+```
+
+Tiene que salir la IP de `cdn-cgi/trace`. Si sale `203.0.113.99`, falta `trusted_proxies_strict`; si sale una IP de Cloudflare, falta su rango en `trusted_proxies`.
 
 Lo que sirve Caddy desde `public/` sin pasar por Laravel lleva su propia caché (`config/octane.php`): los assets de `/build/assets`, que llevan el hash del contenido en el nombre, un año como `immutable`; las fuentes de `/fonts`, sin hash, una semana y después se revalidan. Un CDN delante (Cloudflare) respeta esas cabeceras.
 
