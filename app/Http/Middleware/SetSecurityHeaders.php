@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\FrameAncestors;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -68,7 +69,11 @@ class SetSecurityHeaders
         $headers->set('Permissions-Policy', self::permissionsPolicy());
         // Ninguna página se muestra dentro de un iframe (clickjacking). La CSP
         // lo repite con frame-ancestors; esta cubre a los navegadores viejos.
-        $headers->set('X-Frame-Options', 'DENY');
+        // Con CSP_FRAME_ANCESTORS (solo en local) la CSP nombra quién puede, y
+        // esta, que no sabe de orígenes, no se manda: no la contradice.
+        if (FrameAncestors::configured() === []) {
+            $headers->set('X-Frame-Options', 'DENY');
+        }
 
         // isSecure() ya sabe del proxy de confianza: TrustProxies corrió
         // dentro de $next. Por HTTP el navegador ignoraría HSTS; en

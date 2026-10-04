@@ -1,7 +1,11 @@
 <?php
 
+use App\Providers\AppServiceProvider;
+use App\Support\ContentSecurityPolicy;
+use App\Support\ContentSecurityPolicyProfiles;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,38 +18,15 @@ use Symfony\Component\HttpFoundation\Response;
 */
 
 beforeEach(function () {
-    // Manifest de Vite propio en un public temporal, como en RootViewTest:
-    // las etiquetas de @vite salen de verdad, sin withoutVite().
-    $this->publicPath = sys_get_temp_dir().'/veni-csp-'.bin2hex(random_bytes(4));
-    File::ensureDirectoryExists($this->publicPath.'/build');
-    File::put($this->publicPath.'/build/manifest.json', (string) json_encode([
-        'resources/js/app.ts' => [
-            'file' => 'assets/app-prueba.js',
-            'src' => 'resources/js/app.ts',
-            'isEntry' => true,
-            'css' => ['assets/app-prueba.css'],
-            'imports' => ['_compartido-prueba.js'],
-        ],
-        '_compartido-prueba.js' => [
-            'file' => 'assets/compartido-prueba.js',
-        ],
-        'resources/js/pages/Home.vue' => [
-            'file' => 'assets/Home-prueba.js',
-            'src' => 'resources/js/pages/Home.vue',
-            'isDynamicEntry' => true,
-        ],
-    ]));
-    $this->app->usePublicPath($this->publicPath);
+    // Manifest de Vite propio (tests/Pest.php): las etiquetas de @vite salen
+    // de verdad, sin withoutVite().
+    $this->publicPath = fakeViteManifest();
 
     config([
         'services.map.style_url' => 'https://tiles.example.test/v1.2.3/veni-{theme}-{locale}.json',
         'services.map.routes_url' => 'https://tiles.example.test/v1.2.3/roldanillo-rutas.json',
         'security.csp.report_only' => false,
     ]);
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->publicPath);
 });
 
 /** @param TestResponse<Response> $response */
@@ -56,6 +37,33 @@ function cspPolicy(TestResponse $response): string
     expect($policy)->toBeString();
 
     return (string) $policy;
+}
+
+/** La política sin su nonce, para comparar las de dos peticiones. */
+function cspWithoutNonce(string $policy): string
+{
+    return (string) preg_replace("/'nonce-[^']+'/", "'nonce-…'", $policy);
+}
+
+/**
+ * CSP_REPORT_ONLY tal como lo lee config/security.php con $value en el entorno.
+ */
+function cspReportOnlyFromEnv(string $value): mixed
+{
+    $previous = $_SERVER['CSP_REPORT_ONLY'] ?? null;
+    $_SERVER['CSP_REPORT_ONLY'] = $value;
+
+    try {
+        $config = require config_path('security.php');
+    } finally {
+        if ($previous === null) {
+            unset($_SERVER['CSP_REPORT_ONLY']);
+        } else {
+            $_SERVER['CSP_REPORT_ONLY'] = $previous;
+        }
+    }
+
+    return $config['csp']['report_only'];
 }
 
 function cspNonceOf(string $policy): string
@@ -201,8 +209,11 @@ test('en producción ignora public/hot', function () {
     $this->app['env'] = 'production';
     File::put($this->publicPath.'/hot', 'http://localhost:5173');
 
-    expect(cspPolicy($this->get('/')))->not->toContain('localhost:5173')
-        ->not->toContain('blob: ;');
+    $policy = cspPolicy($this->get('/'));
+
+    // El worker de MapLibre sale de este origen: ni blob: ni el servidor de Vite.
+    expect($policy)->not->toContain('localhost:5173')
+        ->and(cspDirectives($policy)['worker-src'])->toBe(["'self'"]);
 });
 
 test('las páginas de error llevan la política, y su estilo el nonce', function () {
@@ -237,3 +248,138 @@ test('la página de error de desarrollo (APP_DEBUG) queda sin política, con el 
         ->assertHeaderMissing('Content-Security-Policy-Report-Only')
         ->assertHeader('X-Frame-Options', 'DENY');
 });
+
+test('CSP_REPORT_ONLY se lee como booleano: off, no y 0 no lo activan', function (string $value, bool $expected) {
+    expect(cspReportOnlyFromEnv($value))->toBe($expected);
+})->with([
+    'true' => ['true', true],
+    'on' => ['on', true],
+    '1' => ['1', true],
+    'yes' => ['yes', true],
+    'false' => ['false', false],
+    'off' => ['off', false],
+    'no' => ['no', false],
+    '0' => ['0', false],
+    'vacía' => ['', false],
+]);
+
+test('al arrancar en producción con CSP_REPORT_ONLY avisa en el registro', function () {
+    $this->app['env'] = 'production';
+    config(['security.csp.report_only' => true]);
+    Log::spy();
+
+    (new AppServiceProvider($this->app))->boot();
+
+    Log::shouldHaveReceived('warning')->once()->withArgs(fn (string $message) => str_contains($message, 'CSP_REPORT_ONLY'));
+});
+
+test('sin CSP_REPORT_ONLY, o fuera de producción, no avisa', function (string $env, bool $reportOnly) {
+    $this->app['env'] = $env;
+    config(['security.csp.report_only' => $reportOnly]);
+    Log::spy();
+
+    (new AppServiceProvider($this->app))->boot();
+
+    Log::shouldNotHaveReceived('warning');
+})->with([
+    'producción, bloqueando' => ['production', false],
+    'desarrollo, solo informando' => ['local', true],
+]);
+
+test('con una candidata, la política vigente bloquea y la candidata solo informa', function () {
+    config(['security.csp.report_candidate' => true]);
+    app(ContentSecurityPolicyProfiles::class)->register(
+        ContentSecurityPolicy::CANDIDATE_PROFILE,
+        fn (ContentSecurityPolicy $policy) => $policy->with('require-trusted-types-for', "'script'"),
+    );
+
+    $response = $this->get('/')->assertOk();
+    $enforced = cspPolicy($response);
+    $candidate = (string) $response->headers->get('Content-Security-Policy-Report-Only');
+    $nonce = cspNonceOf($enforced);
+
+    expect(cspDirectives($enforced))->not->toHaveKey('require-trusted-types-for')
+        ->toHaveKey('frame-ancestors')
+        ->and(cspDirectives($candidate)['require-trusted-types-for'])->toBe(["'script'"])
+        ->and(cspDirectives($candidate)['script-src'])->toBe(cspDirectives($enforced)['script-src'])
+        ->and(cspDirectives($candidate))->not->toHaveKey('frame-ancestors')
+        ->and(cspNonceOf($candidate))->toBe($nonce);
+});
+
+test('la candidata no se manda si no está activada, si no hay ninguna o si la vigente ya solo informa', function (bool $enabled, bool $registered, bool $reportOnly) {
+    config(['security.csp.report_candidate' => $enabled, 'security.csp.report_only' => $reportOnly]);
+
+    if ($registered) {
+        app(ContentSecurityPolicyProfiles::class)->register(
+            ContentSecurityPolicy::CANDIDATE_PROFILE,
+            fn (ContentSecurityPolicy $policy) => $policy->with('require-trusted-types-for', "'script'"),
+        );
+    }
+
+    $response = $this->get('/')->assertOk();
+    $reported = (string) $response->headers->get('Content-Security-Policy-Report-Only');
+
+    expect($reported)->not->toContain('require-trusted-types-for');
+})->with([
+    'sin activar' => [false, true, false],
+    'activada sin candidata' => [true, false, false],
+    'la vigente solo informa' => [true, true, true],
+]);
+
+test('una ruta declara su perfil en la acción, también en un grupo, y la política de / no cambia', function () {
+    $before = cspWithoutNonce(cspPolicy($this->get('/')->assertOk()));
+
+    app(ContentSecurityPolicyProfiles::class)->register('prueba', fn (ContentSecurityPolicy $policy) => $policy
+        ->with('style-src', "'unsafe-inline'")
+        ->with('connect-src', 'https://panel.example.test'));
+    Route::get('/_prueba/perfil', fn () => 'ok')->setAction(['uses' => fn () => 'ok', 'csp' => 'prueba']);
+    Route::group(['csp' => 'prueba'], function () {
+        Route::get('/_prueba/perfil-en-grupo', fn () => 'ok');
+    });
+
+    expect(cspWithoutNonce(cspPolicy($this->get('/')->assertOk())))->toBe($before);
+
+    foreach (['/_prueba/perfil', '/_prueba/perfil-en-grupo'] as $path) {
+        $directives = cspDirectives(cspWithoutNonce(cspPolicy($this->get($path)->assertOk())));
+
+        expect($directives['style-src'])->toContain("'unsafe-inline'")
+            ->and($directives['connect-src'])->toContain('https://panel.example.test')
+            ->and($directives['script-src'])->toBe(cspDirectives($before)['script-src']);
+    }
+});
+
+test('el perfil público no se redefine y un perfil desconocido no cae en otra política', function () {
+    $profiles = app(ContentSecurityPolicyProfiles::class);
+
+    expect(fn () => $profiles->register(ContentSecurityPolicy::PUBLIC_PROFILE, fn (ContentSecurityPolicy $policy) => $policy))
+        ->toThrow(InvalidArgumentException::class, 'público')
+        ->and(fn () => $profiles->apply('no-existe', new ContentSecurityPolicy(nonce: 'n0nce')))
+        ->toThrow(InvalidArgumentException::class, 'no-existe');
+});
+
+test('CSP_FRAME_ANCESTORS nombra quién puede mostrar la app en un iframe, sin X-Frame-Options', function () {
+    // Solo en local, por ejemplo el tablero de avance en http://localhost:8765.
+    config(['security.csp.frame_ancestors' => ['http://localhost:8765']]);
+
+    $response = $this->get('/')->assertOk()->assertHeaderMissing('X-Frame-Options');
+
+    expect(cspDirectives(cspPolicy($response))['frame-ancestors'])->toBe(['http://localhost:8765']);
+});
+
+test("sin CSP_FRAME_ANCESTORS, frame-ancestors 'none' y X-Frame-Options DENY", function () {
+    config(['security.csp.frame_ancestors' => []]);
+
+    $response = $this->get('/')->assertOk()->assertHeader('X-Frame-Options', 'DENY');
+
+    expect(cspDirectives(cspPolicy($response))['frame-ancestors'])->toBe(["'none'"]);
+});
+
+test('un CSP_FRAME_ANCESTORS que no es una lista de orígenes detiene el arranque', function () {
+    $_SERVER['CSP_FRAME_ANCESTORS'] = 'localhost:8765';
+
+    try {
+        require config_path('security.php');
+    } finally {
+        unset($_SERVER['CSP_FRAME_ANCESTORS']);
+    }
+})->throws(InvalidArgumentException::class, 'CSP_FRAME_ANCESTORS');

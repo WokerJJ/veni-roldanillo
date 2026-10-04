@@ -25,22 +25,58 @@ use Illuminate\Support\Str;
  *   desarrollo sale del servidor de Vite, otro origen: MapLibre lo arranca
  *   desde una URL blob que importa el módulo del worker, y los módulos de un
  *   worker se piden como worker. Hacen falta `blob:` y el servidor de Vite.
- * - Nada de iframes que muestren esta app, `<object>`, cambios de `<base>`
- *   ni formularios hacia otro sitio.
+ * - Nada de iframes que muestren esta app (salvo los orígenes de
+ *   CSP_FRAME_ANCESTORS, solo en local), `<object>`, cambios de `<base>` ni
+ *   formularios hacia otro sitio.
+ *
+ * Es la política del perfil público, la de todas las rutas que no declaran
+ * otro. Un perfil (App\Support\ContentSecurityPolicyProfiles) parte de ella y
+ * le suma con with() lo que su ruta necesita.
  */
 final class ContentSecurityPolicy
 {
+    /** Perfil de las rutas que no declaran otro: el sitio público. */
+    public const PUBLIC_PROFILE = 'public';
+
+    /**
+     * Perfil que, con CSP_REPORT_CANDIDATE, se manda además en
+     * Content-Security-Policy-Report-Only para probar un cambio.
+     */
+    public const CANDIDATE_PROFILE = 'candidate';
+
+    /**
+     * Fuentes que le suman los perfiles, por directiva (with()).
+     *
+     * @var array<string, list<string>>
+     */
+    private array $additions = [];
+
     /**
      * @param  list<string>  $mapOrigins  Orígenes del mapa (MapOrigin::configured()).
      * @param  string|null  $devServer  Origen del servidor de Vite en desarrollo (`npm run dev`).
      * @param  bool  $reportOnly  Solo informar, sin bloquear (CSP_REPORT_ONLY).
+     * @param  list<string>  $frameAncestors  Orígenes que pueden mostrarla en un iframe (FrameAncestors::configured()); vacía, ninguno.
      */
     public function __construct(
         private readonly string $nonce,
         private readonly array $mapOrigins = [],
         private readonly ?string $devServer = null,
         private readonly bool $reportOnly = false,
+        private readonly array $frameAncestors = [],
     ) {}
+
+    /**
+     * Otra política igual a esta, con $sources sumadas a $directive (o con la
+     * directiva, si no estaba). Esta no cambia: la del perfil público sigue
+     * igual para las demás rutas.
+     */
+    public function with(string $directive, string ...$sources): self
+    {
+        $policy = clone $this;
+        $policy->additions[$directive] = [...($this->additions[$directive] ?? []), ...array_values($sources)];
+
+        return $policy;
+    }
 
     /** La cabecera que bloquea o la que solo informa. */
     public function headerName(): string
@@ -53,7 +89,7 @@ final class ContentSecurityPolicy
         $directives = [];
 
         foreach ($this->directives() as $name => $sources) {
-            $directives[] = $name.' '.implode(' ', $sources);
+            $directives[] = trim($name.' '.implode(' ', $sources));
         }
 
         return implode('; ', $directives);
@@ -83,12 +119,19 @@ final class ContentSecurityPolicy
             'object-src' => ["'none'"],
             'base-uri' => [$self],
             'form-action' => [$self],
-            'frame-ancestors' => ["'none'"],
+            'frame-ancestors' => $this->frameAncestors === [] ? ["'none'"] : $this->frameAncestors,
         ];
+
+        foreach ($this->additions as $name => $sources) {
+            // 'none' junto a otra fuente no es válido: las fuentes lo reemplazan.
+            $current = ($directives[$name] ?? []) === ["'none'"] ? [] : ($directives[$name] ?? []);
+            $directives[$name] = array_values(array_unique([...$current, ...$sources]));
+        }
 
         // El navegador ignora frame-ancestors en una política que solo
         // informa, y lo avisa en la consola de cada página. X-Frame-Options
-        // (SetSecurityHeaders) sigue impidiendo los iframes.
+        // (SetSecurityHeaders) sigue impidiendo los iframes, salvo con
+        // CSP_FRAME_ANCESTORS (solo en local).
         if ($this->reportOnly) {
             unset($directives['frame-ancestors']);
         }

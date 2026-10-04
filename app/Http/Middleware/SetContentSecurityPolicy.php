@@ -3,6 +3,8 @@
 namespace App\Http\Middleware;
 
 use App\Support\ContentSecurityPolicy;
+use App\Support\ContentSecurityPolicyProfiles;
+use App\Support\FrameAncestors;
 use App\Support\MapOrigin;
 use App\Support\Origin;
 use Closure;
@@ -23,9 +25,16 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
  * carga después) e Inertia (su barra de progreso). Con Octane el servicio
  * sobrevive entre peticiones del mismo worker; por eso el nonce se crea aquí
  * en cada una y no al arrancar.
+ *
+ * La política es la del perfil de la ruta (App\Support\ContentSecurityPolicyProfiles),
+ * la pública si no declara otro. Con CSP_REPORT_CANDIDATE se manda además la
+ * candidata en Content-Security-Policy-Report-Only: el navegador aplica la
+ * vigente y solo informa de lo que la candidata bloquearía.
  */
 class SetContentSecurityPolicy
 {
+    public function __construct(private readonly ContentSecurityPolicyProfiles $profiles) {}
+
     /**
      * @param  Closure(Request): Response  $next
      */
@@ -39,16 +48,37 @@ class SetContentSecurityPolicy
             return $response;
         }
 
-        $policy = new ContentSecurityPolicy(
+        // La ruta ya está resuelta: este middleware envuelve al router.
+        $profile = $request->route()?->getAction('csp');
+        $profile = is_string($profile) ? $profile : ContentSecurityPolicy::PUBLIC_PROFILE;
+        $reportOnly = config('security.csp.report_only') === true;
+
+        $policy = $this->profiles->apply($profile, $this->publicPolicy($nonce, $reportOnly));
+        $response->headers->set($policy->headerName(), $policy->headerValue());
+
+        // Si la vigente ya solo informa, la candidata no agrega nada.
+        if (! $reportOnly
+            && config('security.csp.report_candidate') === true
+            && $this->profiles->has(ContentSecurityPolicy::CANDIDATE_PROFILE)) {
+            $candidate = $this->profiles->apply(
+                ContentSecurityPolicy::CANDIDATE_PROFILE,
+                $this->profiles->apply($profile, $this->publicPolicy($nonce, reportOnly: true)),
+            );
+            $response->headers->set($candidate->headerName(), $candidate->headerValue());
+        }
+
+        return $response;
+    }
+
+    private function publicPolicy(string $nonce, bool $reportOnly): ContentSecurityPolicy
+    {
+        return new ContentSecurityPolicy(
             nonce: $nonce,
             mapOrigins: MapOrigin::configured(),
             devServer: $this->devServer(),
-            reportOnly: (bool) config('security.csp.report_only'),
+            reportOnly: $reportOnly,
+            frameAncestors: FrameAncestors::configured(),
         );
-
-        $response->headers->set($policy->headerName(), $policy->headerValue());
-
-        return $response;
     }
 
     /**
