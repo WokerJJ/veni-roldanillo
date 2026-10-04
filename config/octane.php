@@ -63,6 +63,7 @@ return [
     | va dentro del bloque route, después de root y encode y antes de
     | php_server, que sirve los archivos de public/ sin pasar por Laravel; aquí
     | reemplaza a la configuración de Mercure de Octane, que no se usa.
+    | Activar Mercure obligaría a juntar sus directivas con estas (ADR 0014).
     |
     | - public/build/assets: Vite pone el hash del contenido en cada nombre;
     |   un archivo nunca cambia, así que se guarda un año sin volver a
@@ -72,6 +73,13 @@ return [
     |   si no cambió, recibe un 304 sin volver a bajarla. Una fuente nueva
     |   tarda como mucho una semana en llegar, y mientras tanto la anterior
     |   se ve igual de bien.
+    | - public/storage: lo que suban los dueños (#18) se sirve con una
+    |   política propia. Si un archivo resultara ser HTML o SVG con scripts,
+    |   abierto directamente corre en un sandbox: sin scripts, sin el origen
+    |   de la app (sus cookies y su almacenamiento) y sin cargar nada. Una
+    |   imagen se ve igual (img-src y los estilos que el navegador pone a su
+    |   visor). Solo si el archivo existe: un 404 lo responde Laravel, con la
+    |   política de la app.
     | - nosniff también para lo que no pasa por Laravel (assets, fuentes y lo
     |   que suban los dueños a storage); `?` lo pone solo si la respuesta no
     |   lo trae ya, para no repetirlo en las de Laravel (SetSecurityHeaders).
@@ -94,6 +102,12 @@ return [
                     file
                 }
                 header @veni_fonts Cache-Control "public, max-age=604800, must-revalidate"
+
+                @veni_storage {
+                    path /storage/*
+                    file
+                }
+                header @veni_storage Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
 
                 header ?X-Content-Type-Options nosniff
                 CADDYFILE,
