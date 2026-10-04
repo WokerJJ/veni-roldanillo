@@ -10,36 +10,9 @@ use Illuminate\Support\Facades\File;
 */
 
 beforeEach(function () {
-    // Manifest de Vite propio en un public temporal: la prueba ejercita
-    // @vite sin withoutVite() y sin depender de `npm run build`.
-    $this->publicPath = sys_get_temp_dir().'/veni-root-view-'.bin2hex(random_bytes(4));
-    File::ensureDirectoryExists($this->publicPath.'/build');
-    File::put($this->publicPath.'/build/manifest.json', (string) json_encode([
-        'resources/js/app.ts' => [
-            'file' => 'assets/app-prueba.js',
-            'src' => 'resources/js/app.ts',
-            'isEntry' => true,
-            'css' => ['assets/app-prueba.css'],
-        ],
-        'resources/js/pages/Home.vue' => [
-            'file' => 'assets/Home-prueba.js',
-            'src' => 'resources/js/pages/Home.vue',
-            'isDynamicEntry' => true,
-            // El mapa: la página lo pide con import() al montarse.
-            'dynamicImports' => ['resources/js/map/engine.ts'],
-        ],
-        'resources/js/map/engine.ts' => [
-            'file' => 'assets/engine-prueba.js',
-            'src' => 'resources/js/map/engine.ts',
-            'isDynamicEntry' => true,
-            'css' => ['assets/engine-prueba.css'],
-        ],
-    ]));
-    $this->app->usePublicPath($this->publicPath);
-});
-
-afterEach(function () {
-    File::deleteDirectory($this->publicPath);
+    // Manifest de Vite propio (tests/Pest.php): la prueba ejercita @vite sin
+    // withoutVite() y sin depender de `npm run build`.
+    fakeViteManifest();
 });
 
 test('declara el español como idioma del documento', function () {

@@ -115,6 +115,13 @@ export default defineConfig({
         chunkSizeWarningLimit: 600,
     },
     server: {
+        // La CSP de desarrollo (app/Support/ContentSecurityPolicy.php) deja
+        // pasar al servidor de Vite por el origen que el plugin de Laravel
+        // escribe en public/hot. Sin host, en Windows sale la IPv6 literal
+        // (http://[::1]:5173), que una CSP no puede nombrar y la página quedaba
+        // sin scripts; con 'localhost' sale http://localhost:5173. Vite sigue
+        // escuchando solo en este equipo.
+        host: 'localhost',
         watch: {
             ignored: ['**/storage/framework/views/**'],
         },

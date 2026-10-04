@@ -9,9 +9,11 @@ x-app: &app
     context: .
     target: prod
     args:
-      # URL del mapa (ADR 0007), fijadas al compilar los assets. Sin valor
-      # aquí: se toman del entorno o del .env si están definidas; si no,
-      # valen las que trae el Dockerfile por defecto.
+      # URL del mapa (ADR 0007), fijadas al compilar los assets y guardadas en
+      # el entorno de la imagen, de donde las lee Laravel en ejecución (el
+      # preconnect y la CSP): no hace falta pasarlas en `environment`, y el
+      # .env del servidor no las cambia. Sin valor aquí: se toman del entorno
+      # o del .env si están definidas; si no, valen las que trae el Dockerfile.
       - VITE_MAP_STYLE_URL
       - VITE_MAP_ROUTES_URL
   # En el servidor APP_IMAGE apunta a la imagen publicada, con su versión
