@@ -41,7 +41,7 @@ enableAutoUnmount(afterEach);
 beforeEach(() => {
     vi.resetModules();
     activate.mockClear();
-    vi.stubGlobal('navigator', { serviceWorker: {} });
+    vi.stubGlobal('navigator', { serviceWorker: new EventTarget() });
 });
 
 describe('UpdatePrompt', () => {

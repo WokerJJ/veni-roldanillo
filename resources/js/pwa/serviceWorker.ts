@@ -42,10 +42,28 @@ export function registerServiceWorker(): void {
 export function useServiceWorker() {
     return {
         updateReady: readonly(updateReady),
-        /** Activa la versión que espera; la página se recarga cuando toma el control. */
+        /**
+         * Activa la versión que espera y recarga la página cuando toma el
+         * control. La recarga va por cuenta propia: el registro de
+         * vite-plugin-pwa solo recarga si la página ya tenía service worker al
+         * abrirse, y en la primera visita la versión nueva quedaría activa
+         * debajo de una página vieja.
+         */
         update: async (): Promise<void> => {
             updateReady.value = false;
-            await activateUpdate?.(true);
+
+            if (activateUpdate === undefined) {
+                return;
+            }
+
+            navigator.serviceWorker.addEventListener(
+                'controllerchange',
+                () => {
+                    window.location.reload();
+                },
+                { once: true },
+            );
+            await activateUpdate(true);
         },
         /** «Ahora no»: el aviso vuelve en la próxima carga, mientras la versión siga esperando. */
         dismiss: (): void => {

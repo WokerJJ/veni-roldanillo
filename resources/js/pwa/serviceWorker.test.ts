@@ -30,11 +30,18 @@ function registeredWith(): RegisterSWOptions {
     return options;
 }
 
+/** navigator.serviceWorker de un navegador que lo soporta: dispara `controllerchange` a pedido. */
+let serviceWorkerContainer: EventTarget;
+const reload = vi.fn();
+
 beforeEach(() => {
     registerSW.mockClear();
     activate.mockClear();
+    reload.mockClear();
+    serviceWorkerContainer = new EventTarget();
     // happy-dom no trae serviceWorker; un navegador que lo soporta, sí.
-    vi.stubGlobal('navigator', { serviceWorker: {} });
+    vi.stubGlobal('navigator', { serviceWorker: serviceWorkerContainer });
+    vi.stubGlobal('location', { reload });
 });
 
 describe('registro del service worker', () => {
@@ -103,6 +110,22 @@ describe('aviso de versión nueva', () => {
 
         expect(updateReady.value).toBe(false);
         expect(activate).not.toHaveBeenCalled();
+    });
+
+    it('recarga la página cuando la versión nueva toma el control, también en la primera visita', async () => {
+        // El registro de vite-plugin-pwa solo recarga si la página ya tenía
+        // service worker al abrirse: la recarga la pide el aviso.
+        const { registerServiceWorker, useServiceWorker } = await load();
+        registerServiceWorker();
+        registeredWith().onNeedRefresh?.();
+
+        await useServiceWorker().update();
+        expect(reload).not.toHaveBeenCalled();
+
+        serviceWorkerContainer.dispatchEvent(new Event('controllerchange'));
+        serviceWorkerContainer.dispatchEvent(new Event('controllerchange'));
+
+        expect(reload).toHaveBeenCalledOnce();
     });
 
     it('sin registro (desarrollo), actualizar no hace nada', async () => {
