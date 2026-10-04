@@ -73,7 +73,7 @@ Hace falta una de las dos. Sin `public/build/manifest.json` y sin el servidor de
 
 Mientras `npm run dev` está abierto manda él: escribe `public/hot` y la app carga los recursos desde ese servidor aunque exista una compilación. Al cerrarlo borra el archivo; si se cierra a la fuerza y `public/hot` queda, la app sigue apuntando a un servidor que ya no existe: borrá el archivo o volvé a ejecutar `npm run dev`.
 
-La política de seguridad de contenido (CSP, [ADR 0014](docs/adr/0014-seguridad-http-detras-del-proxy.md)) está activa también en desarrollo y deja pasar al servidor que nombra `public/hot` (`http://localhost:5173`: `vite.config.ts` fija `localhost` porque una CSP no puede nombrar `[::1]`). Si algo no carga, la consola del navegador dice qué bloqueó; con `CSP_REPORT_ONLY=true` en el `.env` solo lo informa, sin bloquear.
+La política de seguridad de contenido (CSP, [ADR 0014](docs/adr/0014-seguridad-http-detras-del-proxy.md)) está activa también en desarrollo y deja pasar al servidor que nombra `public/hot` (`http://localhost:5173`: `vite.config.ts` fija `localhost` porque una CSP no puede nombrar `[::1]`). Si algo no carga, la consola del navegador dice qué bloqueó; con `CSP_REPORT_ONLY=true` en el `.env` solo lo informa, sin bloquear. Si una visita GET de Inertia falla, la página de depuración de Laravel se abre como página propia y no en el diálogo de Inertia, donde la CSP no deja leerla; la de una visita que manda datos se lee en la pestaña Red del navegador.
 
 ### Mapa
 
