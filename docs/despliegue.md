@@ -242,7 +242,7 @@ journalctl -u caddy -n 50 -o cat | grep -o '"client_ip":"[^"]*"' | tail -n 1
 
 Tiene que salir la IP de `cdn-cgi/trace`. Si sale `203.0.113.99`, falta `trusted_proxies_strict`; si sale una IP de Cloudflare, falta su rango en `trusted_proxies`.
 
-Lo que sirve Caddy desde `public/` sin pasar por Laravel lleva su propia caché (`config/octane.php`): los assets de `/build/assets`, que llevan el hash del contenido en el nombre, un año como `immutable`; las fuentes de `/fonts`, sin hash, una semana y después se revalidan. Un CDN delante (Cloudflare) respeta esas cabeceras.
+Lo que sirve Caddy desde `public/` sin pasar por Laravel lleva su propia caché (`config/octane.php`): los assets de `/build/assets`, que llevan el hash del contenido en el nombre, un año como `immutable`; las fuentes de `/fonts`, sin hash, una semana y después se revalidan; `/sw.js`, el service worker de la app instalable, con `no-cache`, para que una versión nueva llegue en la visita siguiente ([Arquitectura](03-arquitectura.md#app-instalable-y-caché-pwa)). Un CDN delante (Cloudflare) respeta esas cabeceras.
 
 ### Qué hace un despliegue
 

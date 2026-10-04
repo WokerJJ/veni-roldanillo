@@ -96,6 +96,20 @@ docker build --target prod \
   --build-arg VITE_MAP_ROUTES_URL='https://tiles.veniroldanillo.co/vX.Y.Z/roldanillo-rutas.json' .
 ```
 
+### App instalable (PWA)
+
+El manifest (`/manifest.webmanifest`) y la página sin conexión (`/offline`) los sirve Laravel; el service worker (`public/sw.js`) y los íconos (`public/build/icons`) salen de `npm run build`. El service worker **solo se registra con el build de producción**: con `npm run dev` no hay service worker (Vite sirve los módulos sueltos y cambian a cada guardado; uno que los guardara mostraría código viejo). Cómo y qué guarda: [Arquitectura](docs/03-arquitectura.md#app-instalable-y-caché-pwa).
+
+Para probarlo en el equipo, con el entorno de desarrollo arriba y sin `npm run dev` (sin `public/hot`):
+
+```bash
+npm run build
+```
+
+En Chrome, <http://localhost:8000> (un service worker necesita HTTPS o `localhost`; desde otro equipo de la red, por IP, no se registra). En las herramientas de desarrollo, «Application»: «Manifest» dice si se puede instalar; «Service workers», su estado; «Cache storage», lo guardado (`veni-precache-…`, `veni-assets`, `veni-fonts`, `veni-map`). Con «Network» en «Offline», recargar muestra la página sin conexión; al volver la red, se recarga sola. Para ver el aviso de versión nueva, otro `npm run build` con un cambio y recargar. Con la imagen de producción («Probar bajo Octane», más abajo) se prueba igual en su puerto, y ahí `/sw.js` sale además con `Cache-Control: no-cache`.
+
+Si después volvés a `npm run dev`, el service worker del build anterior sigue registrado pero no estorba: no guarda HTML ni lo que sirve Vite. Para empezar limpio: «Application» → «Storage» → «Clear site data».
+
 ### Dependencias de Composer
 
 `vendor/` no está en la carpeta del proyecto: vive en un volumen de Docker. Leer sus más de 10 000 archivos a través del montaje de Docker Desktop hacía que cada petición tardara segundos. El contenedor instala las dependencias al arrancar si el volumen está vacío o si lo instalado ya no corresponde a `composer.lock`. Composer corre con el usuario del contenedor, nunca con `--user root`: dejaría en el volumen archivos que ese usuario no puede actualizar, y el contenedor se niega a instalar como root.
@@ -147,7 +161,7 @@ docker compose -f docker-compose.yml -p veni-prod down -v    # al terminar; -v b
 
 Queda en <http://localhost:8001>, ya migrada, con su propia base de datos y sin tocar el entorno de desarrollo. En PowerShell, `$env:APP_PORT = 8001` antes del primer comando.
 
-La prueba de humo hace ese recorrido sola, y es la que corre la CI en cada PR: levanta la imagen en un proyecto de Compose aparte (`veni-humo`, puerto 8189) con un `.env` temporal, espera `/up`, comprueba la migración y las cachés de Laravel, pide veinte veces la página de inicio alternando inglés y español (`<html lang>`, `Content-Language`, la descripción y las traducciones de la página tienen que seguir a cada petición), comprueba que un archivo de `storage/app` sobrevive a recrear los contenedores y que `worker` y `scheduler` solo se dan por sanos cuando ya corren su comando, y borra todo al terminar:
+La prueba de humo hace ese recorrido sola, y es la que corre la CI en cada PR: levanta la imagen en un proyecto de Compose aparte (`veni-humo`, puerto 8189) con un `.env` temporal, espera `/up`, comprueba la migración y las cachés de Laravel, pide veinte veces la página de inicio alternando inglés y español (`<html lang>`, `Content-Language`, la descripción y las traducciones de la página tienen que seguir a cada petición), comprueba que un archivo de `storage/app` sobrevive a recrear los contenedores, que `worker` y `scheduler` solo se dan por sanos cuando ya corren su comando y que la app instalable sale completa (manifest, service worker y página sin conexión), y borra todo al terminar:
 
 ```bash
 docker build --target prod -t veni-humo .

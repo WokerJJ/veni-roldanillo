@@ -43,6 +43,45 @@ El mapa base lo produce y publica el repositorio [veni-mapa](https://github.com/
 
 Para la política de seguridad de contenido (ADR 0014): el navegador pide con `fetch` el estilo, los tiles, las fuentes, los sprites y el grafo de rutas al host del mapa (`connect-src`, también en `img-src`); la CSP toma ese host de `VITE_MAP_STYLE_URL` y `VITE_MAP_ROUTES_URL`, que la imagen de producción guarda en su entorno. El worker de MapLibre se sirve desde el mismo origen de la app (`worker-src 'self'`); en desarrollo sale del servidor de Vite y MapLibre lo arranca desde una URL `blob:`. Los íconos de los controles van en el CSS como `data:` y, en navegadores sin `createImageBitmap`, los sprites se arman con una URL `blob:` (`img-src`).
 
+## App instalable y caché (PWA)
+
+La app se instala desde el navegador y abre sin señal con una página propia (#5). Regla 8 de producto: tiene que servir con datos móviles y mala señal, así que el service worker guarda lo que no cambia y nunca guarda lo que depende de la persona.
+
+### Manifest
+
+`/manifest.webmanifest` lo sirve Laravel (`WebManifestController`, `App\Support\WebApp`), no un archivo del build: los colores salen de `brand/tokens.json` y la descripción de `lang/es.json`, sin copiarlos. Va sin el grupo `web`: el navegador lo pide sin cookies y abriría una sesión en cada visita. Está en español, el idioma por defecto, porque el navegador no manda la cookie del idioma y el dispositivo lo guarda al instalar. `theme_color` y `background_color` son el fondo de la cabecera en claro (blanco); la vista raíz pone además `<meta name="theme-color">` para claro y oscuro, y `useTheme` los ajusta si en la app rige otro tema que el del sistema. Los íconos (192, 512 y el maskable de 512) y el de iOS se copian de `brand/png` a `public/build/icons` al compilar (`copyBrandIcons` en `vite.config.ts`), sin una segunda copia en git.
+
+### Service worker
+
+`vite-plugin-pwa` con **generateSW**: Workbox arma el service worker desde la configuración de `vite.config.ts`. Alcanza porque todo lo que hace falta es declarativo (rutas, estrategias, límites y la página de respaldo); con injectManifest habría un service worker propio que mantener y probar aparte. Queda en `public/sw.js`, en la raíz, así su alcance es todo el sitio sin `Service-Worker-Allowed`, y lleva el runtime de Workbox adentro (un solo archivo, unos 8 kB comprimidos). Caddy lo sirve con `Cache-Control: no-cache` (`config/octane.php`), para que ni el navegador ni un CDN delante retengan una versión vieja.
+
+Lo registra el bundle (`resources/js/pwa/serviceWorker.ts`), sin script en línea: la CSP solo deja correr scripts de este origen o con nonce, y `worker-src 'self'` ya deja registrar `/sw.js` ([ADR 0014](adr/0014-seguridad-http-detras-del-proxy.md)). Solo en el build de producción y después del evento `load`, para no competir con la primera carga; `workbox-window` es un chunk aparte que baja recién entonces.
+
+**Versiones nuevas.** Una versión nueva del service worker queda esperando y la app avisa abajo, en una región de estado: «Hay una versión nueva de Vení · Actualizar», con «Ahora no». No se activa sola: hacerlo recargaría la página en medio de un pedido, y la versión vieja sigue funcionando con su precache. «Actualizar» la activa y recarga cuando toma el control; si nadie la acepta, se activa cuando se cierran todas las pestañas de la app. Mientras tanto, si el despliegue cambió los assets, Inertia ya recarga la página al ver otra versión del manifest de Vite, y esa navegación es la que hace que el navegador encuentre el `sw.js` nuevo.
+
+### Qué se guarda y cómo
+
+| Qué | Estrategia | Caché y límite | Por qué |
+| --- | --- | --- | --- |
+| El shell: entrada (`app.ts`), página de inicio, sus imports estáticos, CSS y logos, y la página sin conexión con su script y su estilo | Precache | `veni-precache-…`; 9 entradas, unos 74 kB comprimidos | Lo que baja al abrir la app. Con el hash en el nombre se pide tal cual: si la página acaba de bajarlo, sale de la caché del navegador sin volver a la red |
+| Navegaciones (HTML) | Solo red; sin red, la página sin conexión del precache | Nada | El HTML depende de la cookie del idioma (ADR 0010), de la sesión y del token CSRF: guardarlo serviría una página de otra persona, de otro idioma o vencida. Con *navigation preload*, la petición sale mientras arranca el service worker |
+| Lo demás de `/build/assets`: el mapa (MapLibre, PMTiles, el worker y su CSS), cada ícono, otras páginas | Cache first | `veni-assets`, 120 entradas, 60 días | Llevan el hash del contenido: nunca cambian. Se guardan la primera vez que se piden |
+| Fuentes (`/fonts/*.woff2`) | Stale-while-revalidate | `veni-fonts`, 8 entradas | No llevan hash (EVA-004): no pueden ir a una caché que se tome como inmutable. Se usa la guardada y se revalida detrás, con el ETag que da Caddy |
+| Estilos, glyphs y sprites del mapa (`.json`, `.pbf`, `.png`, `.webp` del origen de `VITE_MAP_STYLE_URL`) | Stale-while-revalidate | `veni-map`, 60 entradas, 30 días | La demo de veni-mapa no es una versión fija (ADR 0007): se muestra lo guardado y se actualiza detrás. Una visita al mapa guarda unas 7 entradas |
+| PMTiles y el grafo de rutas | No se guardan | — | Ver abajo |
+
+El precache sale del directorio de build (`public/build/assets`) y el manifest de Vite solo dice cuáles de esos archivos son el shell (`resources/js/pwa/shellPrecache.ts`): en el manifest hay nombres que no son archivos (el worker del mapa queda en `assets` con el hash sin resolver). Si el shell nombra un archivo que no está en el build, la compilación falla: un precache con una URL que no existe deja al service worker sin instalarse. La página sin conexión no es un archivo del build: su versión en el precache es un hash de la vista, de `lang/*.json` y de los archivos del shell que nombra.
+
+**Por qué el mapa no va en el precache.** Son unos 310 kB comprimidos. El precache se baja entero o no se instala: con mala señal, más peso es más instalaciones fallidas, y cada despliegue que cambie el motor lo volvería a bajar a todos. Sin red, además, el motor no sirve de nada sin los tiles. Como el inicio muestra el mapa, la primera visita ya lo baja y desde la segunda sale de `veni-assets`.
+
+**Por qué el PMTiles no se guarda.** El mapa se pide por rangos (`Range`, respuestas 206) y la Cache API no guarda respuestas parciales. `RangeRequestsPlugin` de Workbox no lo resuelve: recorta respuestas de una copia **completa** ya guardada (el archivo de Roldanillo pesa 1,6 MB), y la biblioteca de PMTiles nunca pide el archivo entero, así que habría que bajarlo aparte, con datos móviles, sin que nadie lo pidiera. Con una URL que no es una versión fija, una copia guardada de una versión con los rangos nuevos de otra daría tiles rotos: PMTiles compara el ETag de cada respuesta y, si cambia, vuelve a pedir con `cache: 'reload'`, una indicación para la caché HTTP que una respuesta sacada de la Cache API no mira, así que seguiría recibiendo la copia vieja. Queda la caché HTTP del navegador. Si llega a hacer falta el mapa sin conexión, la forma es una descarga explícita («Descargar el mapa») de una release fija, con su tamaño a la vista. El grafo de rutas (más de 500 kB) se decide con las rutas (#10, #11).
+
+### Sin conexión
+
+Sin red, una navegación responde la página sin conexión (`/offline`, `resources/views/offline.blade.php`) en la misma URL. La arma Laravel, sin el grupo `web` (no depende de la sesión ni del idioma de la petición), con los textos de `lang/` en los dos idiomas y la política de seguridad de siempre; no trae nada en línea, así que la respuesta guardada no depende de su nonce, y nombra los archivos sin esquema ni host. Un script clásico en `<head>` (`resources/js/offline.ts`) elige el idioma antes de pintar: el último con que respondió el servidor en este dispositivo (`useI18n` lo deja en `localStorage`, `veni:locale`) o, si no hay, el primero del teléfono que la app tenga; aplica el tema guardado (`veni:theme`) y recarga la página sola cuando vuelve la señal.
+
+Cambiar de idioma exige red (ADR 0010): los textos del otro idioma vienen del servidor. Sin conexión, o si `PUT /locale` no llega, el selector avisa en una región de estado en vez de fallar en silencio.
+
 ## Geolocalización
 
 - API Geolocation del navegador (PWA) y plugin de Capacitor (fase 2).
