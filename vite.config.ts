@@ -4,10 +4,14 @@ import { fileURLToPath, URL } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
 import laravel from 'laravel-vite-plugin';
-import type { Plugin } from 'vite';
-import { defineConfig } from 'vite';
+import type { Plugin, PluginOption } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 import { missingStylePlaceholders } from './resources/js/map/styleTemplate';
+import { mapCachePattern } from './resources/js/pwa/mapCache';
+import type { ViteManifest } from './resources/js/pwa/shellPrecache';
+import { keepShell, staticFiles } from './resources/js/pwa/shellPrecache';
 
 const MAP_WORKER = 'maplibre-gl/dist/maplibre-gl-worker.mjs';
 
@@ -117,7 +121,112 @@ function copyBrandIcons(): Plugin {
     };
 }
 
-export default defineConfig({
+/** Carpeta del proyecto: de aquí salen public/build y el .env. */
+const ROOT = fileURLToPath(new URL('.', import.meta.url));
+
+/**
+ * El shell que el service worker guarda al instalarse: la entrada y la página
+ * de inicio con sus imports estáticos, CSS y logos (lo que vigila el
+ * presupuesto del arranque en resources/js/map/bundle.test.ts). El mapa, los
+ * íconos y las demás páginas se guardan la primera vez que se piden.
+ */
+const SHELL_ENTRIES = ['resources/js/app.ts', 'resources/js/pages/Home.vue'];
+
+const DAY = 60 * 60 * 24;
+
+/**
+ * Service worker de la app instalable (#5), con generateSW: Workbox lo arma
+ * con esta configuración y queda en public/sw.js, en la raíz, para que su
+ * alcance sea todo el sitio sin cabeceras de más (lo sirve Caddy,
+ * config/octane.php). Las estrategias y por qué, en docs/03-arquitectura.md
+ * («App instalable y caché»).
+ *
+ * Bajo Vitest no genera nada: resources/js/map/bundle.test.ts compila en
+ * memoria y el service worker saldría de un public/build viejo.
+ */
+function serviceWorker(env: Record<string, string>): PluginOption {
+    const mapPattern = mapCachePattern(env.VITE_MAP_STYLE_URL, env.VITE_MAP_ROUTES_URL);
+
+    return VitePWA({
+        disable: process.env.VITEST !== undefined,
+        strategies: 'generateSW',
+        // Lo registra el bundle (resources/js/pwa/serviceWorker.ts), sin script
+        // en línea: la CSP solo deja correr scripts de este origen o con nonce.
+        injectRegister: false,
+        // Avisa «Hay una versión nueva» en vez de recargar sin preguntar.
+        registerType: 'prompt',
+        // El manifest web lo sirve Laravel (WebManifestController).
+        manifest: false,
+        outDir: 'public',
+        filename: 'sw.js',
+        base: '/',
+        buildBase: '/',
+        scope: '/',
+        workbox: {
+            cacheId: 'veni',
+            globDirectory: `${ROOT}public/build`,
+            globPatterns: ['assets/*.{js,css,svg}'],
+            modifyURLPrefix: { 'assets/': '/build/assets/' },
+            // Con el hash en el nombre, la URL ya es la versión: se piden tal
+            // cual y, si la página acaba de bajarlas, salen de la caché del
+            // navegador sin volver a la red.
+            dontCacheBustURLsMatching: /^\/build\/assets\//,
+            manifestTransforms: [
+                (entries) => {
+                    const manifest = JSON.parse(readFileSync(`${ROOT}public/build/manifest.json`, 'utf8')) as ViteManifest;
+                    const shell = staticFiles(manifest, SHELL_ENTRIES).map((file) => `/build/${file}`);
+
+                    return { manifest: keepShell(entries, shell), warnings: [] };
+                },
+            ],
+            // Sin respaldo de una página guardada: el HTML depende del idioma y de la sesión.
+            navigateFallback: null,
+            // Un solo archivo, sin el runtime de Workbox aparte.
+            inlineWorkboxRuntime: true,
+            cleanupOutdatedCaches: true,
+            // La primera vez toma la página ya abierta y guarda lo que ella pide después.
+            clientsClaim: true,
+            runtimeCaching: [
+                {
+                    // Chunks con hash que no van en el shell: el mapa, cada
+                    // ícono, las otras páginas. Nunca cambian.
+                    urlPattern: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith('/build/assets/'),
+                    handler: 'CacheFirst',
+                    options: {
+                        cacheName: 'veni-assets',
+                        expiration: { maxEntries: 120, maxAgeSeconds: 60 * DAY, purgeOnQuotaError: true },
+                        cacheableResponse: { statuses: [200] },
+                    },
+                },
+                {
+                    // Sin hash en el nombre: se usa la guardada y se revalida detrás.
+                    urlPattern: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith('/fonts/') && url.pathname.endsWith('.woff2'),
+                    handler: 'StaleWhileRevalidate',
+                    options: {
+                        cacheName: 'veni-fonts',
+                        expiration: { maxEntries: 8, purgeOnQuotaError: true },
+                        cacheableResponse: { statuses: [200] },
+                    },
+                },
+                ...(mapPattern === null
+                    ? []
+                    : [
+                          {
+                              urlPattern: mapPattern,
+                              handler: 'StaleWhileRevalidate' as const,
+                              options: {
+                                  cacheName: 'veni-map',
+                                  expiration: { maxEntries: 60, maxAgeSeconds: 30 * DAY, purgeOnQuotaError: true },
+                                  cacheableResponse: { statuses: [200] },
+                              },
+                          },
+                      ]),
+            ],
+        },
+    });
+}
+
+export default defineConfig(({ mode }) => ({
     plugins: [
         laravel({
             input: ['resources/js/app.ts'],
@@ -128,6 +237,7 @@ export default defineConfig({
         shareMapWorkerCode(),
         checkMapStyleUrl(),
         copyBrandIcons(),
+        serviceWorker(loadEnv(mode, ROOT, 'VITE_')),
     ],
     resolve: {
         alias: {
@@ -153,4 +263,4 @@ export default defineConfig({
             ignored: ['**/storage/framework/views/**'],
         },
     },
-});
+}));

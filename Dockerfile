@@ -151,6 +151,9 @@ COPY --chmod=0755 docker/entrypoint-prod.sh /usr/local/bin/entrypoint-prod
 
 COPY --from=vendor --chown=app:app /app /app
 COPY --from=assets --chown=app:app /app/public/build /app/public/build
+# El service worker de la PWA va en la raíz, para que su alcance sea todo el
+# sitio (vite.config.ts).
+COPY --from=assets --chown=app:app /app/public/sw.js /app/public/sw.js
 
 # Las mismas URL del mapa con que se compiló el JavaScript, en el entorno del
 # contenedor (config/services.php): la vista raíz adelanta la conexión con ese
