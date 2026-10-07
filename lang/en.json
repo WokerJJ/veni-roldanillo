@@ -30,7 +30,7 @@
     "errors.server_error.message": "It's not your fault. Try again in a little while.",
     "errors.maintenance.title": "We're making a few adjustments",
     "errors.maintenance.message": "Come back in a little while, we're almost done.",
-    "offline.title": "You are offline",
+    "offline.title": "No signal, or it is too slow",
     "offline.message": "Check your mobile data or wifi. When the signal is back, the page opens by itself.",
     "offline.retry": "Try again",
     "pwa.update_available": "There is a new version of Vení.",

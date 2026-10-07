@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
@@ -10,9 +9,9 @@ import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import { missingStylePlaceholders } from './resources/js/map/styleTemplate';
-import { mapCachePattern } from './resources/js/pwa/mapCache';
+import { OFFLINE_URL, runtimeCaching } from './resources/js/pwa/runtimeCaching';
 import type { ViteManifest } from './resources/js/pwa/shellPrecache';
-import { keepShell, staticFiles } from './resources/js/pwa/shellPrecache';
+import { keepShell, offlineRevision, staticFiles } from './resources/js/pwa/shellPrecache';
 
 const MAP_WORKER = 'maplibre-gl/dist/maplibre-gl-worker.mjs';
 
@@ -126,10 +125,9 @@ function copyBrandIcons(): Plugin {
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 
 /**
- * Página sin conexión (resources/views/offline.blade.php, la sirve Laravel) y
- * lo que ella carga del build: un script clásico y su hoja de estilos.
+ * Lo que la página sin conexión (OFFLINE_URL, resources/views/offline.blade.php)
+ * carga del build: un script clásico y su hoja de estilos.
  */
-const OFFLINE_URL = '/offline';
 const OFFLINE_ENTRIES = ['resources/js/offline.ts', 'resources/css/offline.css'];
 
 /**
@@ -140,26 +138,6 @@ const OFFLINE_ENTRIES = ['resources/js/offline.ts', 'resources/css/offline.css']
  * vez que se piden.
  */
 const SHELL_ENTRIES = ['resources/js/app.ts', 'resources/js/pages/Home.vue', ...OFFLINE_ENTRIES];
-
-const DAY = 60 * 60 * 24;
-
-/**
- * Versión de la página sin conexión en el precache. No es un archivo del
- * build: la arma Laravel con la vista, los textos de lang/ y los archivos del
- * shell que nombra (el script, el estilo y los logos, con su hash). Si cambia
- * algo de eso, cambia la versión y el service worker la vuelve a pedir.
- */
-function offlineRevision(shellUrls: readonly string[]): string {
-    const hash = createHash('sha256');
-
-    for (const file of ['resources/views/offline.blade.php', 'lang/es.json', 'lang/en.json']) {
-        hash.update(readFileSync(`${ROOT}${file}`));
-    }
-
-    hash.update(shellUrls.join('\n'));
-
-    return hash.digest('hex').slice(0, 16);
-}
 
 /**
  * Service worker de la app instalable (#5), con generateSW: Workbox lo arma
@@ -172,8 +150,6 @@ function offlineRevision(shellUrls: readonly string[]): string {
  * memoria y el service worker saldría de un public/build viejo.
  */
 function serviceWorker(env: Record<string, string>): PluginOption {
-    const mapPattern = mapCachePattern(env.VITE_MAP_STYLE_URL, env.VITE_MAP_ROUTES_URL);
-
     return VitePWA({
         disable: process.env.VITEST !== undefined,
         strategies: 'generateSW',
@@ -202,7 +178,8 @@ function serviceWorker(env: Record<string, string>): PluginOption {
                 (entries) => {
                     const manifest = JSON.parse(readFileSync(`${ROOT}public/build/manifest.json`, 'utf8')) as ViteManifest;
                     const shell = staticFiles(manifest, SHELL_ENTRIES).map((file) => `/build/${file}`);
-                    const offline = { url: OFFLINE_URL, revision: offlineRevision(shell), size: 0 };
+                    const revision = offlineRevision(shell, (file) => readFileSync(`${ROOT}${file}`));
+                    const offline = { url: OFFLINE_URL, revision, size: 0 };
 
                     return { manifest: [...keepShell(entries, shell), offline], warnings: [] };
                 },
@@ -218,49 +195,8 @@ function serviceWorker(env: Record<string, string>): PluginOption {
             cleanupOutdatedCaches: true,
             // La primera vez toma la página ya abierta y guarda lo que ella pide después.
             clientsClaim: true,
-            runtimeCaching: [
-                {
-                    // Navegaciones: siempre a la red, sin guardar la respuesta.
-                    // Si no hay red, la página sin conexión del precache.
-                    urlPattern: ({ request }) => request.mode === 'navigate',
-                    handler: 'NetworkOnly',
-                    options: { precacheFallback: { fallbackURL: OFFLINE_URL } },
-                },
-                {
-                    // Chunks con hash que no van en el shell: el mapa, cada
-                    // ícono, las otras páginas. Nunca cambian.
-                    urlPattern: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith('/build/assets/'),
-                    handler: 'CacheFirst',
-                    options: {
-                        cacheName: 'veni-assets',
-                        expiration: { maxEntries: 120, maxAgeSeconds: 60 * DAY, purgeOnQuotaError: true },
-                        cacheableResponse: { statuses: [200] },
-                    },
-                },
-                {
-                    // Sin hash en el nombre: se usa la guardada y se revalida detrás.
-                    urlPattern: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith('/fonts/') && url.pathname.endsWith('.woff2'),
-                    handler: 'StaleWhileRevalidate',
-                    options: {
-                        cacheName: 'veni-fonts',
-                        expiration: { maxEntries: 8, purgeOnQuotaError: true },
-                        cacheableResponse: { statuses: [200] },
-                    },
-                },
-                ...(mapPattern === null
-                    ? []
-                    : [
-                          {
-                              urlPattern: mapPattern,
-                              handler: 'StaleWhileRevalidate' as const,
-                              options: {
-                                  cacheName: 'veni-map',
-                                  expiration: { maxEntries: 60, maxAgeSeconds: 30 * DAY, purgeOnQuotaError: true },
-                                  cacheableResponse: { statuses: [200] },
-                              },
-                          },
-                      ]),
-            ],
+            // Qué se guarda de lo demás y cómo: resources/js/pwa/runtimeCaching.ts.
+            runtimeCaching: runtimeCaching(env),
         },
     });
 }

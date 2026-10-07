@@ -22,6 +22,17 @@ function escapeRegExp(text: string): string {
     return text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 }
 
+const MAP_FILES = ['json', 'pbf', 'png', 'webp'] as const;
+
+/** Carpeta de una versión publicada de veni-mapa: /v0.2.0/. */
+const VERSION_FOLDER = '\\/v\\d+\\.\\d+\\.\\d+\\/';
+
+export interface MapCacheFilter {
+    /** Solo lo que lleva la versión en la ruta (true) o solo lo que no (false). */
+    versioned?: boolean;
+    files?: readonly (typeof MAP_FILES)[number][];
+}
+
 /**
  * Estilos, glyphs y sprites de veni-mapa: los archivos `.json`, `.pbf`,
  * `.png` y `.webp` del origen de `VITE_MAP_STYLE_URL`, que también sirve el
@@ -32,8 +43,13 @@ function escapeRegExp(text: string): string {
  * (`VITE_MAP_ROUTES_URL`, más de 500 kB), que solo se pide al calcular una
  * ruta. Sin URL del estilo, no hay patrón: el mapa no carga y no hay nada que
  * guardar.
+ *
+ * Con `only` el patrón se queda con una parte: los archivos de una versión
+ * publicada del mapa (`versioned: true`, la ruta lleva una carpeta como
+ * `/v0.2.0/` y lo que hay dentro no cambia nunca) o los que no la llevan, y
+ * solo algunos tipos de archivo (`files`).
  */
-export function mapCachePattern(styleUrl: string | undefined, routesUrl?: string): RegExp | null {
+export function mapCachePattern(styleUrl: string | undefined, routesUrl?: string, only: MapCacheFilter = {}): RegExp | null {
     const origin = originOf(styleUrl);
 
     if (origin === null) {
@@ -43,6 +59,9 @@ export function mapCachePattern(styleUrl: string | undefined, routesUrl?: string
     const routes = originOf(routesUrl) === origin && routesUrl !== undefined ? new URL(routesUrl.trim()).pathname : null;
     // El grafo de rutas también es .json: se descarta antes de mirar la extensión.
     const withoutRoutes = routes === null ? '' : `(?!${escapeRegExp(routes.slice(1))}(?:[?#]|$))`;
+    // Se mira desde la barra que sigue al host, y solo en la ruta: no en los parámetros.
+    const version = only.versioned === undefined ? '' : `(?${only.versioned ? '=' : '!'}[^?#]*${VERSION_FOLDER})`;
+    const files = (only.files ?? MAP_FILES).join('|');
 
-    return new RegExp(`^${escapeRegExp(origin)}/${withoutRoutes}[^?#]*\\.(?:json|pbf|png|webp)(?:[?#].*)?$`);
+    return new RegExp(`^${escapeRegExp(origin)}${version}/${withoutRoutes}[^?#]*\\.(?:${files})(?:[?#].*)?$`);
 }
