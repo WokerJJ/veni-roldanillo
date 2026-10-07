@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 /// <reference types="vite-plugin-pwa/vanillajs" />
+// Los tipos de MapLibre nombran el espacio global GeoJSON (de @types/geojson,
+// que maplibre-gl trae como dependencia): sin esto quedan sin resolver.
+/// <reference types="geojson" />
 
 interface ImportMetaEnv {
     readonly VITE_APP_NAME?: string;

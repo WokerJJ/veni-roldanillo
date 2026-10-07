@@ -19,6 +19,8 @@ import { Protocol } from 'pmtiles';
 
 import { MapUnavailableError } from './errors';
 import { fetchMapStyle } from './fetchStyle';
+import { createLayerRegistry } from './layerRegistry';
+import type { MapLayerGroup, MapLayerGroupHandle } from './layers';
 
 setWorkerUrl(workerUrl);
 
@@ -53,9 +55,25 @@ export interface MapHandle {
      * tiene que esperarla (o atender su rechazo).
      */
     readonly loaded: Promise<void>;
-    /** Cambia de estilo (otro tema u otro idioma) sin mover la cámara. */
+    /**
+     * Cambia de estilo (otro tema u otro idioma) sin mover la cámara. Las
+     * capas propias registradas con `addLayerGroup` siguen en el estilo nuevo.
+     */
     setStyle(url: string): Promise<void>;
     setLabels(labels: MapLabels): void;
+    /**
+     * Registra un grupo de capas propias sobre el mapa base (ADR 0016) y
+     * devuelve con qué cambiar sus datos y quitarlo. Registrar otra vez el
+     * mismo id reemplaza al anterior. Desde un componente se usa por
+     * `useMapLayers()`, que además lo vuelve a registrar si el mapa se rehace.
+     */
+    addLayerGroup(group: MapLayerGroup): MapLayerGroupHandle;
+    /**
+     * Lleva la cámara a un punto, `[longitud, latitud]`, sin alejarla: con
+     * `minZoom`, se acerca hasta ahí si estaba más lejos. Es una animación
+     * corta, que MapLibre omite con prefers-reduced-motion.
+     */
+    showPoint(center: [number, number], options?: { minZoom?: number }): void;
 }
 
 interface Camera {
@@ -291,6 +309,9 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
     let destroyed = false;
     /** Deja de escuchar la conexión (se llena más abajo, con el mapa ya a la vista). */
     let stopRetrying = (): void => undefined;
+    // Las capas propias de la app (ADR 0016). Nadie puede registrar una hasta
+    // que esta función devuelva el mapa, ya con su primer estilo cargado.
+    const layers = createLayerRegistry(map);
 
     const destroy = (): void => {
         if (destroyed) {
@@ -299,6 +320,7 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
 
         destroyed = true;
         stopRetrying();
+        layers.dispose();
         map.remove();
         releaseProtocol();
     };
@@ -358,7 +380,10 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
         lastApplied = request;
         // diff: false reemplaza el estilo entero (cada tema trae sus
         // sprites); la cámara es del mapa, no del estilo, y no se mueve.
-        map.setStyle(next, { diff: false });
+        // Reemplazarlo borra lo añadido en ejecución: transformStyle vuelve a
+        // meter las capas propias en el estilo que llega, antes de aplicarlo.
+        map.setStyle(next, { diff: false, transformStyle: layers.transformStyle });
+        layers.styleRequested();
     };
 
     // Si el estilo nuevo no llegó (sin señal al cambiar de tema o de idioma),
@@ -393,6 +418,12 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
         setLabels(next) {
             if (!destroyed) {
                 applyLabels(map, next);
+            }
+        },
+        addLayerGroup: (group) => layers.add(group),
+        showPoint(center, { minZoom = 0 } = {}) {
+            if (!destroyed) {
+                map.easeTo({ center, zoom: Math.max(map.getZoom(), minZoom) });
             }
         },
     };
