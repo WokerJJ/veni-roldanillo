@@ -153,6 +153,22 @@ describe('useI18n · idioma para la página sin conexión', () => {
         expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('en');
     });
 
+    it('al volver a una página guardada en otro idioma, sigue recordando el del servidor', async () => {
+        const { fake, useI18n } = await load();
+        const { LOCALE_STORAGE_KEY } = await import('./useI18n');
+        mountHeading(useI18n);
+        fake.receiveFromServer('en', { replace: true });
+        await nextTick();
+
+        // Atrás: Inertia muestra la página guardada en español y se pide de
+        // nuevo; sin red, esa recarga no llega y lo último del servidor es inglés.
+        fake.restoreFromHistory('es');
+        await nextTick();
+
+        expect(document.documentElement.lang).toBe('es');
+        expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('en');
+    });
+
     it('sin almacenamiento, traduce igual', async () => {
         vi.stubGlobal('localStorage', {
             setItem: vi.fn(() => {

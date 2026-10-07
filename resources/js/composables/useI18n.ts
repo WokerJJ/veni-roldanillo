@@ -60,7 +60,6 @@ function syncDocument(): void {
             () => page.props.locale,
             (locale) => {
                 document.documentElement.lang = locale;
-                rememberLocale(locale);
             },
             { immediate: true },
         );
@@ -91,8 +90,15 @@ function syncDocument(): void {
 function reloadPagesSavedInAnotherLocale(initialLocale: Locale): void {
     let serverLocale = initialLocale;
 
+    // Para la página sin conexión se recuerda solo lo que respondió el
+    // servidor (la primera página y cada «beforeUpdate»), nunca el idioma de
+    // una página que sale del historial: si su recarga no llega (sin red),
+    // quedaría guardado el idioma viejo.
+    rememberLocale(serverLocale);
+
     router.on('beforeUpdate', (event) => {
         serverLocale = event.detail.page.props.locale;
+        rememberLocale(serverLocale);
     });
 
     router.on('navigate', (event) => {
