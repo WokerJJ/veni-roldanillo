@@ -17,12 +17,14 @@ const { t } = useI18n();
         <!--
             Bienvenida sobre el mapa (va antes en el documento: el título se
             lee primero). En un celular vertical queda abajo, a lo ancho, y
-            deja libre la franja de la atribución de OpenStreetMap; desde
-            480 px de ancho (también un celular acostado, que es bajo) queda
-            arriba a la izquierda, sin tocar los botones de zoom.
+            deja libre la franja de la atribución de OpenStreetMap (la misma
+            holgura que el aviso de versión nueva) y, si ese aviso se ve, se
+            corre encima de él (UpdatePrompt.vue); desde 480 px de ancho
+            (también un celular acostado, que es bajo) queda arriba a la
+            izquierda, sin tocar los botones de zoom.
         -->
         <section
-            class="absolute inset-x-3 bottom-9 z-10 rounded-veni-md border border-line bg-canvas/95 p-4 shadow-lg min-[480px]:inset-x-auto min-[480px]:top-4 min-[480px]:bottom-auto min-[480px]:left-4 min-[480px]:max-w-sm"
+            class="absolute inset-x-3 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] z-10 rounded-veni-md border border-line bg-canvas/95 p-4 shadow-lg min-[480px]:inset-x-auto min-[480px]:top-4 min-[480px]:bottom-auto min-[480px]:left-4 min-[480px]:max-w-sm"
         >
             <h1 class="text-xl min-[480px]:text-2xl">{{ t('home.heading') }}</h1>
             <p class="mt-1 text-sm text-ink-muted">{{ t('home.intro') }}</p>

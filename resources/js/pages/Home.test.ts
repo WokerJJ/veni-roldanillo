@@ -62,4 +62,12 @@ describe('Home', () => {
         expect(wrapper.get('h1').text()).toBe(heading);
         expect(wrapper.text()).toContain(soon);
     });
+
+    it('la bienvenida deja libre la atribución del mapa y se corre sobre el aviso de versión nueva', async () => {
+        const { wrapper } = await mountHome();
+        const welcome = wrapper.get('h1').element.closest('section');
+
+        // La misma holgura que el aviso (UpdatePrompt.vue) más el lugar que él ocupa cuando se ve.
+        expect(welcome?.classList).toContain('bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))]');
+    });
 });

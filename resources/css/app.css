@@ -26,6 +26,14 @@
     --ink-muted: var(--veni-ciruela-suave);
     --accent: var(--veni-arrebol);
     --line: color-mix(in oklab, var(--veni-ciruela) 15%, transparent);
+
+    /*
+     * Franja de abajo del mapa que nada tapa: la atribución de OpenStreetMap
+     * (ADR 0003). Encima flotan la bienvenida del inicio y el aviso de versión
+     * nueva. MapLibre la escribe en px (una línea de 20 px): el mínimo en px
+     * la cubre aunque el texto de la página se achique.
+     */
+    --veni-attribution-clearance: max(2.25rem, 36px);
 }
 
 :root[data-theme='dark'] {
