@@ -22,6 +22,9 @@ brand
 vendor
 node_modules
 public/build
+# Service worker de la PWA: sale de la compilación dentro de la imagen; uno
+# compilado en este equipo no debe entrar con el código
+public/sw.js
 public/hot
 public/storage
 public/frankenphp-worker.php

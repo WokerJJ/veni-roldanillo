@@ -7,7 +7,7 @@ import { createApp, h } from 'vue';
 import { cspNonce } from '@/csp';
 import { openDevErrorsAsPages } from '@/devErrors';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { registerServiceWorker } from '@/pwa/serviceWorker';
+import { registerServiceWorker, unregisterServiceWorkers } from '@/pwa/serviceWorker';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Vení Roldanillo';
 
@@ -23,9 +23,12 @@ if (import.meta.env.DEV) {
     openDevErrorsAsPages(router);
 }
 
-// App instalable y sin conexión (#5): solo con el build de producción.
+// App instalable y sin conexión (#5): solo con el build de producción. En
+// desarrollo se quita el service worker que haya dejado uno en este origen.
 if (import.meta.env.PROD) {
     registerServiceWorker();
+} else if (import.meta.env.DEV) {
+    void unregisterServiceWorkers();
 }
 
 void createInertiaApp({
