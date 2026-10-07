@@ -1,7 +1,8 @@
 /*
 | Página sin conexión (#5, resources/views/offline.blade.php). El service
-| worker la muestra cuando una navegación falla sin red. Trae los textos en
-| los dos idiomas y este script elige uno antes de pintar, igual que el tema.
+| worker la muestra cuando una navegación falla sin red o tarda demasiado.
+| Trae los textos en los dos idiomas y este script elige uno antes de pintar,
+| igual que el tema.
 |
 | La vista lo carga como script clásico en <head>, que bloquea: el archivo
 | compilado no puede llevar import ni export (lo vigila
@@ -58,13 +59,33 @@ function chooseTheme(): string {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+/**
+ * La barra del sistema sigue al tema de la página. La vista trae un
+ * <meta name="theme-color"> por tema, antes de este script, y el navegador
+ * elige con `media` según el sistema: si en la app se eligió el otro tema,
+ * los dos toman el color del elegido.
+ */
+function applyThemeColor(theme: string): void {
+    const chosen = document.head.querySelector<HTMLMetaElement>(`meta[name="theme-color"][media="(prefers-color-scheme: ${theme})"]`);
+
+    if (chosen === null) {
+        return;
+    }
+
+    for (const meta of document.head.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+        meta.content = chosen.content;
+    }
+}
+
 const locale = chooseLocale();
+const theme = chooseTheme();
 const root = document.documentElement;
 
 // La hoja de estilos (resources/css/offline.css) muestra solo el bloque de este idioma.
 root.lang = locale;
 root.dataset.locale = locale;
-root.dataset.theme = chooseTheme();
+root.dataset.theme = theme;
+applyThemeColor(theme);
 
 function retry(): void {
     window.location.reload();

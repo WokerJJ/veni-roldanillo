@@ -112,9 +112,14 @@ COPY resources ./resources
 COPY brand/tokens.css ./brand/tokens.css
 COPY brand/logo ./brand/logo
 COPY brand/png ./brand/png
-# Los textos de la página sin conexión: su versión en el precache de la PWA
-# depende de ellos (vite.config.ts).
+# De qué sale la página sin conexión, además de su vista: los textos, los
+# colores de la marca, el nombre de la app y sus idiomas. Su versión en el
+# precache de la PWA depende de todos (OFFLINE_PAGE_SOURCES,
+# resources/js/pwa/shellPrecache.ts).
 COPY lang ./lang
+COPY brand/tokens.json ./brand/tokens.json
+COPY app/Support/WebApp.php ./app/Support/WebApp.php
+COPY app/Enums/Locale.php ./app/Enums/Locale.php
 
 # Mapa de veni-mapa (arriba, al principio del archivo). Vite escribe estas URL
 # en el JavaScript al compilar, y el .env no entra en la imagen: llegan como

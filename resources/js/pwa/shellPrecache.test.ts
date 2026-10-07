@@ -1,8 +1,10 @@
 // @vitest-environment node
+import { existsSync, readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import type { ViteManifest } from './shellPrecache';
-import { keepShell, staticFiles } from './shellPrecache';
+import { keepShell, OFFLINE_PAGE_SOURCES, offlineRevision, staticFiles } from './shellPrecache';
 
 /** Como el de `npm run build`: la entrada, la página de inicio y el mapa, que la página pide con import(). */
 const manifest: ViteManifest = {
@@ -69,5 +71,54 @@ describe('precache del shell', () => {
         expect(() => keepShell(fromBuild, ['/build/assets/app-A.js', '/build/assets/maplibre-gl-worker-!~{001}~.js'])).toThrow(
             'maplibre-gl-worker-!~{001}~.js',
         );
+    });
+});
+
+/*
+| La página sin conexión la arma Laravel: si cambia algo de lo que la vista
+| usa y su versión en el precache no, quien ya instaló la app se queda con la
+| página vieja.
+*/
+describe('versión de la página sin conexión', () => {
+    const shell = ['/build/assets/offline-A.js', '/build/assets/offline-B.css'];
+    /** Cada archivo «contiene» su nombre; el que cambió, otra cosa. */
+    const read =
+        (changed?: string) =>
+        (file: string): string =>
+            file === changed ? `${file} (cambiado)` : file;
+
+    it.each([
+        ['la vista', 'resources/views/offline.blade.php'],
+        ['los textos en español', 'lang/es.json'],
+        ['los textos en inglés', 'lang/en.json'],
+        // WebApp::themeColor() saca de aquí el color de la barra del sistema.
+        ['los colores de la marca', 'brand/tokens.json'],
+        ['el nombre de la app y qué color va con cada tema', 'app/Support/WebApp.php'],
+        ['los idiomas de la app', 'app/Enums/Locale.php'],
+    ])('cambia si cambian %s (%s)', (_name, file) => {
+        expect(offlineRevision(shell, read(file))).not.toBe(offlineRevision(shell, read()));
+    });
+
+    it('cambia si cambia un archivo del build que la página nombra', () => {
+        expect(offlineRevision(['/build/assets/offline-Z.js', '/build/assets/offline-B.css'], read())).not.toBe(offlineRevision(shell, read()));
+    });
+
+    it('con lo mismo, sale la misma', () => {
+        expect(offlineRevision(shell, read())).toBe(offlineRevision([...shell], read()));
+        expect(offlineRevision(shell, read())).toMatch(/^[0-9a-f]{16}$/);
+    });
+
+    it('todo lo que lee está en el repositorio y entra a la etapa de la imagen que compila', () => {
+        const dockerfile = readFileSync('Dockerfile', 'utf8');
+        const stage = dockerfile.slice(dockerfile.indexOf(' AS assets'), dockerfile.indexOf(' AS prod'));
+        const copied = [...stage.matchAll(/^COPY (?!--from)(.+) \S+$/gm)].flatMap((line) => (line[1] ?? '').split(' '));
+
+        for (const file of OFFLINE_PAGE_SOURCES) {
+            expect(existsSync(file), file).toBe(true);
+            expect(
+                copied.some((source) => file === source || file.startsWith(`${source}/`)),
+                `La etapa «assets» del Dockerfile no copia ${file}`,
+            ).toBe(true);
+        }
     });
 });

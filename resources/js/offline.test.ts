@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { LOCALE_STORAGE_KEY } from '@/composables/useI18n';
+import { THEME_STORAGE_KEY } from '@/composables/useTheme';
+
+// useI18n importa Inertia; aquí solo se le pide la clave.
+vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
+
 /*
 | resources/js/offline.ts corre al cargarse, como el script clásico que es en
 | la página sin conexión: cada prueba arma la página, importa una copia nueva
-| y mira lo que dejó en <html>.
+| y mira lo que dejó en <html>. Las claves de localStorage son las de la app
+| (el script no puede importarlas: repite los literales).
 */
 
 function fakeSystemTheme(dark: boolean): void {
@@ -81,7 +88,7 @@ afterEach(() => {
 
 describe('idioma de la página sin conexión', () => {
     it('el último con que respondió la app en este dispositivo', async () => {
-        window.localStorage.setItem('veni:locale', 'en');
+        window.localStorage.setItem(LOCALE_STORAGE_KEY, 'en');
 
         await loadScript();
 
@@ -108,7 +115,7 @@ describe('idioma de la página sin conexión', () => {
     });
 
     it('ignora un valor guardado que no es un idioma de la app', async () => {
-        window.localStorage.setItem('veni:locale', 'pt');
+        window.localStorage.setItem(LOCALE_STORAGE_KEY, 'pt');
 
         await loadScript();
 
@@ -131,7 +138,7 @@ describe('idioma de la página sin conexión', () => {
 
 describe('tema de la página sin conexión', () => {
     it('el elegido en la app', async () => {
-        window.localStorage.setItem('veni:theme', 'dark');
+        window.localStorage.setItem(THEME_STORAGE_KEY, 'dark');
 
         await loadScript();
 
@@ -140,6 +147,68 @@ describe('tema de la página sin conexión', () => {
 
     it('sin elección, el del sistema', async () => {
         fakeSystemTheme(true);
+
+        await loadScript();
+
+        expect(root.dataset.theme).toBe('dark');
+    });
+});
+
+/*
+| La vista trae un <meta name="theme-color"> por tema y el navegador elige
+| con `media`, según el sistema. Si en la app se eligió el otro tema, la barra
+| del sistema quedaría de un color y la página de otro.
+*/
+describe('barra del sistema de la página sin conexión', () => {
+    const LIGHT = '#ffffff';
+    const DARK = '#2b1b2e';
+
+    function renderThemeColors(): void {
+        document.head.insertAdjacentHTML(
+            'beforeend',
+            `<meta name="theme-color" content="${LIGHT}" media="(prefers-color-scheme: light)">` +
+                `<meta name="theme-color" content="${DARK}" media="(prefers-color-scheme: dark)">`,
+        );
+    }
+
+    const themeColors = (): string[] => [...document.head.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')].map((meta) => meta.content);
+
+    afterEach(() => {
+        for (const meta of document.head.querySelectorAll('meta[name="theme-color"]')) {
+            meta.remove();
+        }
+    });
+
+    it('con el tema oscuro elegido y el sistema en claro, toma el color del oscuro', async () => {
+        renderThemeColors();
+        window.localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+
+        await loadScript();
+
+        expect(themeColors()).toEqual([DARK, DARK]);
+    });
+
+    it('con el tema claro elegido y el sistema en oscuro, toma el color del claro', async () => {
+        renderThemeColors();
+        fakeSystemTheme(true);
+        window.localStorage.setItem(THEME_STORAGE_KEY, 'light');
+
+        await loadScript();
+
+        expect(themeColors()).toEqual([LIGHT, LIGHT]);
+    });
+
+    it('sin elección, queda el del sistema', async () => {
+        renderThemeColors();
+        fakeSystemTheme(true);
+
+        await loadScript();
+
+        expect(themeColors()).toEqual([DARK, DARK]);
+    });
+
+    it('sin esas etiquetas, la página se pinta igual', async () => {
+        window.localStorage.setItem(THEME_STORAGE_KEY, 'dark');
 
         await loadScript();
 

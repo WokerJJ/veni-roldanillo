@@ -1,7 +1,7 @@
 {{--
     Página sin conexión (#5). El service worker la guarda al instalarse y la
-    muestra cuando una navegación falla sin red (vite.config.ts); online casi
-    nunca se ve. Trae los textos en los dos idiomas porque, sin red, no hay a
+    muestra cuando una navegación falla sin red o tarda más de 10 segundos
+    (resources/js/pwa/runtimeCaching.ts); online casi nunca se ve. Trae los textos en los dos idiomas porque, sin red, no hay a
     quién preguntarle el idioma: resources/js/offline.ts elige uno antes de
     pintar, con el último que respondió la app en el dispositivo, y pone el
     tema. Sin nada en línea: el script y el estilo salen del build, también
