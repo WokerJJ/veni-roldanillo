@@ -37,3 +37,21 @@ Diario de avance del proyecto: qué se hizo en cada bloque, decisiones y aprendi
 - Aprendizajes: una prueba no debe modificar objetos compartidos de la base (quitaba PostGIS y en CI fallaba; ahora usa una base temporal desde `template0`). Una migración ya publicada no se edita: se corrige con otra.
 - Encontrado al levantar una demo: el modo desarrollo en Windows es muy lento con `vendor/` montado (#32). La imagen de producción responde en 0,4 s.
 - Nuevo: los íconos de la interfaz saldrán de [colombia-icons](https://github.com/Mteheran/colombia-icons) (MIT), en curso en #34. La PWA (#5) pasa a la parte 4.
+
+## 2026-10-02 · Parte 4 · Íconos, desarrollo rápido y el mapa en la app
+
+- **#34 integrado:** los íconos de la interfaz salen de [colombia-icons](https://github.com/Mteheran/colombia-icons) (MIT, ADR 0011). Se copian solo los que se usan, desde una versión fija, con un manifiesto de sha256 y una lista blanca que valida cada SVG antes de insertarlo.
+- **#32 integrado:** el entorno de desarrollo en Windows pasó de 5 s a 1 s por página y de 268 s a 68 s en las pruebas (ADR 0012). La causa era Octane arrancando 24 procesos sobre `vendor/` montado desde Windows. Desarrollo corre en modo clásico; producción sigue con Octane.
+- **#8 integrado:** el inicio de la app muestra el mapa de Roldanillo que publica veni-mapa, a pantalla completa, en el tema y el idioma elegidos. El motor del mapa se descarga solo donde hay mapa.
+- La revisión del mapa encontró que «Reintentar» no recuperaba el mapa si el archivo de datos fallaba una vez. Se corrigió con una prueba sobre la librería real, no sobre un doble.
+- Aprendizajes: una prueba puede pasar en local y fallar en CI por depender de archivos compilados o de cómo se detecta el entorno; conviene correrlas también con `CI=true`. Una URL de configuración mal formada debe detener la compilación, no fallar en silencio.
+
+## 2026-10-07 · Parte 5 · Cierre de las bases
+
+- **#7 integrado:** imagen de producción lista para desplegar, con una prueba de humo en CI que la levanta con Octane (ADR 0013). Versiones con release-please. El despliegue queda preparado y desactivado, sin ninguna clave real.
+- **#41 integrado:** seguridad HTTP detrás del proxy (ADR 0014): proxies de confianza cerrados por defecto, cookies seguras, cabeceras y una CSP con nonce sin `'unsafe-inline'`. La revisión encontró que la app aceptaba el host que enviara el cliente en las cabeceras del proxy; ahora solo acepta el de `APP_URL`.
+- **#5 integrado:** Vení se instala en el celular y abre sin señal (ADR 0015). Las páginas nunca se guardan en el dispositivo, porque dependen del idioma y de la sesión; sí se guardan el shell, las fuentes, los íconos y el estilo del mapa.
+- **#50 integrado:** dos vulnerabilidades nuevas en dependencias de desarrollo frenaron el CI. Una llegaba por una herramienta del esqueleto de Laravel que no se usaba: se quitó.
+- Decisión de orden: el issue #7 se partió en dos (entrega y seguridad) para revisarlos por separado.
+- Aprendizajes: la auditoría de dependencias dentro del check obligatorio detiene todo cuando se publica un aviso, y eso es lo que se quiere, pero conviene correrla antes de subir. Los archivos de bloqueo en conflicto se regeneran, no se mezclan a mano.
+- Con esto quedan cerradas las bases de la Fase 0. Sigue el producto: restaurantes sobre el mapa (#9), ficha (#13), ubicación (#10) y ruta (#11).
