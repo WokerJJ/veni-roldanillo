@@ -43,6 +43,26 @@ El mapa base lo produce y publica el repositorio [veni-mapa](https://github.com/
 
 Para la política de seguridad de contenido (ADR 0014): el navegador pide con `fetch` el estilo, los tiles, las fuentes, los sprites y el grafo de rutas al host del mapa (`connect-src`, también en `img-src`); la CSP toma ese host de `VITE_MAP_STYLE_URL` y `VITE_MAP_ROUTES_URL`, que la imagen de producción guarda en su entorno. El worker de MapLibre se sirve desde el mismo origen de la app (`worker-src 'self'`); en desarrollo sale del servidor de Vite y MapLibre lo arranca desde una URL `blob:`. Los íconos de los controles van en el CSS como `data:` y, en navegadores sin `createImageBitmap`, los sprites se arman con una URL `blob:` (`img-src`).
 
+### Capas propias sobre el mapa
+
+Lo que la app pinta encima del mapa base (los restaurantes; después la ubicación, #10, y la ruta, #11) sigue un contrato, decidido en el [ADR 0016](adr/0016-capas-propias-sobre-el-mapa.md): cambiar de tema o de idioma es cambiar de estilo, y eso borra las fuentes, las capas y las imágenes añadidas en ejecución.
+
+| Pieza | Dónde | Qué hace |
+| --- | --- | --- |
+| Grupo de capas | `resources/js/map/layers.ts` (`MapLayerGroup`) | Lo que se declara: `id`, fuentes GeoJSON, capas en orden de pintado, imágenes ya decodificadas, `order` entre grupos y qué capas se pueden tocar. Solo tipos |
+| Registro | `resources/js/map/layerRegistry.ts`, creado por `engine.ts` | Guarda los grupos y los datos de cada fuente. En cada `setStyle` le da a MapLibre un `transformStyle` que los mete en el estilo que llega, y vuelve a añadir las imágenes en «style.load» |
+| Mapa para los de adentro | `MapView.vue` (`provide`, `MAP_CONTEXT`) y su slot | `<MapView><RestaurantsLayer /></MapView>`: lo que va adentro recibe el mapa cuando ya pinta (`null` mientras carga o si falló) |
+| Para un componente | `resources/js/map/useMapLayers.ts` | `useMapLayers(grupo)` registra el grupo, lo vuelve a registrar si el mapa se rehace y lo quita al desmontar; devuelve `setData` y `expandCluster`. `useMap()` da el mapa, para mover la cámara con `showPoint` |
+
+Reglas del contrato:
+
+1. **MapLibre se importa solo en `map/engine.ts`.** Los demás módulos usan sus tipos (`import type`), que no llegan al bundle; lo vigila `resources/js/map/bundle.test.ts`.
+2. **Los ids de un grupo llevan su id como prefijo** (`restaurants`, `restaurants-points`): el registro rechaza los demás.
+3. **Los datos cambian con `setData`**, no volviendo a registrar el grupo: registrar rehace las capas (y, con agrupación, el índice de puntos).
+4. **Mientras carga un estilo nuevo, nada toca el mapa**: MapLibre no deja. Los cambios quedan anotados en el registro y entran con el estilo.
+5. **Orden**: todos los grupos van sobre el mapa base; entre ellos, `order` (los restaurantes usan 20; la ruta irá debajo y la ubicación encima).
+6. **Áreas táctiles de 44 px**: el registro busca la figura tocable más cercana en un cuadrado de 44 px alrededor del toque, se dibuje del tamaño que se dibuje.
+
 ## App instalable y caché (PWA)
 
 La app se instala desde el navegador y abre sin señal con una página propia (#5). Regla 8 de producto: tiene que servir con datos móviles y mala señal, así que el service worker guarda lo que no cambia y nunca guarda lo que depende de la persona. Qué se guarda y por qué está decidido en el [ADR 0015](adr/0015-pwa-que-se-guarda-en-el-dispositivo.md); aquí va el detalle.

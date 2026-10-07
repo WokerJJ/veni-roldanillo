@@ -19,3 +19,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0013](0013-entrega-por-imagen-versionada.md) | Entrega por imagen versionada: migración antes de arrancar, releases automáticas y despliegue a mano | Aceptada |
 | [0014](0014-seguridad-http-detras-del-proxy.md) | Seguridad HTTP: TLS en el proxy de delante, proxies de confianza explícitos y CSP con nonce | Aceptada |
 | [0015](0015-pwa-que-se-guarda-en-el-dispositivo.md) | PWA: qué se guarda en el dispositivo | Aceptada |
+| [0016](0016-capas-propias-sobre-el-mapa.md) | Capas propias sobre el mapa: un registro en el motor y componentes dentro de `MapView` | Aceptada |
