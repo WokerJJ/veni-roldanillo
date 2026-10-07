@@ -37,7 +37,7 @@ El mapa base lo produce y publica el repositorio [veni-mapa](https://github.com/
 
 1. La app lo consume por `VITE_MAP_STYLE_URL` y `VITE_MAP_ROUTES_URL`. Hoy apuntan a la demo pública de veni-mapa, que sigue su rama `main` y **no es una versión fija**: el ADR 0007 la tolera mientras no haya hosting versionado. En producción irán a una release fija en `tiles.veniroldanillo.co` (Cloudflare R2 con CORS limitado al dominio): el día que se definan las variables del repositorio, `docker.yml` exige que apunten a `…/vX.Y.Z/…` (ver [Entrega y despliegue](despliegue.md#el-mapa-dentro-de-la-imagen)). `VITE_MAP_STYLE_URL` es una plantilla, `…/veni-{theme}-{locale}.json`: la app pone `claro` u `oscuro` y `es` o `en`; sin alguno de los dos marcadores `vite build` se detiene y `vite` avisa. Las dos se fijan al compilar los assets (en la imagen de producción, como argumentos de build con la demo pública por defecto).
 2. MapLibre y PMTiles se cargan solo en las pantallas con mapa (carga perezosa): el componente `MapView` importa el motor (`resources/js/map/engine.ts`) con `import()` al montarse y pide el estilo a la vez, sin esperar a que baje; la vista raíz adelanta la conexión con el host del mapa (`<link rel="preconnect">`). Una prueba que compila el frontend (`resources/js/map/bundle.test.ts`) falla si MapLibre llega al bundle inicial, si el worker deja de poder cargarse o si lo que se descarga pasa del presupuesto (comprimido con gzip). El mapa se deja ver en cuanto empieza a pintar; si en 20 s no empieza, o si fallan la fuente de los tiles o el worker, muestra el error con «Reintentar». Tema e idioma los elige la app, que cambia de estilo sin mover la cámara; el mapa no trae botones propios, solo los de zoom y la atribución. La cámara inicial y los límites salen del estilo (`center`, `zoom` y `metadata["veni:bounds"]`).
-3. Restaurantes como capa GeoJSON desde la API.
+3. Restaurantes como capa GeoJSON desde la API: `GET /api/restaurants.geojson` (abajo, «Restaurantes en el mapa»).
 4. Ubicación y rutas en el dispositivo (ADR 0008): la posición nunca sale del teléfono ni queda en la URL; el grafo se descarga al pedir la primera ruta.
 5. Atribución obligatoria: "© colaboradores de OpenStreetMap" (ODbL), sin ocultar el control. Sus enlaces miden unos 20 px de alto, menos que los 44 px de las áreas táctiles de la app: son enlaces dentro de una línea de texto, la excepción «en línea» del criterio 2.5.8 de WCAG 2.2 (tamaño del objetivo), y agrandarlos taparía el mapa. Los botones de zoom sí miden 44 px.
 
@@ -62,6 +62,30 @@ Reglas del contrato:
 4. **Mientras carga un estilo nuevo, nada toca el mapa**: MapLibre no deja. Los cambios quedan anotados en el registro y entran con el estilo.
 5. **Orden**: todos los grupos van sobre el mapa base; entre ellos, `order` (los restaurantes usan 20; la ruta irá debajo y la ubicación encima).
 6. **Áreas táctiles de 44 px**: el registro busca la figura tocable más cercana en un cuadrado de 44 px alrededor del toque, se dibuje del tamaño que se dibuje.
+
+### Restaurantes en el mapa
+
+Decidido en el [ADR 0017](adr/0017-restaurantes-en-el-mapa.md).
+
+`GET /api/restaurants.geojson` responde una `FeatureCollection` con los restaurantes publicados (todos menos los ocultos). Está en `routes/api.php`: sin sesión ni cookies. Cada figura es un punto `[longitud, latitud]` y lleva una lista blanca de propiedades (`App\Http\Resources\RestaurantFeature`):
+
+| Propiedad | Qué es |
+| --- | --- |
+| `slug` | El identificador público (el de la URL de la ficha). El id de la base no viaja |
+| `name` | El nombre |
+| `categories` | `[{ slug, name }]`, en el idioma pedido y en el orden de las categorías |
+| `delivery` | Hace domicilios: tiene zonas cargadas o, sin zonas, lo dice su casilla |
+| `fictitious` | Es un dato de ejemplo (`is_fictitious`): la interfaz lo marca «Datos de ejemplo» |
+| `hours` | Horario semanal: `[{ weekday, opens, closes }]`, `weekday` 0 = domingo, horas `HH:MM` |
+| `special_hours` | Horarios especiales de ayer a siete días: `[{ date, closed, opens, closes }]` |
+
+- **Idioma**: `?lang=es` o `?lang=en` (sin parámetro, español; otro valor, 422). No mira la cookie ni `Accept-Language`: una URL es una sola respuesta.
+- **Caché**: `Cache-Control: public, max-age=60` y `ETag`; con `If-None-Match` al día, 304. El service worker no la guarda (ver «Qué se guarda y cómo»).
+- **Límite**: 60 peticiones por minuto por IP; después, 429 con `Retry-After`. Los errores salen como JSON.
+- **Consultas**: cuatro, haya los restaurantes que haya (restaurantes con si tienen zonas, categorías, horario semanal y horarios especiales de la ventana).
+- **CSP**: la página lo pide con `fetch` al mismo origen (`connect-src 'self'`), sin cambios en la política.
+
+**«Abierto ahora» no viene del servidor**: lo calcula el dispositivo con esos horarios y la hora de Colombia (`resources/js/restaurants/openStatus.ts`, la única implementación). Así la respuesta guardada no envejece: el horario cambia poco y el estado se recalcula cada medio minuto con la página abierta. Las reglas: una franja pertenece al día en que empieza y, si cierra antes de lo que abre, termina al día siguiente; un horario especial reemplaza al semanal en su fecha (cerrado, o con otras franjas) sin tocar la madrugada que viene de la víspera; a la hora de cierre ya cerró; sin horarios cargados, «Horario sin confirmar». `statusText.ts` lo pone en palabras («Cerrado · abre mañana a las 11:00 a. m.») en el idioma de la interfaz.
 
 ## App instalable y caché (PWA)
 
@@ -92,6 +116,7 @@ Lo registra el bundle (`resources/js/pwa/serviceWorker.ts`), sin script en líne
 | Del mismo origen, sin versión: el estilo y la lista del sprite (`.json`) | Network first; lo guardado sale sin red o a los 3 segundos | `veni-map-style`, 12 entradas, 30 días | La demo de veni-mapa no es una versión fija (ADR 0007). Estos archivos dicen qué pedir y dónde está cada ícono: con uno viejo, un release nuevo se pintaría a medias |
 | Del mismo origen, sin versión: glyphs e imágenes del sprite (`.pbf`, `.png`, `.webp`) | Stale-while-revalidate | `veni-map`, 60 entradas, 30 días | Se muestra lo guardado y se actualiza detrás. Una visita al mapa guarda unas 7 entradas entre las dos cachés |
 | PMTiles y el grafo de rutas | No se guardan | — | Ver abajo |
+| Los restaurantes del mapa (`/api/restaurants.geojson`) y todo `/api/` | No se guardan | — | Sin ruta en el service worker: solo la caché HTTP del navegador, un minuto y con ETag ([ADR 0017](adr/0017-restaurantes-en-el-mapa.md)). Una copia aquí podría volver a mostrar una ficha ya oculta, y sin red la app no abre igual |
 
 Cada caché es de una sola ruta, tiene tope, guarda solo respuestas 200 y es de las primeras en vaciarse si el teléfono se queda sin espacio. Lo fijan las pruebas de `runtimeCaching.ts`, junto con que ninguna ruta con caché recibe una navegación ni `PUT /locale`.
 
