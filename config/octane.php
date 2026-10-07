@@ -68,7 +68,7 @@ return [
     | - public/build/assets: Vite pone el hash del contenido en cada nombre;
     |   un archivo nunca cambia, así que se guarda un año sin volver a
     |   preguntar (immutable). Solo si el archivo existe: un 404 no se guarda.
-    | - public/fonts: los nombres no llevan hash (EVA-004, #5). Una semana sin
+    | - public/fonts: los nombres no llevan hash (#5). Una semana sin
     |   preguntar; después el navegador revalida con ETag y Last-Modified y,
     |   si no cambió, recibe un 304 sin volver a bajarla. Una fuente nueva
     |   tarda como mucho una semana en llegar, y mientras tanto la anterior
