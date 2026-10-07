@@ -23,6 +23,22 @@ export const LOCALE_ENDPOINT = '/locale';
 /** Texto de <meta name="description"> en resources/views/app.blade.php. */
 const DESCRIPTION_KEY: TranslationKey = 'meta.description';
 
+/**
+ * Clave en localStorage del último idioma con que respondió el servidor. No
+ * decide nada en la app (el idioma lo resuelve el servidor, ADR 0010): la lee
+ * la página sin conexión (resources/js/offline.ts, con el mismo literal), que
+ * sin red no tiene a quién preguntarle.
+ */
+export const LOCALE_STORAGE_KEY = 'veni:locale';
+
+function rememberLocale(locale: Locale): void {
+    try {
+        window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch {
+        // Sin almacenamiento, la página sin conexión sigue al idioma del teléfono.
+    }
+}
+
 let documentScope: EffectScope | undefined;
 
 /**
@@ -74,8 +90,15 @@ function syncDocument(): void {
 function reloadPagesSavedInAnotherLocale(initialLocale: Locale): void {
     let serverLocale = initialLocale;
 
+    // Para la página sin conexión se recuerda solo lo que respondió el
+    // servidor (la primera página y cada «beforeUpdate»), nunca el idioma de
+    // una página que sale del historial: si su recarga no llega (sin red),
+    // quedaría guardado el idioma viejo.
+    rememberLocale(serverLocale);
+
     router.on('beforeUpdate', (event) => {
         serverLocale = event.detail.page.props.locale;
+        rememberLocale(serverLocale);
     });
 
     router.on('navigate', (event) => {
@@ -104,13 +127,41 @@ export function useI18n() {
      * responde la misma página con los textos del idioma nuevo, que reemplaza
      * la entrada del historial: «atrás» no vuelve a la misma página en el
      * idioma anterior.
+     *
+     * Exige red: los textos del otro idioma no están en el dispositivo. Sin
+     * conexión, o si la petición no llega, llama a `onOffline` para que quien
+     * eligió el idioma se entere (con la app instalada es fácil intentarlo sin
+     * señal).
      */
-    function setLocale(locale: Locale): void {
+    function setLocale(locale: Locale, { onOffline }: { onOffline?: () => void } = {}): void {
         if (locale === page.props.locale) {
             return;
         }
 
-        router.put(LOCALE_ENDPOINT, { locale }, { preserveScroll: true, preserveState: true, replace: true });
+        if (onOffline && !navigator.onLine) {
+            onOffline();
+
+            return;
+        }
+
+        router.put(
+            LOCALE_ENDPOINT,
+            { locale },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                replace: true,
+                // false: el aviso ya lo da quien llamó; sin él, Inertia sigue
+                // con su evento global y rechaza la visita.
+                onNetworkError: () => {
+                    if (onOffline) {
+                        onOffline();
+
+                        return false;
+                    }
+                },
+            },
+        );
     }
 
     return {

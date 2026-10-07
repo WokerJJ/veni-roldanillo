@@ -4,26 +4,8 @@
 /* Única fuente de verdad de la marca: aquí no se repiten valores. */
 @import '../../brand/tokens.css';
 
-/*
- * Fuentes autohospedadas (public/fonts, licencia OFL junto a los archivos).
- * Un solo woff2 variable por familia con el subconjunto latino, que cubre
- * el español (á, é, í, ó, ú, ñ, ü, ¿, ¡). Pesos según brand/README.md.
- */
-@font-face {
-    font-family: 'Bricolage Grotesque';
-    font-style: normal;
-    font-weight: 700 800;
-    font-display: swap;
-    src: url('/fonts/bricolage-grotesque-latin-700-800.woff2') format('woff2');
-}
-
-@font-face {
-    font-family: 'Figtree';
-    font-style: normal;
-    font-weight: 400 700;
-    font-display: swap;
-    src: url('/fonts/figtree-latin-400-700.woff2') format('woff2');
-}
+/* Fuentes autohospedadas (las comparte la página sin conexión). */
+@import './fonts.css';
 
 @source '../js';
 @source '../views';
@@ -44,6 +26,14 @@
     --ink-muted: var(--veni-ciruela-suave);
     --accent: var(--veni-arrebol);
     --line: color-mix(in oklab, var(--veni-ciruela) 15%, transparent);
+
+    /*
+     * Franja de abajo del mapa que nada tapa: la atribución de OpenStreetMap
+     * (ADR 0003). Encima flotan la bienvenida del inicio y el aviso de versión
+     * nueva. MapLibre la escribe en px (una línea de 20 px): el mínimo en px
+     * la cubre aunque el texto de la página se achique.
+     */
+    --veni-attribution-clearance: max(2.25rem, 36px);
 }
 
 :root[data-theme='dark'] {

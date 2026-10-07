@@ -6,7 +6,7 @@
 - [x] Inertia + Vue 3 + TypeScript + Tailwind con tokens de marca y fuentes autohospedadas
 - [x] Pest, Larastan, Pint, ESLint, vue-tsc y workflow de GitHub Actions
 - [x] i18n ES/EN configurado (backend y frontend)
-- [ ] PWA: manifest con íconos de `brand/png`, service worker, modo sin conexión básico
+- [x] PWA: manifest con íconos de `brand/png`, service worker, modo sin conexión básico
 - [x] Modelo de datos inicial, factories y seeders con datos ficticios
 - [x] Imagen de producción en GHCR con prueba de humo en CI, releases con release-please y despliegue preparado (desactivado hasta que exista el servidor)
 - [ ] Seguridad HTTP en producción: proxies de confianza, cookies seguras, cabeceras y CSP

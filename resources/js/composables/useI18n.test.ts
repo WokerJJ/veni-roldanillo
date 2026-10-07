@@ -131,6 +131,65 @@ describe('useI18n', () => {
     });
 });
 
+/*
+| La página sin conexión (resources/js/offline.ts) muestra el último idioma
+| con que respondió el servidor: sin red no tiene a quién preguntarle.
+*/
+describe('useI18n · idioma para la página sin conexión', () => {
+    beforeEach(() => {
+        window.localStorage.clear();
+    });
+
+    it('recuerda en el dispositivo el idioma con que respondió el servidor', async () => {
+        const { fake, useI18n } = await load();
+        const { LOCALE_STORAGE_KEY } = await import('./useI18n');
+        mountHeading(useI18n);
+
+        expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('es');
+
+        fake.receiveFromServer('en', { replace: true });
+        await nextTick();
+
+        expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('en');
+    });
+
+    it('al volver a una página guardada en otro idioma, sigue recordando el del servidor', async () => {
+        const { fake, useI18n } = await load();
+        const { LOCALE_STORAGE_KEY } = await import('./useI18n');
+        mountHeading(useI18n);
+        fake.receiveFromServer('en', { replace: true });
+        await nextTick();
+
+        // Atrás: Inertia muestra la página guardada en español y se pide de
+        // nuevo; sin red, esa recarga no llega y lo último del servidor es inglés.
+        fake.restoreFromHistory('es');
+        await nextTick();
+
+        expect(document.documentElement.lang).toBe('es');
+        expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('en');
+    });
+
+    it('sin almacenamiento, traduce igual', async () => {
+        vi.stubGlobal('localStorage', {
+            setItem: vi.fn(() => {
+                throw new DOMException('Acceso denegado', 'SecurityError');
+            }),
+        });
+        const { useI18n } = await load();
+
+        expect(mountHeading(useI18n).text()).toBe('Vení, comamos en Roldanillo');
+    });
+
+    it('usa la misma clave que la página sin conexión', async () => {
+        const { LOCALE_STORAGE_KEY } = await import('./useI18n');
+        const { THEME_STORAGE_KEY } = await import('./useTheme');
+        const offline = (await import('@/offline.ts?raw')).default;
+
+        expect(offline).toContain(`LOCALE_STORAGE_KEY = '${LOCALE_STORAGE_KEY}'`);
+        expect(offline).toContain(`THEME_STORAGE_KEY = '${THEME_STORAGE_KEY}'`);
+    });
+});
+
 describe('useI18n · cambio de idioma e historial', () => {
     it('pide el idioma al servidor en PUT /locale y reemplaza la entrada del historial', async () => {
         const { fake, useI18n } = await load();
@@ -141,8 +200,39 @@ describe('useI18n · cambio de idioma e historial', () => {
         expect(fake.router.put).toHaveBeenCalledExactlyOnceWith(
             '/locale',
             { locale: 'en' },
-            { preserveScroll: true, preserveState: true, replace: true },
+            expect.objectContaining({ preserveScroll: true, preserveState: true, replace: true }),
         );
+    });
+
+    it('sin red no pide nada y avisa a quien eligió el idioma', async () => {
+        vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+        const { fake, useI18n } = await load();
+        const onOffline = vi.fn();
+
+        useI18n().setLocale('en', { onOffline });
+
+        expect(fake.router.put).not.toHaveBeenCalled();
+        expect(onOffline).toHaveBeenCalledOnce();
+    });
+
+    it('si la petición no llega, avisa y corta el error de Inertia', async () => {
+        const { fake, useI18n } = await load();
+        const onOffline = vi.fn();
+
+        useI18n().setLocale('en', { onOffline });
+        const options = fake.router.put.mock.lastCall?.[2] as { onNetworkError: (error: Error) => boolean | undefined };
+
+        expect(options.onNetworkError(new Error('Network Error'))).toBe(false);
+        expect(onOffline).toHaveBeenCalledOnce();
+    });
+
+    it('sin quien avise, el error de red sigue su curso en Inertia', async () => {
+        const { fake, useI18n } = await load();
+
+        useI18n().setLocale('en');
+        const options = fake.router.put.mock.lastCall?.[2] as { onNetworkError: (error: Error) => boolean | undefined };
+
+        expect(options.onNetworkError(new Error('Network Error'))).toBeUndefined();
     });
 
     it('al volver a una página guardada en otro idioma pide recargarla', async () => {

@@ -2,6 +2,8 @@
 /vendor/
 /node_modules/
 /public/build/
+# Service worker de la PWA: lo genera `npm run build` (vite.config.ts)
+/public/sw.js
 /public/hot
 /public/storage
 /public/fonts-manifest.dev.json

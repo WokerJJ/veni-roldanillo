@@ -7,15 +7,24 @@
 # Documentación
 docs
 brand
-# La compilación de Vite usa los tokens y los logos de la marca
+# La compilación de Vite usa los tokens y los logos de la marca, y copia los
+# íconos de la app instalable (#5); Laravel lee los colores de tokens.json
 !brand/tokens.css
+!brand/tokens.json
 !brand/logo
+!brand/png/veni-icono-192.png
+!brand/png/veni-icono-512.png
+!brand/png/veni-icono-maskable-512.png
+!brand/png/favicon-180.png
 *.md
 
 # Dependencias y compilados (se instalan dentro de la imagen)
 vendor
 node_modules
 public/build
+# Service worker de la PWA: sale de la compilación dentro de la imagen; uno
+# compilado en este equipo no debe entrar con el código
+public/sw.js
 public/hot
 public/storage
 public/frankenphp-worker.php

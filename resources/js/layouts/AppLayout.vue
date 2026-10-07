@@ -3,6 +3,7 @@ import { Link } from '@inertiajs/vue3';
 
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
+import UpdatePrompt from '@/components/UpdatePrompt.vue';
 import { useI18n } from '@/composables/useI18n';
 import wordmark from '@brand/logo/veni-wordmark.svg';
 import wordmarkWhite from '@brand/logo/veni-wordmark-blanco.svg';
@@ -55,5 +56,7 @@ const year = new Date().getFullYear();
                 <p>{{ t('layout.footer', { year }) }}</p>
             </div>
         </footer>
+
+        <UpdatePrompt />
     </div>
 </template>

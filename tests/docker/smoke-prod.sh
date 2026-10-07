@@ -4,8 +4,9 @@
 # la imagen tal como va al servidor, con docker-compose.yml sin el override, y
 # comprueba que arranca, que migra, que una petición no deja estado para la
 # siguiente (ADR 0010: el idioma se resuelve en cada petición), que lo que
-# guarda la aplicación sobrevive a un despliegue y que worker y scheduler solo
-# se dan por sanos cuando de verdad están corriendo.
+# guarda la aplicación sobrevive a un despliegue, que worker y scheduler solo
+# se dan por sanos cuando de verdad están corriendo y que la app instalable
+# (manifest, service worker y página sin conexión) sale completa.
 #
 #   docker build --target prod -t veni-tmp-prod .
 #   bash tests/docker/smoke-prod.sh veni-tmp-prod
@@ -616,6 +617,119 @@ error_pages() {
     done
 }
 
+# --- App instalable (#5) -------------------------------------------------------
+
+# El manifest web lo sirve Laravel: su tipo, lo que pide el navegador para
+# instalar y los íconos que la compilación copió a public/build/icons, que
+# tienen que responder como PNG.
+pwa_manifest() {
+    local response expected icons icon headers
+    response=$(curl --silent --show-error --include --max-time 10 "$base/manifest.webmanifest" | tr -d '\r') || return 1
+    [ "$(status_of "$response")" = 200 ] || {
+        echo "    /manifest.webmanifest respondió $(status_of "$response")"
+        return 1
+    }
+    [ "$(header_value Content-Type "$response")" = application/manifest+json ] || {
+        echo "    /manifest.webmanifest: Content-Type $(header_value Content-Type "$response")"
+        return 1
+    }
+    for expected in '"name":"Vení Roldanillo"' '"start_url":"/"' '"display":"standalone"' '"purpose":"maskable"'; do
+        grep -qF "$expected" <<< "$response" || {
+            echo "    el manifest no trae $expected"
+            return 1
+        }
+    done
+    icons=$(grep -o '"src":"[^"]*"' <<< "$response" | cut -d'"' -f4)
+    [ "$(grep -c . <<< "$icons")" -ge 3 ] || {
+        echo "    el manifest no trae los tres íconos: $icons"
+        return 1
+    }
+    for icon in $icons /build/icons/favicon-180.png; do
+        headers=$(static_headers "$icon")
+        if [ "$(status_of "$headers")" != 200 ] || [ "$(header_value Content-Type "$headers")" != image/png ]; then
+            echo "    $icon: $(status_of "$headers"), $(header_value Content-Type "$headers")"
+            return 1
+        fi
+    done
+}
+
+# El service worker, en la raíz: JavaScript que Caddy sirve sin caché
+# (config/octane.php). Su precache trae lo que carga la página de inicio
+# (@vite: script, CSS y modulepreload) y la página sin conexión, nada del mapa,
+# y cada URL que nombra existe: una que no, y el service worker no se instala.
+service_worker() {
+    local headers sw urls home asset url
+    headers=$(static_headers /sw.js)
+    [ "$(status_of "$headers")" = 200 ] || {
+        echo "    /sw.js respondió $(status_of "$headers")"
+        return 1
+    }
+    header_value Content-Type "$headers" | grep -q javascript || {
+        echo "    /sw.js: Content-Type $(header_value Content-Type "$headers")"
+        return 1
+    }
+    [ "$(header_value Cache-Control "$headers")" = no-cache ] || {
+        echo "    /sw.js: Cache-Control no es «no-cache»: $(header_value Cache-Control "$headers")"
+        return 1
+    }
+    sw=$(curl --silent --show-error --max-time 10 "$base/sw.js") || return 1
+    urls=$(grep -o 'url:"[^"]*"' <<< "$sw" | cut -d'"' -f2)
+    [ -n "$urls" ] || {
+        echo "    /sw.js no trae precache"
+        return 1
+    }
+    home=$(grep -o '"[^"]*/build/assets/[^"]*"' <<< "$(page /)" | sed 's#^"[^"]*\(/build/assets/[^"]*\)"$#\1#' | sort -u)
+    [ -n "$home" ] || {
+        echo "    la página de inicio no carga nada de /build/assets"
+        return 1
+    }
+    for asset in $home; do
+        grep -qxF "$asset" <<< "$urls" || {
+            echo "    el precache no trae $asset, que carga la página de inicio"
+            return 1
+        }
+    done
+    grep -qxF /offline <<< "$urls" || {
+        echo "    el precache no trae la página sin conexión"
+        return 1
+    }
+    if grep -q 'engine-\|maplibre' <<< "$urls"; then
+        echo "    el precache trae el mapa: $(grep 'engine-\|maplibre' <<< "$urls" | tr '\n' ' ')"
+        return 1
+    fi
+    for url in $urls; do
+        [ "$(status_of "$(static_headers "$url")")" = 200 ] || {
+            echo "    $url, del precache, respondió $(status_of "$(static_headers "$url")")"
+            return 1
+        }
+    done
+}
+
+# La página sin conexión: los dos idiomas, con la política y sin sesión (el
+# service worker la guarda con las cookies del sitio).
+offline_page() {
+    local response locale
+    response=$(page /offline) || return 1
+    [ "$(status_of "$response")" = 200 ] || {
+        echo "    /offline respondió $(status_of "$response")"
+        return 1
+    }
+    for locale in es en; do
+        grep -q "<section lang=\"$locale\" data-locale=\"$locale\"" <<< "$response" || {
+            echo "    /offline no trae el bloque en $locale"
+            return 1
+        }
+    done
+    [ -n "$(header_value Content-Security-Policy "$response")" ] || {
+        echo "    /offline sin Content-Security-Policy"
+        return 1
+    }
+    if headers_of "$response" | grep -qi '^Set-Cookie:'; then
+        echo "    /offline deja cookies: $(headers_of "$response" | grep -i '^Set-Cookie:' | cut -d= -f1 | tr '\n' ' ')"
+        return 1
+    fi
+}
+
 # --- Ejecución -----------------------------------------------------------------
 
 echo "Imagen $image, proyecto $project, $base"
@@ -657,6 +771,9 @@ check "CSP activa con nonce y el host del mapa, sin nada en línea" csp_with_non
 check "preconnect al mapa de la imagen aunque el .env diga otro" map_preconnect
 check "caché de assets y fuentes servidos por Caddy" static_cache
 check "páginas de error en es y en, con la marca y la política" error_pages
+check "manifest web instalable, con los íconos de la marca" pwa_manifest
+check "service worker en la raíz, sin caché, con el shell y sin el mapa" service_worker
+check "página sin conexión en es y en, con la política y sin sesión" offline_page
 check "un archivo de storage/app/public sobrevive a recrear app y worker" uploads_survive_recreate
 check "storage se sirve en un sandbox, con nosniff" storage_sandboxed
 check "ningún nonce se repite en las páginas de toda la prueba (Octane)" nonces_never_repeat

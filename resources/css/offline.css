@@ -1,0 +1,89 @@
+/*
+ * Página sin conexión (#5, resources/views/offline.blade.php). Sin Tailwind:
+ * es una sola pantalla y el service worker la guarda junto con el shell. Los
+ * colores por rol son los de resources/css/app.css; el tema y el idioma los
+ * pone resources/js/offline.ts en <html> antes de pintar.
+ */
+@import '../../brand/tokens.css';
+@import './fonts.css';
+
+:root {
+    color-scheme: light;
+    --canvas: var(--veni-blanco);
+    --ink: var(--veni-ciruela);
+    --ink-muted: var(--veni-ciruela-suave);
+    --accent: var(--veni-arrebol);
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+    --canvas: var(--veni-ciruela);
+    --ink: var(--veni-blanco);
+    --ink-muted: var(--veni-lila);
+    --accent: var(--veni-mango);
+}
+
+/* Solo el bloque del idioma elegido; sin script, el español. */
+html[data-locale='en'] [data-locale='es'],
+html:not([data-locale='en']) [data-locale='en'] {
+    display: none;
+}
+
+/* Un logo por tema, como la cabecera de la app. */
+:root[data-theme='dark'] .logo-light,
+:root:not([data-theme='dark']) .logo-dark {
+    display: none;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    background: var(--canvas);
+    color: var(--ink);
+    font: 1.125rem/1.5 var(--veni-font-body);
+    -webkit-font-smoothing: antialiased;
+}
+
+main {
+    max-width: 30rem;
+    padding: 1.5rem;
+}
+
+.logo {
+    display: block;
+    height: 2.5rem;
+    width: auto;
+    margin-bottom: 2rem;
+}
+
+h1 {
+    margin: 0 0 0.75rem;
+    font: 800 1.75rem/1.2 var(--veni-font-display);
+    text-wrap: balance;
+}
+
+p {
+    margin: 0 0 1.5rem;
+    color: var(--ink-muted);
+}
+
+button {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--veni-touch-min);
+    padding: 0 1.25rem;
+    border: 0;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--canvas);
+    font: 700 1rem/1 var(--veni-font-body);
+    cursor: pointer;
+}
+
+button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}

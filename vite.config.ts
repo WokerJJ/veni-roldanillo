@@ -1,12 +1,17 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
 import laravel from 'laravel-vite-plugin';
-import type { Plugin } from 'vite';
-import { defineConfig } from 'vite';
+import type { Plugin, PluginOption } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 import { missingStylePlaceholders } from './resources/js/map/styleTemplate';
+import { OFFLINE_URL, runtimeCaching } from './resources/js/pwa/runtimeCaching';
+import type { ViteManifest } from './resources/js/pwa/shellPrecache';
+import { keepShell, offlineRevision, staticFiles } from './resources/js/pwa/shellPrecache';
 
 const MAP_WORKER = 'maplibre-gl/dist/maplibre-gl-worker.mjs';
 
@@ -91,16 +96,123 @@ function checkMapStyleUrl(): Plugin {
     };
 }
 
-export default defineConfig({
+/**
+ * Íconos de la app instalable (#5), tal como los exporta la marca en
+ * brand/png: los del manifest (App\Support\WebApp::ICONS) y el de iOS
+ * (WebApp::APPLE_TOUCH_ICON). Se copian al compilar, con el mismo nombre, a
+ * public/build/icons: así no hay una segunda copia en git que se desactualice.
+ * Sin hash en el nombre, como espera quien ya instaló la app.
+ */
+const BRAND_ICONS = ['veni-icono-192.png', 'veni-icono-512.png', 'veni-icono-maskable-512.png', 'favicon-180.png'];
+
+function copyBrandIcons(): Plugin {
+    return {
+        name: 'veni:copy-brand-icons',
+        apply: 'build',
+        generateBundle() {
+            for (const icon of BRAND_ICONS) {
+                this.emitFile({
+                    type: 'asset',
+                    fileName: `icons/${icon}`,
+                    source: readFileSync(fileURLToPath(new URL(`./brand/png/${icon}`, import.meta.url))),
+                });
+            }
+        },
+    };
+}
+
+/** Carpeta del proyecto: de aquí salen public/build y el .env. */
+const ROOT = fileURLToPath(new URL('.', import.meta.url));
+
+/**
+ * Lo que la página sin conexión (OFFLINE_URL, resources/views/offline.blade.php)
+ * carga del build: un script clásico y su hoja de estilos.
+ */
+const OFFLINE_ENTRIES = ['resources/js/offline.ts', 'resources/css/offline.css'];
+
+/**
+ * El shell que el service worker guarda al instalarse: la entrada y la página
+ * de inicio con sus imports estáticos, CSS y logos (lo que vigila el
+ * presupuesto del arranque en resources/js/map/bundle.test.ts), más la página
+ * sin conexión. El mapa, los íconos y las demás páginas se guardan la primera
+ * vez que se piden.
+ */
+const SHELL_ENTRIES = ['resources/js/app.ts', 'resources/js/pages/Home.vue', ...OFFLINE_ENTRIES];
+
+/**
+ * Service worker de la app instalable (#5), con generateSW: Workbox lo arma
+ * con esta configuración y queda en public/sw.js, en la raíz, para que su
+ * alcance sea todo el sitio sin cabeceras de más (lo sirve Caddy,
+ * config/octane.php). Las estrategias y por qué, en docs/03-arquitectura.md
+ * («App instalable y caché»).
+ *
+ * Bajo Vitest no genera nada: resources/js/map/bundle.test.ts compila en
+ * memoria y el service worker saldría de un public/build viejo.
+ */
+function serviceWorker(env: Record<string, string>): PluginOption {
+    return VitePWA({
+        disable: process.env.VITEST !== undefined,
+        strategies: 'generateSW',
+        // Lo registra el bundle (resources/js/pwa/serviceWorker.ts), sin script
+        // en línea: la CSP solo deja correr scripts de este origen o con nonce.
+        injectRegister: false,
+        // Avisa «Hay una versión nueva» en vez de recargar sin preguntar.
+        registerType: 'prompt',
+        // El manifest web lo sirve Laravel (WebManifestController).
+        manifest: false,
+        outDir: 'public',
+        filename: 'sw.js',
+        base: '/',
+        buildBase: '/',
+        scope: '/',
+        workbox: {
+            cacheId: 'veni',
+            globDirectory: `${ROOT}public/build`,
+            globPatterns: ['assets/*.{js,css,svg}'],
+            modifyURLPrefix: { 'assets/': '/build/assets/' },
+            // Con el hash en el nombre, la URL ya es la versión: se piden tal
+            // cual y, si la página acaba de bajarlas, salen de la caché del
+            // navegador sin volver a la red.
+            dontCacheBustURLsMatching: /^\/build\/assets\//,
+            manifestTransforms: [
+                (entries) => {
+                    const manifest = JSON.parse(readFileSync(`${ROOT}public/build/manifest.json`, 'utf8')) as ViteManifest;
+                    const shell = staticFiles(manifest, SHELL_ENTRIES).map((file) => `/build/${file}`);
+                    const revision = offlineRevision(shell, (file) => readFileSync(`${ROOT}${file}`));
+                    const offline = { url: OFFLINE_URL, revision, size: 0 };
+
+                    return { manifest: [...keepShell(entries, shell), offline], warnings: [] };
+                },
+            ],
+            // Las páginas no se guardan: el HTML depende del idioma (cookie) y
+            // de la sesión. Ni el respaldo de Workbox para una SPA, que serviría
+            // siempre la misma página guardada.
+            navigateFallback: null,
+            // Mientras arranca el service worker, la navegación ya va por la red.
+            navigationPreload: true,
+            // Un solo archivo, sin el runtime de Workbox aparte.
+            inlineWorkboxRuntime: true,
+            cleanupOutdatedCaches: true,
+            // La primera vez toma la página ya abierta y guarda lo que ella pide después.
+            clientsClaim: true,
+            // Qué se guarda de lo demás y cómo: resources/js/pwa/runtimeCaching.ts.
+            runtimeCaching: runtimeCaching(env),
+        },
+    });
+}
+
+export default defineConfig(({ mode }) => ({
     plugins: [
         laravel({
-            input: ['resources/js/app.ts'],
+            input: ['resources/js/app.ts', ...OFFLINE_ENTRIES],
             refresh: true,
         }),
         vue(),
         tailwindcss(),
         shareMapWorkerCode(),
         checkMapStyleUrl(),
+        copyBrandIcons(),
+        serviceWorker(loadEnv(mode, ROOT, 'VITE_')),
     ],
     resolve: {
         alias: {
@@ -126,4 +238,4 @@ export default defineConfig({
             ignored: ['**/storage/framework/views/**'],
         },
     },
-});
+}));
