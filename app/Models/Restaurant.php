@@ -8,6 +8,7 @@ use App\Enums\RestaurantPlan;
 use App\Enums\RestaurantRole;
 use App\Enums\RestaurantStatus;
 use App\Models\Concerns\HasTranslatableFields;
+use App\Support\GeoPoint;
 use Database\Factories\RestaurantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -29,10 +30,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * no haya zonas cargadas (costo por consultar).
  *
  * Larastan tipa las columnas enum de la migración como literales e ignora el
- * cast; los @property fijan el tipo del enum PHP.
+ * cast; los @property fijan el tipo del enum PHP. Tampoco conoce el cast
+ * propio de la ubicación.
  *
  * @property RestaurantStatus $status
  * @property RestaurantPlan $plan
+ * @property GeoPoint $location
  */
 #[Fillable([
     'name', 'description_es', 'description_en',

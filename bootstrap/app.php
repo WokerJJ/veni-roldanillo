@@ -14,6 +14,8 @@ use Illuminate\Routing\Middleware\ThrottleRequests;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        // Bajo /api y sin el grupo web: sin sesión ni cookies (routes/api.php).
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
