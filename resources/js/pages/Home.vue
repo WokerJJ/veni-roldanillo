@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 
 import Icon from '@/components/Icon.vue';
@@ -9,6 +9,7 @@ import RestaurantsLayer from '@/components/RestaurantsLayer.vue';
 import RestaurantSummary from '@/components/RestaurantSummary.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import { useI18n } from '@/composables/useI18n';
+import { selectedFromUrl } from '@/restaurants/links';
 import { useRestaurants } from '@/restaurants/useRestaurants';
 
 // El mapa ocupa todo el alto bajo la cabecera: el layout va sin pie de página.
@@ -24,6 +25,12 @@ const listOpen = ref(false);
 const mapFailed = ref(false);
 /** De dónde se abrió el resumen: al cerrarlo, el foco vuelve ahí. */
 let openedFromList = false;
+/**
+ * El restaurante que pide la dirección con que se abrió el inicio (`/?r=slug`,
+ * ADR 0018): a donde lleva «Cómo llegar» desde una ficha. Se elige una sola
+ * vez, cuando llega la lista. En la dirección solo viaja el restaurante.
+ */
+let requestedSlug = selectedFromUrl(usePage().url);
 
 const selected = computed(() => restaurants.value.find(({ slug }) => slug === selectedSlug.value) ?? null);
 const hasRestaurants = computed(() => status.value === 'ready' && restaurants.value.length > 0);
@@ -108,6 +115,23 @@ function onKeydown(event: KeyboardEvent): void {
         void closeList();
     }
 }
+
+// Llegó la lista: si la dirección pedía un restaurante y está en ella, abre
+// elegido, como si lo hubieran tocado en el mapa (la cámara va hasta él:
+// RestaurantsLayer). Si no está (se ocultó, o el enlace está mal escrito), el
+// inicio abre como siempre.
+watch(status, (current) => {
+    if (current !== 'ready' || requestedSlug === null) {
+        return;
+    }
+
+    const slug = requestedSlug;
+    requestedSlug = null;
+
+    if (restaurants.value.some((restaurant) => restaurant.slug === slug)) {
+        selectFromMap(slug);
+    }
+});
 
 // La lista se volvió a pedir (otro idioma) y el elegido ya no está: se cierra su resumen.
 watch(selected, (restaurant) => {

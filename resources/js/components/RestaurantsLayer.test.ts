@@ -29,7 +29,7 @@ const IMPORT_TIMEOUT = 10_000;
  * El mapa con la capa de restaurantes adentro, ya pintando. Quien lo monta
  * (como la página del inicio) tiene la lista y el elegido.
  */
-async function mountLayer(initial: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL]) {
+async function mountLayer(initial: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL], { chosen = null }: { chosen?: string | null } = {}) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     const maplibre = (await import('maplibre-gl')) as unknown as typeof FakeMapLibre;
     inertia.reset();
@@ -41,7 +41,8 @@ async function mountLayer(initial: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL
     const { default: RestaurantsLayer } = await import('./RestaurantsLayer.vue');
     const { default: ThemeToggle } = await import('./ThemeToggle.vue');
     const restaurants = ref(initial);
-    const selected = ref<string | null>(null);
+    // `chosen`: ya hay un elegido cuando el mapa todavía no pinta (el inicio abierto con ?r=slug).
+    const selected = ref<string | null>(chosen);
     const onSelect = vi.fn<(slug: string) => void>();
     const wrapper = mount(
         defineComponent({
@@ -253,6 +254,30 @@ describe('RestaurantsLayer', () => {
             expect(map.easeTo).toHaveBeenCalledExactlyOnceWith({ center: EL_GUADUAL.coordinates, zoom: 16 });
             // Más cerca que el zoom hasta el que se agrupan.
             expect(map.getStyle().sources?.restaurants?.clusterMaxZoom).toBe(15);
+        });
+
+        it('elegido antes de que el mapa pinte, la cámara va hasta él cuando el mapa empieza a pintar', async () => {
+            const { map, slugsIn } = await mountLayer([LA_CEIBA, EL_GUADUAL], { chosen: 'prueba-el-guadual' });
+
+            expect(slugsIn('restaurants-selected')).toEqual(['prueba-el-guadual']);
+            expect(map.easeTo).toHaveBeenCalledExactlyOnceWith({ center: EL_GUADUAL.coordinates, zoom: 16 });
+        });
+
+        it('si la lista llega después que el mapa, la cámara va al elegido cuando llega la lista', async () => {
+            const { map, restaurants, slugsIn } = await mountLayer([], { chosen: 'prueba-la-ceiba' });
+            expect(map.easeTo).not.toHaveBeenCalled();
+
+            restaurants.value = [LA_CEIBA, EL_GUADUAL];
+            await flushPromises();
+
+            expect(slugsIn('restaurants-selected')).toEqual(['prueba-la-ceiba']);
+            expect(map.easeTo).toHaveBeenCalledExactlyOnceWith({ center: LA_CEIBA.coordinates, zoom: 16 });
+        });
+
+        it('sin elegido, el mapa abre con su cámara de siempre', async () => {
+            const { map } = await mountLayer();
+
+            expect(map.easeTo).not.toHaveBeenCalled();
         });
 
         it('al cerrar el resumen se quita el halo', async () => {

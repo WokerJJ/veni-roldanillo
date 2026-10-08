@@ -18,8 +18,9 @@ import tokens from '@brand/tokens.json';
  *   se superponen se juntan en un círculo blanco con borde arrebol y la
  *   cantidad, que al tocarlo acerca el mapa hasta separarlos.
  * - El elegido (`selected`) lleva un halo. Si se eligió desde fuera del mapa
- *   (la lista), la cámara va hasta él, lo bastante cerca para que no quede
- *   dentro de un grupo.
+ *   (la lista, o la dirección con que se abrió el inicio: `?r=slug`), la
+ *   cámara va hasta él, lo bastante cerca para que no quede dentro de un
+ *   grupo. Si el mapa todavía no pinta, va cuando empieza a pintar.
  * - Los colores son los mismos en el tema claro y en el oscuro: arrebol con
  *   borde blanco, y blanco con borde arrebol, se distinguen sobre los dos
  *   fondos del mapa (lila y ciruela).
@@ -232,6 +233,17 @@ export default defineComponent({
             },
             { immediate: true },
         );
+
+        // El elegido llegó antes que el mapa (el inicio abierto con ?r=slug,
+        // que elige apenas llega la lista) o el mapa se rehízo («Reintentar»):
+        // el mapa nuevo abre con su cámara de siempre, y va hasta el elegido.
+        watch(map, (current) => {
+            const restaurant = selectedRestaurant.value;
+
+            if (current && restaurant) {
+                current.showPoint(restaurant.coordinates, { minZoom: SELECTED_ZOOM });
+            }
+        });
 
         return () => null;
     },

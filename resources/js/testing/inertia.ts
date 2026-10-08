@@ -31,7 +31,9 @@ type FakeListener = (event: { detail: { page: { props: FakePageProps } } }) => v
 function createPage() {
     const props: FakePageProps = { locale: 'es', translations: { ...es } };
 
-    return reactive({ props });
+    // `url`: la ruta de la página con sus parámetros, como la manda el
+    // servidor. La prueba la cambia antes de montar (`page.url = '/?r=…'`).
+    return reactive({ props, url: '/' });
 }
 
 /**

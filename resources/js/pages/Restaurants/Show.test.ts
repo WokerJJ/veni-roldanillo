@@ -114,6 +114,34 @@ describe('Restaurants/Show', () => {
         expect(real.wrapper.text()).not.toContain('Datos de ejemplo');
     });
 
+    describe('cómo llegar', () => {
+        it.each([
+            ['es', 'Cómo llegar'],
+            ['en', 'Get directions'],
+        ] as const)('en %s, el botón abre el mapa del inicio con este restaurante elegido', async (locale, text) => {
+            const { wrapper } = await mountShow(profile(), locale);
+            const directions = wrapper.get('[data-directions]');
+
+            expect(directions.element.tagName).toBe('A');
+            expect(directions.text()).toBe(text);
+            expect(directions.attributes('href')).toBe('/?r=prueba-la-ceiba');
+            expect(directions.classes()).toContain('min-h-touch');
+        });
+
+        it('en la dirección solo va el restaurante', async () => {
+            const { wrapper } = await mountShow();
+            const href = wrapper.get('[data-directions]').attributes('href') ?? '';
+
+            expect([...new URLSearchParams(href.slice(href.indexOf('?'))).keys()]).toEqual(['r']);
+        });
+
+        it('una ficha oculta no lo lleva: no está en el mapa', async () => {
+            const { wrapper } = await mountShow(profile({ hidden: true }));
+
+            expect(wrapper.find('[data-directions]').exists()).toBe(false);
+        });
+    });
+
     describe('abierto ahora', () => {
         it.each([
             ['es', 'Abierto ahora · cierra a las 3:00 p. m.'],
