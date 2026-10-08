@@ -144,10 +144,12 @@ onBeforeUnmount(() => {
             (UpdatePrompt.vue); desde 480 px de ancho (también un celular
             acostado, que es bajo) queda arriba a la izquierda, sin tocar los
             botones de zoom. Nunca pasa del alto del mapa: la lista se desplaza
-            por dentro.
+            por dentro. En el celular vertical tampoco llega a los botones de
+            zoom (arriba a la derecha, 10 px de margen y dos de 44 px): deja
+            7rem libres arriba.
         -->
         <section
-            class="absolute inset-x-3 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] z-10 flex max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_0.75rem)] flex-col rounded-veni-md border border-line bg-canvas/95 p-4 shadow-lg min-[480px]:inset-x-auto min-[480px]:top-4 min-[480px]:bottom-auto min-[480px]:left-4 min-[480px]:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm"
+            class="absolute inset-x-3 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] z-10 flex max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_7rem)] flex-col rounded-veni-md border border-line bg-canvas/95 p-4 shadow-lg min-[480px]:inset-x-auto min-[480px]:top-4 min-[480px]:bottom-auto min-[480px]:left-4 min-[480px]:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm"
         >
             <!-- El título de la página sigue en el documento aunque el panel muestre otra cosa. -->
             <h1 :class="selected || listOpen ? 'sr-only' : 'text-xl min-[480px]:text-2xl'">{{ t('home.heading') }}</h1>

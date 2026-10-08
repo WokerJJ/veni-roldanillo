@@ -120,6 +120,15 @@ describe('Home', () => {
         expect(panel().classes()).toContain('bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))]');
     });
 
+    it('en un celular vertical el panel no llega a los botones de zoom, por larga que sea la lista', async () => {
+        const { panel } = await mountHome();
+
+        // Los botones ocupan 10 + 88 px desde arriba: el panel deja 7rem (112 px).
+        expect(panel().classes()).toContain(
+            'max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_7rem)]',
+        );
+    });
+
     it('no pone botones de tema ni de idioma sobre el mapa: son de la cabecera', async () => {
         const { wrapper } = await mountHome({ answer: [LA_CEIBA] });
 
