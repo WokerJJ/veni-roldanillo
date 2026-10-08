@@ -2,6 +2,8 @@
 
 ## Fase 0 · Base técnica
 
+Cerrada: versión 0.1.0.
+
 - [x] Proyecto Laravel 13 + Docker Compose (app, worker, scheduler, db PostGIS, meilisearch)
 - [x] Inertia + Vue 3 + TypeScript + Tailwind con tokens de marca y fuentes autohospedadas
 - [x] Pest, Larastan, Pint, ESLint, vue-tsc y workflow de GitHub Actions
@@ -9,7 +11,7 @@
 - [x] PWA: manifest con íconos de `brand/png`, service worker, modo sin conexión básico
 - [x] Modelo de datos inicial, factories y seeders con datos ficticios
 - [x] Imagen de producción en GHCR con prueba de humo en CI, releases con release-please y despliegue preparado (desactivado hasta que exista el servidor)
-- [ ] Seguridad HTTP en producción: proxies de confianza, cookies seguras, cabeceras y CSP
+- [x] Seguridad HTTP en producción: proxies de confianza, cookies seguras, cabeceras y CSP
 
 ## Fase 1 · MVP
 
@@ -18,7 +20,9 @@
 - [ ] Menú con opciones obligatorias, adiciones, quitar ingredientes y nota
 - [ ] Carrito y mensaje de WhatsApp (barrio, dirección, referencia, ubicación opcional, pago, "¿con cuánto pagás?")
 - [ ] Direcciones y favoritos guardados en el dispositivo
-- [ ] Mapa de veni-mapa (ADR 0007) con capa de restaurantes, ubicación del usuario y ruta en el dispositivo (ADR 0008)
+- [x] Mapa de veni-mapa en el inicio (ADR 0007)
+- [x] Restaurantes sobre el mapa, con su resumen y el estado «abierto ahora» (ADR 0016 y 0017)
+- [ ] Ubicación del usuario y ruta en el dispositivo (ADR 0008)
 - [ ] Búsqueda por plato con Meilisearch
 - [ ] Panel de dueño (Filament): ficha, menú, agotado hoy, promociones, horarios especiales, aviso de demora
 - [ ] Panel de administración: alta de restaurantes, reclamación de fichas, moderación

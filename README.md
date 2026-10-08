@@ -14,7 +14,7 @@
 
 Plataforma web instalable (PWA), bilingüe español/inglés, que reúne a **todos los restaurantes de Roldanillo** (Valle del Cauca, Colombia) con menús, precios, mapa, horarios y calificaciones confiables, y permite **pedir a domicilio por WhatsApp sin comisiones** para el negocio.
 
-> Estado: planeación terminada, desarrollo del MVP en curso. Dominio: `veniroldanillo.co`
+> Estado: versión 0.1.0 publicada (bases técnicas). MVP en desarrollo: los restaurantes ya se ven sobre el mapa, con datos de ejemplo. Dominio: `veniroldanillo.co`
 
 ## El problema
 
@@ -40,7 +40,7 @@ Plataforma web instalable (PWA), bilingüe español/inglés, que reúne a **todo
 | Datos | PostgreSQL + PostGIS · Meilisearch |
 | Mapas | MapLibre GL JS · PMTiles autohospedado (OpenStreetMap) |
 | Infraestructura | Docker Compose · VPS · Cloudflare (DNS, CDN, R2) |
-| Calidad | Pest · Larastan · Pint · GitHub Actions |
+| Calidad | Pest · Vitest · Larastan · Pint · ESLint · vue-tsc · GitHub Actions |
 
 ## Desarrollo local
 
@@ -179,7 +179,7 @@ docker compose exec db sh /docker-entrypoint-initdb.d/20-veni-test.sh
 
 La primera migración crea las extensiones `postgis` y `btree_gist` (`CREATE EXTENSION IF NOT EXISTS`), así que el usuario de la base necesita permiso para crear extensiones: en Docker lo tiene (es el superusuario de la imagen); en un servidor administrado, o se le da ese permiso o un administrador crea las dos extensiones antes de migrar. Al revertir, las extensiones se quedan: son de toda la base y pueden usarlas otros.
 
-`php artisan db:seed` carga datos ficticios y solo corre con `APP_ENV` en `local` o `testing`; las cuentas sembradas (`@example.test`) tienen contraseñas aleatorias que no se muestran.
+`php artisan db:seed` carga datos ficticios y solo corre con `APP_ENV` en `local` o `testing`; las cuentas sembradas (`@example.test`) tienen contraseñas aleatorias que no se muestran. Todavía no se puede repetir sobre una base ya sembrada: para volver a sembrar, `php artisan migrate:fresh --seed`.
 
 ## Calidad
 

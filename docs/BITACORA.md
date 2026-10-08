@@ -55,3 +55,17 @@ Diario de avance del proyecto: qué se hizo en cada bloque, decisiones y aprendi
 - Decisión de orden: el issue #7 se partió en dos (entrega y seguridad) para revisarlos por separado.
 - Aprendizajes: la auditoría de dependencias dentro del check obligatorio detiene todo cuando se publica un aviso, y eso es lo que se quiere, pero conviene correrla antes de subir. Los archivos de bloqueo en conflicto se regeneran, no se mezclan a mano.
 - Con esto quedan cerradas las bases de la Fase 0. Sigue el producto: restaurantes sobre el mapa (#9), ficha (#13), ubicación (#10) y ruta (#11).
+
+## 2026-10-08 · Parte 6 · Restaurantes sobre el mapa
+
+- **Versión 0.1.0 publicada** con las bases de la Fase 0: tag, release e imagen versionada. Nada está desplegado todavía.
+- **#9 integrado:** el inicio muestra los restaurantes sobre el mapa, con marcadores de la marca. Tocar uno abre su resumen (categorías, «abierto ahora», domicilios) y «Ver la lista» ofrece lo mismo sin mapa. Los datos son ficticios y llevan el rótulo «Datos de ejemplo».
+- **Contrato de capas propias (ADR 0016):** un registro que vuelve a meter las fuentes, capas e imágenes cuando el mapa cambia de tema o de idioma. La ubicación y la ruta se van a sumar como grupos nuevos, sin tocar lo que ya hay.
+- **GeoJSON público (ADR 0017):** solo restaurantes publicados y una lista blanca de campos, con caché de un minuto y el idioma explícito en la URL. «Abierto ahora» se calcula en el dispositivo, así una respuesta guardada no envejece.
+- La revisión encontró que, con el mapa caído, su aviso tapaba la lista, que es justo la alternativa al mapa. Una prueba sin motor de layout no lo podía ver: se comprobó en Chrome sin WebGL.
+- Otra de la revisión: dos cambios de tema seguidos dejaban las capas sin responder, porque MapLibre avisa una sola vez y el registro contaba avisos. El doble de pruebas avisaba dos veces; ahora imita a MapLibre.
+- El contrato del GeoJSON se probaba por separado en PHP y en TypeScript. Ahora hay una respuesta de referencia que leen los dos lados.
+- Vitest corre en orden aleatorio: apareció una prueba que dependía del orden desde el #8.
+- Aprendizajes: un doble de pruebas que no se comporta como la librería esconde el fallo en vez de encontrarlo. Y lo que es de layout se comprueba en un navegador, no en una prueba unitaria.
+- Quedan con seguimiento: endurecer la API pública (#54) y la prueba de humo del mapa con navegador real (#40). El enlace del resumen a la ficha pasó a #13.
+- Sigue la ficha del restaurante (#13).
