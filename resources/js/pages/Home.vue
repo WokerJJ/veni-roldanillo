@@ -20,6 +20,8 @@ const { status, restaurants, retry } = useRestaurants();
 /** Slug del restaurante con el resumen abierto. */
 const selectedSlug = ref<string | null>(null);
 const listOpen = ref(false);
+/** El mapa no cargó: su aviso lo ocupa entero y el panel, con la lista, deja de ir encima. */
+const mapFailed = ref(false);
 /** De dónde se abrió el resumen: al cerrarlo, el foco vuelve ahí. */
 let openedFromList = false;
 
@@ -133,7 +135,7 @@ onBeforeUnmount(() => {
 <template>
     <Head :title="t('home.title')" />
 
-    <div class="absolute inset-0">
+    <div class="absolute inset-0" :class="{ 'flex flex-col overflow-y-auto': mapFailed }">
         <!--
             Panel sobre el mapa (va antes en el documento: el título se lee
             primero). Muestra la bienvenida con el estado de los restaurantes,
@@ -147,9 +149,19 @@ onBeforeUnmount(() => {
             por dentro. En el celular vertical tampoco llega a los botones de
             zoom (arriba a la derecha, 10 px de margen y dos de 44 px): deja
             7rem libres arriba.
+
+            Si el mapa no carga, su aviso lo ocupa entero y taparía el panel,
+            que tiene la lista: la alternativa al mapa. Ahí el panel deja de
+            flotar y va antes del mapa, en una columna que se desplaza si no
+            entran los dos.
         -->
         <section
-            class="absolute inset-x-3 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] z-10 flex max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_7rem)] flex-col rounded-veni-md border border-line bg-canvas/95 p-4 shadow-lg min-[480px]:inset-x-auto min-[480px]:top-4 min-[480px]:bottom-auto min-[480px]:left-4 min-[480px]:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm"
+            class="z-10 flex flex-col rounded-veni-md border border-line bg-canvas/95 p-4 shadow-lg"
+            :class="
+                mapFailed
+                    ? 'mx-3 mt-3 shrink-0 min-[480px]:mx-4 min-[480px]:mt-4 min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm'
+                    : 'absolute inset-x-3 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_7rem)] min-[480px]:inset-x-auto min-[480px]:top-4 min-[480px]:bottom-auto min-[480px]:left-4 min-[480px]:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm'
+            "
         >
             <!-- El título de la página sigue en el documento aunque el panel muestre otra cosa. -->
             <h1 :class="selected || listOpen ? 'sr-only' : 'text-xl min-[480px]:text-2xl'">{{ t('home.heading') }}</h1>
@@ -202,7 +214,8 @@ onBeforeUnmount(() => {
             </template>
         </section>
 
-        <MapView ref="mapView">
+        <!-- Sin mapa, su aviso se queda con el alto que deja el panel, y nunca con menos del que necesita. -->
+        <MapView ref="mapView" :class="{ 'min-h-56': mapFailed }" @status="mapFailed = $event === 'error'">
             <RestaurantsLayer :restaurants="restaurants" :selected="selectedSlug" @select="selectFromMap" />
         </MapView>
     </div>

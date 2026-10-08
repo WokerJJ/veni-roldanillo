@@ -6,8 +6,12 @@ import type * as FakeInertia from '@/testing/inertia';
 import { EL_GUADUAL, LA_CEIBA, restaurant, stubRestaurantsFetch } from '@/testing/restaurants';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
-// El mapa tiene sus propias pruebas (components/MapView.test.ts): aquí queda cargando.
-vi.mock('@/map/engine', () => ({ createMap: () => new Promise(() => undefined) }));
+// El mapa tiene sus propias pruebas (components/MapView.test.ts): aquí queda
+// cargando, salvo en las pruebas que lo hacen fallar.
+const engine = vi.hoisted(() => ({ fails: false }));
+vi.mock('@/map/engine', () => ({
+    createMap: () => (engine.fails ? Promise.reject(new Error('El navegador no pudo crear el mapa.')) : new Promise(() => undefined)),
+}));
 // Sin mapa, el ícono de los marcadores no llega a usarse (happy-dom no decodifica imágenes).
 vi.mock('@/map/iconImage', () => ({ iconImage: () => new Promise(() => undefined) }));
 
@@ -71,6 +75,7 @@ enableAutoUnmount(afterEach);
 
 beforeEach(() => {
     vi.resetModules();
+    engine.fails = false;
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     // Miércoles 7 de octubre de 2026, 12:30 en Colombia: La Ceiba (11 a 15) está abierta.
     vi.setSystemTime(new Date('2026-10-07T12:30:00-05:00'));
@@ -263,6 +268,57 @@ describe('Home', () => {
             await flushPromises();
 
             expect(alert().get('button').text()).toBe('Reintentar');
+        });
+    });
+
+    describe('si el mapa no carga', () => {
+        async function mountWithoutMap() {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            engine.fails = true;
+            const home = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+            // El motor del mapa llega con import(): el mapa falla después de montar.
+            await vi.dynamicImportSettled();
+            await flushPromises();
+
+            return { ...home, page: () => home.wrapper.get('inertia-head + div'), mapAlert: () => home.map().get('[role="alert"]') };
+        }
+
+        it('el aviso del mapa no tapa el panel: va debajo, y la lista se sigue viendo', async () => {
+            const { listButton, mapAlert, page, panel, status } = await mountWithoutMap();
+
+            expect(mapAlert().get('button').text()).toBe('Reintentar');
+            // El aviso ocupa todo su mapa. El panel deja de flotar encima (quedaría
+            // tapado): va antes, en una columna, y el mapa se queda con el resto.
+            expect(page().classes()).toEqual(expect.arrayContaining(['flex', 'flex-col']));
+            expect(panel().classes()).not.toContain('absolute');
+            expect(status().text()).toBe('2 restaurantes en el mapa');
+            expect(listButton()?.text()).toBe('Ver la lista');
+        });
+
+        it('la lista, que es la alternativa al mapa, se abre y deja elegir un restaurante', async () => {
+            const { items, listButton, panel } = await mountWithoutMap();
+
+            await listButton()?.trigger('click');
+            await flushPromises();
+
+            expect(items().map((item) => item.attributes('data-slug'))).toEqual(['prueba-la-ceiba', 'prueba-el-guadual']);
+            expect(document.activeElement).toBe(panel().get('h2').element);
+
+            await items()[0]?.trigger('click');
+            await flushPromises();
+
+            expect(panel().get('[role="dialog"] h2').text()).toBe('Restaurante de Prueba La Ceiba (ficticio)');
+        });
+
+        it('al reintentar, con el mapa cargando otra vez, el panel vuelve a ir sobre él', async () => {
+            const { mapAlert, page, panel } = await mountWithoutMap();
+            engine.fails = false;
+
+            await mapAlert().get('button').trigger('click');
+            await flushPromises();
+
+            expect(page().classes()).not.toContain('flex');
+            expect(panel().classes()).toContain('absolute');
         });
     });
 

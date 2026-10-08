@@ -604,6 +604,25 @@ describe('MapView', () => {
             expect(created.container.classList.contains('invisible')).toBe(false);
         });
 
+        it('avisa cada cambio de estado a quien lo usa: el error, la carga del reintento y el mapa a la vista', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            styles.fail(503);
+            const { alert, loadedMap, wrapper } = await mountMap();
+            const emitted = () => wrapper.getComponent({ name: 'MapView' }).emitted('status');
+
+            await vi.waitFor(() => {
+                expect(alert().exists()).toBe(true);
+            });
+
+            expect(emitted()).toEqual([['error']]);
+
+            styles.recover();
+            await alert().get('button').trigger('click');
+            await loadedMap();
+
+            expect(emitted()).toEqual([['error'], ['loading'], ['ready']]);
+        });
+
         it('al reintentar el foco pasa a la región del mapa en vez de perderse con el botón', async () => {
             vi.spyOn(console, 'error').mockImplementation(() => undefined);
             styles.fail(503);

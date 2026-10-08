@@ -26,6 +26,11 @@ import { MAP_CONTEXT } from '@/map/useMapLayers';
  */
 type Status = 'loading' | 'ready' | 'error';
 
+const emit = defineEmits<{
+    /** Cambió el estado del mapa: con `error` su aviso lo ocupa entero, y la página acomoda lo que tenía encima. */
+    status: [status: Status];
+}>();
+
 const { t, locale } = useI18n();
 const { theme } = useTheme();
 
@@ -160,6 +165,10 @@ watch([theme, locale], () => {
     }
 });
 
+watch(status, (current) => {
+    emit('status', current);
+});
+
 onMounted(() => {
     void load();
 });
@@ -198,7 +207,11 @@ defineExpose({
             <p class="text-sm">{{ t('map.loading') }}</p>
         </div>
 
-        <!-- z-20: por encima de lo que la página ponga sobre el mapa; nada debe tapar el botón de reintentar. -->
+        <!--
+            z-20: por encima de lo que la página ponga sobre el mapa; nada debe
+            tapar el botón de reintentar. Lo que deba seguir a la vista sin mapa
+            lo saca de encima la página, que se entera por `status`.
+        -->
         <div
             v-else-if="status === 'error'"
             role="alert"
