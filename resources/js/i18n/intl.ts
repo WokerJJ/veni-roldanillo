@@ -1,15 +1,12 @@
 import type { Locale } from '@/composables/useI18n';
 
+import { intlLocale } from './intlLocale';
+
 /**
  * Lo que escribe `Intl` según el idioma de la interfaz: precios y fechas. Los
  * formatos no se arman a mano: cada idioma tiene su separador de miles, su
  * orden del día y el mes y su manera de nombrar la moneda.
  */
-
-/** El idioma de la interfaz como lo pide Intl: las horas, las fechas y los precios, como se escriben en Colombia. */
-export function intlLocale(locale: Locale): string {
-    return locale === 'en' ? 'en-US' : 'es-CO';
-}
 
 // Crear un formateador cuesta: uno por idioma y por forma, la primera vez que se usa.
 const formats = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat>();

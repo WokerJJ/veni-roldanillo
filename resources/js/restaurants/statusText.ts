@@ -1,5 +1,5 @@
 import type { Locale, TranslationKey } from '@/composables/useI18n';
-import { intlLocale } from '@/i18n/intl';
+import { intlLocale } from '@/i18n/intlLocale';
 import type { Replacements } from '@/i18n/translate';
 
 import type { OpenStatus } from './openStatus';

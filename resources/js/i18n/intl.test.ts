@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDate, formatDay, formatPesos, intlLocale } from './intl';
+import { formatDate, formatDay, formatPesos } from './intl';
+import { intlLocale } from './intlLocale';
 
 /** El espacio que no parte la línea, que Intl pone entre el símbolo y la cifra. */
 const NBSP = ' ';
