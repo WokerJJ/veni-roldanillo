@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\RestaurantStatus;
 use App\Models\DeliveryZone;
 use App\Models\Dish;
 use App\Models\Neighborhood;
@@ -44,6 +45,39 @@ test('las coordenadas sembradas caen dentro del casco urbano de Roldanillo', fun
     );
 
     expect($outside)->toBe(0);
+});
+
+test('el seeder deja restaurantes a la vista en el mapa del inicio, todos como datos de ejemplo', function () {
+    $this->seed(DatabaseSeeder::class);
+
+    $features = collect($this->getJson('/api/restaurants.geojson')->assertOk()->json('features'));
+    $published = Restaurant::query()->where('status', '!=', RestaurantStatus::Hidden)->pluck('slug');
+
+    expect($published->count())->toBeGreaterThanOrEqual(5)
+        ->and($features->pluck('properties.slug')->sort()->values()->all())->toBe($published->sort()->values()->all())
+        ->and($features->where('properties.fictitious', '!==', true))->toBeEmpty()
+        // Uno queda oculto: sirve para ver que el mapa no lo muestra.
+        ->and(Restaurant::query()->where('status', RestaurantStatus::Hidden)->count())->toBe(1);
+});
+
+test('los restaurantes sembrados caen siempre en los mismos puntos, y no hay dos en el mismo', function () {
+    $points = fn () => DB::table('restaurants')
+        ->orderBy('slug')
+        ->selectRaw('slug, round(ST_Y(location::geometry)::numeric, 6)::text as latitude, round(ST_X(location::geometry)::numeric, 6)::text as longitude')
+        ->get()
+        ->map(fn (object $restaurant) => (array) $restaurant)
+        ->all();
+
+    $this->seed(DatabaseSeeder::class);
+    $first = $points();
+
+    Restaurant::query()->delete();
+    User::query()->delete();
+    $this->seed(DatabaseSeeder::class);
+
+    expect($first)->not->toBeEmpty()
+        ->and($points())->toBe($first)
+        ->and(collect($first)->unique(fn (array $point) => $point['latitude'].','.$point['longitude']))->toHaveCount(count($first));
 });
 
 test('los números de WhatsApp sembrados no pueden pertenecer a nadie', function () {

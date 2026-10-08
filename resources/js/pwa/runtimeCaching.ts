@@ -70,6 +70,12 @@ export async function navigation({ event, request }: Navigation): Promise<Respon
  * Las rutas del service worker, en el orden en que Workbox las prueba: gana
  * la primera que acepta el pedido. `env` son las variables `VITE_` de la
  * compilación; sin URL del estilo del mapa no hay ruta para el mapa.
+ *
+ * Lo que no tiene ruta sale a la red como si no hubiera service worker. Así
+ * va, a propósito, todo `/api/`: los restaurantes del mapa
+ * (`/api/restaurants.geojson`) solo los guarda la caché HTTP del navegador,
+ * un minuto y con ETag (ADR 0017). Una copia aquí podría volver a mostrar una
+ * ficha que ya se ocultó, y sin red la app tampoco abre: el HTML no se guarda.
  */
 export function runtimeCaching(env: Readonly<Record<string, string | undefined>>): RuntimeCaching[] {
     return [

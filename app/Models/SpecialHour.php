@@ -11,9 +11,15 @@ use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Horario de una fecha concreta (festivo, cierre temporal) que reemplaza al semanal.
+ *
+ * Larastan tipa la columna date de la migración como texto e ignora el cast;
+ * el @property fija el tipo.
+ *
+ * @property Carbon $on_date
  */
 #[Fillable(['on_date', 'closed', 'opens_at', 'closes_at', 'note_es', 'note_en'])]
 #[UsePolicy(RestaurantContentPolicy::class)]

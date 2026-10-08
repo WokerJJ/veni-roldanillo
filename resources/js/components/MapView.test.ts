@@ -1,7 +1,10 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Component } from 'vue';
 import { defineComponent, h } from 'vue';
 
+import type { MapGeoJson, MapLayerGroup } from '@/map/layers';
+import type { MapLayers } from '@/map/useMapLayers';
 import type * as FakeInertia from '@/testing/inertia';
 import type * as FakeMapLibre from '@/testing/maplibre';
 
@@ -18,6 +21,8 @@ const CENTER = [-76.1547, 4.4128];
 const BOUNDS = [-76.3, 4.3, -76, 4.55];
 /** Otra esquina del pueblo, adonde quien usa el mapa lo pudo haber llevado. */
 const ELSEWHERE: [number, number] = [-76.1493, 4.4172];
+/** Cómo se le pide a MapLibre otro estilo: entero, y con las capas propias de vuelta adentro (ADR 0016). */
+const FULL_SWAP = { diff: false, transformStyle: expect.any(Function) as unknown };
 
 function styleUrl(theme: 'claro' | 'oscuro', locale: 'es' | 'en'): string {
     return `https://tiles.example.test/style/veni-${theme}-${locale}.json`;
@@ -106,7 +111,15 @@ async function mountMap({
     locale = 'es',
     mapError,
     attachTo,
-}: { theme?: 'light' | 'dark'; locale?: 'es' | 'en'; mapError?: Error; attachTo?: HTMLElement } = {}) {
+    inside,
+}: {
+    theme?: 'light' | 'dark';
+    locale?: 'es' | 'en';
+    mapError?: Error;
+    attachTo?: HTMLElement;
+    /** Lo que la app pinta sobre el mapa: componentes dentro de <MapView>. */
+    inside?: () => Component[];
+} = {}) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     const maplibre = (await import('maplibre-gl')) as unknown as typeof FakeMapLibre;
     inertia.reset();
@@ -120,7 +133,12 @@ async function mountMap({
 
     const { default: MapView } = await import('./MapView.vue');
     const { default: ThemeToggle } = await import('./ThemeToggle.vue');
-    const wrapper = mount(defineComponent({ render: () => [h(ThemeToggle), h(MapView)] }), attachTo ? { attachTo } : {});
+    const wrapper = mount(
+        defineComponent({
+            render: () => [h(ThemeToggle), h(MapView, null, { default: () => (inside?.() ?? []).map((layer) => h(layer)) })],
+        }),
+        attachTo ? { attachTo } : {},
+    );
 
     /** El mapa creado (espera a que baje el motor y llegue el estilo). */
     const map = async (index = 0) => {
@@ -163,8 +181,12 @@ beforeEach(() => {
     styles = stubFetch();
 });
 
-afterEach(() => {
+afterEach(async () => {
     vi.useRealTimers();
+    // El motor llega con import() y hay pruebas que terminan antes que él: que
+    // llegue dentro de la suya. En la siguiente volvería a darle a MapLibre la
+    // URL del worker, y el orden de las pruebas cambiaría el resultado.
+    await vi.dynamicImportSettled();
     vi.unstubAllEnvs();
     delete document.documentElement.dataset.theme;
 });
@@ -339,7 +361,7 @@ describe('MapView', () => {
             });
 
             expect(styles.urls()).toEqual([styleUrl('claro', 'es'), styleUrl('oscuro', 'es')]);
-            expect(created.setStyle).toHaveBeenCalledWith(styleFrom(styleUrl('oscuro', 'es')), { diff: false });
+            expect(created.setStyle).toHaveBeenCalledWith(styleFrom(styleUrl('oscuro', 'es')), FULL_SWAP);
             expect(maplibre.maps).toHaveLength(1);
             expect(created.remove).not.toHaveBeenCalled();
 
@@ -363,7 +385,7 @@ describe('MapView', () => {
                 expect(created.setStyle).toHaveBeenCalledOnce();
             });
 
-            expect(created.setStyle).toHaveBeenCalledWith(styleFrom(styleUrl('claro', 'en')), { diff: false });
+            expect(created.setStyle).toHaveBeenCalledWith(styleFrom(styleUrl('claro', 'en')), FULL_SWAP);
             expect(maplibre.maps).toHaveLength(1);
             expect(created.jumpTo).not.toHaveBeenCalled();
             expect(created.getCenter()).toEqual(ELSEWHERE);
@@ -393,7 +415,7 @@ describe('MapView', () => {
             styles.pending[0]?.respond();
             await flushPromises();
 
-            expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'en')), { diff: false });
+            expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'en')), FULL_SWAP);
         });
 
         it('si el tema cambia mientras el mapa carga, al pintar se pone al día', async () => {
@@ -405,7 +427,7 @@ describe('MapView', () => {
 
             created.fire('load');
             await vi.waitFor(() => {
-                expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'es')), { diff: false });
+                expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'es')), FULL_SWAP);
             });
         });
 
@@ -418,7 +440,7 @@ describe('MapView', () => {
             await toggleTheme();
 
             await vi.waitFor(() => {
-                expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'es')), { diff: false });
+                expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'es')), FULL_SWAP);
             });
         });
 
@@ -461,7 +483,7 @@ describe('MapView', () => {
             styles.recover();
             happen(created);
             await vi.waitFor(() => {
-                expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'es')), { diff: false });
+                expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'es')), FULL_SWAP);
             });
 
             expect(styles.urls()).toEqual([styleUrl('claro', 'es'), styleUrl('oscuro', 'es'), styleUrl('oscuro', 'es')]);
@@ -501,7 +523,7 @@ describe('MapView', () => {
             styles.pending[0]?.respond();
             await flushPromises();
 
-            expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'es')), { diff: false });
+            expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'es')), FULL_SWAP);
 
             window.dispatchEvent(new Event('online'));
             await vi.waitFor(() => {
@@ -513,7 +535,7 @@ describe('MapView', () => {
             await flushPromises();
 
             expect(created.setStyle).toHaveBeenCalledTimes(2);
-            expect(created.setStyle).toHaveBeenLastCalledWith(styleFrom(styleUrl('oscuro', 'en')), { diff: false });
+            expect(created.setStyle).toHaveBeenLastCalledWith(styleFrom(styleUrl('oscuro', 'en')), FULL_SWAP);
         });
 
         it('un estilo viejo que llega tarde no reemplaza al que se aplicó después de que fallara', async () => {
@@ -539,7 +561,7 @@ describe('MapView', () => {
             styles.pending[0]?.respond();
             await flushPromises();
 
-            expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'en')), { diff: false });
+            expect(created.setStyle).toHaveBeenCalledExactlyOnceWith(styleFrom(styleUrl('oscuro', 'en')), FULL_SWAP);
         });
     });
 
@@ -584,6 +606,25 @@ describe('MapView', () => {
             expect(region().attributes('aria-busy')).toBe('false');
             expect(skeleton().exists()).toBe(false);
             expect(created.container.classList.contains('invisible')).toBe(false);
+        });
+
+        it('avisa cada cambio de estado a quien lo usa: el error, la carga del reintento y el mapa a la vista', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            styles.fail(503);
+            const { alert, loadedMap, wrapper } = await mountMap();
+            const emitted = () => wrapper.getComponent({ name: 'MapView' }).emitted('status');
+
+            await vi.waitFor(() => {
+                expect(alert().exists()).toBe(true);
+            });
+
+            expect(emitted()).toEqual([['error']]);
+
+            styles.recover();
+            await alert().get('button').trigger('click');
+            await loadedMap();
+
+            expect(emitted()).toEqual([['error'], ['loading'], ['ready']]);
         });
 
         it('al reintentar el foco pasa a la región del mapa en vez de perderse con el botón', async () => {
@@ -784,6 +825,173 @@ describe('MapView', () => {
             expect(String(error.mock.calls[0]?.[1])).toContain('VITE_MAP_STYLE_URL');
             // No es la conexión de quien visita: a la app le falta configuración.
             expect(alert().get('p').text()).toBe('Por ahora no podemos mostrarte el mapa en este dispositivo.');
+        });
+    });
+
+    describe('capas propias', () => {
+        const EMPTY: MapGeoJson = { type: 'FeatureCollection', features: [] };
+        const RESTAURANTS: MapGeoJson = {
+            type: 'FeatureCollection',
+            features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [-76.1547, 4.4128] }, properties: { slug: 'la-ceiba' } }],
+        };
+        const GROUP: MapLayerGroup = {
+            id: 'restaurants',
+            sources: { restaurants: { type: 'geojson', data: EMPTY } },
+            layers: [{ id: 'restaurants-points', type: 'circle', source: 'restaurants' }],
+        };
+
+        /** Un componente como los que van dentro de <MapView>: registra su grupo y no importa MapLibre. */
+        async function restaurantsLayer() {
+            const { useMapLayers } = await import('@/map/useMapLayers');
+            const used: { layers?: MapLayers } = {};
+            const Layer: Component = {
+                setup() {
+                    used.layers = useMapLayers(GROUP);
+
+                    return () => null;
+                },
+            };
+
+            return { Layer, used };
+        }
+
+        function layerIds(map: FakeMapLibre.Map): string[] {
+            return (map.getStyle().layers ?? []).map((layer) => layer.id);
+        }
+
+        it('lo que va dentro de <MapView> registra sus capas cuando el mapa ya pinta', async () => {
+            const { Layer } = await restaurantsLayer();
+            const { map } = await mountMap({ inside: () => [Layer] });
+            const created = await map();
+
+            // Todavía cargando: el componente ya está montado, pero no hay mapa en el que pintar.
+            expect(layerIds(created)).toEqual([]);
+
+            created.fire('load');
+            await flushPromises();
+
+            expect(layerIds(created)).toEqual(['restaurants-points']);
+        });
+
+        it('tras cambiar el tema, la capa sigue en el estilo aplicado', async () => {
+            const { Layer, used } = await restaurantsLayer();
+            const { loadedMap, toggleTheme } = await mountMap({ inside: () => [Layer] });
+            const created = await loadedMap();
+            used.layers?.setData('restaurants', RESTAURANTS);
+
+            await toggleTheme();
+            await vi.waitFor(() => {
+                expect(created.getStyle().name).toBe(styleUrl('oscuro', 'es'));
+            });
+
+            expect(layerIds(created)).toEqual(['restaurants-points']);
+            expect(created.getStyle().sources?.restaurants?.data).toEqual(RESTAURANTS);
+        });
+
+        it('tras cambiar el idioma, también', async () => {
+            const { Layer } = await restaurantsLayer();
+            const { loadedMap, inertia } = await mountMap({ inside: () => [Layer] });
+            const created = await loadedMap();
+
+            inertia.receiveFromServer('en', { replace: true });
+            await vi.waitFor(() => {
+                expect(created.getStyle().name).toBe(styleUrl('claro', 'en'));
+            });
+
+            expect(layerIds(created)).toEqual(['restaurants-points']);
+        });
+
+        it('los datos que llegan antes que el mapa entran al registrarse', async () => {
+            const { Layer, used } = await restaurantsLayer();
+            const { map } = await mountMap({ inside: () => [Layer] });
+            const created = await map();
+
+            used.layers?.setData('restaurants', RESTAURANTS);
+            created.fire('load');
+            await flushPromises();
+
+            expect(created.getStyle().sources?.restaurants?.data).toEqual(RESTAURANTS);
+        });
+
+        it('al reintentar, el mapa nuevo recibe las capas y sus datos', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { Layer, used } = await restaurantsLayer();
+            const { map, alert, wrapper } = await mountMap({ inside: () => [Layer] });
+            const first = await map();
+            used.layers?.setData('restaurants', RESTAURANTS);
+
+            // La fuente de los tiles no abre: el primer mapa se libera.
+            first.fire('error', { error: new Error('Failed to fetch'), sourceId: 'protomaps' });
+            first.fire('load');
+            await flushPromises();
+            expect(alert().exists()).toBe(true);
+
+            await wrapper.get('[role="alert"] button').trigger('click');
+            const second = await map(1);
+            second.fire('load');
+            await flushPromises();
+
+            expect(layerIds(second)).toEqual(['restaurants-points']);
+            expect(second.getStyle().sources?.restaurants?.data).toEqual(RESTAURANTS);
+        });
+
+        it('al desmontarse el componente, sus capas salen del mapa', async () => {
+            const { Layer } = await restaurantsLayer();
+            const shown = { value: true };
+            const { loadedMap, wrapper } = await mountMap({ inside: () => (shown.value ? [Layer] : []) });
+            const created = await loadedMap();
+
+            expect(layerIds(created)).toEqual(['restaurants-points']);
+
+            shown.value = false;
+            wrapper.vm.$forceUpdate();
+            await flushPromises();
+
+            expect(layerIds(created)).toEqual([]);
+            expect(Object.keys(created.getStyle().sources ?? {})).toEqual([]);
+        });
+
+        it('fuera de <MapView> avisa que no tiene dónde pintar', async () => {
+            vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const { Layer } = await restaurantsLayer();
+
+            expect(() => mount(Layer)).toThrow('va dentro de <MapView>');
+        });
+
+        it('deja llevar la cámara a un punto, acercando si hace falta y sin alejar nunca', async () => {
+            const { useMap } = await import('@/map/useMapLayers');
+            const used: { map?: ReturnType<typeof useMap>['map'] } = {};
+            const Camera: Component = {
+                setup() {
+                    used.map = useMap().map;
+
+                    return () => null;
+                },
+            };
+            const { loadedMap } = await mountMap({ inside: () => [Camera] });
+            const created = await loadedMap();
+
+            used.map?.value?.showPoint(ELSEWHERE, { minZoom: 16 });
+            expect(created.easeTo).toHaveBeenLastCalledWith({ center: ELSEWHERE, zoom: 16 });
+
+            // Quien usa el mapa ya estaba más cerca: se queda con su zoom.
+            created.userMovesTo({ center: CENTER as [number, number], zoom: 18 });
+            used.map?.value?.showPoint(ELSEWHERE, { minZoom: 16 });
+            expect(created.easeTo).toHaveBeenLastCalledWith({ center: ELSEWHERE, zoom: 18 });
+        });
+
+        it('deja devolverle el foco a la región del mapa', async () => {
+            const host = document.createElement('div');
+            document.body.append(host);
+            const { default: MapView } = await import('./MapView.vue');
+            const view = mount(MapView, { attachTo: host });
+
+            (view.vm as unknown as { focus: () => void }).focus();
+
+            expect(document.activeElement).toBe(view.get('section').element);
+
+            view.unmount();
+            host.remove();
         });
     });
 

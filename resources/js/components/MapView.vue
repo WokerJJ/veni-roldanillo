@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
+import { onBeforeUnmount, onMounted, provide, ref, shallowRef, useTemplateRef, watch } from 'vue';
 
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
@@ -9,14 +9,27 @@ import type { MapHandle, MapLabels } from '@/map/engine';
 import { MapUnavailableError } from '@/map/errors';
 import { fetchMapStyle } from '@/map/fetchStyle';
 import { mapStyleUrl } from '@/map/styleUrl';
+import { MAP_CONTEXT } from '@/map/useMapLayers';
 
 /**
  * Mapa de Roldanillo de veni-mapa, del tamaño de su contenedor. El tema y el
  * idioma los pone la app: elige el estilo `veni-{tema}-{idioma}.json` y lo
  * cambia cuando cambian, sin mover la cámara. No trae botones de tema ni de
  * idioma, solo los de zoom y la atribución de OpenStreetMap.
+ *
+ * Lo que la app pinta encima va adentro, como componentes (ADR 0016):
+ *
+ *     <MapView><RestaurantsLayer /></MapView>
+ *
+ * Cada uno registra sus capas con `useMapLayers()` y no importa MapLibre. Se
+ * montan con el mapa todavía cargando: el mapa les llega cuando ya pinta.
  */
 type Status = 'loading' | 'ready' | 'error';
+
+const emit = defineEmits<{
+    /** Cambió el estado del mapa: con `error` su aviso lo ocupa entero, y la página acomoda lo que tenía encima. */
+    status: [status: Status];
+}>();
 
 const { t, locale } = useI18n();
 const { theme } = useTheme();
@@ -27,8 +40,12 @@ const unavailable = ref(false);
 const region = useTemplateRef<HTMLElement>('region');
 const container = useTemplateRef<HTMLDivElement>('container');
 
-// Fuera de la reactividad: el mapa no es estado de la interfaz.
-let handle: MapHandle | null = null;
+/**
+ * El mapa, cuando ya pinta. Es una referencia (sin reactividad hacia adentro)
+ * para que los componentes de adentro sepan cuándo hay mapa y cuándo es otro.
+ */
+const handle = shallowRef<MapHandle | null>(null);
+provide(MAP_CONTEXT, { map: handle });
 /** Carga en curso o mapa vivo: al abortarla se cancelan las descargas y se libera el mapa. */
 let attempt: AbortController | null = null;
 /** El código del mapa no bajó (se cortó la señal a mitad del import()). */
@@ -56,7 +73,7 @@ async function load(): Promise<void> {
     attempt?.abort();
     const current = new AbortController();
     attempt = current;
-    handle = null;
+    handle.value = null;
     status.value = 'loading';
 
     try {
@@ -83,7 +100,7 @@ async function load(): Promise<void> {
         });
 
         // Ya pinta: se deja ver mientras llegan los tiles, sin esperar a que termine.
-        handle = created;
+        handle.value = created;
         status.value = 'ready';
 
         // El tema o el idioma pudieron cambiar mientras cargaba.
@@ -104,7 +121,7 @@ async function load(): Promise<void> {
 
         // Si algo quedó a medias (un mapa ya creado), se libera.
         current.abort();
-        handle = null;
+        handle.value = null;
         unavailable.value = error instanceof MapUnavailableError;
         status.value = 'error';
         console.error('[mapa] No se pudo cargar el mapa.', error);
@@ -142,10 +159,14 @@ function applyStyle(map: MapHandle): void {
 // nuevos. Sin mapa (cargando o con error) no hay nada que cambiar: al terminar
 // de cargar, o al reintentar, se usan los valores del momento.
 watch([theme, locale], () => {
-    if (handle) {
-        handle.setLabels(labels());
-        applyStyle(handle);
+    if (handle.value) {
+        handle.value.setLabels(labels());
+        applyStyle(handle.value);
     }
+});
+
+watch(status, (current) => {
+    emit('status', current);
 });
 
 onMounted(() => {
@@ -155,7 +176,14 @@ onMounted(() => {
 onBeforeUnmount(() => {
     attempt?.abort();
     attempt = null;
-    handle = null;
+    handle.value = null;
+});
+
+defineExpose({
+    /** Lleva el foco a la región del mapa (al cerrar algo que se abrió desde él). */
+    focus(): void {
+        region.value?.focus({ preventScroll: true });
+    },
 });
 </script>
 
@@ -179,7 +207,11 @@ onBeforeUnmount(() => {
             <p class="text-sm">{{ t('map.loading') }}</p>
         </div>
 
-        <!-- z-20: por encima de lo que la página ponga sobre el mapa; nada debe tapar el botón de reintentar. -->
+        <!--
+            z-20: por encima de lo que la página ponga sobre el mapa; nada debe
+            tapar el botón de reintentar. Lo que deba seguir a la vista sin mapa
+            lo saca de encima la página, que se entera por `status`.
+        -->
         <div
             v-else-if="status === 'error'"
             role="alert"
@@ -194,5 +226,8 @@ onBeforeUnmount(() => {
                 {{ t('map.retry') }}
             </button>
         </div>
+
+        <!-- Lo que la app pinta sobre el mapa: componentes que registran sus capas (useMapLayers). -->
+        <slot />
     </section>
 </template>

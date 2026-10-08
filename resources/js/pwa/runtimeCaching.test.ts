@@ -266,6 +266,28 @@ describe('rutas del service worker', () => {
         expect(routeFor(routes, { url })).toBeUndefined();
     });
 
+    /*
+    | Los restaurantes del mapa (#9, ADR 0017) no tienen ruta: salen a la red
+    | como si no hubiera service worker y solo los guarda la caché HTTP, un
+    | minuto y con ETag. Una copia de Workbox podría volver a mostrar una ficha
+    | que ya se ocultó, hasta que venciera esa copia.
+    */
+    it.each([
+        ['en español', '/api/restaurants.geojson'],
+        ['en inglés', '/api/restaurants.geojson?lang=en'],
+    ])('los restaurantes del mapa (%s) no pasan por ninguna ruta: no se guardan en el service worker', (_name, url) => {
+        expect(routeFor(routes, { url, mode: 'cors' })).toBeUndefined();
+        expect(routeFor(routes, { url, mode: 'same-origin' })).toBeUndefined();
+    });
+
+    it('tampoco si el mapa se sirviera desde el mismo origen que la app', () => {
+        const sameOrigin = runtimeCaching({ VITE_MAP_STYLE_URL: `${APP}/mapa/style/veni-{theme}-{locale}.json` });
+
+        // Las rutas del mapa sí están: guardan sus .json, pero no un .geojson de /api/.
+        expect(routeFor(sameOrigin, { url: '/mapa/style/veni-claro-es.json' })?.options?.cacheName).toBe('veni-map-style');
+        expect(routeFor(sameOrigin, { url: '/api/restaurants.geojson?lang=en' })).toBeUndefined();
+    });
+
     it('el motor del mapa guarda dos versiones de sus dos archivos, no más', () => {
         const engine = routeFor(routes, { url: '/build/assets/engine-DSZWC3fb.js' });
 

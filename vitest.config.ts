@@ -22,6 +22,10 @@ export default defineConfig({
         // El primer import de un componente en frío puede rozar los 5 s por
         // defecto en máquinas cargadas (CI, Docker en marcha).
         testTimeout: 15_000,
+        // Archivos y pruebas en orden aleatorio: una prueba que solo pasa
+        // después de otra es una falla que todavía no se vio. La semilla sale
+        // al empezar; `--sequence.seed=<semilla>` repite ese orden.
+        sequence: { shuffle: true },
         restoreMocks: true,
         unstubGlobals: true,
     },
