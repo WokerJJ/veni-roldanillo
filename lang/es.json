@@ -38,6 +38,8 @@
     "restaurants.status.closed_opens_tomorrow": "Cerrado · abre mañana a :time",
     "restaurants.status.closed_opens_weekday": "Cerrado · abre el :day a :time",
     "restaurants.status.unknown": "Horario sin confirmar",
+    "restaurants.status.time_one": "la :time",
+    "restaurants.status.time_many": "las :time",
     "credits.icons": "Íconos de colombia-icons, de Miguel Teheran, con licencia MIT.",
     "errors.home": "Volvé al inicio",
     "errors.not_found.title": "No encontramos esta página",

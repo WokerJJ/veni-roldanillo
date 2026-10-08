@@ -38,6 +38,8 @@
     "restaurants.status.closed_opens_tomorrow": "Closed · opens tomorrow at :time",
     "restaurants.status.closed_opens_weekday": "Closed · opens :day at :time",
     "restaurants.status.unknown": "Hours not confirmed",
+    "restaurants.status.time_one": ":time",
+    "restaurants.status.time_many": ":time",
     "credits.icons": "Icons from colombia-icons by Miguel Teheran, under the MIT License.",
     "errors.home": "Back to home",
     "errors.not_found.title": "We couldn't find this page",
