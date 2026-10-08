@@ -54,6 +54,12 @@ test('la ubicación es obligatoria', function () {
     Restaurant::factory()->create(['location' => null]);
 })->throws(QueryException::class, 'location');
 
+test('la ubicación no puede ser un punto vacío', function () {
+    // PostGIS lo guarda en una columna de puntos, pero no tiene coordenadas que leer.
+    DB::table('restaurants')->where('id', Restaurant::factory()->create()->id)
+        ->update(['location' => DB::raw("'SRID=4326;POINT EMPTY'::geography")]);
+})->throws(QueryException::class, 'restaurants_location_not_empty');
+
 test('no se borra una categoría con restaurantes', function () {
     $category = Category::factory()->create();
     Restaurant::factory()->hasAttached($category)->create();
@@ -310,6 +316,36 @@ test('un día especial admite varias franjas separadas', function () {
     SpecialHour::factory()->for($restaurant)->create(['on_date' => '2026-12-25']);
 
     expect(SpecialHour::query()->count())->toBe(3);
+});
+
+/*
+| Horarios: las 24:00 no son una hora. PostgreSQL las admite en una columna
+| time, pero ningún reloj las marca: cerrar a medianoche se escribe 00:00.
+*/
+
+test('ninguna hora del horario semanal es las 24:00', function (array $slot) {
+    OpeningHour::factory()->create($slot);
+})->with([
+    'cierra a las 24:00' => [['opens_at' => '18:00', 'closes_at' => '24:00']],
+    'abre a las 24:00' => [['opens_at' => '24:00', 'closes_at' => '02:00']],
+])->throws(QueryException::class, 'opening_hours_times_below_24');
+
+test('ninguna hora de un horario especial es las 24:00', function (string $opensAt, string $closesAt) {
+    SpecialHour::factory()->open($opensAt, $closesAt)->create();
+})->with([
+    'cierra a las 24:00' => ['18:00', '24:00'],
+    'abre a las 24:00' => ['24:00', '02:00'],
+])->throws(QueryException::class, 'special_hours_times_below_24');
+
+test('cerrar a medianoche se escribe 00:00, y el último minuto del día vale', function () {
+    $restaurant = Restaurant::factory()->create();
+    OpeningHour::factory()->for($restaurant)->create(['weekday' => 1, 'opens_at' => '18:00', 'closes_at' => '00:00']);
+    OpeningHour::factory()->for($restaurant)->create(['weekday' => 2, 'opens_at' => '18:00', 'closes_at' => '23:59']);
+    SpecialHour::factory()->for($restaurant)->open('18:00', '00:00')->create(['on_date' => '2026-12-24']);
+    SpecialHour::factory()->for($restaurant)->open('18:00', '23:59')->create(['on_date' => '2026-12-25']);
+
+    expect(OpeningHour::query()->count())->toBe(2)
+        ->and(SpecialHour::query()->count())->toBe(2);
 });
 
 test('restaurant_claims tiene índices para restaurant_id y reviewed_by', function () {
