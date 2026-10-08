@@ -31,6 +31,7 @@
     "restaurants.delivery": "Delivers",
     "restaurants.sample_data": "Sample data",
     "restaurants.view_details": "View details",
+    "restaurants.view_details_of": "View details of :name",
     "restaurants.status.open": "Open now",
     "restaurants.status.open_until": "Open now · closes at :time",
     "restaurants.status.closed": "Closed",

@@ -31,6 +31,7 @@
     "restaurants.delivery": "Hace domicilios",
     "restaurants.sample_data": "Datos de ejemplo",
     "restaurants.view_details": "Ver la ficha",
+    "restaurants.view_details_of": "Ver la ficha de :name",
     "restaurants.status.open": "Abierto ahora",
     "restaurants.status.open_until": "Abierto ahora · cierra a :time",
     "restaurants.status.closed": "Cerrado",

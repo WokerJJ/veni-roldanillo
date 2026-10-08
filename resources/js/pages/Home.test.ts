@@ -340,6 +340,12 @@ describe('Home', () => {
     });
 
     describe('la lista', () => {
+        it('cada restaurante de la lista enlaza a su ficha', async () => {
+            const { panel } = await mountWithList();
+
+            expect(panel().findAll('li > a').map((link) => link.attributes('href'))).toEqual(['/restaurants/prueba-la-ceiba', '/restaurants/prueba-el-guadual']);
+        });
+
         it('se abre con su botón, con todos los restaurantes y el foco en su título', async () => {
             const { items, panel, wrapper } = await mountWithList();
 
@@ -444,12 +450,12 @@ describe('Home', () => {
             expect(panel().get('[role="dialog"] h2').text()).toBe('Restaurante de Prueba El Guadual (ficticio)');
         });
 
-        it('todavía no enlaza a la ficha: no existe', async () => {
-            const { panel, tapOnMap } = await mountHome({ answer: [LA_CEIBA] });
+        it('enlaza a la ficha del restaurante elegido', async () => {
+            const { panel, tapOnMap } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
 
-            await tapOnMap('prueba-la-ceiba');
+            await tapOnMap('prueba-el-guadual');
 
-            expect(panel().find('a').exists()).toBe(false);
+            expect(panel().get('[role="dialog"] a').attributes('href')).toBe('/restaurants/prueba-el-guadual');
         });
 
         it('al cambiar de idioma sigue abierto, con las categorías en el idioma nuevo', async () => {
