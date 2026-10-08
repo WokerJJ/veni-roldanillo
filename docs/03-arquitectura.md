@@ -67,7 +67,7 @@ Reglas del contrato:
 
 Decidido en el [ADR 0017](adr/0017-restaurantes-en-el-mapa.md).
 
-`GET /api/restaurants.geojson` responde una `FeatureCollection` con los restaurantes publicados (todos menos los ocultos). Está en `routes/api.php`: sin sesión ni cookies. Cada figura es un punto `[longitud, latitud]` y lleva una lista blanca de propiedades (`App\Http\Resources\RestaurantFeature`):
+`GET /api/restaurants.geojson` responde una `FeatureCollection` con los restaurantes publicados (los sin reclamar y los reclamados; los ocultos, nunca). Está en `routes/api.php`: sin sesión ni cookies. Cada figura es un punto `[longitud, latitud]` y lleva una lista blanca de propiedades (`App\Http\Resources\RestaurantFeature`):
 
 | Propiedad | Qué es |
 | --- | --- |
@@ -90,13 +90,13 @@ En la página del inicio (`resources/js/pages/Home.vue`):
 | Pieza | Dónde | Qué hace |
 | --- | --- | --- |
 | Pedido | `resources/js/restaurants/api.ts` | `fetchRestaurants(idioma)`: pide la lista sin cookies (`credentials: 'omit'`), descarta las figuras mal formadas y se rinde a los 20 s |
-| Estado | `resources/js/restaurants/useRestaurants.ts` | `loading`, `ready` o `error`, con `retry`. Vuelve a pedir al cambiar de idioma y, si ese pedido falla, deja la lista que ya había |
+| Estado | `resources/js/restaurants/useRestaurants.ts` | `loading`, `ready` o `error`, con `retry`. Vuelve a pedir al cambiar de idioma y cuando la pestaña vuelve del fondo con una lista de más de un minuto; si ese pedido falla, deja la lista que ya había |
 | Marcadores | `resources/js/components/RestaurantsLayer.vue`, dentro de `<MapView>` | Un grupo de capas (ADR 0016): círculo arrebol con un ícono de colombia-icons por restaurante, grupos con la cantidad donde se superponen (hasta el zoom 15) y un halo en el elegido. Tocar un grupo acerca el mapa; tocar un restaurante lo elige |
 | Lista | `resources/js/components/RestaurantList.vue` | Lo mismo que los marcadores, para teclado y lector de pantalla: un botón por restaurante con su nombre y su estado |
 | Resumen | `resources/js/components/RestaurantSummary.vue` | El elegido: nombre, tipo de comida, abierto o cerrado y domicilios. Diálogo no modal; `href` enlazará a la ficha cuando exista (#13) |
 | Rótulo | `resources/js/components/SampleDataBadge.vue` | «Datos de ejemplo» en todo restaurante con `fictitious` |
 
-El panel del inicio muestra una de tres cosas: la bienvenida con el estado de la lista (cargando, cuántos hay, que todavía no hay, o el error con «Reintentar»), la lista, o el resumen. Escape cierra el resumen y después la lista, y el foco vuelve a donde se abrió (el botón de la lista o el mapa). El panel va antes que el mapa en el documento: con el teclado se llega a la lista sin pasar por el lienzo.
+El panel del inicio muestra una de tres cosas: la bienvenida con el estado de la lista (cargando, cuántos hay, que todavía no hay, o el error con «Reintentar»), la lista, o el resumen. Escape cierra el resumen y después la lista, y el foco vuelve a donde se abrió (el botón de la lista o el mapa). El panel va antes que el mapa en el documento: con el teclado se llega a la lista sin pasar por el lienzo. Si el mapa no carga, `MapView` lo avisa (`status`) y el panel deja de ir encima: queda antes del aviso del mapa, en una columna, para que la lista siga a la vista.
 
 Los marcadores son figuras del lienzo, no elementos de la página: no reciben foco ni los lee un lector de pantalla. Por eso la lista no es un extra: es la forma accesible de llegar a cada restaurante.
 
@@ -167,10 +167,10 @@ Implementado en la Fase 0 (#6); decisiones en el ADR 0009. Convenciones: precios
 | `categories` | slug, name_es/en, position | slug único con formato |
 | `category_restaurant` | category_id, restaurant_id | un restaurante puede tener varias categorías; PK (category_id, restaurant_id) e índice en restaurant_id; categoría en uso con `RESTRICT`, restaurante en cascada |
 | `neighborhoods` | name, slug, area (geography MultiPolygon, opcional), is_fictitious | name y slug únicos; GiST en area |
-| `restaurants` | name, slug, description_es/en, address, reference, location (geography Point 4326), phone, whatsapp, price_level, delivery, delivery_notes_es/en, payment_methods (jsonb, lista del enum `PaymentMethod`: cash/nequi/daviplata/card), status (unclaimed/claimed/hidden), plan (free/featured), verified_at, updated_by_owner_at, is_fictitious | slug único con formato; GiST en location; sin índice en status (el filtro `status <> 'hidden'` no lo usa); whatsapp celular colombiano `57` + diez dígitos (el modelo normaliza «+57 300 …»); price_level 1-4; payment_methods solo con valores del enum |
+| `restaurants` | name, slug, description_es/en, address, reference, location (geography Point 4326), phone, whatsapp, price_level, delivery, delivery_notes_es/en, payment_methods (jsonb, lista del enum `PaymentMethod`: cash/nequi/daviplata/card), status (unclaimed/claimed/hidden), plan (free/featured), verified_at, updated_by_owner_at, is_fictitious | slug único con formato; GiST en location, que no puede ser un punto vacío; sin índice en status (el filtro de las publicadas, `status IN ('unclaimed', 'claimed')`, no lo usa); whatsapp celular colombiano `57` + diez dígitos (el modelo normaliza «+57 300 …»); price_level 1-4; payment_methods solo con valores del enum |
 | `restaurant_user` | restaurant_id, user_id, role (owner/staff) | PK compuesta; cascada |
-| `opening_hours` | restaurant_id, weekday (0 = domingo), opens_at, closes_at | varias franjas por día sin solaparse (`EXCLUDE` con GiST); una franja puede pasar la medianoche |
-| `special_hours` | restaurant_id, on_date, closed, opens_at, closes_at, note_es/en | cerrado sin horas o abierto con ambas; por fecha, o un solo «cerrado» o franjas que no se solapan (`EXCLUDE`) |
+| `opening_hours` | restaurant_id, weekday (0 = domingo), opens_at, closes_at | varias franjas por día sin solaparse (`EXCLUDE` con GiST); una franja puede pasar la medianoche; ninguna hora es las 24:00 (cerrar a medianoche es 00:00) |
+| `special_hours` | restaurant_id, on_date, closed, opens_at, closes_at, note_es/en | cerrado sin horas o abierto con ambas; por fecha, o un solo «cerrado» o franjas que no se solapan (`EXCLUDE`); ninguna hora es las 24:00 |
 | `menu_sections` | restaurant_id, name_es/en, position | |
 | `dishes` | restaurant_id, menu_section_id, name_es/en, description_es/en, price, photo_path, tags (jsonb), available, sold_out_until, position | FK compuesta (sección del mismo restaurante) |
 | `option_groups` | dish_id, name_es/en, required, min_choices, max_choices, position | obligatorio si y solo si min_choices >= 1; max >= min |

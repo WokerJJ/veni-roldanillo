@@ -13,7 +13,7 @@ Tres cosas van a pintar sobre el mapa: los restaurantes (#9), la ubicación de q
 
 Dos detalles de MapLibre condicionan la forma:
 
-- Tras `setStyle`, el estilo nuevo carga en el siguiente cuadro. Hasta entonces `addSource` y `addLayer` lanzan «Style is not done loading». Y si se piden dos estilos seguidos con `transformStyle`, el segundo espera a que cargue el primero.
+- Tras `setStyle`, el estilo nuevo carga en el siguiente cuadro. Hasta entonces `addSource` y `addLayer` lanzan «Style is not done loading». Y si se piden dos estilos seguidos con `transformStyle`, el segundo espera a que cargue el primero, y de los dos el mapa solo avisa «style.load» del último.
 - Las imágenes de `icon-image` no son parte del JSON del estilo: se añaden aparte con `addImage` y también se pierden.
 
 ## Alternativas
@@ -27,7 +27,7 @@ Dos detalles de MapLibre condicionan la forma:
 
 - **El motor guarda un registro de capas propias** (`resources/js/map/layerRegistry.ts`, que crea `engine.ts`). Un grupo (`MapLayerGroup`, en `resources/js/map/layers.ts`) declara sus fuentes GeoJSON, sus capas, sus imágenes ya decodificadas y qué capas se pueden tocar. `MapHandle.addLayerGroup(grupo)` lo registra y devuelve con qué cambiar sus datos (`setData`), acercar un grupo de puntos (`expandCluster`) y quitarlo (`remove`).
 - **Al cambiar de estilo, las capas entran con él.** El motor llama a `setStyle` con un `transformStyle` del registro, que mete las fuentes (con sus datos del momento) y las capas en el estilo que llega, antes de que MapLibre lo aplique: no hay cuadro vacío. Las imágenes se vuelven a añadir en «style.load», que ocurre antes de que MapLibre arme los símbolos que las usan.
-- **Mientras un estilo carga, los cambios solo se anotan.** El registro cuenta los estilos pedidos que no cargaron; hasta que llega a cero, `setData`, registrar o quitar un grupo no tocan el mapa: quedan en el registro y entran con el estilo, porque `transformStyle` lee el registro cuando MapLibre lo llama, no cuando se pidió el cambio.
+- **Mientras un estilo carga, los cambios solo se anotan.** El registro anota que hay un estilo pedido sin cargar; hasta que el mapa avisa «style.load», `setData`, registrar o quitar un grupo no tocan el mapa: quedan en el registro y entran con el estilo, porque `transformStyle` lee el registro cuando MapLibre lo llama, no cuando se pidió el cambio. Es una marca y no una cuenta de avisos: con varios estilos pedidos seguidos llega uno solo, el del último.
 - **`MapView` reparte el mapa a lo que lleva adentro.** Lo que la app pinta sobre el mapa son componentes en su slot:
 
   ```vue
@@ -44,8 +44,13 @@ Dos detalles de MapLibre condicionan la forma:
 
 ## Consecuencias
 
-- #10 y #11 no tocan este contrato: la ruta es un grupo con una fuente GeoJSON de línea y un `order` menor que el de los restaurantes; la ubicación, otro grupo (punto y círculo de precisión) con uno mayor, o el control de geolocalización de MapLibre, que el motor añadiría como añade los de zoom. Lo que necesiten de MapLibre que hoy no esté (un control, ajustar la cámara a una ruta) se suma a `MapHandle`, en `engine.ts`.
-- El registro se prueba contra un doble de MapLibre (`resources/js/testing/maplibre.ts`) que reproduce lo que importa: reemplazar el estilo borra lo añadido, el estilo nuevo no carga al instante y dos seguidos esperan su turno. Lo que el doble no puede probar (que MapLibre de verdad se comporte así) lo cubre la verificación en un navegador real; la prueba de humo con navegador sigue pendiente en #40.
+- #10 y #11 se apoyan en este contrato y lo amplían sin romperlo: la ruta es un grupo con una fuente GeoJSON de línea y un `order` menor que el de los restaurantes; la ubicación, otro grupo (punto y círculo de precisión) con uno mayor, o el control de geolocalización de MapLibre, que el motor añadiría como añade los de zoom. Lo que hoy falta se suma, y lo que ya registra un grupo sigue valiendo igual. Las extensiones previstas:
+  - **Un ancla para pintar debajo de las etiquetas.** Hoy todo grupo va encima del mapa base entero, y una ruta así taparía los nombres de las calles. Un campo opcional en `MapLayerGroup` dirá que sus capas entran debajo de las etiquetas del estilo; sin él, el grupo va encima, como ahora. El registro tendrá que respetarlo también al volver a meter las capas en un estilo nuevo.
+  - **La cámara, con margen para el panel.** `MapHandle.fitBounds` para encuadrar una ruta, y un margen opcional en él y en `showPoint`: lo que se muestra no puede quedar debajo del panel de la página.
+  - **El restaurante elegido, en la URL** (`?r=slug`). «Cómo llegar» sale de la ficha (#13) y tiene que abrir el mapa con ese restaurante ya elegido. Es de la página, no del registro: la capa ya recibe el elegido como dato. Solo va el restaurante; la ubicación de quien usa el mapa no pasa por la URL (ADR 0008).
+
+  Lo demás que necesiten de MapLibre (un control) se suma a `MapHandle`, en `engine.ts`.
+- El registro se prueba contra un doble de MapLibre (`resources/js/testing/maplibre.ts`) que reproduce lo que importa: reemplazar el estilo borra lo añadido, el estilo nuevo no carga al instante, dos seguidos esperan su turno y solo el último avisa «style.load». Lo que el doble no puede probar (que MapLibre de verdad se comporte así) lo cubre la verificación en un navegador real; la prueba de humo con navegador sigue pendiente en #40.
 - Los datos de una fuente viven dos veces en memoria: en el registro y en MapLibre. Con los restaurantes de un municipio no pesa; una fuente grande tendría que cargarse por URL, que este contrato no cubre.
 - Las propiedades de una figura tocada llegan aplanadas (MapLibre devuelve las listas y los objetos como texto JSON): un grupo pone un identificador en las propiedades y busca el resto en sus propios datos.
 - Una imagen se registra ya decodificada: quien la necesita la prepara (y decide qué hacer si no baja) antes de registrar el grupo, o lo registra de nuevo cuando la tiene.
