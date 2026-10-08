@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\RestaurantsGeoJsonRequest;
 use App\Http\Resources\RestaurantFeatureCollection;
 use App\Models\Restaurant;
-use Carbon\CarbonImmutable;
+use App\Support\BusinessDay;
 use Illuminate\Database\Eloquent\Relations\Relation;
 
 /**
@@ -17,20 +17,11 @@ use Illuminate\Database\Eloquent\Relations\Relation;
  */
 class RestaurantGeoJsonController extends Controller
 {
-    /**
-     * Hasta cuántos días adelante viajan los horarios especiales. El
-     * dispositivo calcula con ellos «abierto ahora» y cuándo vuelve a abrir, y
-     * no busca más allá de una semana.
-     */
-    public const SPECIAL_HOURS_DAYS_AHEAD = 7;
-
     public function __invoke(RestaurantsGeoJsonRequest $request): RestaurantFeatureCollection
     {
-        // El día en Colombia, aunque el reloj del servidor estuviera en otra zona.
-        $today = CarbonImmutable::now(config()->string('app.timezone'))->startOfDay();
-        // Desde ayer: una franja de ayer puede pasar la medianoche y seguir abierta hoy.
-        $from = $today->subDay()->toDateString();
-        $until = $today->addDays(self::SPECIAL_HOURS_DAYS_AHEAD)->toDateString();
+        // Los horarios especiales con que el dispositivo calcula «abierto
+        // ahora»: de ayer a una semana, la misma ventana que manda la ficha.
+        [$from, $until] = BusinessDay::specialHoursWindow();
 
         // Cuatro consultas, haya un restaurante o trescientos: la de
         // restaurantes (con si tiene zonas de domicilio) y una por relación.
