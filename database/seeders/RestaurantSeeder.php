@@ -11,20 +11,37 @@ use App\Models\Option;
 use App\Models\OptionGroup;
 use App\Models\Restaurant;
 use App\Models\User;
+use App\Support\GeoPoint;
 use Illuminate\Support\Str;
 
 /**
  * Restaurantes ficticios con menú, horario, almuerzo del día y domicilios.
- * Los nombres y coordenadas son inventados (RestaurantFactory).
+ * Los nombres y los puntos son inventados: ninguno es un negocio real.
  */
 class RestaurantSeeder extends FictitiousSeeder
 {
-    private const array NAMES = [
-        'La Ceiba', 'El Guadual', 'Los Totumos', 'La Chiminea',
-        'El Fogón Azul', 'La Mesa Larga', 'El Patio Lila', 'Las Tres Ollas',
+    /**
+     * Nombre y punto (latitud, longitud) de cada restaurante. Los puntos
+     * reparten los restaurantes por el casco urbano de Roldanillo, para que el
+     * mapa del inicio los muestre separados apenas abre; La Ceiba y El Patio
+     * Lila quedan a media cuadra, para ver cómo se juntan en un grupo. Son
+     * fijos, no al azar: la misma siembra da siempre el mismo mapa.
+     *
+     * @var list<array{string, float, float}>
+     */
+    private const array RESTAURANTS = [
+        ['La Ceiba', 4.4128, -76.1547],
+        ['El Guadual', 4.4093, -76.1556],
+        ['Los Totumos', 4.4162, -76.1560],
+        ['La Chiminea', 4.4150, -76.1500],
+        ['El Fogón Azul', 4.4118, -76.1598],
+        ['La Mesa Larga', 4.4100, -76.1492],
+        ['El Patio Lila', 4.4132, -76.1542],
+        ['Las Tres Ollas', 4.4075, -76.1520],
     ];
 
     /**
+     * El primero queda reclamado por la dueña de prueba y el último, oculto.
      * Categorías, domicilios y zonas salen del índice de cada restaurante (no
      * al azar): la misma siembra da siempre los mismos datos de domicilio.
      */
@@ -38,18 +55,19 @@ class RestaurantSeeder extends FictitiousSeeder
             $categories = collect([Category::factory()->create()->id]);
         }
 
-        foreach (self::NAMES as $i => $base) {
+        foreach (self::RESTAURANTS as $i => [$base, $latitude, $longitude]) {
             $factory = Restaurant::factory();
 
             if ($i === 0) {
                 $factory = $factory->claimed();
-            } elseif ($i === count(self::NAMES) - 1) {
+            } elseif ($i === count(self::RESTAURANTS) - 1) {
                 $factory = $factory->hidden();
             }
 
             $restaurant = $factory->create([
                 'name' => "Restaurante de Prueba {$base} (ficticio)",
                 'slug' => Str::slug("prueba {$base}"),
+                'location' => new GeoPoint($latitude, $longitude),
                 'delivery' => $i % 2 === 0,
             ]);
 
