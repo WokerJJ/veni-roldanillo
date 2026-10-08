@@ -3,6 +3,8 @@ import { Head, Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
 import Icon from '@/components/Icon.vue';
+import RestaurantContact from '@/components/RestaurantContact.vue';
+import RestaurantDelivery from '@/components/RestaurantDelivery.vue';
 import RestaurantHours from '@/components/RestaurantHours.vue';
 import RestaurantMenu from '@/components/RestaurantMenu.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
@@ -68,6 +70,11 @@ const statusText = computed(() => openStatusText(status.value, t, locale.value))
                     <span>{{ statusText }}</span>
                 </p>
 
+                <p v-if="restaurant.delivery.available" class="mt-1.5 flex items-start gap-2" data-delivery>
+                    <Icon name="check" :size="20" class="mt-0.5 shrink-0" />
+                    <span>{{ t('restaurants.delivery') }}</span>
+                </p>
+
                 <p v-if="restaurant.description" class="mt-4 max-w-prose whitespace-pre-line" data-description>{{ restaurant.description }}</p>
 
                 <!-- Sin reclamar: nadie del restaurante confirmó estos datos. -->
@@ -86,6 +93,10 @@ const statusText = computed(() => openStatusText(status.value, t, locale.value))
             <RestaurantHours class="mt-8 border-t border-line pt-6" :hours="restaurant.hours" :special-hours="restaurant.special_hours" />
 
             <RestaurantMenu class="mt-8 border-t border-line pt-6" :sections="restaurant.menu" />
+
+            <RestaurantDelivery v-if="restaurant.delivery.available" class="mt-8 border-t border-line pt-6" :delivery="restaurant.delivery" />
+
+            <RestaurantContact class="mt-8 border-t border-line pt-6" :restaurant="restaurant" />
         </article>
     </div>
 </template>

@@ -195,6 +195,63 @@ describe('Restaurants/Show', () => {
         });
     });
 
+    describe('domicilios', () => {
+        it('si hace domicilios lo dice arriba y muestra a qué barrios lleva', async () => {
+            const { wrapper } = await mountShow();
+
+            expect(wrapper.get('header [data-delivery]').text()).toBe('Hace domicilios');
+            expect(wrapper.getComponent({ name: 'RestaurantDelivery' }).findAll('[data-zone]')).toHaveLength(2);
+        });
+
+        it('si no hace domicilios, no dice nada de domicilios', async () => {
+            const { wrapper } = await mountShow(profile({ delivery: { available: false, notes: null, zones: [] } }));
+
+            expect(wrapper.find('header [data-delivery]').exists()).toBe(false);
+            expect(wrapper.findComponent({ name: 'RestaurantDelivery' }).exists()).toBe(false);
+        });
+    });
+
+    describe('contacto', () => {
+        it('muestra la dirección, el teléfono, el WhatsApp y los medios de pago del negocio', async () => {
+            const { wrapper } = await mountShow();
+            const contact = wrapper.getComponent({ name: 'RestaurantContact' });
+
+            expect(contact.get('[data-address]').text()).toContain('Calle de Prueba # 1-23');
+            expect(contact.get('[data-phone] a').attributes('href')).toBe('tel:+576020000000');
+            expect(contact.get('[data-whatsapp] a').attributes('href')).toBe('https://wa.me/570009998877');
+            expect(contact.findAll('[data-payments] li').map((item) => item.text())).toEqual(['Efectivo', 'Nequi']);
+        });
+
+        it('sin ningún dato de contacto, no deja el título solo', async () => {
+            const { wrapper } = await mountShow(
+                profile({ address: null, reference: null, phone: null, whatsapp: null, payment_methods: [], price_level: null }),
+            );
+
+            expect(wrapper.findAll('h2').map((title) => title.text())).toEqual(['Horario', 'Menú', 'Domicilios']);
+        });
+    });
+
+    describe('encabezados', () => {
+        it('van en orden: el nombre, las secciones y, dentro de ellas, sus partes', async () => {
+            const { wrapper } = await mountShow(
+                profile({ special_hours: [{ date: '2026-10-12', closed: true, opens: null, closes: null, note: null }] }),
+            );
+            const headings = wrapper.findAll('h1, h2, h3').map((heading) => `${heading.element.tagName} ${heading.text()}`);
+
+            expect(headings).toEqual([
+                'H1 Restaurante de Prueba La Ceiba (ficticio)',
+                'H2 Horario',
+                'H3 Horarios especiales',
+                'H2 Menú',
+                'H3 Platos fuertes (prueba)',
+                'H3 Bebidas (prueba)',
+                'H2 Domicilios',
+                'H3 Barrios y costo del domicilio',
+                'H2 Ubicación y contacto',
+            ]);
+        });
+    });
+
     describe('información sin verificar', () => {
         it.each([
             ['es', 'Información sin verificar · actualizada el 5 de octubre de 2026.'],
