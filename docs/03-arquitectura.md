@@ -83,7 +83,24 @@ Decidido en el [ADR 0017](adr/0017-restaurantes-en-el-mapa.md).
 - **Caché**: `Cache-Control: public, max-age=60` y `ETag`; con `If-None-Match` al día, 304. El service worker no la guarda (ver «Qué se guarda y cómo»).
 - **Límite**: 60 peticiones por minuto por IP; después, 429 con `Retry-After`. Los errores salen como JSON.
 - **Consultas**: cuatro, haya los restaurantes que haya (restaurantes con si tienen zonas, categorías, horario semanal y horarios especiales de la ventana).
-- **CSP**: la página lo pide con `fetch` al mismo origen (`connect-src 'self'`), sin cambios en la política.
+- **CSP**: la página lo pide con `fetch` al mismo origen (`connect-src 'self'`), sin cambios en la política. El ícono de los marcadores se dibuja desde una URL `data:`, que `img-src` ya admite.
+
+En la página del inicio (`resources/js/pages/Home.vue`):
+
+| Pieza | Dónde | Qué hace |
+| --- | --- | --- |
+| Pedido | `resources/js/restaurants/api.ts` | `fetchRestaurants(idioma)`: pide la lista sin cookies (`credentials: 'omit'`), descarta las figuras mal formadas y se rinde a los 20 s |
+| Estado | `resources/js/restaurants/useRestaurants.ts` | `loading`, `ready` o `error`, con `retry`. Vuelve a pedir al cambiar de idioma y, si ese pedido falla, deja la lista que ya había |
+| Marcadores | `resources/js/components/RestaurantsLayer.vue`, dentro de `<MapView>` | Un grupo de capas (ADR 0016): círculo arrebol con un ícono de colombia-icons por restaurante, grupos con la cantidad donde se superponen (hasta el zoom 15) y un halo en el elegido. Tocar un grupo acerca el mapa; tocar un restaurante lo elige |
+| Lista | `resources/js/components/RestaurantList.vue` | Lo mismo que los marcadores, para teclado y lector de pantalla: un botón por restaurante con su nombre y su estado |
+| Resumen | `resources/js/components/RestaurantSummary.vue` | El elegido: nombre, tipo de comida, abierto o cerrado y domicilios. Diálogo no modal; `href` enlazará a la ficha cuando exista (#13) |
+| Rótulo | `resources/js/components/SampleDataBadge.vue` | «Datos de ejemplo» en todo restaurante con `fictitious` |
+
+El panel del inicio muestra una de tres cosas: la bienvenida con el estado de la lista (cargando, cuántos hay, que todavía no hay, o el error con «Reintentar»), la lista, o el resumen. Escape cierra el resumen y después la lista, y el foco vuelve a donde se abrió (el botón de la lista o el mapa). El panel va antes que el mapa en el documento: con el teclado se llega a la lista sin pasar por el lienzo.
+
+Los marcadores son figuras del lienzo, no elementos de la página: no reciben foco ni los lee un lector de pantalla. Por eso la lista no es un extra: es la forma accesible de llegar a cada restaurante.
+
+Los seeders dejan ocho restaurantes ficticios en puntos fijos del casco urbano (uno oculto): el mapa abre siempre con los mismos siete, cinco sueltos y un grupo de dos.
 
 **«Abierto ahora» no viene del servidor**: lo calcula el dispositivo con esos horarios y la hora de Colombia (`resources/js/restaurants/openStatus.ts`, la única implementación). Así la respuesta guardada no envejece: el horario cambia poco y el estado se recalcula cada medio minuto con la página abierta. Las reglas: una franja pertenece al día en que empieza y, si cierra antes de lo que abre, termina al día siguiente; un horario especial reemplaza al semanal en su fecha (cerrado, o con otras franjas) sin tocar la madrugada que viene de la víspera; a la hora de cierre ya cerró; sin horarios cargados, «Horario sin confirmar». `statusText.ts` lo pone en palabras («Cerrado · abre mañana a las 11:00 a. m.») en el idioma de la interfaz.
 
