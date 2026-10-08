@@ -1,0 +1,45 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [-76.1547, 4.4128]
+            },
+            "properties": {
+                "slug": "prueba-la-ceiba",
+                "name": "Restaurante de Prueba La Ceiba (ficticio)",
+                "categories": [
+                    { "slug": "comida-tipica", "name": "Comida típica" }
+                ],
+                "delivery": true,
+                "fictitious": true,
+                "hours": [
+                    { "weekday": 1, "opens": "11:00", "closes": "15:00" },
+                    { "weekday": 5, "opens": "18:00", "closes": "02:00" }
+                ],
+                "special_hours": [
+                    { "date": "2026-10-07", "closed": true, "opens": null, "closes": null },
+                    { "date": "2026-10-12", "closed": false, "opens": "12:00", "closes": "16:00" }
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [-76.1539, 4.4102]
+            },
+            "properties": {
+                "slug": "prueba-el-guadual",
+                "name": "Restaurante de Prueba El Guadual (ficticio)",
+                "categories": [],
+                "delivery": false,
+                "fictitious": true,
+                "hours": [],
+                "special_hours": []
+            }
+        }
+    ]
+}
