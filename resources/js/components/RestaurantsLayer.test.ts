@@ -56,6 +56,12 @@ async function mountLayer(initial: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL
     const map = maplibre.maps[0] as FakeMapLibre.Map;
     map.fire('load');
     await flushPromises();
+    // El ícono llega con su propio import(), cuando quiere: las capas quedan
+    // como van a quedar recién cuando ya se preparó (o falló) y se registró.
+    await vi.waitFor(() => {
+        expect(iconImage).toHaveBeenCalled();
+    });
+    await flushPromises();
 
     const source = (id: string) => map.getStyle().sources?.[id];
     const slugsIn = (id: string) => (source(id)?.data as { features: { properties: { slug: string } }[] }).features.map((feature) => feature.properties.slug);
