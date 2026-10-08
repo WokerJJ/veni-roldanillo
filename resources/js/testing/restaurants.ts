@@ -6,6 +6,7 @@
 import { vi } from 'vitest';
 
 import type { Restaurant } from '@/restaurants/api';
+import type { RestaurantProfile } from '@/restaurants/profile';
 
 const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
 
@@ -109,5 +110,53 @@ export function stubRestaurantsFetch(answer?: readonly Restaurant[]) {
         /** Las URL de los pedidos de restaurantes, en orden. */
         urls: () => requests.map((request) => request.url),
         last: () => requests.at(-1),
+    };
+}
+
+/**
+ * La ficha de La Ceiba como la manda el servidor a la página Restaurants/Show
+ * (App\Http\Resources\RestaurantProfile): completa, con menú, horario,
+ * domicilios y contacto. Abre todos los días de 11:00 a 15:00.
+ */
+export function profile(overrides: Partial<RestaurantProfile> = {}): RestaurantProfile {
+    return {
+        slug: 'prueba-la-ceiba',
+        name: 'Restaurante de Prueba La Ceiba (ficticio)',
+        description: 'Ficha de ejemplo para desarrollo. No corresponde a un negocio real.',
+        categories: [{ slug: 'comida-tipica', name: 'Comida típica' }],
+        fictitious: true,
+        hidden: false,
+        unverified: false,
+        updated_on: '2026-10-05',
+        price_level: 2,
+        address: 'Calle de Prueba # 1-23',
+        reference: 'Dirección inventada',
+        phone: '6020000000',
+        whatsapp: '570009998877',
+        payment_methods: ['cash', 'nequi'],
+        delivery: {
+            available: true,
+            notes: 'Domicilios hasta las 9 de la noche.',
+            zones: [
+                { neighborhood: 'Barrio El Mirador de Prueba (ficticio)', fee: 2500 },
+                { neighborhood: 'Barrio Los Guayacanes (ficticio)', fee: 3000 },
+            ],
+        },
+        hours: EVERY_DAY.map((weekday) => ({ weekday, opens: '11:00', closes: '15:00' })),
+        special_hours: [],
+        menu: [
+            {
+                name: 'Platos fuertes (prueba)',
+                dishes: [
+                    { name: 'Sancocho de prueba', description: 'Con arroz y aguacate.', price: 18500, sold_out: false },
+                    { name: 'Bandeja de prueba', description: null, price: 22000, sold_out: true },
+                ],
+            },
+            {
+                name: 'Bebidas (prueba)',
+                dishes: [{ name: 'Jugo de prueba', description: 'En agua o en leche.', price: 4000, sold_out: false }],
+            },
+        ],
+        ...overrides,
     };
 }

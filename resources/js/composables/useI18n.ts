@@ -24,6 +24,16 @@ export const LOCALE_ENDPOINT = '/locale';
 const DESCRIPTION_KEY: TranslationKey = 'meta.description';
 
 /**
+ * El título y la descripción del documento de una página que tiene los suyos
+ * (la ficha de un restaurante): los manda el servidor en la prop `meta`, ya
+ * en el idioma de la petición. Las demás páginas no la traen.
+ */
+export interface PageMeta {
+    title: string;
+    description: string;
+}
+
+/**
  * Clave en localStorage del último idioma con que respondió el servidor. No
  * decide nada en la app (el idioma lo resuelve el servidor, ADR 0010): la lee
  * la página sin conexión (resources/js/offline.ts, con el mismo literal), que
@@ -43,9 +53,11 @@ let documentScope: EffectScope | undefined;
 
 /**
  * Mantiene <html lang> y la descripción del documento al día cuando el idioma
- * cambia sin recargar (selector o historial). El servidor ya los pinta en la
- * primera carga. Son watchers globales, fuera del ciclo de vida de los
- * componentes, que arrancan con el primer componente que traduce.
+ * o la página cambian sin recargar (selector, enlaces o historial). El
+ * servidor ya los pinta en la primera carga. La descripción es la de la
+ * página, si manda la suya (`meta`), o la general de la app. Son watchers
+ * globales, fuera del ciclo de vida de los componentes, que arrancan con el
+ * primer componente que traduce.
  */
 function syncDocument(): void {
     if (documentScope) {
@@ -65,7 +77,7 @@ function syncDocument(): void {
         );
 
         watch(
-            () => page.props.translations[DESCRIPTION_KEY],
+            () => page.props.meta?.description ?? page.props.translations[DESCRIPTION_KEY],
             (description) => {
                 if (description !== undefined) {
                     document.head.querySelector('meta[name="description"]')?.setAttribute('content', description);

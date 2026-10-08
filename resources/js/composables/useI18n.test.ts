@@ -129,6 +129,38 @@ describe('useI18n', () => {
 
         expect(meta.content).toBe(fake.messages.es['meta.description']);
     });
+
+    it('al llegar a una página con descripción propia, el documento lleva esa; al salir, vuelve la general', async () => {
+        const { fake, useI18n } = await load();
+        const meta = serverDescription(fake);
+        mountHeading(useI18n);
+
+        // Del inicio a la ficha de un restaurante, sin recargar.
+        fake.receiveFromServer('es', { meta: { title: 'La Ceiba (ficticio)', description: 'Sancocho de prueba en fogón de leña.' } });
+        await nextTick();
+
+        expect(meta.content).toBe('Sancocho de prueba en fogón de leña.');
+
+        // Y de vuelta al inicio, que no manda la suya.
+        fake.receiveFromServer('es');
+        await nextTick();
+
+        expect(meta.content).toBe(fake.messages.es['meta.description']);
+        expect(document.head.querySelectorAll('meta[name="description"]')).toHaveLength(1);
+    });
+
+    it('en una página con descripción propia, cambiar de idioma trae la del idioma nuevo, no la general', async () => {
+        const { fake, useI18n } = await load();
+        const meta = serverDescription(fake);
+        mountHeading(useI18n);
+        fake.receiveFromServer('es', { meta: { title: 'La Ceiba (ficticio)', description: 'Sancocho de prueba en fogón de leña.' } });
+        await nextTick();
+
+        fake.receiveFromServer('en', { replace: true, meta: { title: 'La Ceiba (ficticio)', description: 'Test sancocho cooked over a wood fire.' } });
+        await nextTick();
+
+        expect(meta.content).toBe('Test sancocho cooked over a wood fire.');
+    });
 });
 
 /*

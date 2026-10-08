@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 /**
  * Ficha de un restaurante. slug, status, plan, verified_at e is_fictitious
@@ -31,11 +32,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * Larastan tipa las columnas enum de la migración como literales e ignora el
  * cast; los @property fijan el tipo del enum PHP. Tampoco conoce el cast
- * propio de la ubicación.
+ * propio de la ubicación ni el de la lista de medios de pago.
  *
  * @property RestaurantStatus $status
  * @property RestaurantPlan $plan
  * @property GeoPoint $location
+ * @property Collection<int, PaymentMethod> $payment_methods
  */
 #[Fillable([
     'name', 'description_es', 'description_en',

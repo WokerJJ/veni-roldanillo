@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * Plato con precio en pesos enteros.
@@ -27,6 +28,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * tags es una lista libre de etiquetas del dueño («picante», «vegetariano»):
  * todavía no hay un catálogo acordado y cerrarlo ahora obligaría a una
  * migración por cada etiqueta nueva; se normalizará cuando existan filtros.
+ *
+ * sold_out_until es «agotado hoy»: el plato sigue en el menú, pero no hay
+ * hasta esa fecha, incluida. Larastan tipa la columna date de la migración
+ * como texto e ignora el cast; el @property fija el tipo.
+ *
+ * @property Carbon|null $sold_out_until
  */
 #[Fillable([
     'menu_section_id', 'name_es', 'name_en', 'description_es', 'description_en',

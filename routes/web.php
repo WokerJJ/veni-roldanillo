@@ -1,10 +1,18 @@
 <?php
 
 use App\Http\Controllers\LocaleController;
+use App\Http\Controllers\RestaurantController;
 use App\Http\Controllers\WebManifestController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Home')->name('home');
+
+// La ficha de un restaurante (#13, ADR 0018). El slug es su dirección pública
+// y estable; lo que no tenga forma de slug ni llega a consultar la base. El
+// frontend arma la misma dirección en resources/js/restaurants/links.ts.
+Route::get('/restaurants/{slug}', [RestaurantController::class, 'show'])
+    ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
+    ->name('restaurants.show');
 
 // Límite por IP real (AppServiceProvider): 429 con el aviso en el idioma de la petición.
 Route::put('/locale', LocaleController::class)
