@@ -92,17 +92,48 @@ En la página del inicio (`resources/js/pages/Home.vue`):
 | Pedido | `resources/js/restaurants/api.ts` | `fetchRestaurants(idioma)`: pide la lista sin cookies (`credentials: 'omit'`), descarta las figuras mal formadas y se rinde a los 20 s |
 | Estado | `resources/js/restaurants/useRestaurants.ts` | `loading`, `ready` o `error`, con `retry`. Vuelve a pedir al cambiar de idioma y cuando la pestaña vuelve del fondo con una lista de más de un minuto; si ese pedido falla, deja la lista que ya había |
 | Marcadores | `resources/js/components/RestaurantsLayer.vue`, dentro de `<MapView>` | Un grupo de capas (ADR 0016): círculo arrebol con un ícono de colombia-icons por restaurante, grupos con la cantidad donde se superponen (hasta el zoom 15) y un halo en el elegido. Tocar un grupo acerca el mapa; tocar un restaurante lo elige |
-| Lista | `resources/js/components/RestaurantList.vue` | Lo mismo que los marcadores, para teclado y lector de pantalla: un botón por restaurante con su nombre y su estado |
-| Resumen | `resources/js/components/RestaurantSummary.vue` | El elegido: nombre, tipo de comida, abierto o cerrado y domicilios. Diálogo no modal; `href` enlazará a la ficha cuando exista (#13) |
+| Lista | `resources/js/components/RestaurantList.vue` | Lo mismo que los marcadores, para teclado y lector de pantalla: un botón por restaurante con su nombre y su estado y, al lado, un enlace a su ficha |
+| Resumen | `resources/js/components/RestaurantSummary.vue` | El elegido: nombre, tipo de comida, abierto o cerrado y domicilios. Diálogo no modal, que termina en el enlace a la ficha |
 | Rótulo | `resources/js/components/SampleDataBadge.vue` | «Datos de ejemplo» en todo restaurante con `fictitious` |
+
+El inicio puede abrir con un restaurante ya elegido: `/?r=slug`, a donde lleva «Cómo llegar» desde una ficha ([ADR 0018](adr/0018-ficha-del-restaurante.md)). Lee el parámetro una vez y, cuando llega la lista, si ese restaurante está en ella, abre su resumen y la cámara va hasta él (aunque el mapa empiece a pintar después); si no está, abre como siempre. En la dirección solo viaja el restaurante.
 
 El panel del inicio muestra una de tres cosas: la bienvenida con el estado de la lista (cargando, cuántos hay, que todavía no hay, o el error con «Reintentar»), la lista, o el resumen. Escape cierra el resumen y después la lista, y el foco vuelve a donde se abrió (el botón de la lista o el mapa). El panel va antes que el mapa en el documento: con el teclado se llega a la lista sin pasar por el lienzo. Si el mapa no carga, `MapView` lo avisa (`status`) y el panel deja de ir encima: queda antes del aviso del mapa, en una columna, para que la lista siga a la vista.
 
 Los marcadores son figuras del lienzo, no elementos de la página: no reciben foco ni los lee un lector de pantalla. Por eso la lista no es un extra: es la forma accesible de llegar a cada restaurante.
 
-Los seeders dejan ocho restaurantes ficticios en puntos fijos del casco urbano (uno oculto): el mapa abre siempre con los mismos siete, cinco sueltos y un grupo de dos.
+Los seeders dejan ocho restaurantes ficticios en puntos fijos del casco urbano (uno oculto): el mapa abre siempre con los mismos siete, cinco sueltos y un grupo de dos. Llevan un menú fijo de tres secciones, en español e inglés, con un plato agotado hoy en algunos; uno tiene horarios especiales cerca de la fecha y otro cierra hoy; uno queda sin menú y otro sin horario, para ver la ficha cuando faltan.
 
 **«Abierto ahora» no viene del servidor**: lo calcula el dispositivo con esos horarios y la hora de Colombia (`resources/js/restaurants/openStatus.ts`, la única implementación). Así la respuesta guardada no envejece: el horario cambia poco y el estado se recalcula cada medio minuto con la página abierta. Las reglas: una franja pertenece al día en que empieza y, si cierra antes de lo que abre, termina al día siguiente; un horario especial reemplaza al semanal en su fecha (cerrado, o con otras franjas) sin tocar la madrugada que viene de la víspera; a la hora de cierre ya cerró; sin horarios cargados, «Horario sin confirmar». `statusText.ts` lo pone en palabras («Cerrado · abre mañana a las 11:00 a. m.») en el idioma de la interfaz.
+
+### Ficha del restaurante
+
+Decidida en el [ADR 0018](adr/0018-ficha-del-restaurante.md).
+
+`GET /restaurants/{slug}` (`restaurants.show`) pinta la página `Restaurants/Show` de Inertia. El slug es el del GeoJSON; lo que no tiene forma de slug es un 404 sin consultar la base. La ven todos si está publicada; una oculta, solo un administrador y la gente del restaurante (`RestaurantPolicy::view`), y los demás reciben el mismo 404 que el de una que no existe.
+
+`RestaurantController` hace ocho consultas, tenga el menú que tenga (el restaurante y una por tabla), y manda dos props:
+
+| Prop | Qué trae |
+| --- | --- |
+| `restaurant` | La lista blanca de `App\Http\Resources\RestaurantProfile`: `slug`, `name`, `description`, `categories`, `fictitious`, `hidden`, `unverified`, `updated_on`, `price_level`, `address`, `reference`, `phone`, `whatsapp`, `payment_methods`, `delivery` (`available`, `notes`, `zones` con barrio y costo), `hours`, `special_hours` (con `note`) y `menu` (secciones con sus platos: `name`, `description`, `price`, `sold_out`) |
+| `meta` | `title` y `description` del documento, en el idioma de la petición. La vista raíz los escribe en el HTML (quien arma la vista previa de un enlace no ejecuta JavaScript); al navegar sin recargar los mantienen `<Head>` y `useI18n` |
+
+No viajan el id, los dueños, el plan, la ubicación exacta, los platos que el dueño sacó del menú (`available`) ni las opciones y adiciones (#14). Los textos traducibles salen en el idioma de la petición y, si falta el inglés, en español (`HasTranslatableFields`).
+
+| Pieza | Dónde | Qué hace |
+| --- | --- | --- |
+| Página | `resources/js/pages/Restaurants/Show.vue` | «Volver al mapa», el nombre, el tipo de comida, abierto o cerrado, «Cómo llegar» (`/?r=slug`), la descripción y los avisos: «Datos de ejemplo», «Información sin verificar» en las fichas sin reclamar y, para quien ve una oculta, que el público no la ve |
+| Horario | `resources/js/components/RestaurantHours.vue` | La semana, de lunes a domingo, con hoy resaltado, y los horarios especiales que vienen con su nota. Si hoy tiene un horario especial, la fila de hoy muestra ese. Sin horario cargado, lo dice |
+| Menú | `resources/js/components/RestaurantMenu.vue` | Por secciones, en el orden del restaurante, con el precio de cada plato y «Agotado hoy». Sin menú cargado, lo dice |
+| Domicilios | `resources/js/components/RestaurantDelivery.vue` | Los barrios a los que lleva y el costo; sin zonas cargadas, que el costo se pregunta. Solo si hace domicilios |
+| Contacto | `resources/js/components/RestaurantContact.vue` | Dirección con su referencia, teléfono (`tel:`), WhatsApp (un enlace a `wa.me` sin mensaje: el pedido es de #15), medios de pago y nivel de precios. Lo que el restaurante no cargó no deja ni el rótulo |
+| Direcciones | `resources/js/restaurants/links.ts` | `restaurantUrl(slug)` y `mapUrl(slug)`: el frontend no conoce las rutas de Laravel y repite el literal, que fija una prueba |
+| Formatos | `resources/js/i18n/intl.ts` | Precios en pesos y fechas, escritos por `Intl`: «$ 18.500» en español y «COP 18,500» en inglés |
+
+**El horario es el mismo que recibe el mapa**, con la misma ventana de horarios especiales (de ayer a siete días, `App\Support\BusinessDay`), y el estado lo calcula `openStatus.ts`, que también dice qué día es en Colombia (`businessDay`). Así el mapa y la ficha dicen siempre lo mismo. «Agotado hoy», en cambio, lo resuelve el servidor con el día de Colombia: esta respuesta no se guarda en ninguna caché.
+
+La ficha no pide el modo inmersivo: va en el layout común, con su pie de página. Su código es un chunk aparte, que baja al abrirla; sus estilos van en el CSS único de la app.
 
 ## App instalable y caché (PWA)
 
@@ -124,10 +155,10 @@ Lo registra el bundle (`resources/js/pwa/serviceWorker.ts`), sin script en líne
 
 | Qué | Estrategia | Caché y límite | Por qué |
 | --- | --- | --- | --- |
-| El shell: entrada (`app.ts`), página de inicio, sus imports estáticos, CSS y logos, y la página sin conexión con su script y su estilo | Precache | `veni-precache-…`; 9 entradas, unos 74 kB comprimidos | Lo que baja al abrir la app. Con el hash en el nombre se pide tal cual: si la página acaba de bajarlo, sale de la caché del navegador sin volver a la red |
+| El shell: entrada (`app.ts`), página de inicio, sus imports estáticos, CSS y logos, y la página sin conexión con su script y su estilo | Precache | `veni-precache-…`; 10 entradas, unos 84 kB comprimidos | Lo que baja al abrir la app. Con el hash en el nombre se pide tal cual: si la página acaba de bajarlo, sale de la caché del navegador sin volver a la red |
 | Navegaciones (HTML) | Solo red, con un plazo de 10 segundos; sin red o pasado el plazo, la página sin conexión del precache | Nada | El HTML depende de la cookie del idioma (ADR 0010), de la sesión y del token CSRF: guardarlo serviría una página de otra persona, de otro idioma o vencida. Con *navigation preload*, la petición sale mientras arranca el service worker, y el plazo también la cuenta. Es una función propia: generateSW solo acepta un plazo de red con network first, que guarda lo que responde |
 | El motor del mapa: `engine-….js` y `maplibre-gl-shared-….js` | Cache first | `veni-map-engine`, 4 entradas, 60 días | Más de 500 kB entre los dos. Aparte, con lugar para dos versiones: entre los demás chunks, cada compilación dejaría otro par guardado hasta vencer, y los íconos podrían sacarlos |
-| Lo demás de `/build/assets`: PMTiles (la biblioteca), el worker del mapa y su CSS, cada ícono, otras páginas | Cache first | `veni-assets`, 120 entradas, 60 días | Llevan el hash del contenido: nunca cambian. Se guardan la primera vez que se piden |
+| Lo demás de `/build/assets`: PMTiles (la biblioteca), el worker del mapa y su CSS, cada ícono, otras páginas (la ficha del restaurante) | Cache first | `veni-assets`, 120 entradas, 60 días | Llevan el hash del contenido: nunca cambian. Se guardan la primera vez que se piden |
 | Fuentes (`/fonts/*.woff2`) | Stale-while-revalidate | `veni-fonts`, 8 entradas | No llevan hash (#2): no pueden ir a una caché que se tome como inmutable. Se usa la guardada y se revalida detrás, con el ETag que da Caddy |
 | Del origen de `VITE_MAP_STYLE_URL`, con la versión en la ruta (`/v0.2.0/`): estilos, glyphs y sprites | Cache first | `veni-map-release`, 60 entradas, 60 días | Una release publicada de veni-mapa no cambia |
 | Del mismo origen, sin versión: el estilo y la lista del sprite (`.json`) | Network first; lo guardado sale sin red o a los 3 segundos | `veni-map-style`, 12 entradas, 30 días | La demo de veni-mapa no es una versión fija (ADR 0007). Estos archivos dicen qué pedir y dónde está cada ícono: con uno viejo, un release nuevo se pintaría a medias |
