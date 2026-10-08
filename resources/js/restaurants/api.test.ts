@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { EL_GUADUAL, feature, LA_CEIBA, stubRestaurantsFetch } from '@/testing/restaurants';
 
+// Una respuesta de ejemplo del servidor: tests/Feature/Api/RestaurantsGeoJsonTest.php la compara con la de verdad.
+import contract from '../../../tests/contracts/restaurants.geojson.json';
 import { fetchRestaurants, RESTAURANTS_ENDPOINT, RESTAURANTS_TIMEOUT_MS } from './api';
 
 afterEach(() => {
@@ -28,6 +30,17 @@ describe('pedir los restaurantes del mapa', () => {
 
         expect(restaurants).toEqual([LA_CEIBA, EL_GUADUAL]);
         expect(restaurants[0]?.coordinates).toEqual([-76.1547, 4.4128]);
+    });
+
+    it('lee el contrato del servidor sin perder nada', async () => {
+        const network = stubRestaurantsFetch();
+        const pending = fetchRestaurants('es', new AbortController().signal);
+
+        network.last()?.respondWith({ status: 200, body: contract });
+
+        // Cada figura vuelve entera: sus propiedades y su punto. Un campo que el
+        // servidor sume o renombre y este módulo no lea, aquí falta.
+        await expect(pending).resolves.toEqual(contract.features.map(({ geometry, properties }) => ({ ...properties, coordinates: geometry.coordinates })));
     });
 
     it('sin restaurantes devuelve una lista vacía', async () => {

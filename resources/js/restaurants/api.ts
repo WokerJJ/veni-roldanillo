@@ -6,6 +6,11 @@ import type { Schedule, SpecialHours, WeeklyHours } from './openStatus';
  * Los restaurantes del mapa: GET /api/restaurants.geojson (routes/api.php,
  * App\Http\Resources\RestaurantFeature). El servidor usa el mismo literal: lo
  * fija tests/Feature/Api/RestaurantsGeoJsonTest.php.
+ *
+ * La forma de la respuesta está en tests/contracts/restaurants.geojson.json:
+ * esa prueba la compara con lo que responde el servidor y api.test.ts
+ * comprueba que este módulo la lee entera. Solo admite cambios aditivos: hay
+ * apps instaladas con una versión anterior de este archivo (ADR 0017).
  */
 export const RESTAURANTS_ENDPOINT = '/api/restaurants.geojson';
 

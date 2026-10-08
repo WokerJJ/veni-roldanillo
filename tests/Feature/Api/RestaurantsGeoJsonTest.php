@@ -24,6 +24,13 @@ uses(RefreshDatabase::class);
 
 const RESTAURANTS_GEOJSON = '/api/restaurants.geojson';
 
+/*
+| Una respuesta de ejemplo, la misma para los dos lados: aquí se compara con lo
+| que responde el servidor y resources/js/restaurants/api.test.ts comprueba
+| que el cliente la lee entera (ADR 0017).
+*/
+const RESTAURANTS_GEOJSON_CONTRACT = 'tests/contracts/restaurants.geojson.json';
+
 /**
  * @param  TestResponse<Response>  $response
  * @return list<array<string, mixed>>
@@ -132,6 +139,37 @@ test('cada restaurante lleva solo los campos públicos de la lista blanca', func
         ->not->toContain('verified_at')
         ->not->toContain('created_at')
         ->not->toContain('"id"');
+});
+
+test('responde lo que dice el contrato que también lee el cliente', function () {
+    // Miércoles 7 de octubre de 2026: los horarios especiales del contrato caen en la ventana.
+    $this->travelTo('2026-10-07 12:00:00');
+
+    $ceiba = Restaurant::factory()->create([
+        'slug' => 'prueba-la-ceiba',
+        'name' => 'Restaurante de Prueba La Ceiba (ficticio)',
+        'location' => new GeoPoint(4.4128, -76.1547),
+        'delivery' => true,
+    ]);
+    $ceiba->categories()->attach(Category::factory()->create(['slug' => 'comida-tipica', 'name_es' => 'Comida típica']));
+    OpeningHour::factory()->for($ceiba)->create(['weekday' => 1, 'opens_at' => '11:00', 'closes_at' => '15:00']);
+    OpeningHour::factory()->for($ceiba)->create(['weekday' => 5, 'opens_at' => '18:00', 'closes_at' => '02:00']);
+    SpecialHour::factory()->for($ceiba)->create(['on_date' => '2026-10-07']);
+    SpecialHour::factory()->for($ceiba)->open('12:00', '16:00')->create(['on_date' => '2026-10-12']);
+
+    // Sin categorías ni horarios: las listas van vacías, no faltan.
+    Restaurant::factory()->create([
+        'slug' => 'prueba-el-guadual',
+        'name' => 'Restaurante de Prueba El Guadual (ficticio)',
+        'location' => new GeoPoint(4.4102, -76.1539),
+        'delivery' => false,
+    ]);
+
+    $contract = json_decode((string) file_get_contents(base_path(RESTAURANTS_GEOJSON_CONTRACT)), true, flags: JSON_THROW_ON_ERROR);
+    $body = json_decode((string) $this->get(RESTAURANTS_GEOJSON)->assertOk()->getContent(), true, flags: JSON_THROW_ON_ERROR);
+
+    // Idénticos: las mismas claves, en el mismo orden y con los mismos tipos.
+    expect($body)->toBe($contract);
 });
 
 test('la geometría es un punto con la longitud primero, como manda GeoJSON', function () {
