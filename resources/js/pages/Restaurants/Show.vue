@@ -87,7 +87,7 @@ const statusText = computed(() => openStatusText(status.value, t, locale.value))
                     class="mt-4 inline-flex min-h-touch items-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
                     data-directions
                 >
-                    <Icon name="marcador" :size="20" />
+                    <Icon name="ubicacion" :size="20" />
                     {{ t('restaurant.directions') }}
                 </Link>
 
