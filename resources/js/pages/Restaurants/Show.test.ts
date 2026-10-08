@@ -98,11 +98,11 @@ describe('Restaurants/Show', () => {
 
     it('muestra la descripción, y sin descripción no deja el hueco', async () => {
         const described = await mountShow();
-        expect(described.wrapper.get('[data-description]').text()).toBe('Ficha de ejemplo para desarrollo. No corresponde a un negocio real.');
+        expect(described.wrapper.get('header [data-description]').text()).toBe('Ficha de ejemplo para desarrollo. No corresponde a un negocio real.');
         described.wrapper.unmount();
 
         const bare = await mountShow(profile({ description: null }));
-        expect(bare.wrapper.find('[data-description]').exists()).toBe(false);
+        expect(bare.wrapper.find('header [data-description]').exists()).toBe(false);
     });
 
     it('marca los datos de ejemplo, y solo esos', async () => {
@@ -175,6 +175,23 @@ describe('Restaurants/Show', () => {
             const { wrapper } = await mountShow(profile({ hours: [] }));
 
             expect(wrapper.getComponent({ name: 'RestaurantHours' }).get('[data-empty]').text()).toContain('Todavía no tenemos el horario');
+        });
+    });
+
+    describe('menú', () => {
+        it('muestra el menú por secciones, con los precios', async () => {
+            const { wrapper } = await mountShow();
+            const menu = wrapper.getComponent({ name: 'RestaurantMenu' });
+
+            expect(menu.findAll('h3').map((title) => title.text())).toEqual(['Platos fuertes (prueba)', 'Bebidas (prueba)']);
+            expect(menu.findAll('[data-dish]')).toHaveLength(3);
+            expect(menu.get('[data-price]').text()).toContain('18.500');
+        });
+
+        it('sin menú, lo dice', async () => {
+            const { wrapper } = await mountShow(profile({ menu: [] }));
+
+            expect(wrapper.getComponent({ name: 'RestaurantMenu' }).get('[data-empty]').text()).toBe('Este restaurante todavía no tiene el menú cargado.');
         });
     });
 

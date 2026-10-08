@@ -4,6 +4,7 @@ import { computed } from 'vue';
 
 import Icon from '@/components/Icon.vue';
 import RestaurantHours from '@/components/RestaurantHours.vue';
+import RestaurantMenu from '@/components/RestaurantMenu.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import type { PageMeta } from '@/composables/useI18n';
 import { useI18n } from '@/composables/useI18n';
@@ -83,6 +84,8 @@ const statusText = computed(() => openStatusText(status.value, t, locale.value))
             </header>
 
             <RestaurantHours class="mt-8 border-t border-line pt-6" :hours="restaurant.hours" :special-hours="restaurant.special_hours" />
+
+            <RestaurantMenu class="mt-8 border-t border-line pt-6" :sections="restaurant.menu" />
         </article>
     </div>
 </template>
