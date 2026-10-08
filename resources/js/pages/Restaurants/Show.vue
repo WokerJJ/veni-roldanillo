@@ -1,18 +1,27 @@
 <script setup lang="ts">
 import { Head, Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
 import Icon from '@/components/Icon.vue';
+import RestaurantHours from '@/components/RestaurantHours.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import type { PageMeta } from '@/composables/useI18n';
 import { useI18n } from '@/composables/useI18n';
+import { useNow } from '@/composables/useNow';
 import { formatDate } from '@/i18n/intl';
+import { openStatus } from '@/restaurants/openStatus';
 import type { RestaurantProfile } from '@/restaurants/profile';
+import { openStatusText } from '@/restaurants/statusText';
 
 /**
  * La ficha de un restaurante (#13, ADR 0018): GET /restaurants/{slug}. Lo que
  * muestra llega en `restaurant`, una lista blanca que arma el servidor
  * (App\Http\Resources\RestaurantProfile); `meta` trae el título y la
  * descripción del documento, que el servidor ya escribió en el HTML.
+ *
+ * «Abierto ahora» no viene del servidor: se calcula aquí con el horario de
+ * las props y el mismo módulo que usa el mapa (openStatus.ts, ADR 0017), y se
+ * pone al día solo mientras la página siga abierta.
  */
 const { restaurant, meta } = defineProps<{
     restaurant: RestaurantProfile;
@@ -20,6 +29,10 @@ const { restaurant, meta } = defineProps<{
 }>();
 
 const { t, locale } = useI18n();
+const now = useNow();
+
+const status = computed(() => openStatus(restaurant, now.value));
+const statusText = computed(() => openStatusText(status.value, t, locale.value));
 </script>
 
 <template>
@@ -49,6 +62,11 @@ const { t, locale } = useI18n();
                     </li>
                 </ul>
 
+                <p class="mt-3 flex items-start gap-2" :class="status.state === 'open' ? 'font-semibold' : 'text-ink-muted'" data-status>
+                    <Icon name="reloj" :size="20" class="mt-0.5 shrink-0" />
+                    <span>{{ statusText }}</span>
+                </p>
+
                 <p v-if="restaurant.description" class="mt-4 max-w-prose whitespace-pre-line" data-description>{{ restaurant.description }}</p>
 
                 <!-- Sin reclamar: nadie del restaurante confirmó estos datos. -->
@@ -63,6 +81,8 @@ const { t, locale } = useI18n();
                     </span>
                 </p>
             </header>
+
+            <RestaurantHours class="mt-8 border-t border-line pt-6" :hours="restaurant.hours" :special-hours="restaurant.special_hours" />
         </article>
     </div>
 </template>

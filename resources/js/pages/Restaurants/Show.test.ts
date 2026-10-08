@@ -20,7 +20,13 @@ async function mountShow(restaurant: RestaurantProfile = profile(), locale: 'es'
     const wrapper = mount(Show, { props: { restaurant, meta }, attachTo: host });
     await flushPromises();
 
-    return { Show, inertia, wrapper };
+    return {
+        Show,
+        inertia,
+        wrapper,
+        // El espacio que no parte la línea de «3:00 p. m.» se compara como uno común.
+        status: () => wrapper.get('header [data-status]').text().replaceAll(' ', ' '),
+    };
 }
 
 enableAutoUnmount(afterEach);
@@ -106,6 +112,70 @@ describe('Restaurants/Show', () => {
 
         const real = await mountShow(profile({ fictitious: false, name: 'La Ceiba' }));
         expect(real.wrapper.text()).not.toContain('Datos de ejemplo');
+    });
+
+    describe('abierto ahora', () => {
+        it.each([
+            ['es', 'Abierto ahora · cierra a las 3:00 p. m.'],
+            ['en', 'Open now · closes at 3:00 PM'],
+        ] as const)('en %s dice si está abierto y hasta cuándo, con el horario que mandó el servidor', async (locale, text) => {
+            const { status } = await mountShow(profile(), locale);
+
+            expect(status()).toBe(text);
+        });
+
+        it('cerrado, dice cuándo abre', async () => {
+            const { status } = await mountShow(profile({ hours: [{ weekday: 3, opens: '18:00', closes: '22:00' }] }));
+
+            expect(status()).toBe('Cerrado · abre a las 6:00 p. m.');
+        });
+
+        it('un horario especial de hoy manda sobre el de la semana', async () => {
+            const { status } = await mountShow(
+                profile({ special_hours: [{ date: '2026-10-07', closed: true, opens: null, closes: null, note: 'Festivo de prueba' }] }),
+            );
+
+            expect(status()).toBe('Cerrado · abre mañana a las 11:00 a. m.');
+        });
+
+        it('sin horarios cargados no afirma que esté cerrado', async () => {
+            const { status } = await mountShow(profile({ hours: [], special_hours: [] }));
+
+            expect(status()).toBe('Horario sin confirmar');
+        });
+
+        it('se pone al día solo cuando pasa la hora de cierre', async () => {
+            const { status } = await mountShow();
+
+            // De las 12:30 a las 15:00 y un poco más: el reloj de la página avanza cada medio minuto.
+            await vi.advanceTimersByTimeAsync(2.5 * 60 * 60 * 1000 + 30_000);
+
+            expect(status()).toBe('Cerrado · abre mañana a las 11:00 a. m.');
+        });
+    });
+
+    describe('horario', () => {
+        it('muestra la semana con el día de hoy resaltado', async () => {
+            const { wrapper } = await mountShow();
+            const hours = wrapper.getComponent({ name: 'RestaurantHours' });
+
+            expect(hours.findAll('tbody tr')).toHaveLength(7);
+            expect(hours.get('tr[aria-current="date"] th span').text()).toBe('miércoles');
+        });
+
+        it('le pasa los horarios especiales con su nota', async () => {
+            const { wrapper } = await mountShow(
+                profile({ special_hours: [{ date: '2026-10-12', closed: true, opens: null, closes: null, note: 'Festivo de prueba' }] }),
+            );
+
+            expect(wrapper.getComponent({ name: 'RestaurantHours' }).get('[data-special]').text()).toContain('Festivo de prueba');
+        });
+
+        it('sin horario cargado, lo dice', async () => {
+            const { wrapper } = await mountShow(profile({ hours: [] }));
+
+            expect(wrapper.getComponent({ name: 'RestaurantHours' }).get('[data-empty]').text()).toContain('Todavía no tenemos el horario');
+        });
     });
 
     describe('información sin verificar', () => {
