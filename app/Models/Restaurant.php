@@ -85,14 +85,16 @@ class Restaurant extends Model
     }
 
     /**
-     * Fichas visibles en el sitio público (todas menos las ocultas).
+     * Fichas visibles en el sitio público: las sin reclamar y las reclamadas.
+     * La lista vive en RestaurantStatus::published(), la misma que usa la
+     * Policy para decidir quién ve una ficha.
      *
      * @param  Builder<self>  $query
      */
     #[Scope]
     protected function published(Builder $query): void
     {
-        $query->where('status', '!=', RestaurantStatus::Hidden->value);
+        $query->whereIn('status', RestaurantStatus::published());
     }
 
     /**

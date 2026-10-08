@@ -101,6 +101,19 @@ test('solo trae los restaurantes publicados: una ficha oculta nunca sale', funct
         ->and($response->getContent())->not->toContain('oculto')->not->toContain('Restaurante Oculto');
 });
 
+test('un estado que todavía no existe no sale publicado hasta que se decida', function () {
+    Restaurant::factory()->create(['slug' => 'sin-reclamar']);
+    $restaurant = Restaurant::factory()->create(['slug' => 'estado-nuevo']);
+    // La tabla como la dejaría la migración que sume un estado. Va dentro de
+    // la transacción de la prueba: al terminar, la restricción vuelve.
+    DB::statement('ALTER TABLE restaurants DROP CONSTRAINT restaurants_status_check');
+    DB::table('restaurants')->where('id', $restaurant->id)->update(['status' => 'archived']);
+
+    $response = $this->get(RESTAURANTS_GEOJSON)->assertOk();
+
+    expect(collect(geoJsonFeatures($response))->pluck('properties.slug')->all())->toBe(['sin-reclamar']);
+});
+
 test('cada restaurante lleva solo los campos públicos de la lista blanca', function () {
     $owner = User::factory()->create(['email' => 'duena-privada@example.test']);
     $restaurant = Restaurant::factory()->claimed()->create([

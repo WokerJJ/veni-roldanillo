@@ -2,7 +2,6 @@
 
 namespace App\Policies;
 
-use App\Enums\RestaurantStatus;
 use App\Models\Restaurant;
 use App\Models\User;
 
@@ -23,7 +22,7 @@ class RestaurantPolicy
      */
     public function view(?User $user, Restaurant $restaurant): bool
     {
-        if ($restaurant->status !== RestaurantStatus::Hidden) {
+        if ($restaurant->status->isPublished()) {
             return true;
         }
 
