@@ -1,4 +1,5 @@
 import type { Locale, TranslationKey } from '@/composables/useI18n';
+import { intlLocale } from '@/i18n/intl';
 import type { Replacements } from '@/i18n/translate';
 
 import type { OpenStatus } from './openStatus';
@@ -8,11 +9,6 @@ type Translate = (key: TranslationKey, replacements?: Replacements) => string;
 
 /** Espacio que no parte la línea: «6:00 p. m.» no se corta al final de un renglón. */
 const NBSP = ' ';
-
-/** El idioma de la interfaz como lo pide Intl: las horas y los días, como se escriben en Colombia. */
-function intlLocale(locale: Locale): string {
-    return locale === 'en' ? 'en-US' : 'es-CO';
-}
 
 const clocks = new Map<Locale, Intl.DateTimeFormat>();
 
