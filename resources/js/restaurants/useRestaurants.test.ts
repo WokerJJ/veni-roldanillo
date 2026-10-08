@@ -158,6 +158,106 @@ describe('los restaurantes del inicio', () => {
         });
     });
 
+    describe('al volver la pestaña del fondo', () => {
+        const HIDDEN_NOW = restaurant({ slug: 'prueba-el-samán', name: 'Restaurante de Prueba El Samán (ficticio)' });
+
+        function setVisibility(state: 'visible' | 'hidden'): void {
+            vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(state);
+            document.dispatchEvent(new Event('visibilitychange'));
+        }
+
+        /** La lista llegó con dos restaurantes y la pestaña pasó ese tiempo en el fondo. */
+        async function setUpAfter(milliseconds: number) {
+            const network = stubRestaurantsFetch();
+            const used = await setUp();
+            network.last()?.respond([LA_CEIBA, HIDDEN_NOW]);
+            await flushPromises();
+            vi.advanceTimersByTime(milliseconds);
+
+            return { network, ...used };
+        }
+
+        beforeEach(() => {
+            vi.useFakeTimers({ toFake: ['Date'] });
+            vi.setSystemTime(new Date('2026-10-07T12:00:00-05:00'));
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('pasado el minuto que dura la lista, la vuelve a pedir sin dejar de mostrar la que hay', async () => {
+            const { network, status, restaurants } = await setUpAfter(61_000);
+
+            setVisibility('visible');
+
+            expect(network.urls()).toEqual(['/api/restaurants.geojson?lang=es', '/api/restaurants.geojson?lang=es']);
+            // Sin parpadeo: no vuelve a «cargando» ni vacía el mapa mientras llega.
+            expect(status.value).toBe('ready');
+            expect(restaurants.value).toEqual([LA_CEIBA, HIDDEN_NOW]);
+
+            // Mientras estaba en el fondo ocultaron una ficha: deja de verse.
+            network.last()?.respond([LA_CEIBA]);
+            await flushPromises();
+
+            expect(status.value).toBe('ready');
+            expect(restaurants.value).toEqual([LA_CEIBA]);
+        });
+
+        it('antes del minuto no pide nada: la lista sigue vigente', async () => {
+            const { network } = await setUpAfter(30_000);
+
+            setVisibility('visible');
+
+            expect(network.requests).toHaveLength(1);
+        });
+
+        it('al irse al fondo no pide nada', async () => {
+            const { network } = await setUpAfter(61_000);
+
+            setVisibility('hidden');
+
+            expect(network.requests).toHaveLength(1);
+        });
+
+        it('si ese pedido falla, se queda con la que había y lo intenta otra vez la próxima vuelta', async () => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { network, status, restaurants } = await setUpAfter(61_000);
+
+            setVisibility('visible');
+            network.last()?.fail();
+            await flushPromises();
+
+            expect(status.value).toBe('ready');
+            expect(restaurants.value).toEqual([LA_CEIBA, HIDDEN_NOW]);
+
+            setVisibility('visible');
+
+            expect(network.requests).toHaveLength(3);
+        });
+
+        it('el minuto corre desde la última lista que llegó', async () => {
+            const { network } = await setUpAfter(61_000);
+            setVisibility('visible');
+            network.last()?.respond([LA_CEIBA]);
+            await flushPromises();
+
+            vi.advanceTimersByTime(30_000);
+            setVisibility('visible');
+
+            expect(network.requests).toHaveLength(2);
+        });
+
+        it('ya desmontado, no pide nada', async () => {
+            const { network, wrapper } = await setUpAfter(61_000);
+            wrapper.unmount();
+
+            setVisibility('visible');
+
+            expect(network.requests).toHaveLength(1);
+        });
+    });
+
     it('al desmontar cancela el pedido en curso y no deja nada escrito en la consola', async () => {
         const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const network = stubRestaurantsFetch();
