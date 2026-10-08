@@ -213,6 +213,39 @@ describe('registro de capas propias', () => {
             expect(dataOf('restaurants')).toEqual(second);
         });
 
+        it('tras dos estilos pedidos seguidos, MapLibre avisa una sola vez y la capa sigue viva: ícono, toques y datos', () => {
+            const { map, registry, changeStyle } = setUp();
+            const onSelect = vi.fn<(hit: MapHit) => void>();
+            const marker = { data: { width: 2, height: 2, data: new Uint8ClampedArray(16) } as ImageData };
+            const laCeiba = point('la-ceiba', -76.1547, 4.4128);
+            const data = collection(laCeiba);
+            const group = registry.add(
+                restaurants({ images: { 'restaurants-marker': marker }, interaction: { layers: ['restaurants-points'], onSelect } }),
+            );
+            const styleLoaded = vi.fn();
+            map.on('style.load', styleLoaded);
+            map.render([{ layer: { id: 'restaurants-points' }, properties: { slug: 'la-ceiba' }, geometry: laCeiba.geometry }]);
+            map.holdStyleLoads = true;
+
+            // El tema y el idioma cambian casi a la vez: el segundo estilo se pide antes de que cargue el primero.
+            changeStyle(DARK);
+            changeStyle(ENGLISH);
+            map.finishStyleLoad();
+            map.finishStyleLoad();
+
+            expect(map.getStyle().name).toBe('claro-en');
+            expect(styleLoaded).toHaveBeenCalledOnce();
+            expect(map.imageIds()).toEqual(['restaurants-marker']);
+
+            map.click(map.project([-76.1547, 4.4128]));
+
+            expect(onSelect).toHaveBeenCalledOnce();
+
+            group.setData('restaurants', data);
+
+            expect(map.getSource('restaurants')?.setData).toHaveBeenCalledExactlyOnceWith(data);
+        });
+
         it('un toque no consulta capas de un estilo que todavía no cargó', () => {
             const { map, registry, changeStyle } = setUp();
             const onSelect = vi.fn();

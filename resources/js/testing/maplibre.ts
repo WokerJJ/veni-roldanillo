@@ -319,8 +319,10 @@ class FakeMap {
     /**
      * Termina de cargar el estilo más viejo de los pedidos, como MapLibre un
      * cuadro después de setStyle(): le pasa el estilo a `transformStyle`, lo
-     * aplica y avisa «style.load». Si hay otro esperando, cuando avisa ya
-     * empezó a cargarlo: el mapa vuelve a estar sin estilo cargado.
+     * aplica y avisa «style.load». Si hay otro esperando, MapLibre empieza a
+     * cargarlo ahí mismo y suelta el que acaba de cargar antes de que su
+     * aviso llegue al mapa: el mapa sigue sin estilo cargado y, de varios
+     * estilos pedidos seguidos, solo avisa el último.
      */
     finishStyleLoad(): void {
         const next = this.pendingStyles.shift();
@@ -332,7 +334,10 @@ class FakeMap {
         const previous = this.getStyle();
         this.applyStyle(next.options?.transformStyle ? next.options.transformStyle(previous, next.style) : next.style);
         this.styleLoaded = this.pendingStyles.length === 0;
-        this.fire('style.load');
+
+        if (this.styleLoaded) {
+            this.fire('style.load');
+        }
 
         if (!this.holdStyleLoads && this.pendingStyles.length > 0) {
             queueMicrotask(() => {

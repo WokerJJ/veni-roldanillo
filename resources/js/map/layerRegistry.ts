@@ -51,15 +51,19 @@ function assertOwnIds(group: MapLayerGroup): void {
 export function createLayerRegistry(map: MapLibreMap): LayerRegistry {
     const groups = new Map<string, Registered>();
     let nextSequence = 0;
-    /** Estilos pedidos que todavía no cargaron. */
-    let stylesLoading = 0;
+    /**
+     * Hay un estilo pedido que todavía no cargó. Es una bandera y no una
+     * cuenta: de varios estilos pedidos seguidos MapLibre solo avisa
+     * «style.load» del último, cuando ya no queda ninguno por cargar.
+     */
+    let styleLoading = false;
     let disposed = false;
 
     /** De abajo hacia arriba, como se pintan. */
     const ordered = (): Registered[] =>
         [...groups.values()].sort((a, b) => (a.group.order ?? 0) - (b.group.order ?? 0) || a.sequence - b.sequence);
 
-    const styleReady = (): boolean => !disposed && stylesLoading === 0;
+    const styleReady = (): boolean => !disposed && !styleLoading;
 
     const sourcesOf = ({ group, data }: Registered): StyleSpecification['sources'] =>
         Object.fromEntries(Object.entries(group.sources).map(([id, source]) => [id, { ...source, data: data.get(id) ?? source.data }]));
@@ -172,13 +176,10 @@ export function createLayerRegistry(map: MapLibreMap): LayerRegistry {
     };
 
     map.on('style.load', () => {
-        stylesLoading = Math.max(0, stylesLoading - 1);
+        styleLoading = false;
 
-        // Con otro estilo en camino, las imágenes entran cuando cargue ese.
-        if (styleReady()) {
-            for (const registered of groups.values()) {
-                addImages(registered);
-            }
+        for (const registered of groups.values()) {
+            addImages(registered);
         }
     });
 
@@ -268,7 +269,7 @@ export function createLayerRegistry(map: MapLibreMap): LayerRegistry {
         },
 
         styleRequested() {
-            stylesLoading += 1;
+            styleLoading = true;
         },
 
         dispose() {
