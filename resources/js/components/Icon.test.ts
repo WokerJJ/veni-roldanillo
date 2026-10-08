@@ -40,11 +40,18 @@ function svg(wrapper: VueWrapper): Element {
     return wrapper.element as Element;
 }
 
-/** Los íconos que no van en el bundle inicial llegan con una importación dinámica. */
+/**
+ * Los íconos que no van en el bundle inicial llegan con una importación
+ * dinámica, que en frío y con la máquina cargada tarda más que el segundo que
+ * espera vi.waitFor.
+ */
 async function drawn(wrapper: VueWrapper): Promise<void> {
-    await vi.waitFor(() => {
-        expect(svg(wrapper).childElementCount).toBeGreaterThan(0);
-    });
+    await vi.waitFor(
+        () => {
+            expect(svg(wrapper).childElementCount).toBeGreaterThan(0);
+        },
+        { timeout: 10_000 },
+    );
 }
 
 enableAutoUnmount(afterEach);
@@ -53,7 +60,9 @@ beforeEach(() => {
     vi.resetModules();
 });
 
-afterEach(() => {
+afterEach(async () => {
+    // Un ícono que quedó en camino llega aquí, no en medio de la prueba siguiente.
+    await vi.dynamicImportSettled();
     vi.doUnmock('@/icons/icons');
 });
 

@@ -22,6 +22,8 @@ const iconImage = vi.fn<() => Promise<MapImage>>();
 vi.mock('@/map/iconImage', () => ({ iconImage: () => iconImage() }));
 
 const STYLE = { version: 8, center: [-76.1547, 4.4128], zoom: 13.5, sources: {}, layers: [{ id: 'background' }, { id: 'places' }] };
+/** Lo que puede tardar un import() en frío con la máquina cargada: más que el segundo que espera vi.waitFor. */
+const IMPORT_TIMEOUT = 10_000;
 
 /**
  * El mapa con la capa de restaurantes adentro, ya pintando. Quien lo monta
@@ -50,17 +52,24 @@ async function mountLayer(initial: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL
         }),
     );
 
-    await vi.waitFor(() => {
-        expect(maplibre.maps).toHaveLength(1);
-    });
+    // El motor del mapa llega con import().
+    await vi.waitFor(
+        () => {
+            expect(maplibre.maps).toHaveLength(1);
+        },
+        { timeout: IMPORT_TIMEOUT },
+    );
     const map = maplibre.maps[0] as FakeMapLibre.Map;
     map.fire('load');
     await flushPromises();
     // El ícono llega con su propio import(), cuando quiere: las capas quedan
     // como van a quedar recién cuando ya se preparó (o falló) y se registró.
-    await vi.waitFor(() => {
-        expect(iconImage).toHaveBeenCalled();
-    });
+    await vi.waitFor(
+        () => {
+            expect(iconImage).toHaveBeenCalled();
+        },
+        { timeout: IMPORT_TIMEOUT },
+    );
     await flushPromises();
 
     const source = (id: string) => map.getStyle().sources?.[id];
@@ -102,7 +111,10 @@ beforeEach(() => {
     );
 });
 
-afterEach(() => {
+afterEach(async () => {
+    // Si un import() quedó en camino, que llegue aquí: en la prueba siguiente
+    // el montaje de esta crearía su mapa entre los de ella.
+    await vi.dynamicImportSettled();
     vi.unstubAllEnvs();
     delete document.documentElement.dataset.theme;
 });

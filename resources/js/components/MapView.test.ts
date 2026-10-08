@@ -181,8 +181,12 @@ beforeEach(() => {
     styles = stubFetch();
 });
 
-afterEach(() => {
+afterEach(async () => {
     vi.useRealTimers();
+    // El motor llega con import() y hay pruebas que terminan antes que él: que
+    // llegue dentro de la suya. En la siguiente volvería a darle a MapLibre la
+    // URL del worker, y el orden de las pruebas cambiaría el resultado.
+    await vi.dynamicImportSettled();
     vi.unstubAllEnvs();
     delete document.documentElement.dataset.theme;
 });
