@@ -5,11 +5,18 @@ namespace App\Support;
 use Carbon\CarbonImmutable;
 
 /**
- * El día en Roldanillo: el de la zona horaria de la aplicación
- * (America/Bogota), aunque el reloj del servidor estuviera en otra.
+ * El día en Roldanillo: el de Colombia, corra la aplicación con la zona
+ * horaria que corra (APP_TIMEZONE) y esté el reloj del servidor en la que esté.
  */
 final class BusinessDay
 {
+    /**
+     * Zona horaria del municipio; Colombia no cambia de hora en el año. Es la
+     * misma con que el dispositivo calcula «abierto ahora» (BUSINESS_TIME_ZONE
+     * en resources/js/restaurants/openStatus.ts).
+     */
+    public const TIME_ZONE = 'America/Bogota';
+
     /**
      * Hasta cuántos días adelante viajan los horarios especiales al
      * dispositivo: hasta donde busca la próxima apertura (DAYS_AHEAD en
@@ -19,7 +26,7 @@ final class BusinessDay
 
     public static function today(): CarbonImmutable
     {
-        return CarbonImmutable::now(config()->string('app.timezone'))->startOfDay();
+        return CarbonImmutable::now(self::TIME_ZONE)->startOfDay();
     }
 
     /**
