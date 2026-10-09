@@ -45,13 +45,25 @@ const hasAny = computed(
         restaurant.price_level !== null,
 );
 
+/** Un solo número: dígitos con espacios, guiones y paréntesis, y un `+` al principio. */
+const SINGLE_PHONE = /^\s*\+?(?:[\s()-]*\d)+[\s()-]*$/;
+
 /**
  * El teléfono como lo marca un celular: solo dígitos, con el indicativo de
  * Colombia si son los diez de un número nacional (un turista con su línea de
  * afuera lo necesita).
+ *
+ * El dato es texto libre. Lo que no es un solo número («229 1234 / 229 5678»,
+ * «No tiene») no se puede marcar: no lleva enlace (null) y sale como texto.
  */
 const phoneHref = computed(() => {
-    const digits = (restaurant.phone ?? '').replace(/[^\d+]/g, '');
+    const phone = restaurant.phone ?? '';
+
+    if (!SINGLE_PHONE.test(phone)) {
+        return null;
+    }
+
+    const digits = phone.replace(/[^\d+]/g, '');
 
     return `tel:${/^\d{10}$/.test(digits) ? `+57${digits}` : digits}`;
 });
@@ -80,10 +92,15 @@ const whatsappText = computed(() => {
             <div v-if="restaurant.phone !== null" data-phone>
                 <dt class="text-sm text-ink-muted">{{ t('restaurant.contact.phone') }}</dt>
                 <dd>
-                    <a :href="phoneHref" class="inline-flex min-h-touch items-center gap-2 rounded-veni-sm font-semibold underline underline-offset-4">
+                    <a
+                        v-if="phoneHref !== null"
+                        :href="phoneHref"
+                        class="inline-flex min-h-touch items-center gap-2 rounded-veni-sm font-semibold underline underline-offset-4"
+                    >
                         <Icon name="telefono" :size="20" class="shrink-0" />
                         {{ restaurant.phone }}
                     </a>
+                    <span v-else class="wrap-anywhere">{{ restaurant.phone }}</span>
                 </dd>
             </div>
 

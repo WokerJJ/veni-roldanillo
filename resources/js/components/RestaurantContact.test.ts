@@ -78,6 +78,14 @@ describe('RestaurantContact', () => {
 
             expect(wrapper.get('[data-phone] a').attributes('href')).toBe(href);
         });
+
+        // El dato es texto libre: lo que no es un solo número no arma un enlace que marque otra cosa.
+        it.each(['229 1234 / 229 5678', 'No tiene'])('«%s» sale como texto, sin enlace para llamar', async (phone) => {
+            const { wrapper } = await mountContact({ ...COMPLETE, phone });
+
+            expect(wrapper.find('[data-phone] a').exists()).toBe(false);
+            expect(wrapper.get('[data-phone] dd').text()).toBe(phone);
+        });
     });
 
     describe('WhatsApp', () => {
