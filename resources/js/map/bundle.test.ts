@@ -171,6 +171,12 @@ describe('reparto del bundle', () => {
         // El motor le da a MapLibre la URL de ese chunk (setWorkerUrl).
         expect(engine.code).toContain(worker.fileName);
     });
+
+    it('la entrada trae lo que abre como página el error de una visita: no es solo de desarrollo', () => {
+        const initial = loadedWith(chunkOf('/resources/js/app.ts'));
+
+        expect(initial.some((chunk) => has(chunk, /\/resources\/js\/visitErrors\.ts$/))).toBe(true);
+    });
 });
 
 /*
