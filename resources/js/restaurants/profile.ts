@@ -4,8 +4,12 @@ import type { SpecialHours, WeeklyHours } from './openStatus';
 /**
  * La ficha de un restaurante: la prop `restaurant` de la página
  * Restaurants/Show, tal como la arma App\Http\Resources\RestaurantProfile
- * (una lista blanca: aquí no hay nada que no se pueda mostrar). La lista
- * exacta de campos la fija tests/Feature/RestaurantPageTest.php.
+ * (una lista blanca: aquí no hay nada que no se pueda mostrar).
+ *
+ * La forma de la prop está en tests/contracts/restaurant.profile.json:
+ * tests/Feature/RestaurantPageTest.php la compara con lo que manda el
+ * servidor, y de ella parte la ficha de las pruebas de la página
+ * (resources/js/testing/restaurants.ts), que tiene que caber en estos tipos.
  */
 
 /** Los valores de App\Enums\PaymentMethod. */
@@ -28,8 +32,12 @@ export interface MenuDish {
     description: string | null;
     /** En pesos, sin decimales. */
     price: number;
-    /** «Agotado hoy»: sigue en el menú, pero hoy no hay. */
-    sold_out: boolean;
+    /**
+     * «Agotado hoy»: sigue en el menú, pero no hay hasta esta fecha
+     * (`YYYY-MM-DD`), incluida. Si hoy está agotado lo calcula el
+     * dispositivo con el día de Colombia, como «abierto ahora».
+     */
+    sold_out_until: string | null;
 }
 
 export interface MenuSection {

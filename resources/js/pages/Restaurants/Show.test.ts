@@ -221,6 +221,125 @@ describe('Restaurants/Show', () => {
 
             expect(wrapper.getComponent({ name: 'RestaurantMenu' }).get('[data-empty]').text()).toBe('Este restaurante todavía no tiene el menú cargado.');
         });
+
+        it('un plato agotado hoy deja de decirlo al día siguiente, sin volver a pedir nada', async () => {
+            const { wrapper, inertia } = await mountShow();
+            const menu = wrapper.getComponent({ name: 'RestaurantMenu' });
+
+            // La bandeja del ejemplo está agotada hasta el 7 de octubre, que es hoy.
+            expect(menu.findAll('[data-sold-out]')).toHaveLength(1);
+
+            // De las 12:30 a pasada la medianoche: el reloj de la página avanza cada medio minuto.
+            await vi.advanceTimersByTimeAsync(12 * 60 * 60 * 1000);
+
+            expect(menu.findAll('[data-sold-out]')).toHaveLength(0);
+            expect(inertia.router.reload).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('al volver la pestaña del fondo', () => {
+        type ReloadOptions = {
+            only?: string[];
+            onSuccess?: () => void;
+            onHttpException?: (response: { status: number }) => boolean | undefined;
+            onNetworkError?: (error: Error) => boolean | undefined;
+        };
+
+        function setVisibility(state: 'visible' | 'hidden'): void {
+            vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(state);
+            document.dispatchEvent(new Event('visibilitychange'));
+        }
+
+        /** La ficha lleva ese tiempo a la vista y la pestaña vuelve del fondo. */
+        async function comeBackAfter(milliseconds: number) {
+            const mounted = await mountShow();
+            vi.setSystemTime(Date.now() + milliseconds);
+            setVisibility('visible');
+
+            return {
+                ...mounted,
+                reloads: () => mounted.inertia.router.reload.mock.calls.map(([options]) => options as ReloadOptions),
+            };
+        }
+
+        afterEach(() => {
+            vi.unstubAllGlobals();
+            vi.restoreAllMocks();
+        });
+
+        it('pasado un minuto vuelve a pedir las props de la ficha, y solo esas', async () => {
+            const { reloads } = await comeBackAfter(61_000);
+
+            expect(reloads()).toHaveLength(1);
+            expect(reloads()[0]?.only).toEqual(['restaurant', 'meta']);
+        });
+
+        it('antes del minuto no pide nada: lo que se ve sigue vigente', async () => {
+            const { reloads } = await comeBackAfter(30_000);
+
+            expect(reloads()).toHaveLength(0);
+        });
+
+        it('al irse al fondo no pide nada', async () => {
+            const { inertia } = await mountShow();
+            vi.setSystemTime(Date.now() + 61_000);
+
+            setVisibility('hidden');
+
+            expect(inertia.router.reload).not.toHaveBeenCalled();
+        });
+
+        it('cuando llegan, el minuto vuelve a empezar', async () => {
+            const { reloads } = await comeBackAfter(61_000);
+            reloads()[0]?.onSuccess?.();
+
+            vi.setSystemTime(Date.now() + 30_000);
+            setVisibility('visible');
+            expect(reloads()).toHaveLength(1);
+
+            vi.setSystemTime(Date.now() + 31_000);
+            setVisibility('visible');
+            expect(reloads()).toHaveLength(2);
+        });
+
+        it('si la ficha ya no está (404), abre la página de error del servidor en vez del aviso de Inertia', async () => {
+            const reload = vi.fn();
+            vi.stubGlobal('location', { reload });
+            const { reloads } = await comeBackAfter(61_000);
+
+            // false: Inertia no muestra la respuesta en su diálogo.
+            expect(reloads()[0]?.onHttpException?.({ status: 404 })).toBe(false);
+            expect(reload).toHaveBeenCalledOnce();
+        });
+
+        it.each([429, 500, 503])('con otro error (%i) se queda la ficha que había', async (status) => {
+            const reload = vi.fn();
+            vi.stubGlobal('location', { reload });
+            const { reloads, wrapper } = await comeBackAfter(61_000);
+
+            expect(reloads()[0]?.onHttpException?.({ status })).toBe(false);
+            expect(reload).not.toHaveBeenCalled();
+            expect(wrapper.get('h1').text()).toBe('Restaurante de Prueba La Ceiba (ficticio)');
+        });
+
+        it('sin señal se queda la ficha que había, y lo vuelve a intentar al regresar', async () => {
+            const { reloads } = await comeBackAfter(61_000);
+
+            expect(reloads()[0]?.onNetworkError?.(new TypeError('Failed to fetch'))).toBe(false);
+
+            setVisibility('visible');
+            expect(reloads()).toHaveLength(2);
+        });
+
+        it('al salir de la ficha deja de escuchar', async () => {
+            const { wrapper, inertia } = await mountShow();
+            wrapper.unmount();
+            vi.setSystemTime(Date.now() + 61_000);
+
+            setVisibility('visible');
+
+            expect(inertia.router.reload).not.toHaveBeenCalled();
+        });
     });
 
     describe('domicilios', () => {

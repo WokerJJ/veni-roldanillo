@@ -11,7 +11,6 @@ use App\Models\Dish;
 use App\Models\MenuSection;
 use App\Models\Restaurant;
 use App\Models\SpecialHour;
-use App\Support\BusinessDay;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -31,13 +30,14 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * Espera las relaciones ya cargadas y en orden (categories, openingHours,
  * specialHours, menuSections con sus dishes y deliveryZones con su
  * neighborhood): las carga RestaurantController en una consulta por tabla.
+ * De cada plato necesita `available`: con él decide si sale.
  *
  * @phpstan-import-type WeeklyHours from PresentsSchedule
  *
  * @phpstan-type ProfileCategory array{slug: string, name: string}
  * @phpstan-type ProfileSpecialHours array{date: string, closed: bool, opens: string|null, closes: string|null, note: string|null}
  * @phpstan-type ProfileZone array{neighborhood: string, fee: int}
- * @phpstan-type ProfileDish array{name: string, description: string|null, price: int, sold_out: bool}
+ * @phpstan-type ProfileDish array{name: string, description: string|null, price: int, sold_out_until: string|null}
  * @phpstan-type ProfileSection array{name: string, dishes: list<ProfileDish>}
  * @phpstan-type Profile array{
  *     slug: string,
@@ -150,19 +150,23 @@ class RestaurantProfile extends JsonResource
      */
     private function menu(): array
     {
-        $today = BusinessDay::today()->toDateString();
-
         return array_values($this->restaurant->menuSections
-            ->filter(fn (MenuSection $section): bool => $section->dishes->isNotEmpty())
+            ->filter(fn (MenuSection $section): bool => $section->dishes->contains('available', true))
             ->map(fn (MenuSection $section): array => [
                 'name' => (string) $section->translated('name', $this->locale),
                 'dishes' => array_values($section->dishes
+                    // Lo que el dueño sacó del menú no se publica, aunque
+                    // llegue cargado.
+                    ->filter(fn (Dish $dish): bool => $dish->available)
                     ->map(fn (Dish $dish): array => [
                         'name' => (string) $dish->translated('name', $this->locale),
                         'description' => $dish->translated('description', $this->locale),
                         'price' => $dish->price,
-                        // «Agotado hoy» vale hasta su fecha, incluida.
-                        'sold_out' => $dish->sold_out_until !== null && $dish->sold_out_until->toDateString() >= $today,
+                        // «Agotado hoy» vale hasta esta fecha, incluida. Si
+                        // hoy está agotado lo dice el dispositivo, como
+                        // «abierto ahora»: la ficha puede quedar abierta de
+                        // un día para otro.
+                        'sold_out_until' => $dish->sold_out_until?->toDateString(),
                     ])
                     ->all()),
             ])

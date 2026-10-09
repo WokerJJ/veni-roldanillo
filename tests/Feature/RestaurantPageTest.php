@@ -1,7 +1,9 @@
 <?php
 
+use App\Enums\Locale;
 use App\Enums\PaymentMethod;
 use App\Enums\RestaurantRole;
+use App\Http\Resources\RestaurantProfile;
 use App\Models\Category;
 use App\Models\DeliveryZone;
 use App\Models\Dish;
@@ -32,6 +34,14 @@ use Symfony\Component\HttpFoundation\Response;
 */
 
 uses(RefreshDatabase::class);
+
+/*
+| Una ficha de ejemplo, la misma para los dos lados: aquí se compara con la
+| prop que manda el servidor, y de ella parte la ficha de las pruebas de la
+| página (resources/js/testing/restaurants.ts), como el contrato del mapa
+| (ADR 0017 y 0018).
+*/
+const RESTAURANT_PROFILE_CONTRACT = 'tests/contracts/restaurant.profile.json';
 
 beforeEach(function () {
     // Las pruebas no dependen de que existan los assets compilados de Vite.
@@ -182,7 +192,56 @@ describe('lista blanca', function () {
             ->and(array_keys($profile['hours'][0]))->toBe(['weekday', 'opens', 'closes'])
             ->and(array_keys($profile['special_hours'][0]))->toBe(['date', 'closed', 'opens', 'closes', 'note'])
             ->and(array_keys($profile['menu'][0]))->toBe(['name', 'dishes'])
-            ->and(array_keys($profile['menu'][0]['dishes'][0]))->toBe(['name', 'description', 'price', 'sold_out']);
+            ->and(array_keys($profile['menu'][0]['dishes'][0]))->toBe(['name', 'description', 'price', 'sold_out_until']);
+    });
+
+    test('manda la ficha que dice el contrato del que parten las pruebas de la página', function () {
+        // Actualizada el lunes 5 de octubre de 2026.
+        $this->travelTo('2026-10-05 10:00:00');
+
+        $restaurant = Restaurant::factory()->claimed()->create([
+            'slug' => 'prueba-la-ceiba',
+            'name' => 'Restaurante de Prueba La Ceiba (ficticio)',
+            'description_es' => 'Ficha de ejemplo para desarrollo. No corresponde a un negocio real.',
+            'address' => 'Calle de Prueba # 1-23',
+            'reference' => 'Dirección inventada',
+            'phone' => '6020000000',
+            'whatsapp' => '570009998877',
+            'price_level' => 2,
+            'delivery' => true,
+            'delivery_notes_es' => 'Domicilios hasta las 9 de la noche.',
+            'payment_methods' => [PaymentMethod::Cash, PaymentMethod::Nequi],
+        ]);
+        $restaurant->categories()->attach(Category::factory()->create(['slug' => 'comida-tipica', 'name_es' => 'Comida típica']));
+
+        foreach (range(0, 6) as $weekday) {
+            OpeningHour::factory()->for($restaurant)->create(['weekday' => $weekday, 'opens_at' => '11:00', 'closes_at' => '15:00']);
+        }
+
+        SpecialHour::factory()->for($restaurant)->create(['on_date' => '2026-10-12', 'note_es' => 'Festivo de prueba']);
+        SpecialHour::factory()->for($restaurant)->open('17:00', '21:00')->create(['on_date' => '2026-10-14', 'note_es' => null, 'note_en' => null]);
+        DeliveryZone::factory()->for($restaurant)->create([
+            'neighborhood_id' => Neighborhood::factory()->create(['name' => 'Barrio Los Guayacanes (ficticio)']),
+            'fee' => 3000,
+        ]);
+        DeliveryZone::factory()->for($restaurant)->create([
+            'neighborhood_id' => Neighborhood::factory()->create(['name' => 'Barrio El Mirador de Prueba (ficticio)']),
+            'fee' => 2500,
+        ]);
+
+        $mains = MenuSection::factory()->for($restaurant)->create(['name_es' => 'Platos fuertes (prueba)', 'position' => 0]);
+        $drinks = MenuSection::factory()->for($restaurant)->create(['name_es' => 'Bebidas (prueba)', 'position' => 1]);
+        Dish::factory()->for($mains)->create(['name_es' => 'Sancocho de prueba', 'description_es' => 'Con arroz y aguacate.', 'price' => 18500, 'position' => 0]);
+        Dish::factory()->for($mains)->create(['name_es' => 'Bandeja de prueba', 'description_es' => null, 'description_en' => null, 'price' => 22000, 'sold_out_until' => '2026-10-07', 'position' => 1]);
+        Dish::factory()->for($drinks)->create(['name_es' => 'Jugo de prueba', 'description_es' => 'En agua o en leche.', 'price' => 4000, 'position' => 0]);
+
+        // Miércoles 7: los horarios especiales del contrato caen en la ventana.
+        $this->travelTo('2026-10-07 12:30:00');
+
+        $contract = json_decode((string) file_get_contents(base_path(RESTAURANT_PROFILE_CONTRACT)), true, flags: JSON_THROW_ON_ERROR);
+
+        // Idénticos: las mismas claves, en el mismo orden y con los mismos tipos.
+        expect(restaurantPageProfile($this->get('/restaurants/prueba-la-ceiba')))->toBe($contract);
     });
 
     test('no lleva a los dueños, ids, el plan, la ubicación ni fechas internas', function () {
@@ -351,12 +410,12 @@ describe('menú', function () {
 
         expect(restaurantPageProfile($this->get('/restaurants/la-ceiba'))['menu'])->toBe([
             ['name' => 'Platos fuertes (prueba)', 'dishes' => [
-                ['name' => 'Primero', 'description' => 'Descripción de ejemplo.', 'price' => 18500, 'sold_out' => false],
-                ['name' => 'Segundo', 'description' => 'Descripción de ejemplo.', 'price' => 22000, 'sold_out' => false],
+                ['name' => 'Primero', 'description' => 'Descripción de ejemplo.', 'price' => 18500, 'sold_out_until' => null],
+                ['name' => 'Segundo', 'description' => 'Descripción de ejemplo.', 'price' => 22000, 'sold_out_until' => null],
             ]],
             ['name' => 'Bebidas (prueba)', 'dishes' => [
-                ['name' => 'Jugo', 'description' => null, 'price' => 4000, 'sold_out' => false],
-                ['name' => 'Gaseosa', 'description' => null, 'price' => 3500, 'sold_out' => false],
+                ['name' => 'Jugo', 'description' => null, 'price' => 4000, 'sold_out_until' => null],
+                ['name' => 'Gaseosa', 'description' => null, 'price' => 3500, 'sold_out_until' => null],
             ]],
         ]);
     });
@@ -378,9 +437,24 @@ describe('menú', function () {
             ->and(json_encode($response->inertiaProps('restaurant'), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE))->not->toContain('Fuera del menú')->not->toContain('Postre retirado');
     });
 
-    test('«agotado hoy» vale hasta su fecha, con el día de Colombia', function () {
-        // 20:00 del 7 de octubre en Colombia: en UTC ya es 8.
-        $this->travelTo('2026-10-08 01:00:00 UTC');
+    test('la lista blanca no publica un plato fuera del menú aunque llegue cargado', function () {
+        $restaurant = Restaurant::factory()->create(['slug' => 'la-ceiba']);
+        $mains = MenuSection::factory()->for($restaurant)->create(['name_es' => 'Platos fuertes (prueba)', 'position' => 0]);
+        $desserts = MenuSection::factory()->for($restaurant)->create(['name_es' => 'Postres (prueba)', 'position' => 1]);
+        Dish::factory()->for($mains)->create(['name_es' => 'A la vista']);
+        Dish::factory()->for($mains)->create(['name_es' => 'Fuera del menú', 'available' => false]);
+        Dish::factory()->for($desserts)->create(['name_es' => 'Postre retirado', 'available' => false]);
+
+        // Todo cargado, sin el filtro de quien arma la consulta.
+        $restaurant->load(['categories', 'openingHours', 'specialHours', 'menuSections.dishes', 'deliveryZones.neighborhood']);
+
+        $menu = (new RestaurantProfile($restaurant, Locale::Es))->toArray(request())['menu'];
+
+        expect(array_column($menu, 'name'))->toBe(['Platos fuertes (prueba)'])
+            ->and(array_column($menu[0]['dishes'], 'name'))->toBe(['A la vista']);
+    });
+
+    test('«agotado hoy» viaja como la fecha hasta la que vale: si es hoy lo dice el dispositivo', function () {
         $restaurant = Restaurant::factory()->create(['slug' => 'la-ceiba']);
         $section = MenuSection::factory()->for($restaurant)->create();
         Dish::factory()->for($section)->create(['name_es' => 'Se agotó ayer', 'sold_out_until' => '2026-10-06', 'position' => 0]);
@@ -388,14 +462,23 @@ describe('menú', function () {
         Dish::factory()->for($section)->create(['name_es' => 'Agotado hasta mañana', 'sold_out_until' => '2026-10-08', 'position' => 2]);
         Dish::factory()->for($section)->create(['name_es' => 'Hay', 'position' => 3]);
 
-        $dishes = restaurantPageProfile($this->get('/restaurants/la-ceiba'))['menu'][0]['dishes'];
+        $dishesAt = function (string $moment): array {
+            $this->travelTo($moment);
 
-        expect(array_column($dishes, 'sold_out', 'name'))->toBe([
-            'Se agotó ayer' => false,
-            'Agotado hoy' => true,
-            'Agotado hasta mañana' => true,
-            'Hay' => false,
-        ]);
+            return restaurantPageProfile($this->get('/restaurants/la-ceiba'))['menu'][0]['dishes'];
+        };
+
+        $tonight = $dishesAt('2026-10-07 20:00:00');
+
+        expect(array_column($tonight, 'sold_out_until', 'name'))->toBe([
+            'Se agotó ayer' => '2026-10-06',
+            'Agotado hoy' => '2026-10-07',
+            'Agotado hasta mañana' => '2026-10-08',
+            'Hay' => null,
+        ])
+            // Lo mismo a cualquier hora: una ficha que queda abierta de un día
+            // para otro no se queda con el «agotado» de la víspera.
+            ->and($dishesAt('2026-10-08 08:00:00'))->toBe($tonight);
     });
 
     test('las opciones y adiciones de un plato no viajan: son del pedido', function () {

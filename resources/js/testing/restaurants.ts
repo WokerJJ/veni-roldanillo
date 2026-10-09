@@ -6,7 +6,10 @@
 import { vi } from 'vitest';
 
 import type { Restaurant } from '@/restaurants/api';
-import type { RestaurantProfile } from '@/restaurants/profile';
+import type { PaymentMethod, RestaurantProfile } from '@/restaurants/profile';
+
+// Una ficha de ejemplo del servidor: tests/Feature/RestaurantPageTest.php la compara con la de verdad.
+import contract from '../../../tests/contracts/restaurant.profile.json';
 
 const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
 
@@ -115,48 +118,20 @@ export function stubRestaurantsFetch(answer?: readonly Restaurant[]) {
 
 /**
  * La ficha de La Ceiba como la manda el servidor a la página Restaurants/Show
- * (App\Http\Resources\RestaurantProfile): completa, con menú, horario,
- * domicilios y contacto. Abre todos los días de 11:00 a 15:00.
+ * (App\Http\Resources\RestaurantProfile): la del contrato, que
+ * tests/Feature/RestaurantPageTest.php compara con la de verdad. Completa,
+ * con menú, horario, domicilios y contacto: abre todos los días de 11:00 a
+ * 15:00, cierra el lunes 12 de octubre de 2026 y tiene un plato agotado
+ * hasta el 7.
  */
 export function profile(overrides: Partial<RestaurantProfile> = {}): RestaurantProfile {
-    return {
-        slug: 'prueba-la-ceiba',
-        name: 'Restaurante de Prueba La Ceiba (ficticio)',
-        description: 'Ficha de ejemplo para desarrollo. No corresponde a un negocio real.',
-        categories: [{ slug: 'comida-tipica', name: 'Comida típica' }],
-        fictitious: true,
-        hidden: false,
-        unverified: false,
-        updated_on: '2026-10-05',
-        price_level: 2,
-        address: 'Calle de Prueba # 1-23',
-        reference: 'Dirección inventada',
-        phone: '6020000000',
-        whatsapp: '570009998877',
-        payment_methods: ['cash', 'nequi'],
-        delivery: {
-            available: true,
-            notes: 'Domicilios hasta las 9 de la noche.',
-            zones: [
-                { neighborhood: 'Barrio El Mirador de Prueba (ficticio)', fee: 2500 },
-                { neighborhood: 'Barrio Los Guayacanes (ficticio)', fee: 3000 },
-            ],
-        },
-        hours: EVERY_DAY.map((weekday) => ({ weekday, opens: '11:00', closes: '15:00' })),
-        special_hours: [],
-        menu: [
-            {
-                name: 'Platos fuertes (prueba)',
-                dishes: [
-                    { name: 'Sancocho de prueba', description: 'Con arroz y aguacate.', price: 18500, sold_out: false },
-                    { name: 'Bandeja de prueba', description: null, price: 22000, sold_out: true },
-                ],
-            },
-            {
-                name: 'Bebidas (prueba)',
-                dishes: [{ name: 'Jugo de prueba', description: 'En agua o en leche.', price: 4000, sold_out: false }],
-            },
-        ],
-        ...overrides,
+    // Una copia por prueba. Lleva el tipo escrito: si al contrato le falta un
+    // campo de RestaurantProfile, o le cambia el tipo, esto no compila.
+    const example: RestaurantProfile = {
+        ...structuredClone(contract),
+        // Para JSON son textos sueltos; los valores los fija App\Enums\PaymentMethod.
+        payment_methods: contract.payment_methods as PaymentMethod[],
     };
+
+    return { ...example, ...overrides };
 }

@@ -106,7 +106,8 @@ test('el seeder deja una ficha completa: menú por secciones, un plato agotado y
         ->and($dishes)->toHaveCount(7)
         // Todo rotulado como dato de prueba, también en inglés.
         ->and($dishes->reject(fn (array $dish) => str_contains($dish['name'], 'Test')))->toBeEmpty()
-        ->and($dishes->where('sold_out', true))->toHaveCount(1)
+        // Uno solo agotado, y hasta hoy: la ficha lo muestra «Agotado hoy».
+        ->and($dishes->pluck('sold_out_until')->filter()->values()->all())->toBe([now()->toDateString()])
         ->and($profile['hours'])->not->toBeEmpty()
         ->and(array_column($profile['special_hours'], 'closed'))->toBe([true, false])
         ->and(array_column($profile['special_hours'], 'note'))->toBe(['Test closure for maintenance', 'Test holiday hours'])

@@ -6,20 +6,25 @@ import type * as FakeInertia from '@/testing/inertia';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 
-/** Un menú de ejemplo: dos secciones, con un plato agotado y otro sin descripción. */
+/** Un menú de ejemplo: dos secciones, con un plato agotado hoy (7 de octubre) y otro sin descripción. */
 const MENU: MenuSection[] = [
     {
         name: 'Platos fuertes (prueba)',
         dishes: [
-            { name: 'Sancocho de prueba', description: 'Con arroz y aguacate.', price: 18500, sold_out: false },
-            { name: 'Bandeja de prueba', description: null, price: 22000, sold_out: true },
+            { name: 'Sancocho de prueba', description: 'Con arroz y aguacate.', price: 18500, sold_out_until: null },
+            { name: 'Bandeja de prueba', description: null, price: 22000, sold_out_until: '2026-10-07' },
         ],
     },
     {
         name: 'Bebidas (prueba)',
-        dishes: [{ name: 'Jugo de prueba', description: 'En agua o en leche.', price: 4000, sold_out: false }],
+        dishes: [{ name: 'Jugo de prueba', description: 'En agua o en leche.', price: 4000, sold_out_until: null }],
     },
 ];
+
+/** Un menú con un solo plato, agotado hasta esa fecha. */
+function soldOutUntil(date: string | null): MenuSection[] {
+    return [{ name: 'Platos fuertes (prueba)', dishes: [{ name: 'Bandeja de prueba', description: null, price: 22000, sold_out_until: date }] }];
+}
 
 async function mountMenu(sections: MenuSection[] = MENU, locale: 'es' | 'en' = 'es') {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
@@ -42,6 +47,13 @@ enableAutoUnmount(afterEach);
 
 beforeEach(() => {
     vi.resetModules();
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    // Miércoles 7 de octubre de 2026, 12:30 en Colombia.
+    vi.setSystemTime(new Date('2026-10-07T12:30:00-05:00'));
+});
+
+afterEach(() => {
+    vi.useRealTimers();
 });
 
 describe('RestaurantMenu', () => {
@@ -95,6 +107,38 @@ describe('RestaurantMenu', () => {
 
             expect(dishes()[1]?.get('[data-name]').classes()).toContain('text-ink-muted');
             expect(dishes()[1]?.text()).toContain('Agotado hoy');
+        });
+
+        it.each([
+            ['ayer', '2026-10-06', false],
+            ['hoy', '2026-10-07', true],
+            ['mañana', '2026-10-08', true],
+            ['ninguna fecha', null, false],
+        ] as const)('agotado hasta %s: vale hasta su fecha, incluida', async (_until, date, soldOut) => {
+            const { wrapper } = await mountMenu(soldOutUntil(date));
+
+            expect(wrapper.find('[data-sold-out]').exists()).toBe(soldOut);
+        });
+
+        it('el día es el de Colombia, esté donde esté el teléfono', async () => {
+            // 20:00 del 7 de octubre en Colombia: en UTC ya es 8.
+            vi.setSystemTime(new Date('2026-10-08T01:00:00Z'));
+
+            const { wrapper } = await mountMenu(soldOutUntil('2026-10-07'));
+
+            expect(wrapper.find('[data-sold-out]').exists()).toBe(true);
+        });
+
+        it('una ficha que queda abierta de noche deja de decirlo al día siguiente', async () => {
+            vi.setSystemTime(new Date('2026-10-07T23:50:00-05:00'));
+            const { wrapper } = await mountMenu(soldOutUntil('2026-10-07'));
+
+            expect(wrapper.find('[data-sold-out]').exists()).toBe(true);
+
+            // Pasa la medianoche: el reloj de la página avanza cada medio minuto.
+            await vi.advanceTimersByTimeAsync(11 * 60 * 1000);
+
+            expect(wrapper.find('[data-sold-out]').exists()).toBe(false);
         });
     });
 

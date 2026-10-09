@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, onBeforeUnmount, onMounted } from 'vue';
 
 import Icon from '@/components/Icon.vue';
 import RestaurantContact from '@/components/RestaurantContact.vue';
@@ -26,17 +26,61 @@ import { openStatusText } from '@/restaurants/statusText';
  * «Abierto ahora» no viene del servidor: se calcula aquí con el horario de
  * las props y el mismo módulo que usa el mapa (openStatus.ts, ADR 0017), y se
  * pone al día solo mientras la página siga abierta.
+ *
+ * Las props sí envejecen: una app instalada pasa horas abierta sin volver a
+ * montarse. Cuando la pestaña vuelve del fondo con props de más de un minuto
+ * se piden otra vez, como la lista del mapa (useRestaurants.ts): el
+ * restaurante pudo cambiar el menú o el horario, o la ficha ocultarse.
  */
 const { restaurant, meta } = defineProps<{
     restaurant: RestaurantProfile;
     meta: PageMeta;
 }>();
 
+/** Lo que duran las props a la vista: el mismo minuto que la lista del mapa. */
+const FRESH_FOR_MS = 60_000;
+
 const { t, locale } = useI18n();
 const now = useNow();
 
 const status = computed(() => openStatus(restaurant, now.value));
 const statusText = computed(() => openStatusText(status.value, t, locale.value));
+
+/** Cuándo llegaron las props que se ven, por el reloj del dispositivo. */
+let loadedAt = Date.now();
+
+const onVisible = (): void => {
+    if (document.visibilityState !== 'visible' || Date.now() - loadedAt <= FRESH_FOR_MS) {
+        return;
+    }
+
+    router.reload({
+        only: ['restaurant', 'meta'],
+        onSuccess: () => {
+            loadedAt = Date.now();
+        },
+        // La ficha ya no está (se ocultó): se pide como una página normal y
+        // el servidor responde su página de error. Con cualquier otro error
+        // se queda la ficha que había. false: sin el diálogo de Inertia.
+        onHttpException: (response) => {
+            if (response.status === 404) {
+                window.location.reload();
+            }
+
+            return false;
+        },
+        // Sin señal se queda la que había; al volver otra vez, se reintenta.
+        onNetworkError: () => false,
+    });
+};
+
+onMounted(() => {
+    document.addEventListener('visibilitychange', onVisible);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('visibilitychange', onVisible);
+});
 </script>
 
 <template>
