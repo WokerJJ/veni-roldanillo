@@ -96,6 +96,55 @@ test('el seeder arma menús con opciones obligatorias y adiciones', function () 
         ->and(Restaurant::query()->whereHas('owners')->count())->toBe(1);
 });
 
+test('el seeder deja una ficha completa: menú por secciones, un plato agotado y horarios especiales que vienen', function () {
+    $this->seed(DatabaseSeeder::class);
+
+    $profile = $this->withoutVite()->get('/restaurants/prueba-la-ceiba?lang=en')->assertOk()->inertiaProps('restaurant');
+    $dishes = collect($profile['menu'])->flatMap(fn (array $section) => $section['dishes']);
+
+    expect(array_column($profile['menu'], 'name'))->toBe(['Main dishes (test)', 'Drinks (test)', 'Desserts (test)'])
+        ->and($dishes)->toHaveCount(7)
+        // Todo rotulado como dato de prueba, también en inglés.
+        ->and($dishes->reject(fn (array $dish) => str_contains($dish['name'], 'Test')))->toBeEmpty()
+        // Uno solo agotado, y hasta hoy: la ficha lo muestra «Agotado hoy».
+        ->and($dishes->pluck('sold_out_until')->filter()->values()->all())->toBe([now()->toDateString()])
+        ->and($profile['hours'])->not->toBeEmpty()
+        ->and(array_column($profile['special_hours'], 'closed'))->toBe([true, false])
+        ->and(array_column($profile['special_hours'], 'note'))->toBe(['Test closure for maintenance', 'Test holiday hours'])
+        ->and($profile['fictitious'])->toBeTrue();
+});
+
+test('el seeder deja un restaurante sin menú y otro sin horario, para ver la ficha cuando faltan', function () {
+    $this->seed(DatabaseSeeder::class);
+
+    $profile = fn (string $slug): array => $this->withoutVite()->get("/restaurants/{$slug}")->assertOk()->inertiaProps('restaurant');
+
+    expect($profile('prueba-la-chiminea'))->toMatchArray(['menu' => []])
+        ->and($profile('prueba-la-chiminea')['hours'])->not->toBeEmpty()
+        ->and($profile('prueba-la-mesa-larga'))->toMatchArray(['hours' => [], 'special_hours' => []])
+        ->and($profile('prueba-la-mesa-larga')['menu'])->not->toBeEmpty();
+});
+
+test('el menú sembrado es siempre el mismo', function () {
+    $menu = fn () => DB::table('dishes')
+        ->join('restaurants', 'restaurants.id', '=', 'dishes.restaurant_id')
+        ->join('menu_sections', 'menu_sections.id', '=', 'dishes.menu_section_id')
+        ->orderBy('restaurants.slug')->orderBy('menu_sections.position')->orderBy('dishes.position')
+        ->get(['restaurants.slug as restaurant', 'menu_sections.name_es as section', 'dishes.name_es as dish', 'dishes.price'])
+        ->map(fn (object $dish) => (array) $dish)
+        ->all();
+
+    $this->seed(DatabaseSeeder::class);
+    $first = $menu();
+
+    Restaurant::query()->delete();
+    User::query()->delete();
+    $this->seed(DatabaseSeeder::class);
+
+    expect($first)->not->toBeEmpty()
+        ->and($menu())->toBe($first);
+});
+
 test('ningún seeder corre fuera de local o testing', function (string $seeder, string $environment) {
     app()->detectEnvironment(fn () => $environment);
 

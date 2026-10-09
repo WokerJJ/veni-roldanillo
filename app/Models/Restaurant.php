@@ -8,6 +8,7 @@ use App\Enums\RestaurantPlan;
 use App\Enums\RestaurantRole;
 use App\Enums\RestaurantStatus;
 use App\Models\Concerns\HasTranslatableFields;
+use App\Support\BusinessDay;
 use App\Support\GeoPoint;
 use Database\Factories\RestaurantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -19,6 +20,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Collection;
 
 /**
  * Ficha de un restaurante. slug, status, plan, verified_at e is_fictitious
@@ -31,11 +34,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * Larastan tipa las columnas enum de la migración como literales e ignora el
  * cast; los @property fijan el tipo del enum PHP. Tampoco conoce el cast
- * propio de la ubicación.
+ * propio de la ubicación ni el de la lista de medios de pago.
  *
  * @property RestaurantStatus $status
  * @property RestaurantPlan $plan
  * @property GeoPoint $location
+ * @property Collection<int, PaymentMethod> $payment_methods
  */
 #[Fillable([
     'name', 'description_es', 'description_en',
@@ -95,6 +99,56 @@ class Restaurant extends Model
     protected function published(Builder $query): void
     {
         $query->whereIn('status', RestaurantStatus::published());
+    }
+
+    /**
+     * Carga las categorías como se publican: slug y nombre, en el orden del
+     * catálogo. El mapa y la ficha las piden igual.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function withPublicCategories(Builder $query): void
+    {
+        $query->with([
+            'categories' => function (Relation $categories): void {
+                $categories
+                    ->select(['categories.id', 'categories.slug', 'categories.name_es', 'categories.name_en'])
+                    ->orderBy('categories.position')
+                    ->orderBy('categories.id');
+            },
+        ]);
+    }
+
+    /**
+     * Carga el horario con que el dispositivo calcula «abierto ahora»
+     * (ADR 0017): el semanal y los horarios especiales de la ventana de
+     * BusinessDay, en orden. El mapa y la ficha piden el mismo, y por eso el
+     * estado que se lee en los dos es el mismo. La nota de un horario
+     * especial solo la publica la ficha.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function withPublicSchedule(Builder $query): void
+    {
+        [$from, $until] = BusinessDay::specialHoursWindow();
+
+        $query->with([
+            'openingHours' => function (Relation $hours): void {
+                $hours
+                    ->select(['id', 'restaurant_id', 'weekday', 'opens_at', 'closes_at'])
+                    ->orderBy('weekday')
+                    ->orderBy('opens_at');
+            },
+            'specialHours' => function (Relation $days) use ($from, $until): void {
+                $days
+                    ->select(['id', 'restaurant_id', 'on_date', 'closed', 'opens_at', 'closes_at', 'note_es', 'note_en'])
+                    ->whereBetween('on_date', [$from, $until])
+                    ->orderBy('on_date')
+                    ->orderBy('opens_at');
+            },
+        ]);
     }
 
     /**

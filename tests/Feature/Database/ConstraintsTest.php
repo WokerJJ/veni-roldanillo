@@ -357,3 +357,18 @@ test('restaurant_claims tiene índices para restaurant_id y reviewed_by', functi
 
     expect($indexed)->toContain('restaurant_id', 'reviewed_by');
 });
+
+test('los horarios tienen índices B-tree por restaurante, en el orden en que se piden', function () {
+    // El mapa y la ficha cargan los horarios con «restaurant_id in (…)» y en
+    // orden. El GiST de la restricción contra franjas solapadas también
+    // empieza por restaurant_id, pero no resuelve una lista de restaurantes
+    // en un solo recorrido ni devuelve las filas ordenadas.
+    $btrees = fn (string $table): array => collect(Schema::getIndexes($table))
+        ->where('type', 'btree')
+        ->map(fn (array $index) => implode(',', $index['columns']))
+        ->values()
+        ->all();
+
+    expect($btrees('opening_hours'))->toContain('restaurant_id,weekday,opens_at')
+        ->and($btrees('special_hours'))->toContain('restaurant_id,on_date');
+});

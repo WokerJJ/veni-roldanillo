@@ -7,6 +7,7 @@ import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import { useI18n } from '@/composables/useI18n';
 import { useNow } from '@/composables/useNow';
 import type { Restaurant } from '@/restaurants/api';
+import { restaurantUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
 import { openStatusText } from '@/restaurants/statusText';
 
@@ -19,13 +20,9 @@ import { openStatusText } from '@/restaurants/statusText';
  * Al abrirse toma el foco en el nombre, para que se anuncie de quién es; quien
  * lo muestra lo cierra con `close` (el botón o Escape) y devuelve el foco.
  *
- * `href` es la ficha completa (#13): sin ruta todavía, no se pasa y no hay
- * enlace que lleve a ningún lado.
+ * Termina en el enlace a la ficha completa del restaurante (#13).
  */
-const { restaurant, href = '' } = defineProps<{
-    restaurant: Restaurant;
-    href?: string;
-}>();
+const { restaurant } = defineProps<{ restaurant: Restaurant }>();
 
 defineEmits<{ close: [] }>();
 
@@ -77,8 +74,7 @@ onMounted(() => {
         </p>
 
         <Link
-            v-if="href"
-            :href="href"
+            :href="restaurantUrl(restaurant.slug)"
             class="mt-3 inline-flex min-h-touch items-center gap-1 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
         >
             {{ t('restaurants.view_details') }}

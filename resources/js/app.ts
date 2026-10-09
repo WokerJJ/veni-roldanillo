@@ -5,9 +5,9 @@ import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
 
 import { cspNonce } from '@/csp';
-import { openDevErrorsAsPages } from '@/devErrors';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { registerServiceWorker, unregisterServiceWorkers } from '@/pwa/serviceWorker';
+import { openVisitErrorsAsPages } from '@/visitErrors';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Vení Roldanillo';
 
@@ -17,11 +17,10 @@ const progressColor = getComputedStyle(document.documentElement).getPropertyValu
 // La barra de progreso inserta un <style>: con el nonce la CSP lo deja pasar.
 const nonce = cspNonce();
 
-// En desarrollo, el error de una visita se abre como página y no en el
-// diálogo de Inertia, donde la CSP no deja leerlo (resources/js/devErrors.ts).
-if (import.meta.env.DEV) {
-    openDevErrorsAsPages(router);
-}
+// El error de una visita GET se abre como una carga normal de esa dirección:
+// el servidor muestra su página de error y, sin señal, el service worker la
+// de sin conexión, que una visita de Inertia no recibe (resources/js/visitErrors.ts).
+openVisitErrorsAsPages(router);
 
 // App instalable y sin conexión (#5): solo con el build de producción. En
 // desarrollo se quita el service worker que haya dejado uno en este origen.

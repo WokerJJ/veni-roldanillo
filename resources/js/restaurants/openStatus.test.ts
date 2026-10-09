@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Schedule, SpecialHours, WeeklyHours } from './openStatus';
-import { BUSINESS_TIME_ZONE, openStatus } from './openStatus';
+import { BUSINESS_TIME_ZONE, businessDay, openStatus } from './openStatus';
 
 /*
 | «Abierto ahora» con fechas fijas. Octubre de 2026: el 5 es lunes, el 7
@@ -401,5 +401,50 @@ describe('abierto ahora', () => {
                 opens: { daysAhead: 1, weekday: THU, time: '11:00' },
             });
         });
+    });
+});
+
+describe('el día de hoy', () => {
+    const originalZone = process.env.TZ;
+
+    afterEach(() => {
+        if (originalZone === undefined) {
+            delete process.env.TZ;
+        } else {
+            process.env.TZ = originalZone;
+        }
+    });
+
+    it('es la fecha y el día de la semana de Colombia', () => {
+        expect(businessDay(bogota('2026-10-07', '12:30'))).toEqual({ date: '2026-10-07', weekday: WED });
+        expect(businessDay(bogota('2026-10-11', '09:00'))).toEqual({ date: '2026-10-11', weekday: SUN });
+    });
+
+    it('cerca de la medianoche sigue siendo el de Colombia, no el de UTC', () => {
+        // Miércoles 7 a las 20:00 en Colombia: en UTC ya es jueves 8.
+        expect(businessDay(new Date('2026-10-08T01:00:00Z'))).toEqual({ date: '2026-10-07', weekday: WED });
+        // Y a las 00:00 en punto ya es el día siguiente.
+        expect(businessDay(bogota('2026-10-08', '00:00'))).toEqual({ date: '2026-10-08', weekday: THU });
+    });
+
+    it('cambia de mes y de año con el calendario', () => {
+        expect(businessDay(bogota('2026-12-31', '23:59'))).toEqual({ date: '2026-12-31', weekday: THU });
+        expect(businessDay(bogota('2027-01-01', '00:00'))).toEqual({ date: '2027-01-01', weekday: FRI });
+    });
+
+    it.each(['Asia/Tokyo', 'Pacific/Honolulu', 'UTC', 'Europe/Madrid'])('es el mismo en un teléfono con la hora de %s', (zone) => {
+        process.env.TZ = zone;
+
+        expect(new Intl.DateTimeFormat().resolvedOptions().timeZone).toBe(zone);
+        expect(businessDay(bogota('2026-10-07', '23:30'))).toEqual({ date: '2026-10-07', weekday: WED });
+        expect(businessDay(bogota('2026-10-07', '00:30'))).toEqual({ date: '2026-10-07', weekday: WED });
+    });
+
+    it('es el mismo «hoy» con que se calcula el estado', () => {
+        // Un cerrado en la fecha de hoy deja cerrado; en otra, no.
+        const now = new Date('2026-10-08T01:00:00Z');
+        const { date } = businessDay(now);
+
+        expect(openStatus(schedule([weekly(WED, '18:00', '22:00')], [closedOn(date)]), now).state).toBe('closed');
     });
 });

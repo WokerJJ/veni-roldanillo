@@ -195,8 +195,18 @@ defineExpose({
         :aria-label="t('map.label')"
         :aria-busy="status === 'loading'"
     >
-        <!-- Oculto hasta que empieza a pintar: ni el lienzo ni los botones reciben foco debajo del esqueleto. -->
-        <div ref="container" class="absolute inset-0" :class="{ invisible: status !== 'ready' }" />
+        <!--
+            Oculto hasta que empieza a pintar: ni el lienzo ni los botones
+            reciben foco debajo del esqueleto.
+
+            size-full además de inset-0: al crear el mapa, MapLibre le pone al
+            contenedor su clase, con `position: relative`, que le gana a la
+            utilidad de Tailwind; sin un alto propio mediría cero y el mapa
+            nacería con 300 px de alto, hasta el primer cambio de tamaño. Una
+            cámara que se moviera en ese rato (el inicio abierto con ?r=slug)
+            dejaría el punto fuera del centro.
+        -->
+        <div ref="container" class="absolute inset-0 size-full" :class="{ invisible: status !== 'ready' }" />
 
         <div
             v-if="status === 'loading'"

@@ -171,6 +171,12 @@ describe('reparto del bundle', () => {
         // El motor le da a MapLibre la URL de ese chunk (setWorkerUrl).
         expect(engine.code).toContain(worker.fileName);
     });
+
+    it('la entrada trae lo que abre como página el error de una visita: no es solo de desarrollo', () => {
+        const initial = loadedWith(chunkOf('/resources/js/app.ts'));
+
+        expect(initial.some((chunk) => has(chunk, /\/resources\/js\/visitErrors\.ts$/))).toBe(true);
+    });
 });
 
 /*
@@ -295,9 +301,23 @@ describe('página sin conexión', () => {
 | en el mismo cambio que lo justifica.
 */
 describe('presupuesto de descarga', () => {
-    it('el arranque (entrada, página de inicio y sus estilos) no pasa de 80 kB comprimidos', () => {
-        // Medido al fijarlo: 70 kB (Vue e Inertia son casi todo).
-        expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(80);
+    it('el arranque (entrada, página de inicio y sus estilos) no pasa de 82 kB comprimidos', () => {
+        // Medido al fijarlo en 80: 70 kB (Vue e Inertia son casi todo). Con
+        // los restaurantes sobre el mapa (#9) llegó a 79, y con la ficha (#13),
+        // a 80,5: de los 1,5 kB que suma, 0,6 son sus estilos, porque el CSS
+        // de Tailwind es uno solo para todas las páginas, y el resto, los
+        // enlaces del mapa a la ficha y el restaurante elegido en la dirección.
+        // El código de la ficha no cuenta: es un chunk aparte que baja al abrirla.
+        expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(82);
+    });
+
+    it('la ficha de un restaurante no baja con el arranque: es un chunk aparte', () => {
+        const show = chunkOf('/resources/js/pages/Restaurants/Show.vue');
+
+        expect(initialChunks()).not.toContain(show);
+        // Los formatos de precios y fechas son de la ficha: no viajan con el inicio.
+        expect(show.code + loadedWith(show).map((chunk) => chunk.code).join('')).toMatch(/currency:\s*["'`]COP/);
+        expect(initialChunks().some((chunk) => /currency:\s*["'`]COP/.test(chunk.code))).toBe(false);
     });
 
     it('el mapa (motor, MapLibre, PMTiles, worker y sus estilos) no pasa de 340 kB comprimidos', () => {
