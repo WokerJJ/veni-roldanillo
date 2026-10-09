@@ -6,7 +6,6 @@ use App\Enums\Locale;
 use App\Http\Resources\RestaurantProfile;
 use App\Models\Neighborhood;
 use App\Models\Restaurant;
-use App\Support\BusinessDay;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -42,54 +41,40 @@ class RestaurantController extends Controller
             abort(404);
         }
 
-        [$from, $until] = BusinessDay::specialHoursWindow();
-
-        // Siete consultas más, tenga el menú tres platos o trescientos: una por tabla.
-        $restaurant->load([
-            'categories' => function (Relation $categories): void {
-                $categories
-                    ->select(['categories.id', 'categories.slug', 'categories.name_es', 'categories.name_en'])
-                    ->orderBy('categories.position')
-                    ->orderBy('categories.id');
-            },
-            'openingHours' => function (Relation $hours): void {
-                $hours
-                    ->select(['id', 'restaurant_id', 'weekday', 'opens_at', 'closes_at'])
-                    ->orderBy('weekday')
-                    ->orderBy('opens_at');
-            },
-            'specialHours' => function (Relation $days) use ($from, $until): void {
-                $days
-                    ->select(['id', 'restaurant_id', 'on_date', 'closed', 'opens_at', 'closes_at', 'note_es', 'note_en'])
-                    ->whereBetween('on_date', [$from, $until])
-                    ->orderBy('on_date')
-                    ->orderBy('opens_at');
-            },
-            // Secciones y platos ya salen en el orden del restaurante (position, id).
-            'menuSections' => function (Relation $sections): void {
-                $sections->select(['id', 'restaurant_id', 'name_es', 'name_en', 'position']);
-            },
-            // Lo que el dueño sacó del menú (available) no se publica.
-            'menuSections.dishes' => function (Relation $dishes): void {
-                $dishes
-                    ->select([
-                        'id', 'restaurant_id', 'menu_section_id', 'name_es', 'name_en',
-                        'description_es', 'description_en', 'price', 'sold_out_until', 'position',
-                    ])
-                    ->where('available', true);
-            },
-            // Las zonas de domicilio con su costo, por orden alfabético del
-            // barrio (lo ordena la base, que sabe de tildes), y sus nombres.
-            'deliveryZones' => function (Relation $zones): void {
-                $zones
-                    ->select(['id', 'restaurant_id', 'neighborhood_id', 'fee'])
-                    ->orderBy(Neighborhood::query()->select('name')->whereColumn('neighborhoods.id', 'delivery_zones.neighborhood_id'))
-                    ->orderBy('id');
-            },
-            'deliveryZones.neighborhood' => function (Relation $neighborhoods): void {
-                $neighborhoods->select(['id', 'name']);
-            },
-        ]);
+        // Siete consultas más, tenga el menú tres platos o trescientos: una
+        // por tabla. Es lo que hace $restaurant->load(), con las categorías y
+        // el horario cargados igual que en el mapa (ver Restaurant).
+        Restaurant::query()
+            ->withPublicCategories()
+            ->withPublicSchedule()
+            ->with([
+                // Secciones y platos ya salen en el orden del restaurante (position, id).
+                'menuSections' => function (Relation $sections): void {
+                    $sections->select(['id', 'restaurant_id', 'name_es', 'name_en', 'position']);
+                },
+                // Lo que el dueño sacó del menú no hace falta traerlo:
+                // RestaurantProfile no lo publica (lo decide con available).
+                'menuSections.dishes' => function (Relation $dishes): void {
+                    $dishes
+                        ->select([
+                            'id', 'restaurant_id', 'menu_section_id', 'name_es', 'name_en',
+                            'description_es', 'description_en', 'price', 'available', 'sold_out_until', 'position',
+                        ])
+                        ->where('available', true);
+                },
+                // Las zonas de domicilio con su costo, por orden alfabético del
+                // barrio (lo ordena la base, que sabe de tildes), y sus nombres.
+                'deliveryZones' => function (Relation $zones): void {
+                    $zones
+                        ->select(['id', 'restaurant_id', 'neighborhood_id', 'fee'])
+                        ->orderBy(Neighborhood::query()->select('name')->whereColumn('neighborhoods.id', 'delivery_zones.neighborhood_id'))
+                        ->orderBy('id');
+                },
+                'deliveryZones.neighborhood' => function (Relation $neighborhoods): void {
+                    $neighborhoods->select(['id', 'name']);
+                },
+            ])
+            ->eagerLoadRelations([$restaurant]);
 
         $locale = Locale::current();
 
