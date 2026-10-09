@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
+import { onBeforeUnmount, useTemplateRef } from 'vue';
 
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
@@ -17,6 +18,34 @@ const { immersive } = defineProps<{ immersive?: boolean }>();
 
 const { t } = useI18n();
 const year = new Date().getFullYear();
+
+const page = usePage();
+const main = useTemplateRef<HTMLElement>('main');
+
+/** La ruta de una dirección de Inertia (`page.url`), sin sus parámetros. */
+function pathOf(url: string): string {
+    return new URL(url, window.location.href).pathname;
+}
+
+let currentPath = pathOf(page.url);
+
+// El layout es persistente: al navegar no se vuelve a montar, el foco quedaría
+// en <body> y nada anunciaría la página nueva. Cuando cambia la ruta, el foco
+// va al contenido; no en la primera carga (Inertia también avisa ahí) ni
+// cuando la misma página cambia sus parámetros. Del scroll se ocupa Inertia:
+// arriba en una página nueva y, con atrás y adelante, donde estaba.
+const stopFocusingContent = router.on('navigate', () => {
+    const path = pathOf(page.url);
+
+    if (path === currentPath) {
+        return;
+    }
+
+    currentPath = path;
+    main.value?.focus({ preventScroll: true });
+});
+
+onBeforeUnmount(stopFocusingContent);
 </script>
 
 <template>
@@ -47,7 +76,7 @@ const year = new Date().getFullYear();
             </div>
         </header>
 
-        <main id="contenido" tabindex="-1" class="flex-1 focus:outline-none" :class="{ 'relative min-h-0': immersive }">
+        <main id="contenido" ref="main" tabindex="-1" class="flex-1 focus:outline-none" :class="{ 'relative min-h-0': immersive }">
             <slot />
         </main>
 
