@@ -43,7 +43,7 @@
     "restaurants.status.time_many": "las :time",
     "restaurant.meta_description": "Menú con precios, horarios y cómo llegar a :name, en Roldanillo.",
     "restaurant.back_to_map": "Volver al mapa",
-    "restaurant.directions": "Cómo llegar",
+    "restaurant.see_on_map": "Ver en el mapa",
     "restaurant.hidden": "Esta ficha está oculta: solo la ven la gente del restaurante y la administración.",
     "restaurant.unverified": "Información sin verificar.",
     "restaurant.unverified_since": "Información sin verificar · actualizada el :date.",

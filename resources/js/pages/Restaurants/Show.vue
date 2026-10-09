@@ -122,17 +122,18 @@ onBeforeUnmount(() => {
 
                 <!--
                     Abre el mapa del inicio con este restaurante ya elegido
-                    (/?r=slug); la ruta se calcula allá, en el dispositivo. Una
-                    ficha oculta no está en el mapa: no hay a dónde llevar.
+                    (/?r=slug), y eso dice el botón. La ruta hasta él («Cómo
+                    llegar») es de #11 y se calcula allá, en el dispositivo.
+                    Una ficha oculta no está en el mapa: no hay a dónde llevar.
                 -->
                 <Link
                     v-if="!restaurant.hidden"
                     :href="mapUrl(restaurant.slug)"
                     class="mt-4 inline-flex min-h-touch items-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
-                    data-directions
+                    data-see-on-map
                 >
                     <Icon name="ubicacion" :size="20" />
-                    {{ t('restaurant.directions') }}
+                    {{ t('restaurant.see_on_map') }}
                 </Link>
 
                 <p v-if="restaurant.description" class="mt-4 max-w-prose whitespace-pre-line" data-description>{{ restaurant.description }}</p>

@@ -16,7 +16,7 @@ export function restaurantUrl(slug: string): string {
  */
 export const SELECTED_PARAM = 'r';
 
-/** El mapa del inicio con ese restaurante ya elegido: a donde lleva «Cómo llegar». */
+/** El mapa del inicio con ese restaurante ya elegido: a donde lleva «Ver en el mapa». */
 export function mapUrl(slug: string): string {
     return `/?${SELECTED_PARAM}=${encodeURIComponent(slug)}`;
 }

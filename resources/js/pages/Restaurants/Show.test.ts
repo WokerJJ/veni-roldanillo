@@ -114,23 +114,25 @@ describe('Restaurants/Show', () => {
         expect(real.wrapper.text()).not.toContain('Datos de ejemplo');
     });
 
-    describe('cómo llegar', () => {
+    describe('ver en el mapa', () => {
+        // Dice lo que hace: abre el mapa con el restaurante elegido. La ruta
+        // hasta él («Cómo llegar») todavía no existe.
         it.each([
-            ['es', 'Cómo llegar'],
-            ['en', 'Get directions'],
+            ['es', 'Ver en el mapa'],
+            ['en', 'See on the map'],
         ] as const)('en %s, el botón abre el mapa del inicio con este restaurante elegido', async (locale, text) => {
             const { wrapper } = await mountShow(profile(), locale);
-            const directions = wrapper.get('[data-directions]');
+            const seeOnMap = wrapper.get('[data-see-on-map]');
 
-            expect(directions.element.tagName).toBe('A');
-            expect(directions.text()).toBe(text);
-            expect(directions.attributes('href')).toBe('/?r=prueba-la-ceiba');
-            expect(directions.classes()).toContain('min-h-touch');
+            expect(seeOnMap.element.tagName).toBe('A');
+            expect(seeOnMap.text()).toBe(text);
+            expect(seeOnMap.attributes('href')).toBe('/?r=prueba-la-ceiba');
+            expect(seeOnMap.classes()).toContain('min-h-touch');
         });
 
         it('en la dirección solo va el restaurante', async () => {
             const { wrapper } = await mountShow();
-            const href = wrapper.get('[data-directions]').attributes('href') ?? '';
+            const href = wrapper.get('[data-see-on-map]').attributes('href') ?? '';
 
             expect([...new URLSearchParams(href.slice(href.indexOf('?'))).keys()]).toEqual(['r']);
         });
@@ -138,7 +140,7 @@ describe('Restaurants/Show', () => {
         it('una ficha oculta no lo lleva: no está en el mapa', async () => {
             const { wrapper } = await mountShow(profile({ hidden: true }));
 
-            expect(wrapper.find('[data-directions]').exists()).toBe(false);
+            expect(wrapper.find('[data-see-on-map]').exists()).toBe(false);
         });
     });
 

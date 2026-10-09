@@ -43,7 +43,7 @@
     "restaurants.status.time_many": ":time",
     "restaurant.meta_description": "Menu with prices, opening hours and directions to :name in Roldanillo, Colombia.",
     "restaurant.back_to_map": "Back to the map",
-    "restaurant.directions": "Get directions",
+    "restaurant.see_on_map": "See on the map",
     "restaurant.hidden": "This listing is hidden: only the restaurant's staff and the site admins can see it.",
     "restaurant.unverified": "Unverified information.",
     "restaurant.unverified_since": "Unverified information · updated on :date.",
