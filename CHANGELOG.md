@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.1.0...v0.2.0) (2026-10-09)
+
+
+### Funcionalidades
+
+* ficha del restaurante con horarios y menú por secciones ([#60](https://github.com/WokerJJ/veni-roldanillo/issues/60)) ([1cb0254](https://github.com/WokerJJ/veni-roldanillo/commit/1cb02543d1aaca11e18244bccb69f80820a1654e)), closes [#13](https://github.com/WokerJJ/veni-roldanillo/issues/13)
+* restaurantes sobre el mapa con su resumen y estado abierto ahora ([#55](https://github.com/WokerJJ/veni-roldanillo/issues/55)) ([5c5a4c2](https://github.com/WokerJJ/veni-roldanillo/commit/5c5a4c2c89ee079b4b2750a2ebc998f1a99f498c)), closes [#9](https://github.com/WokerJJ/veni-roldanillo/issues/9)
+
+
+### Correcciones
+
+* **deps:** bump the npm-menores group across 1 directory with 6 updates ([#52](https://github.com/WokerJJ/veni-roldanillo/issues/52)) ([33146e7](https://github.com/WokerJJ/veni-roldanillo/commit/33146e7fecb308934fe26bdcb09a80e5a0e00710))
+
 ## 0.1.0 (2026-10-07)
 
 
