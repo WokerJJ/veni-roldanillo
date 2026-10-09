@@ -96,7 +96,7 @@ En la página del inicio (`resources/js/pages/Home.vue`):
 | Resumen | `resources/js/components/RestaurantSummary.vue` | El elegido: nombre, tipo de comida, abierto o cerrado y domicilios. Diálogo no modal, que termina en el enlace a la ficha |
 | Rótulo | `resources/js/components/SampleDataBadge.vue` | «Datos de ejemplo» en todo restaurante con `fictitious` |
 
-El inicio puede abrir con un restaurante ya elegido: `/?r=slug`, a donde lleva «Cómo llegar» desde una ficha ([ADR 0018](adr/0018-ficha-del-restaurante.md)). Lee el parámetro una vez y, cuando llega la lista, si ese restaurante está en ella, abre su resumen y la cámara va hasta él (aunque el mapa empiece a pintar después); si no está, abre como siempre. En la dirección solo viaja el restaurante.
+El inicio puede abrir con un restaurante ya elegido: `/?r=slug`, a donde lleva «Ver en el mapa» desde una ficha ([ADR 0018](adr/0018-ficha-del-restaurante.md)). Lee el parámetro una vez y, cuando llega la lista, si ese restaurante está en ella, abre su resumen y la cámara va hasta él (aunque el mapa empiece a pintar después); si no está, abre como siempre. En la dirección solo viaja el restaurante.
 
 El panel del inicio muestra una de tres cosas: la bienvenida con el estado de la lista (cargando, cuántos hay, que todavía no hay, o el error con «Reintentar»), la lista, o el resumen. Escape cierra el resumen y después la lista, y el foco vuelve a donde se abrió (el botón de la lista o el mapa). El panel va antes que el mapa en el documento: con el teclado se llega a la lista sin pasar por el lienzo. Si el mapa no carga, `MapView` lo avisa (`status`) y el panel deja de ir encima: queda antes del aviso del mapa, en una columna, para que la lista siga a la vista.
 
@@ -116,14 +116,14 @@ Decidida en el [ADR 0018](adr/0018-ficha-del-restaurante.md).
 
 | Prop | Qué trae |
 | --- | --- |
-| `restaurant` | La lista blanca de `App\Http\Resources\RestaurantProfile`: `slug`, `name`, `description`, `categories`, `fictitious`, `hidden`, `unverified`, `updated_on`, `price_level`, `address`, `reference`, `phone`, `whatsapp`, `payment_methods`, `delivery` (`available`, `notes`, `zones` con barrio y costo), `hours`, `special_hours` (con `note`) y `menu` (secciones con sus platos: `name`, `description`, `price`, `sold_out`) |
+| `restaurant` | La lista blanca de `App\Http\Resources\RestaurantProfile`: `slug`, `name`, `description`, `categories`, `fictitious`, `hidden`, `unverified`, `updated_on`, `price_level`, `address`, `reference`, `phone`, `whatsapp`, `payment_methods`, `delivery` (`available`, `notes`, `zones` con barrio y costo), `hours`, `special_hours` (con `note`) y `menu` (secciones con sus platos: `name`, `description`, `price`, `sold_out_until`) |
 | `meta` | `title` y `description` del documento, en el idioma de la petición. La vista raíz los escribe en el HTML (quien arma la vista previa de un enlace no ejecuta JavaScript); al navegar sin recargar los mantienen `<Head>` y `useI18n` |
 
 No viajan el id, los dueños, el plan, la ubicación exacta, los platos que el dueño sacó del menú (`available`) ni las opciones y adiciones (#14). Los textos traducibles salen en el idioma de la petición y, si falta el inglés, en español (`HasTranslatableFields`).
 
 | Pieza | Dónde | Qué hace |
 | --- | --- | --- |
-| Página | `resources/js/pages/Restaurants/Show.vue` | «Volver al mapa», el nombre, el tipo de comida, abierto o cerrado, «Cómo llegar» (`/?r=slug`), la descripción y los avisos: «Datos de ejemplo», «Información sin verificar» en las fichas sin reclamar y, para quien ve una oculta, que el público no la ve |
+| Página | `resources/js/pages/Restaurants/Show.vue` | «Volver al mapa», el nombre, el tipo de comida, abierto o cerrado, «Ver en el mapa» (`/?r=slug`; la ruta, «Cómo llegar», es de #11), la descripción y los avisos: «Datos de ejemplo», «Información sin verificar» en las fichas sin reclamar y, para quien ve una oculta, que el público no la ve |
 | Horario | `resources/js/components/RestaurantHours.vue` | La semana, de lunes a domingo, con hoy resaltado, y los horarios especiales que vienen con su nota. Si hoy tiene un horario especial, la fila de hoy muestra ese. Sin horario cargado, lo dice |
 | Menú | `resources/js/components/RestaurantMenu.vue` | Por secciones, en el orden del restaurante, con el precio de cada plato y «Agotado hoy». Sin menú cargado, lo dice |
 | Domicilios | `resources/js/components/RestaurantDelivery.vue` | Los barrios a los que lleva y el costo; sin zonas cargadas, que el costo se pregunta. Solo si hace domicilios |
@@ -131,7 +131,9 @@ No viajan el id, los dueños, el plan, la ubicación exacta, los platos que el d
 | Direcciones | `resources/js/restaurants/links.ts` | `restaurantUrl(slug)` y `mapUrl(slug)`: el frontend no conoce las rutas de Laravel y repite el literal, que fija una prueba |
 | Formatos | `resources/js/i18n/intl.ts` | Precios en pesos y fechas, escritos por `Intl`: «$ 18.500» en español y «COP 18,500» en inglés |
 
-**El horario es el mismo que recibe el mapa**, con la misma ventana de horarios especiales (de ayer a siete días, `App\Support\BusinessDay`), y el estado lo calcula `openStatus.ts`, que también dice qué día es en Colombia (`businessDay`). Así el mapa y la ficha dicen siempre lo mismo. «Agotado hoy», en cambio, lo resuelve el servidor con el día de Colombia: esta respuesta no se guarda en ninguna caché.
+**El horario es el mismo que recibe el mapa**, con la misma ventana de horarios especiales (de ayer a siete días, `App\Support\BusinessDay`), y el estado lo calcula `openStatus.ts`, que también dice qué día es en Colombia (`businessDay`). Así el mapa y la ficha dicen siempre lo mismo. «Agotado hoy» sigue la misma regla: viaja la fecha hasta la que vale (`sold_out_until`) y el menú la compara con el día de Colombia, así que el aviso se va solo a la medianoche.
+
+**Las props se vuelven a pedir** cuando la pestaña regresa del fondo y tienen más de un minuto, como la lista del mapa: solo `restaurant` y `meta`. Si la ficha se ocultó, la página se pide entera y se ve el 404 del servidor; con otro error, o sin señal, se queda la que había.
 
 La ficha no pide el modo inmersivo: va en el layout común, con su pie de página. Su código es un chunk aparte, que baja al abrirla; sus estilos van en el CSS único de la app.
 
@@ -200,8 +202,8 @@ Implementado en la Fase 0 (#6); decisiones en el ADR 0009. Convenciones: precios
 | `neighborhoods` | name, slug, area (geography MultiPolygon, opcional), is_fictitious | name y slug únicos; GiST en area |
 | `restaurants` | name, slug, description_es/en, address, reference, location (geography Point 4326), phone, whatsapp, price_level, delivery, delivery_notes_es/en, payment_methods (jsonb, lista del enum `PaymentMethod`: cash/nequi/daviplata/card), status (unclaimed/claimed/hidden), plan (free/featured), verified_at, updated_by_owner_at, is_fictitious | slug único con formato; GiST en location, que no puede ser un punto vacío; sin índice en status (el filtro de las publicadas, `status IN ('unclaimed', 'claimed')`, no lo usa); whatsapp celular colombiano `57` + diez dígitos (el modelo normaliza «+57 300 …»); price_level 1-4; payment_methods solo con valores del enum |
 | `restaurant_user` | restaurant_id, user_id, role (owner/staff) | PK compuesta; cascada |
-| `opening_hours` | restaurant_id, weekday (0 = domingo), opens_at, closes_at | varias franjas por día sin solaparse (`EXCLUDE` con GiST); una franja puede pasar la medianoche; ninguna hora es las 24:00 (cerrar a medianoche es 00:00) |
-| `special_hours` | restaurant_id, on_date, closed, opens_at, closes_at, note_es/en | cerrado sin horas o abierto con ambas; por fecha, o un solo «cerrado» o franjas que no se solapan (`EXCLUDE`); ninguna hora es las 24:00 |
+| `opening_hours` | restaurant_id, weekday (0 = domingo), opens_at, closes_at | varias franjas por día sin solaparse (`EXCLUDE` con GiST); una franja puede pasar la medianoche; ninguna hora es las 24:00 (cerrar a medianoche es 00:00); índice B-tree en (restaurant_id, weekday, opens_at), que es como se piden |
+| `special_hours` | restaurant_id, on_date, closed, opens_at, closes_at, note_es/en | cerrado sin horas o abierto con ambas; por fecha, o un solo «cerrado» o franjas que no se solapan (`EXCLUDE`); ninguna hora es las 24:00; índice B-tree en (restaurant_id, on_date) |
 | `menu_sections` | restaurant_id, name_es/en, position | |
 | `dishes` | restaurant_id, menu_section_id, name_es/en, description_es/en, price, photo_path, tags (jsonb), available, sold_out_until, position | FK compuesta (sección del mismo restaurante) |
 | `option_groups` | dish_id, name_es/en, required, min_choices, max_choices, position | obligatorio si y solo si min_choices >= 1; max >= min |

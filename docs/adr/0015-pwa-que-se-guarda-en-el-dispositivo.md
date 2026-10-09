@@ -43,7 +43,7 @@ Lo que condiciona la decisión:
 ## Consecuencias
 
 - Sin red, la app no muestra restaurantes ni menús: muestra la página sin conexión. Verlos sin señal es otra decisión (guardar datos, no HTML) y llegará con las fichas.
-- Una página que tarde más de 10 segundos en responder se ve como «sin señal», aunque el servidor siga trabajando: ninguna navegación debe depender de un proceso largo. El plazo no toca los envíos de formularios ni las visitas de Inertia, que no son navegaciones `GET` del navegador.
+- Una página que tarde más de 10 segundos en responder se ve como «sin señal», aunque el servidor siga trabajando: ninguna navegación debe depender de un proceso largo. El plazo no toca los envíos de formularios ni las visitas de Inertia, que no son navegaciones `GET` del navegador. Una visita GET de Inertia que no llega a la red se repite como navegación normal, y entonces sí cae en `/offline` (ADR 0014).
 - Las pruebas de `runtimeCaching.ts` fijan lo decidido: ninguna ruta con caché recibe una navegación ni `PUT /locale`, toda caché tiene tope y solo guarda 200. La función de las navegaciones se prueba como queda en `public/sw.js`, copiada como texto: no puede usar nada de fuera de ella.
 - Cambiar el nombre de una caché deja la anterior en los teléfonos hasta que venza o se borre a propósito: los nombres se tratan como parte del contrato.
 - La versión de la página sin conexión en el precache sale de todo lo que la arma (la vista, los textos, los colores de la marca, el nombre de la app y sus idiomas): si cambia algo de eso, el service worker la vuelve a pedir.
