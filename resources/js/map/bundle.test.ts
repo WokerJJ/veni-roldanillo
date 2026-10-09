@@ -301,14 +301,14 @@ describe('página sin conexión', () => {
 | en el mismo cambio que lo justifica.
 */
 describe('presupuesto de descarga', () => {
-    it('el arranque (entrada, página de inicio y sus estilos) no pasa de 85 kB comprimidos', () => {
+    it('el arranque (entrada, página de inicio y sus estilos) no pasa de 82 kB comprimidos', () => {
         // Medido al fijarlo en 80: 70 kB (Vue e Inertia son casi todo). Con
         // los restaurantes sobre el mapa (#9) llegó a 79, y con la ficha (#13),
         // a 80,5: de los 1,5 kB que suma, 0,6 son sus estilos, porque el CSS
         // de Tailwind es uno solo para todas las páginas, y el resto, los
         // enlaces del mapa a la ficha y el restaurante elegido en la dirección.
         // El código de la ficha no cuenta: es un chunk aparte que baja al abrirla.
-        expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(85);
+        expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(82);
     });
 
     it('la ficha de un restaurante no baja con el arranque: es un chunk aparte', () => {
