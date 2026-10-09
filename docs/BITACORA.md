@@ -69,3 +69,17 @@ Diario de avance del proyecto: qué se hizo en cada bloque, decisiones y aprendi
 - Aprendizajes: un doble de pruebas que no se comporta como la librería esconde el fallo en vez de encontrarlo. Y lo que es de layout se comprueba en un navegador, no en una prueba unitaria.
 - Quedan con seguimiento: endurecer la API pública (#54) y la prueba de humo del mapa con navegador real (#40). El enlace del resumen a la ficha pasó a #13.
 - Sigue la ficha del restaurante (#13).
+
+## 2026-10-09 · Parte 7 · La ficha del restaurante
+
+- **#13 integrado:** cada restaurante tiene su ficha en `/restaurants/{slug}` (ADR 0018), con el estado abierto o cerrado, la semana con el día de hoy resaltado, los horarios especiales y el menú por secciones con precios y «Agotado hoy». El mapa enlaza a la ficha, y «Ver en el mapa» vuelve al inicio con ese restaurante elegido.
+- La dirección quedó en inglés por la convención de rutas del proyecto. Cambiarla solo es barato antes del primer despliegue; se decidió dejarla.
+- El botón no dice «Cómo llegar» porque todavía no traza la ruta: eso llega con #11.
+- La revisión encontró que, en producción, nadie atendía los errores de una visita entre páginas: sin señal, tocar «Ver la ficha» no hacía nada. Ahora la visita se repite como carga normal y sale la página de error de la app o la de sin conexión. Se comprobó en Chrome ocultando una ficha con el mapa abierto.
+- Otras de la revisión: el foco no pasaba al contenido al cambiar de página, y una ficha abierta no se ponía al día («Agotado hoy» seguía al día siguiente). «Agotado» ahora se calcula en el dispositivo, igual que «abierto ahora».
+- El contrato de la ficha, como el del mapa, es una respuesta de referencia que leen Pest y Vitest.
+- **Dependencias:** se integraron las versiones menores de npm, con MapLibre 6.12 comprobado en el navegador. El salto de Node 24 a 26 en la imagen se cerró: las versiones mayores se suben a mano.
+- **Decisión sobre OpenStreetMap:** el mapa base dejó de dibujar los locales de comida (versión 0.2.1 del mapa), porque en la app esos lugares los muestra Vení. Y los que ya están en OpenStreetMap se van a importar como borradores ocultos, para verificarlos en la calle antes de publicarlos (#58). OpenStreetMap lo permite con atribución y guardando la procedencia; Google y TripAdvisor siguen prohibidos.
+- Aprendizajes: lo que se probó solo con dobles hay que verlo en un navegador antes de darlo por hecho; las tres correcciones de navegación se confirmaron así. Y cuando dos personas corrigen a la vez sobre el mismo árbol, el reparto de archivos tiene que quedar escrito.
+- Quedan con seguimiento: la vista previa al compartir y la URL canónica (#59), el límite de peticiones de la ficha (#54) y «actualizada el…» (#18).
+- Sigue «¿Dónde estoy?» (#10).
