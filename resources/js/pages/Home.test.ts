@@ -24,8 +24,12 @@ async function mountHome({ locale = 'es', answer, url = '/' }: { locale?: 'es' |
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     inertia.reset();
     inertia.receiveFromServer(locale, { replace: true });
-    // La dirección con que el servidor respondió el inicio (con ?r=slug, la de «Cómo llegar»).
+    // La dirección con que el servidor respondió el inicio (con ?r=slug, la de «Ver en el mapa»).
     inertia.page.url = url;
+    // La visita que cambia la dirección en el dispositivo, sin pedirle nada al
+    // servidor ni sumar una entrada al historial: el router de mentira no la trae.
+    const replace = vi.fn();
+    Object.assign(inertia.router, { replace });
     // Los demás pedidos (MapView pide el estilo al montarse) no llegan nunca: aquí nada sale a la red.
     const network = stubRestaurantsFetch(answer);
 
@@ -42,6 +46,7 @@ async function mountHome({ locale = 'es', answer, url = '/' }: { locale?: 'es' |
         Home,
         inertia,
         network,
+        replace,
         wrapper,
         panel,
         /** La región que anuncia el estado de los restaurantes. */
@@ -435,11 +440,36 @@ describe('Home', () => {
             expect(panel().get('[role="dialog"] h2').text()).toBe('Restaurante de Prueba La Ceiba (ficticio)');
         });
 
-        it('sin el parámetro no elige a nadie', async () => {
-            const { layer, panel } = await mountHome({ url: '/?lang=es', answer: [LA_CEIBA] });
+        it('sin el parámetro no elige a nadie ni toca la dirección', async () => {
+            const { layer, panel, replace } = await mountHome({ url: '/?lang=es', answer: [LA_CEIBA] });
 
             expect(panel().find('[role="dialog"]').exists()).toBe(false);
             expect(layer().props('selected')).toBeNull();
+            expect(replace).not.toHaveBeenCalled();
+        });
+
+        // Si quedara, «atrás» desde otra ficha volvería a `/?r=slug` y reabriría
+        // a este, y no al mapa sin nadie elegido (ADR 0018).
+        it('una vez leído, el parámetro sale de la dirección, sin sumar una entrada al historial ni volver a montar la página', async () => {
+            const { network, replace } = await mountHome({ url: '/?r=prueba-la-ceiba' });
+            expect(replace).not.toHaveBeenCalled();
+
+            network.last()?.respond([LA_CEIBA, EL_GUADUAL]);
+            await flushPromises();
+
+            expect(replace).toHaveBeenCalledExactlyOnceWith({ url: '/', preserveScroll: true, preserveState: true });
+        });
+
+        it('también sale si ese restaurante no está en la lista', async () => {
+            const { replace } = await mountHome({ url: '/?r=ya-no-esta', answer: [LA_CEIBA] });
+
+            expect(replace).toHaveBeenCalledExactlyOnceWith({ url: '/', preserveScroll: true, preserveState: true });
+        });
+
+        it('los demás parámetros de la dirección se quedan', async () => {
+            const { replace } = await mountHome({ url: '/?lang=en&r=prueba-la-ceiba', answer: [LA_CEIBA] });
+
+            expect(replace).toHaveBeenCalledExactlyOnceWith({ url: '/?lang=en', preserveScroll: true, preserveState: true });
         });
     });
 
