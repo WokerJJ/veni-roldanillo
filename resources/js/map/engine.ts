@@ -21,8 +21,8 @@ import { MapUnavailableError } from './errors';
 import { fetchMapStyle } from './fetchStyle';
 import { createLayerRegistry } from './layerRegistry';
 import type { MapLayerGroup, MapLayerGroupHandle } from './layers';
-import type { LocateButton } from './locate';
-import { takeLocateButton } from './locate';
+import type { LocateControl, LocateTexts } from './locate';
+import { takeLocateControl } from './locate';
 
 setWorkerUrl(workerUrl);
 
@@ -32,8 +32,8 @@ export interface MapLabels {
     canvas: string;
     zoomIn: string;
     zoomOut: string;
-    /** El botón «¿Dónde estoy?». */
-    locate: string;
+    /** «¿Dónde estoy?»: su botón y sus avisos. */
+    locate: LocateTexts;
 }
 
 export interface CreateMapOptions {
@@ -333,8 +333,8 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
     // Las capas propias de la app (ADR 0016). Nadie puede registrar una hasta
     // que esta función devuelva el mapa, ya con su primer estilo cargado.
     const layers = createLayerRegistry(map);
-    /** El botón «¿Dónde estoy?», cuando ya está en el mapa. */
-    let locate: LocateButton | null = null;
+    /** «¿Dónde estoy?», cuando ya está en el mapa. */
+    let locate: LocateControl | null = null;
 
     const destroy = (): void => {
         if (destroyed) {
@@ -359,8 +359,9 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
         map.keyboard.disableRotation();
         map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
         // Debajo de los de zoom: arriba a la derecha no lo tapa el panel de la página.
-        map.addControl(new GeolocateControl(LOCATE_OPTIONS), 'top-right');
-        locate = takeLocateButton(map.getContainer(), labels.locate);
+        const geolocate = new GeolocateControl(LOCATE_OPTIONS);
+        map.addControl(geolocate, 'top-right');
+        locate = takeLocateControl(geolocate, map.getContainer(), labels.locate);
         applyLabels(map, labels);
 
         let startedPainting: () => void = () => undefined;

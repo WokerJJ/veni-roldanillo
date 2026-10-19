@@ -111,6 +111,72 @@
     }
 }
 
+/*
+ * El aviso de «¿Dónde estoy?», junto a su botón: a la altura de él (10 px de
+ * margen, los dos de zoom de 44 y otros 10) y a su izquierda (10 + 44 + 8).
+ * Como el panel de la página, a todo el ancho en un celular vertical y de
+ * 20rem desde 480 px. Con el z-index del panel (10) y después en el
+ * documento: si se cruzan, el aviso queda encima. Clases propias y no de
+ * Tailwind: así su CSS viaja con el mapa y no con el arranque.
+ */
+.veni-locate-notice {
+    position: absolute;
+    top: 108px;
+    right: 62px;
+    left: 12px;
+    z-index: 10;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 8px 4px 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--veni-radius-md);
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    box-shadow:
+        0 10px 15px -3px rgb(0 0 0 / 10%),
+        0 4px 6px -4px rgb(0 0 0 / 10%);
+}
+
+@media (min-width: 480px) {
+    .veni-locate-notice {
+        left: auto;
+        width: 20rem;
+    }
+}
+
+.veni-locate-notice p {
+    flex-grow: 1;
+    padding: 4px 0;
+}
+
+.veni-locate-close {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--veni-touch-min);
+    height: var(--veni-touch-min);
+    border-radius: 9999px;
+    transition: background-color 150ms;
+}
+
+.veni-locate-close:hover {
+    background-color: var(--surface);
+}
+
+.veni-locate-close:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.veni-locate-close .veni-ctrl-icon {
+    width: 20px;
+    height: 20px;
+}
+
 /* Atribución: siempre legible, en claro y en oscuro (contraste de --ink sobre --canvas). */
 .maplibregl-ctrl.maplibregl-ctrl-attrib {
     background-color: color-mix(in oklab, var(--canvas) 85%, transparent);

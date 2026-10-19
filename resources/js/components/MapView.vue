@@ -60,7 +60,17 @@ function labels(): MapLabels {
         canvas: t('map.canvas_label'),
         zoomIn: t('map.zoom_in'),
         zoomOut: t('map.zoom_out'),
-        locate: t('map.locate'),
+        locate: {
+            button: t('map.locate'),
+            found: t('map.locate_found'),
+            close: t('map.locate_close'),
+            problems: {
+                denied: t('map.locate_denied'),
+                signal: t('map.locate_signal'),
+                outside: t('map.locate_outside'),
+                unsupported: t('map.locate_unsupported'),
+            },
+        },
     };
 }
 

@@ -1,11 +1,11 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Component } from 'vue';
 import { defineComponent, h } from 'vue';
 
 import type { MapGeoJson, MapLayerGroup } from '@/map/layers';
 import type { MapLayers } from '@/map/useMapLayers';
-import { stubGeolocation } from '@/testing/geolocation';
+import { removeGeolocation, stubGeolocation } from '@/testing/geolocation';
 import type * as FakeInertia from '@/testing/inertia';
 import type * as FakeMapLibre from '@/testing/maplibre';
 
@@ -509,6 +509,192 @@ describe('MapView', () => {
             expect(device.watching()).toBe(0);
         });
 
+        describe('avisos', () => {
+            /** Bogotá: fuera de la región del mapa. */
+            const BOGOTA = { longitude: -74.0721, latitude: 4.711 };
+
+            /** El mapa a la vista, en la página (para el foco), con «¿Dónde estoy?» ya tocado. */
+            async function locating(options: { locale?: 'es' | 'en'; permission?: PermissionState } = {}) {
+                const device = stubGeolocation(options);
+                const host = document.createElement('div');
+                document.body.append(host);
+                onTestFinished(() => {
+                    host.remove();
+                });
+                const mounted = await mountMap({ ...options, attachTo: host });
+                const created = await mounted.loadedMap();
+                const button = await locateButton(created);
+
+                button.focus();
+                button.click();
+
+                const update = async (): Promise<void> => {
+                    await flushPromises();
+                };
+
+                return { ...mounted, device, created, button, update, live: () => mounted.region().get('[aria-live="polite"]') };
+            }
+
+            it.each([
+                ['es', 'No tenemos permiso para ver tu ubicación. Tocá otra vez «¿Dónde estoy?» y elegí «Permitir».'],
+                ['en', 'We don\'t have permission to see your location. Tap “Where am I?” again and choose “Allow”.'],
+            ] as const)('sin permiso (%s) dice cómo darlo, sin deshabilitar el botón ni sacarle el foco', async (locale, text) => {
+                const { device, button, alert, update, region } = await locating({ locale });
+
+                device.fail(1);
+                await update();
+
+                expect(alert().text()).toContain(text);
+                expect(alert().text()).toMatch(locale === 'es' ? /ajustes del teléfono/ : /phone's settings/);
+                // El aviso va sobre el mapa, no lo reemplaza: el mapa se sigue usando.
+                expect(region().attributes('aria-busy')).toBe('false');
+                expect(button.disabled).toBe(false);
+                expect(button.title).toBe(locale === 'es' ? '¿Dónde estoy?' : 'Where am I?');
+                expect(document.activeElement).toBe(button);
+                expect(device.watching()).toBe(0);
+            });
+
+            it('con el permiso ya negado al cargar, el botón no queda deshabilitado: tocarlo lo explica', async () => {
+                const device = stubGeolocation({ permission: 'denied' });
+                const { loadedMap, alert } = await mountMap();
+                const button = await locateButton(await loadedMap());
+
+                // MapLibre lo deshabilitó al prepararlo, con «Location not available».
+                expect(button.disabled).toBe(false);
+                expect(button.title).toBe('¿Dónde estoy?');
+
+                button.click();
+                device.fail(1);
+                await flushPromises();
+
+                expect(alert().text()).toContain('No tenemos permiso');
+            });
+
+            it('sin señal o con el tiempo agotado avisa una vez y sigue buscando; al llegar la ubicación, el aviso se va', async () => {
+                const { device, button, alert, update, live, wrapper } = await locating();
+
+                device.fail(3);
+                await update();
+
+                expect(alert().text()).toContain('Todavía no sabemos dónde estás');
+                expect(alert().text()).toContain('Seguimos buscando');
+                expect(device.watching()).toBe(1);
+
+                // Cerrado, no vuelve con cada lectura que falla.
+                await wrapper.get('[role="alert"] button').trigger('click');
+                device.fail(3);
+                device.fail(2);
+                await update();
+
+                expect(alert().exists()).toBe(false);
+                expect(document.activeElement).toBe(button);
+
+                device.move(PLAZA);
+                await update();
+
+                expect(alert().exists()).toBe(false);
+                expect(live().text()).toBe('Listo: tu ubicación está en el mapa.');
+            });
+
+            it('fuera de la región del mapa avisa que solo cubre Roldanillo, sin marca ni cámara', async () => {
+                const { device, created, alert, update, live } = await locating();
+
+                device.move(BOGOTA);
+                await update();
+
+                expect(alert().text()).toBe(
+                    'Estás fuera de la zona del mapa: solo cubre Roldanillo y sus alrededores. Cuando estés por acá, te mostramos en el mapa.',
+                );
+                expect(userDot(created)).toBeNull();
+                expect(created.fitBounds).not.toHaveBeenCalled();
+                expect(live().text()).toBe('');
+            });
+
+            it('en un navegador sin geolocalización, tocar el botón lo explica', async () => {
+                removeGeolocation();
+                const { loadedMap, alert } = await mountMap({ locale: 'en' });
+                const button = await locateButton(await loadedMap());
+
+                expect(button.disabled).toBe(false);
+
+                button.click();
+                await flushPromises();
+
+                expect(alert().text()).toBe('This browser can\'t share your location. Try opening Vení in another browser.');
+            });
+
+            it('se cierra con su botón, que tiene nombre, y el foco vuelve a «¿Dónde estoy?»', async () => {
+                const { device, button, alert, update, wrapper } = await locating({ locale: 'en' });
+
+                device.fail(1);
+                await update();
+                const close = wrapper.get('[role="alert"] button');
+
+                expect(close.attributes('aria-label')).toBe('Close the notice');
+
+                (close.element as HTMLButtonElement).focus();
+                await close.trigger('click');
+
+                expect(alert().exists()).toBe(false);
+                expect(document.activeElement).toBe(button);
+            });
+
+            it('Escape lo cierra y no le llega a la página', async () => {
+                const { device, button, alert, update, wrapper } = await locating();
+
+                device.fail(1);
+                await update();
+                const close = wrapper.get('[role="alert"] button').element as HTMLButtonElement;
+                close.focus();
+                const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+                close.dispatchEvent(escape);
+                await update();
+
+                expect(escape.defaultPrevented).toBe(true);
+                expect(alert().exists()).toBe(false);
+                expect(document.activeElement).toBe(button);
+            });
+
+            it('tocar otra vez el botón quita el aviso: es otro intento', async () => {
+                const { device, button, alert, update } = await locating();
+
+                device.fail(1);
+                await update();
+                button.click();
+                await update();
+
+                expect(alert().exists()).toBe(false);
+                expect(device.watching()).toBe(1);
+            });
+
+            it('si llega la ubicación con el foco en el aviso, el foco pasa al botón', async () => {
+                const { device, button, alert, update, wrapper } = await locating();
+
+                device.fail(3);
+                await update();
+                (wrapper.get('[role="alert"] button').element as HTMLButtonElement).focus();
+                device.move(PLAZA);
+                await update();
+
+                expect(alert().exists()).toBe(false);
+                expect(document.activeElement).toBe(button);
+            });
+
+            it('apagarlo deja de anunciar la ubicación', async () => {
+                const { device, button, update, live } = await locating({ locale: 'en' });
+
+                device.move(PLAZA);
+                await update();
+
+                expect(live().text()).toBe('Done: your location is on the map.');
+
+                button.click();
+                await update();
+
+                expect(live().text()).toBe('');
+            });
+        });
+
         /*
         | Regla 3 de producto y ADR 0008: la posición se usa en el dispositivo
         | y no sale de él. Lo que estas pruebas no ven (MapLibre de verdad, el
@@ -538,7 +724,7 @@ describe('MapView', () => {
                 const beacon = vi.spyOn(navigator, 'sendBeacon');
                 const pushState = vi.spyOn(window.history, 'pushState');
                 const replaceState = vi.spyOn(window.history, 'replaceState');
-                const { loadedMap, toggleTheme, inertia } = await mountMap();
+                const { loadedMap, toggleTheme, inertia, region } = await mountMap();
                 const created = await loadedMap();
                 const button = await locateButton(created);
                 const href = window.location.href;
@@ -546,6 +732,13 @@ describe('MapView', () => {
                 button.click();
                 device.move(SECRET);
                 device.move({ ...SECRET, accuracy: 5 });
+
+                // La posición sí llegó al mapa: la prueba no mira un mapa vacío.
+                expect(leaks(userDot(created)?.dataset.lngLat)).toBe(true);
+                expect(created.fitBounds).toHaveBeenCalledTimes(2);
+
+                // Y un aviso: dice qué pasó, nunca dónde.
+                device.move({ longitude: -74.0721937, latitude: 4.7109377 });
                 // Con la ubicación en el mapa, otro tema y otro idioma: piden estilos nuevos a la red.
                 await toggleTheme();
                 inertia.receiveFromServer('en', { replace: true });
@@ -553,10 +746,6 @@ describe('MapView', () => {
                     expect(created.setStyle).toHaveBeenCalledTimes(2);
                 });
                 await flushPromises();
-
-                // La posición sí llegó al mapa: la prueba no mira un mapa vacío.
-                expect(leaks(userDot(created)?.dataset.lngLat)).toBe(true);
-                expect(created.fitBounds).toHaveBeenCalledTimes(2);
 
                 expect(styles.fetchMock).toHaveBeenCalledTimes(3);
                 expect(styles.fetchMock.mock.calls.filter((call) => leaks(call))).toEqual([]);
@@ -573,6 +762,9 @@ describe('MapView', () => {
                 expect(leaks(storageText(window.localStorage))).toBe(false);
                 expect(leaks(storageText(window.sessionStorage))).toBe(false);
                 expect(leaks(document.cookie)).toBe(false);
+                // Tras cambiar de idioma, el aviso sigue a la vista, en inglés.
+                expect(region().get('[role="alert"]').text()).toContain("You're outside the map's area");
+                expect(region().text()).not.toMatch(/74\.07|4\.71|76\.15|4\.40/);
             });
 
             it('la cámara, que sigue a la ubicación, no se escribe en la dirección', async () => {

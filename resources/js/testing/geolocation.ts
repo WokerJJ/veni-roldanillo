@@ -85,7 +85,8 @@ export function stubGeolocation({ permission = 'prompt' }: { permission?: Permis
     };
 }
 
-/** Un navegador sin la API Geolocation (o una página fuera de HTTPS, donde no existe). */
+/** Un navegador sin la API Geolocation ni la de permisos (o una página fuera de HTTPS, donde no existen). */
 export function removeGeolocation(): void {
     stubNavigator('geolocation', undefined);
+    stubNavigator('permissions', undefined);
 }

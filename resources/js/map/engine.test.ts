@@ -78,7 +78,17 @@ async function setUp() {
             const created = createMap({
                 container: document.createElement('div'),
                 style: fetchMapStyle(STYLE_URL, controller.signal),
-                labels: { canvas: 'Mapa', zoomIn: 'Acercar', zoomOut: 'Alejar', locate: '¿Dónde estoy?' },
+                labels: {
+                    canvas: 'Mapa',
+                    zoomIn: 'Acercar',
+                    zoomOut: 'Alejar',
+                    locate: {
+                        button: '¿Dónde estoy?',
+                        found: 'Listo',
+                        close: 'Cerrar',
+                        problems: { denied: 'Sin permiso', signal: 'Sin señal', outside: 'Fuera', unsupported: 'Sin geolocalización' },
+                    },
+                },
                 signal: controller.signal,
             });
 
