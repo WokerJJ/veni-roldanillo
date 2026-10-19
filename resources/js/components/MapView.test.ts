@@ -1,5 +1,5 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Component } from 'vue';
 import { defineComponent, h } from 'vue';
 
@@ -144,11 +144,17 @@ async function mountMap({
         attachTo ? { attachTo } : {},
     );
 
-    /** El mapa creado (espera a que baje el motor y llegue el estilo). */
+    /**
+     * El mapa creado (espera a que baje el motor y llegue el estilo). Con
+     * plazo amplio: con la máquina cargada, el import() del motor tarda.
+     */
     const map = async (index = 0) => {
-        await vi.waitFor(() => {
-            expect(maplibre.maps.length).toBeGreaterThan(index);
-        });
+        await vi.waitFor(
+            () => {
+                expect(maplibre.maps.length).toBeGreaterThan(index);
+            },
+            { timeout: 10_000 },
+        );
 
         return maplibre.maps[index] as FakeMapLibre.Map;
     };
@@ -174,6 +180,13 @@ async function mountMap({
 }
 
 enableAutoUnmount(afterEach);
+
+// La primera vez, Vite transforma el motor y todo lo que importa, y eso tarda
+// más que las esperas de una prueba. Aquí, una vez y con su propio plazo: cada
+// prueba vuelve a evaluarlo (vi.resetModules), pero ya transformado.
+beforeAll(async () => {
+    await import('@/map/engine');
+}, 60_000);
 
 let styles: ReturnType<typeof stubFetch>;
 
@@ -259,14 +272,16 @@ describe('MapView', () => {
             const { map, region, skeleton } = await mountMap();
             const created = await map();
 
-            expect(created.container.classList.contains('invisible')).toBe(true);
+            expect(created.container.style.visibility).toBe('hidden');
 
             created.fire('load');
             await flushPromises();
 
             expect(region().attributes('aria-busy')).toBe('false');
             expect(skeleton().exists()).toBe(false);
-            expect(created.container.classList.contains('invisible')).toBe(false);
+            expect(created.container.style.visibility).toBe('');
+            // La clase que MapLibre le puso al crearlo sigue: maplibre-gl.css cuelga de ella.
+            expect(created.container.classList.contains('maplibregl-map')).toBe(true);
         });
 
         it('deja ver el mapa en cuanto abre la fuente de los tiles, sin esperar a que termine de cargar', async () => {
@@ -279,7 +294,7 @@ describe('MapView', () => {
 
             expect(skeleton().exists()).toBe(false);
             expect(region().attributes('aria-busy')).toBe('false');
-            expect(created.container.classList.contains('invisible')).toBe(false);
+            expect(created.container.style.visibility).toBe('');
         });
 
         it('otro aviso de la fuente (que empezó a pedirla) todavía no lo deja ver', async () => {
@@ -290,7 +305,7 @@ describe('MapView', () => {
             await flushPromises();
 
             expect(skeleton().exists()).toBe(true);
-            expect(created.container.classList.contains('invisible')).toBe(true);
+            expect(created.container.style.visibility).toBe('hidden');
         });
 
         it('registra el protocolo de PMTiles y le da a MapLibre la URL de su worker', async () => {
@@ -317,6 +332,31 @@ describe('MapView', () => {
             expect(maplibre.maps).toHaveLength(0);
             expect(maplibre.addProtocol).not.toHaveBeenCalled();
             expect(error).toHaveBeenCalledOnce();
+        });
+
+        // Sin la región, «¿Dónde estoy?» no podría avisar que alguien está
+        // fuera de ella: mejor el error, que se ve, que un aviso que no llega.
+        it.each([
+            ['sin límites', undefined],
+            ['con el oeste después del este', [-76.0, 4.3, -76.3, 4.55]],
+            ['con el sur después del norte', [-76.3, 4.55, -76.0, 4.3]],
+            ['fuera de rango', [-76.3, 4.3, -76.0, 95]],
+        ])('%s en el estilo no crea el mapa', async (_case, bounds) => {
+            const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            styles.hold();
+            const { alert, maplibre } = await mountMap();
+
+            await vi.waitFor(() => {
+                expect(styles.pending).toHaveLength(1);
+            });
+            const style = { ...styleFrom(TEMPLATE), metadata: bounds ? { 'veni:bounds': bounds } : {} };
+            styles.pending[0]?.respond({ ok: true, status: 200, body: style });
+
+            await vi.waitFor(() => {
+                expect(alert().exists()).toBe(true);
+            });
+            expect(maplibre.maps).toHaveLength(0);
+            expect(error.mock.lastCall?.join(' ')).toMatch(/veni:bounds/);
         });
     });
 
@@ -535,24 +575,34 @@ describe('MapView', () => {
                     await flushPromises();
                 };
 
-                return { ...mounted, device, created, button, update, live: () => mounted.region().get('[aria-live="polite"]') };
+                return {
+                    ...mounted,
+                    device,
+                    created,
+                    button,
+                    /** El botón de ahora: con el permiso negado, MapLibre se queda con un control nuevo. */
+                    current: () => created.container.querySelector<HTMLButtonElement>('button.maplibregl-ctrl-geolocate'),
+                    update,
+                    live: () => mounted.region().get('[aria-live="polite"]'),
+                };
             }
 
             it.each([
                 ['es', 'No tenemos permiso para ver tu ubicación. Tocá otra vez «¿Dónde estoy?» y elegí «Permitir».'],
                 ['en', 'We don\'t have permission to see your location. Tap “Where am I?” again and choose “Allow”.'],
             ] as const)('sin permiso (%s) dice cómo darlo, sin deshabilitar el botón ni sacarle el foco', async (locale, text) => {
-                const { device, button, alert, update, region } = await locating({ locale });
+                const { device, current, alert, update, region } = await locating({ locale });
 
                 device.fail(1);
                 await update();
+                const button = current();
 
                 expect(alert().text()).toContain(text);
                 expect(alert().text()).toMatch(locale === 'es' ? /ajustes del teléfono/ : /phone's settings/);
                 // El aviso va sobre el mapa, no lo reemplaza: el mapa se sigue usando.
                 expect(region().attributes('aria-busy')).toBe('false');
-                expect(button.disabled).toBe(false);
-                expect(button.title).toBe(locale === 'es' ? '¿Dónde estoy?' : 'Where am I?');
+                expect(button?.disabled).toBe(false);
+                expect(button?.title).toBe(locale === 'es' ? '¿Dónde estoy?' : 'Where am I?');
                 expect(document.activeElement).toBe(button);
                 expect(device.watching()).toBe(0);
             });
@@ -571,6 +621,36 @@ describe('MapView', () => {
                 await flushPromises();
 
                 expect(alert().text()).toContain('No tenemos permiso');
+            });
+
+            it.each([
+                ['al tocarlo', false],
+                ['mientras la sigue', true],
+            ] as const)('tras negar el permiso (%s), tocar otra vez la pide como la primera: precisión alta y 10 s por lectura', async (_when, tracking) => {
+                const { device, created, alert, update } = await locating();
+
+                if (tracking) {
+                    device.move(PLAZA);
+                }
+
+                device.fail(1);
+                await update();
+                const button = await locateButton(created);
+
+                // El botón es otro, pero el foco no se perdió.
+                expect(document.activeElement).toBe(button);
+
+                device.geolocation.watchPosition.mockClear();
+                button.click();
+
+                expect(device.geolocation.watchPosition).toHaveBeenCalledOnce();
+                expect(device.lastOptions()).toEqual({ enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 });
+
+                // Y con el tiempo agotado vuelve a avisar.
+                device.fail(3);
+                await update();
+
+                expect(alert().text()).toContain('Todavía no sabemos dónde estás');
             });
 
             it('sin señal o con el tiempo agotado avisa una vez y sigue buscando; al llegar la ubicación, el aviso se va', async () => {
@@ -627,7 +707,7 @@ describe('MapView', () => {
             });
 
             it('se cierra con su botón, que tiene nombre, y el foco vuelve a «¿Dónde estoy?»', async () => {
-                const { device, button, alert, update, wrapper } = await locating({ locale: 'en' });
+                const { device, current, alert, update, wrapper } = await locating({ locale: 'en' });
 
                 device.fail(1);
                 await update();
@@ -639,11 +719,11 @@ describe('MapView', () => {
                 await close.trigger('click');
 
                 expect(alert().exists()).toBe(false);
-                expect(document.activeElement).toBe(button);
+                expect(document.activeElement).toBe(current());
             });
 
             it('Escape lo cierra y no le llega a la página', async () => {
-                const { device, button, alert, update, wrapper } = await locating();
+                const { device, current, alert, update, wrapper } = await locating();
 
                 device.fail(1);
                 await update();
@@ -655,15 +735,15 @@ describe('MapView', () => {
 
                 expect(escape.defaultPrevented).toBe(true);
                 expect(alert().exists()).toBe(false);
-                expect(document.activeElement).toBe(button);
+                expect(document.activeElement).toBe(current());
             });
 
             it('tocar otra vez el botón quita el aviso: es otro intento', async () => {
-                const { device, button, alert, update } = await locating();
+                const { device, current, alert, update } = await locating();
 
                 device.fail(1);
                 await update();
-                button.click();
+                current()?.click();
                 await update();
 
                 expect(alert().exists()).toBe(false);
@@ -856,6 +936,23 @@ describe('MapView', () => {
 
             it('ni a la red, ni a la dirección, ni al almacenamiento del navegador', async () => {
                 const device = stubGeolocation();
+                // Lo que happy-dom no trae (o no deja espiar), de mentira: las
+                // cachés y la base de datos del navegador, el service worker y
+                // los WebSocket. Nada tiene que tocarlos.
+                const cache = { open: vi.fn(), match: vi.fn(), has: vi.fn(), delete: vi.fn(), keys: vi.fn() };
+                const database = { open: vi.fn(), deleteDatabase: vi.fn() };
+                const worker = { postMessage: vi.fn() };
+                const socket = vi.fn();
+                vi.stubGlobal('caches', cache);
+                vi.stubGlobal('indexedDB', database);
+                vi.stubGlobal('WebSocket', socket);
+                Object.defineProperty(navigator, 'serviceWorker', {
+                    value: { controller: worker, ready: Promise.resolve({ active: worker }) },
+                    configurable: true,
+                });
+                onTestFinished(() => {
+                    Reflect.deleteProperty(navigator, 'serviceWorker');
+                });
                 const open = vi.spyOn(XMLHttpRequest.prototype, 'open');
                 const send = vi.spyOn(XMLHttpRequest.prototype, 'send');
                 const beacon = vi.spyOn(navigator, 'sendBeacon');
@@ -899,6 +996,7 @@ describe('MapView', () => {
                 expect(leaks(storageText(window.localStorage))).toBe(false);
                 expect(leaks(storageText(window.sessionStorage))).toBe(false);
                 expect(leaks(document.cookie)).toBe(false);
+                expect([...Object.values(cache), ...Object.values(database), worker.postMessage, socket].filter((spy) => spy.mock.calls.length > 0)).toEqual([]);
                 // Tras cambiar de idioma, el aviso sigue a la vista, en inglés.
                 expect(region().get('[role="alert"]').text()).toContain("You're outside the map's area");
                 expect(region().text()).not.toMatch(/74\.07|4\.71|76\.15|4\.40/);
@@ -1172,7 +1270,7 @@ describe('MapView', () => {
             expect(styles.urls()).toEqual([styleUrl('claro', 'es'), styleUrl('claro', 'es')]);
             expect(region().attributes('aria-busy')).toBe('false');
             expect(skeleton().exists()).toBe(false);
-            expect(created.container.classList.contains('invisible')).toBe(false);
+            expect(created.container.style.visibility).toBe('');
         });
 
         it('avisa cada cambio de estado a quien lo usa: el error, la carga del reintento y el mapa a la vista', async () => {
@@ -1332,7 +1430,7 @@ describe('MapView', () => {
 
             expect(alert().exists()).toBe(false);
             expect(created.remove).not.toHaveBeenCalled();
-            expect(created.container.classList.contains('invisible')).toBe(false);
+            expect(created.container.style.visibility).toBe('');
         });
 
         it('si el worker de MapLibre no carga muestra el error sin esperar al plazo', async () => {

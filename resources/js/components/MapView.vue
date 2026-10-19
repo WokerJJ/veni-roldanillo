@@ -229,8 +229,11 @@ defineExpose({
             nacería con 300 px de alto, hasta el primer cambio de tamaño. Una
             cámara que se moviera en ese rato (el inicio abierto con ?r=slug)
             dejaría el punto fuera del centro.
+
+            Oculto con `style` y no con una clase: al cambiar `:class`, Vue
+            reescribe las clases del elemento y se llevaría la de MapLibre.
         -->
-        <div ref="container" class="absolute inset-0 size-full" :class="{ invisible: status !== 'ready' }" />
+        <div ref="container" class="absolute inset-0 size-full" :style="{ visibility: status === 'ready' ? undefined : 'hidden' }" />
 
         <div
             v-if="status === 'loading'"
