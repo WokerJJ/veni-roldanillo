@@ -9,7 +9,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import '../../css/map.css';
 
 import type { AddProtocolAction, ErrorEvent, LngLatBoundsLike, LngLatLike, MapSourceDataEvent, StyleSpecification } from 'maplibre-gl';
-import { addProtocol, Map as MapLibreMap, NavigationControl, removeProtocol, setWorkerUrl } from 'maplibre-gl';
+import { addProtocol, GeolocateControl, Map as MapLibreMap, NavigationControl, removeProtocol, setWorkerUrl } from 'maplibre-gl';
 // MapLibre busca su worker junto a su propio archivo; empaquetado, ese archivo
 // ya no existe con ese nombre: Vite compila el worker y da su URL. Al compilar
 // para producción, vite.config.ts (shareMapWorkerCode) resuelve este import
@@ -21,6 +21,8 @@ import { MapUnavailableError } from './errors';
 import { fetchMapStyle } from './fetchStyle';
 import { createLayerRegistry } from './layerRegistry';
 import type { MapLayerGroup, MapLayerGroupHandle } from './layers';
+import type { LocateButton } from './locate';
+import { takeLocateButton } from './locate';
 
 setWorkerUrl(workerUrl);
 
@@ -30,6 +32,8 @@ export interface MapLabels {
     canvas: string;
     zoomIn: string;
     zoomOut: string;
+    /** El botón «¿Dónde estoy?». */
+    locate: string;
 }
 
 export interface CreateMapOptions {
@@ -93,6 +97,23 @@ const FIRST_PAINT_TIMEOUT_MS = 20_000;
  * versión nueva de MapLibre lo cambia.
  */
 const WORKER_ERROR = 'Worker failed to load';
+
+/**
+ * «¿Dónde estoy?» (ADR 0008 y 0019). El permiso se pide recién al tocar el
+ * botón: MapLibre no busca la ubicación hasta entonces. Es un interruptor:
+ * sigue la ubicación mientras está encendido (a pie, la ruta de #11 se mueve
+ * con quien camina) y al apagarlo deja de pedirla y la quita del mapa.
+ * Precisión alta, porque en un pueblo la de la red del celular puede errar
+ * por cuadras, y un plazo de 10 s por lectura para dar tiempo al GPS.
+ * Acerca hasta el zoom con que se ve un restaurante elegido (RestaurantsLayer).
+ */
+const LOCATE_OPTIONS = {
+    positionOptions: { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 },
+    trackUserLocation: true,
+    showUserLocation: true,
+    showAccuracyCircle: true,
+    fitBoundsOptions: { maxZoom: 16 },
+};
 
 // Los estilos piden los tiles como pmtiles://…: MapLibre los lee por rangos
 // HTTP. El protocolo es global en MapLibre: se registra con el primer mapa y
@@ -312,6 +333,8 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
     // Las capas propias de la app (ADR 0016). Nadie puede registrar una hasta
     // que esta función devuelva el mapa, ya con su primer estilo cargado.
     const layers = createLayerRegistry(map);
+    /** El botón «¿Dónde estoy?», cuando ya está en el mapa. */
+    let locate: LocateButton | null = null;
 
     const destroy = (): void => {
         if (destroyed) {
@@ -321,6 +344,8 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
         destroyed = true;
         stopRetrying();
         layers.dispose();
+        locate?.dispose();
+        // Quita también los controles: el de la ubicación deja de pedirla.
         map.remove();
         releaseProtocol();
     };
@@ -333,6 +358,9 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
         map.touchZoomRotate.disableRotation();
         map.keyboard.disableRotation();
         map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
+        // Debajo de los de zoom: arriba a la derecha no lo tapa el panel de la página.
+        map.addControl(new GeolocateControl(LOCATE_OPTIONS), 'top-right');
+        locate = takeLocateButton(map.getContainer(), labels.locate);
         applyLabels(map, labels);
 
         let startedPainting: () => void = () => undefined;
@@ -418,6 +446,7 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
         setLabels(next) {
             if (!destroyed) {
                 applyLabels(map, next);
+                locate.relabel(next.locate);
             }
         },
         addLayerGroup: (group) => layers.add(group),

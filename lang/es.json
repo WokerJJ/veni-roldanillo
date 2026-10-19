@@ -13,6 +13,7 @@
     "map.canvas_label": "Mapa interactivo. Movete con las flechas y acercá o alejá con las teclas más y menos.",
     "map.zoom_in": "Acercar",
     "map.zoom_out": "Alejar",
+    "map.locate": "¿Dónde estoy?",
     "map.loading": "Cargando el mapa…",
     "map.error": "No pudimos cargar el mapa. Revisá tu conexión y volvé a intentar.",
     "map.unavailable": "Por ahora no podemos mostrarte el mapa en este dispositivo.",

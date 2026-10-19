@@ -187,9 +187,10 @@ onBeforeUnmount(() => {
             (UpdatePrompt.vue); desde 480 px de ancho (también un celular
             acostado, que es bajo) queda arriba a la izquierda, sin tocar los
             botones de zoom. Nunca pasa del alto del mapa: la lista se desplaza
-            por dentro. En el celular vertical tampoco llega a los botones de
-            zoom (arriba a la derecha, 10 px de margen y dos de 44 px): deja
-            7rem libres arriba.
+            por dentro. En el celular vertical tampoco llega a los botones del
+            mapa (arriba a la derecha: 10 px de margen, los dos de zoom de
+            44 px, otros 10 y el de «¿Dónde estoy?», 152 px): deja 10rem
+            libres arriba.
 
             Si el mapa no carga, su aviso lo ocupa entero y taparía el panel,
             que tiene la lista: la alternativa al mapa. Ahí el panel deja de
@@ -201,7 +202,7 @@ onBeforeUnmount(() => {
             :class="
                 mapFailed
                     ? 'mx-3 mt-3 shrink-0 min-[480px]:mx-4 min-[480px]:mt-4 min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm'
-                    : 'absolute inset-x-3 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_7rem)] min-[480px]:inset-x-auto min-[480px]:top-4 min-[480px]:bottom-auto min-[480px]:left-4 min-[480px]:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm'
+                    : 'absolute inset-x-3 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_10rem)] min-[480px]:inset-x-auto min-[480px]:top-4 min-[480px]:bottom-auto min-[480px]:left-4 min-[480px]:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm'
             "
         >
             <!-- El título de la página sigue en el documento aunque el panel muestre otra cosa. -->

@@ -5,6 +5,7 @@ import { defineComponent, h } from 'vue';
 
 import type { MapGeoJson, MapLayerGroup } from '@/map/layers';
 import type { MapLayers } from '@/map/useMapLayers';
+import { stubGeolocation } from '@/testing/geolocation';
 import type * as FakeInertia from '@/testing/inertia';
 import type * as FakeMapLibre from '@/testing/maplibre';
 
@@ -320,9 +321,9 @@ describe('MapView', () => {
         it('trae los botones de zoom de MapLibre con sus textos en el idioma actual', async () => {
             const { loadedMap } = await mountMap();
             const created = await loadedMap();
-            const [zoomIn, zoomOut] = created.container.querySelectorAll('button');
+            const zoomIn = created.container.querySelector<HTMLButtonElement>('button.maplibregl-ctrl-zoom-in');
+            const zoomOut = created.container.querySelector<HTMLButtonElement>('button.maplibregl-ctrl-zoom-out');
 
-            expect(created.container.querySelectorAll('button')).toHaveLength(2);
             expect(zoomIn?.title).toBe('Acercar');
             expect(zoomIn?.getAttribute('aria-label')).toBe('Acercar');
             expect(zoomOut?.title).toBe('Alejar');
@@ -334,7 +335,7 @@ describe('MapView', () => {
             const { loadedMap } = await mountMap();
             const created = await loadedMap();
 
-            expect(created.controls).toHaveLength(1);
+            expect(created.controls).toHaveLength(2);
             expect(created.controls[0]?.options).toEqual({ showCompass: false });
             expect(created.options).toMatchObject({ dragRotate: false, pitchWithRotate: false, touchPitch: false });
             expect(created.touchZoomRotate.disableRotation).toHaveBeenCalledOnce();
@@ -351,8 +352,161 @@ describe('MapView', () => {
             const { loadedMap, region } = await mountMap();
             await loadedMap();
 
-            // Los únicos botones de la región son los dos de zoom de MapLibre.
-            expect(region().findAll('button').map((button) => button.attributes('title'))).toEqual(['Acercar', 'Alejar']);
+            // Los únicos botones de la región son los de MapLibre: zoom y ubicación.
+            expect(region().findAll('button').map((button) => button.attributes('title'))).toEqual(['Acercar', 'Alejar', '¿Dónde estoy?']);
+        });
+    });
+
+    describe('¿Dónde estoy?', () => {
+        /** La plaza de Roldanillo: dentro de la región del mapa. */
+        const PLAZA = { longitude: -76.1547, latitude: 4.4128 };
+
+        /** El botón, ya armado: MapLibre termina de prepararlo después de preguntar (sin pedirlo) por el permiso. */
+        async function locateButton(map: FakeMapLibre.Map): Promise<HTMLButtonElement> {
+            await flushPromises();
+            const button = map.container.querySelector<HTMLButtonElement>('button.maplibregl-ctrl-geolocate');
+
+            if (!button) {
+                throw new Error('No está el botón «¿Dónde estoy?».');
+            }
+
+            return button;
+        }
+
+        function userDot(map: FakeMapLibre.Map): HTMLElement | null {
+            return map.container.querySelector('.maplibregl-user-location-dot');
+        }
+
+        it('es el control de geolocalización de MapLibre, debajo de los de zoom, con su nombre en el idioma actual', async () => {
+            stubGeolocation();
+            const { loadedMap, maplibre } = await mountMap();
+            const created = await loadedMap();
+            const button = await locateButton(created);
+
+            expect(created.controls[1]).toBeInstanceOf(maplibre.GeolocateControl);
+            expect(created.controls[1]?.options).toMatchObject({
+                trackUserLocation: true,
+                showUserLocation: true,
+                showAccuracyCircle: true,
+                positionOptions: { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 },
+                fitBoundsOptions: { maxZoom: 16 },
+            });
+            // MapLibre le pone «Find my location» al terminar de armarlo: queda el de la app.
+            expect(button.title).toBe('¿Dónde estoy?');
+            expect(button.getAttribute('aria-label')).toBe('¿Dónde estoy?');
+            expect(button.disabled).toBe(false);
+            expect(button.getAttribute('aria-pressed')).toBe('false');
+        });
+
+        it('lleva el ícono de ubicación de la app, decorativo y del color del botón', async () => {
+            stubGeolocation();
+            const { loadedMap } = await mountMap();
+            const button = await locateButton(await loadedMap());
+            const icon = button.querySelector('svg');
+
+            expect(button.children).toHaveLength(1);
+            expect(icon?.getAttribute('class')).toBe('veni-ctrl-icon');
+            expect(icon?.getAttribute('aria-hidden')).toBe('true');
+            expect(icon?.getAttribute('stroke')).toBe('currentColor');
+            // El tamaño lo pone map.css.
+            expect(icon?.hasAttribute('width')).toBe(false);
+            expect(icon?.querySelector('path')).not.toBeNull();
+        });
+
+        it('no pide la ubicación al cargar el mapa: solo al tocar el botón', async () => {
+            const device = stubGeolocation();
+            const { loadedMap } = await mountMap();
+            const button = await locateButton(await loadedMap());
+
+            expect(device.geolocation.watchPosition).not.toHaveBeenCalled();
+            expect(device.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+
+            button.click();
+
+            expect(device.geolocation.watchPosition).toHaveBeenCalledOnce();
+            expect(device.lastOptions()).toEqual({ enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 });
+        });
+
+        it('con la ubicación, la marca en el mapa y la cámara va hasta ella', async () => {
+            const device = stubGeolocation();
+            const { loadedMap } = await mountMap();
+            const created = await loadedMap();
+            const button = await locateButton(created);
+
+            button.click();
+            device.move(PLAZA);
+
+            expect(userDot(created)?.dataset.lngLat).toBe('-76.1547,4.4128');
+            expect(created.container.querySelector('.maplibregl-user-location-accuracy-circle')).not.toBeNull();
+            expect(created.fitBounds).toHaveBeenCalledOnce();
+            expect(created.fitBounds.mock.calls[0]?.[1]).toMatchObject({ maxZoom: 16 });
+            expect(button.getAttribute('aria-pressed')).toBe('true');
+            expect(button.classList.contains('maplibregl-ctrl-geolocate-active')).toBe(true);
+        });
+
+        it('mientras está encendido, la marca y la cámara siguen a quien camina', async () => {
+            const device = stubGeolocation();
+            const { loadedMap } = await mountMap();
+            const created = await loadedMap();
+            const button = await locateButton(created);
+
+            button.click();
+            device.move(PLAZA);
+            device.move({ longitude: ELSEWHERE[0], latitude: ELSEWHERE[1] });
+
+            expect(userDot(created)?.dataset.lngLat).toBe(ELSEWHERE.join(','));
+            expect(created.fitBounds).toHaveBeenCalledTimes(2);
+        });
+
+        it('tocarlo otra vez lo apaga: deja de pedir la ubicación y la quita del mapa', async () => {
+            const device = stubGeolocation();
+            const { loadedMap } = await mountMap();
+            const created = await loadedMap();
+            const button = await locateButton(created);
+
+            button.click();
+            device.move(PLAZA);
+            button.click();
+
+            expect(device.geolocation.clearWatch).toHaveBeenCalledOnce();
+            expect(device.watching()).toBe(0);
+            expect(userDot(created)).toBeNull();
+            expect(button.getAttribute('aria-pressed')).toBe('false');
+        });
+
+        it('al cambiar el tema o el idioma sigue encendido y con la marca; el botón cambia de nombre', async () => {
+            const device = stubGeolocation();
+            const { loadedMap, toggleTheme, inertia } = await mountMap();
+            const created = await loadedMap();
+            const button = await locateButton(created);
+
+            button.click();
+            device.move(PLAZA);
+
+            await toggleTheme();
+            inertia.receiveFromServer('en', { replace: true });
+            await vi.waitFor(() => {
+                expect(created.setStyle).toHaveBeenCalledTimes(2);
+            });
+            await flushPromises();
+
+            expect(button.title).toBe('Where am I?');
+            expect(button.getAttribute('aria-label')).toBe('Where am I?');
+            expect(button.getAttribute('aria-pressed')).toBe('true');
+            expect(userDot(created)?.dataset.lngLat).toBe('-76.1547,4.4128');
+            expect(device.watching()).toBe(1);
+        });
+
+        it('al salir de la página deja de pedir la ubicación', async () => {
+            const device = stubGeolocation();
+            const { loadedMap, wrapper } = await mountMap();
+            const button = await locateButton(await loadedMap());
+
+            button.click();
+            wrapper.unmount();
+
+            expect(device.geolocation.clearWatch).toHaveBeenCalledOnce();
+            expect(device.watching()).toBe(0);
         });
     });
 
@@ -400,10 +554,11 @@ describe('MapView', () => {
             expect(created.getCenter()).toEqual(ELSEWHERE);
             expect(created.getZoom()).toBe(16);
             expect(region().attributes('aria-label')).toBe('Map of Roldanillo');
-            expect([...created.container.querySelectorAll('button')].map((button) => button.title)).toEqual(['Zoom in', 'Zoom out']);
+            expect([...created.container.querySelectorAll('button')].map((button) => button.title)).toEqual(['Zoom in', 'Zoom out', 'Where am I?']);
             expect([...created.container.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'))).toEqual([
                 'Zoom in',
                 'Zoom out',
+                'Where am I?',
             ]);
             expect(created.getCanvas().getAttribute('aria-label')).toMatch(/^Interactive map\./);
         });

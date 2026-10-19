@@ -47,9 +47,68 @@
     border-radius: 0 0 var(--veni-radius-sm) var(--veni-radius-sm);
 }
 
+/* Un grupo de un solo botón (la ubicación) redondea las cuatro esquinas. */
+.maplibregl-ctrl-group button:focus:only-child {
+    border-radius: var(--veni-radius-sm);
+}
+
 /* Los íconos de MapLibre son oscuros: en el tema oscuro se invierten. */
 [data-theme='dark'] .maplibregl-ctrl-group .maplibregl-ctrl-icon {
     filter: invert(1);
+}
+
+/*
+ * «¿Dónde estoy?» (resources/js/map/locate.ts). El ícono es el de
+ * colombia-icons, dentro del botón, y toma su color: no hace falta invertirlo
+ * en el tema oscuro y en los colores forzados del sistema se ve igual. Los
+ * estados son las clases que pone MapLibre; la misma especificidad que su
+ * regla de :hover, y después, para que no la tape.
+ */
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate {
+    border-radius: var(--veni-radius-sm);
+    color: var(--ink);
+}
+
+.maplibregl-ctrl-geolocate .veni-ctrl-icon {
+    display: block;
+    width: 24px;
+    height: 24px;
+    margin: auto;
+}
+
+/* Encendido y siguiendo la ubicación: el botón queda «apretado». */
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active {
+    background-color: var(--ink);
+    color: var(--canvas);
+}
+
+/* Encendido, pero la cámara ya no la sigue: se movió el mapa. */
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background {
+    background-color: var(--surface);
+}
+
+/* Encendido, sin ubicación que mostrar (sin señal o fuera de la región): lo explica el aviso. */
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active-error,
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background-error {
+    background-color: var(--surface);
+    color: var(--ink-muted);
+}
+
+/* Buscando: el ícono late (el de MapLibre gira). */
+.maplibregl-ctrl-geolocate-waiting .veni-ctrl-icon {
+    animation: veni-locate-waiting 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes veni-locate-waiting {
+    to {
+        opacity: 0.35;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .maplibregl-ctrl-geolocate-waiting .veni-ctrl-icon {
+        animation: none;
+    }
 }
 
 /* Atribución: siempre legible, en claro y en oscuro (contraste de --ink sobre --canvas). */

@@ -13,6 +13,7 @@
     "map.canvas_label": "Interactive map. Move with the arrow keys and zoom with the plus and minus keys.",
     "map.zoom_in": "Zoom in",
     "map.zoom_out": "Zoom out",
+    "map.locate": "Where am I?",
     "map.loading": "Loading the map…",
     "map.error": "We couldn't load the map. Check your connection and try again.",
     "map.unavailable": "We can't show the map on this device right now.",
