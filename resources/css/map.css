@@ -177,6 +177,19 @@
     height: 20px;
 }
 
+/* Lo que solo oye el lector de pantalla (que la ubicación llegó). */
+.veni-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+}
+
 /* Atribución: siempre legible, en claro y en oscuro (contraste de --ink sobre --canvas). */
 .maplibregl-ctrl.maplibregl-ctrl-attrib {
     background-color: color-mix(in oklab, var(--canvas) 85%, transparent);

@@ -91,6 +91,17 @@ const GEOLOCATE_DEFAULTS: FakeGeolocateOptions = {
     showAccuracyCircle: true,
 };
 
+/**
+ * Cuántos controles de geolocalización tienen encendido el seguimiento, como
+ * `numberOfWatches` en MapLibre: es de todo el módulo. Lo sube cada
+ * watchPosition y lo baja apagarlo con el botón; un permiso negado limpia la
+ * lectura sin bajarlo. Desde el segundo, MapLibre pide `{ maximumAge: 600000,
+ * timeout: 0 }` en vez de `positionOptions` y calla el tiempo agotado. Quitar
+ * un control lo vuelve a cero (reset() también).
+ */
+let numberOfWatches = 0;
+let noTimeout = false;
+
 /** Lo que MapLibre averiguó de la geolocalización: una vez por página (reset() lo olvida). */
 let supportsGeolocation: boolean | undefined;
 
@@ -179,6 +190,8 @@ class FakeGeolocateControl implements FakeControl {
         this.container.remove();
         this.map?.off('movestart', this.onMoveStart);
         this.map = undefined;
+        numberOfWatches = 0;
+        noTimeout = false;
     }
 
     on(type: string, listener: Listener): this {
@@ -222,6 +235,8 @@ class FakeGeolocateControl implements FakeControl {
                 this.fire('userlocationfocus');
                 break;
             default:
+                numberOfWatches -= 1;
+                noTimeout = false;
                 this.watchState = 'OFF';
                 this.toggle('remove', 'waiting', 'active', 'active-error', 'background', 'background-error');
                 this.fire('trackuserlocationend');
@@ -238,7 +253,10 @@ class FakeGeolocateControl implements FakeControl {
         } else if (this.watchId === undefined) {
             this.toggle('add', 'waiting');
             this.button.setAttribute('aria-pressed', 'true');
-            this.watchId = navigator.geolocation.watchPosition(this.onSuccess, this.onError, this.options.positionOptions);
+            numberOfWatches += 1;
+            noTimeout = numberOfWatches > 1;
+            const options = noTimeout ? { maximumAge: 600_000, timeout: 0 } : this.options.positionOptions;
+            this.watchId = navigator.geolocation.watchPosition(this.onSuccess, this.onError, options);
         }
 
         return true;
@@ -328,6 +346,8 @@ class FakeGeolocateControl implements FakeControl {
             if (this.watchId !== undefined) {
                 this.clearWatch();
             }
+        } else if (error.code === 3 && noTimeout) {
+            return;
         } else {
             this.setErrorState();
         }
@@ -560,6 +580,7 @@ class FakeMap {
         }
 
         this.container.replaceChildren();
+        this.container.classList.remove('maplibregl-map');
         this.registrations = [];
     });
 
@@ -636,6 +657,7 @@ class FakeMap {
     });
 
     private readonly canvas = document.createElement('canvas');
+    private readonly controlContainer = document.createElement('div');
     private registrations: Registration[] = [];
 
     constructor(readonly options: Record<string, unknown>) {
@@ -647,8 +669,12 @@ class FakeMap {
         }
 
         this.container = options.container as HTMLElement;
+        // Como MapLibre: su clase en el contenedor (maplibre-gl.css cuelga de
+        // ella) y, después del lienzo, las esquinas donde van los controles.
+        this.container.classList.add('maplibregl-map');
         this.canvas.setAttribute('aria-label', 'Map');
-        this.container.append(this.canvas);
+        this.controlContainer.className = 'maplibregl-control-container';
+        this.container.append(this.canvas, this.controlContainer);
         // Primero la cámara de las opciones; la del estilo, solo si no vino en ellas.
         this.moveCamera(options);
 
@@ -815,9 +841,29 @@ class FakeMap {
         return this.container;
     }
 
-    addControl(control: FakeControl): this {
+    /** Como MapLibre: el control va al final de su esquina (`top-right` si no se dice). */
+    addControl(control: FakeControl, position = 'top-right'): this {
+        let corner = this.controlContainer.querySelector(`.maplibregl-ctrl-${position}`);
+
+        if (!corner) {
+            corner = document.createElement('div');
+            corner.className = `maplibregl-ctrl-${position}`;
+            this.controlContainer.append(corner);
+        }
+
         this.controls.push(control);
-        this.container.append(control.onAdd(this));
+        corner.append(control.onAdd(this));
+
+        return this;
+    }
+
+    removeControl(control: FakeControl): this {
+        const index = this.controls.indexOf(control);
+
+        if (index !== -1) {
+            this.controls.splice(index, 1);
+            control.onRemove();
+        }
 
         return this;
     }
@@ -871,6 +917,8 @@ export function failNextMap(error: Error): void {
 export function reset(): void {
     maps.length = 0;
     supportsGeolocation = undefined;
+    numberOfWatches = 0;
+    noTimeout = false;
     nextMapError = null;
     addProtocol.mockReset();
     removeProtocol.mockReset();

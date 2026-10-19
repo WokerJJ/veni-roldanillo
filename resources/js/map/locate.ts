@@ -13,14 +13,14 @@
  * Solo importa tipos de MapLibre: el control lo crea engine.ts, el único que
  * lo importa.
  */
-import type { GeolocateControl, GeolocateErrorEvent } from 'maplibre-gl';
+import type { GeolocateControl, GeolocateErrorEvent, Map as MapLibreMap } from 'maplibre-gl';
 
 // Los dibujos son archivos del repositorio (colombia-icons, ADR 0011), no
 // datos: viajan dentro del chunk del mapa y están siempre que esté el botón.
 import closeIcon from '../../icons/colombia/cerrar.svg?raw';
 import locateIcon from '../../icons/colombia/ubicacion.svg?raw';
 
-import { NO_PADDING, paddingAround } from './padding';
+import type { MapPadding } from './padding';
 
 /** Por qué «¿Dónde estoy?» no puede mostrar la ubicación. */
 export type LocateProblem =
@@ -48,11 +48,6 @@ export interface LocateTexts {
 export interface LocateControl {
     /** Cambia los textos (otro idioma), sin tocar el estado. */
     relabel(texts: LocateTexts): void;
-    /**
-     * Lo que la página pone encima del mapa (su panel), o `null`: la cámara
-     * deja la ubicación en el centro de lo que queda a la vista.
-     */
-    setOverlay(overlay: HTMLElement | null): void;
     /** Deja de vigilar el botón y quita los avisos: el mapa se libera. */
     dispose(): void;
 }
@@ -78,24 +73,26 @@ function iconElement(svg: string): SVGSVGElement {
 }
 
 /**
- * Toma el botón de `control`, ya añadido al mapa en `container`, y pone ahí
- * mismo los avisos.
+ * Añade a `map`, arriba a la derecha, el control que da `create`, y pone los
+ * avisos junto a su botón. `padding` dice cuánto del mapa tapa la página: la
+ * cámara deja la ubicación en el centro de lo que queda a la vista.
  *
- * El botón queda siempre habilitado y con el nombre de la app. MapLibre lo
- * deshabilita si el navegador no tiene geolocalización y cuando el permiso
- * está negado (también si ya lo estaba al cargar), y un botón deshabilitado
- * no explica nada: así, tocarlo dice qué pasa y cómo arreglarlo. Además le
- * pone su nombre en inglés al terminar de prepararlo, un momento después de
- * añadirlo, y al cambiar de estado. Un observador deshace las dos cosas.
+ * El botón lleva siempre el nombre de la app y, desde que MapLibre termina de
+ * prepararlo (un momento después de añadirlo: antes no atiende el toque),
+ * queda habilitado. MapLibre lo deshabilita si el navegador no tiene
+ * geolocalización y cuando el permiso está negado (también si ya lo estaba
+ * al cargar), y un botón deshabilitado no explica nada: así, tocarlo dice qué
+ * pasa y cómo arreglarlo. Además le pone su nombre en inglés al terminar de
+ * prepararlo y al cambiar de estado. Un observador deshace las dos cosas.
+ *
+ * Con el permiso negado, MapLibre apaga el control sin descontarlo de los que
+ * siguen la ubicación (una cuenta de todo su módulo): el siguiente toque
+ * pediría una posición vieja, sin precisión alta ni plazo, y el aviso de sin
+ * señal no volvería. Por eso ahí el control se cambia por uno nuevo, que
+ * MapLibre vuelve a contar desde cero; los avisos y el foco siguen.
  */
-export function takeLocateControl(control: GeolocateControl, container: HTMLElement, initial: LocateTexts): LocateControl {
-    const button = container.querySelector<HTMLButtonElement>('button.maplibregl-ctrl-geolocate');
-    const group = button?.parentElement;
-
-    if (!button || !group) {
-        throw new Error('El control de geolocalización no está en el mapa.');
-    }
-
+export function addLocateControl(map: MapLibreMap, create: () => GeolocateControl, initial: LocateTexts, padding: () => MapPadding): LocateControl {
+    const container = map.getContainer();
     let texts = initial;
     /** El aviso a la vista, si hay uno. */
     let problem: LocateProblem | null = null;
@@ -107,18 +104,8 @@ export function takeLocateControl(control: GeolocateControl, container: HTMLElem
      * que falla, y un aviso cerrado no vuelve a abrirse cada 10 segundos.
      */
     const shown = new Set<LocateProblem>();
-    /** El panel de la página sobre el mapa. */
-    let overlay: HTMLElement | null = null;
-    const fitBoundsOptions = { ...control.options.fitBoundsOptions };
-
-    // MapLibre encuadra la ubicación con `fitBoundsOptions`, que lee cada vez:
-    // el margen del panel va ahí, medido cuando cambia de tamaño el panel o el
-    // mapa, y otra vez en cada toque (el panel pudo moverse sin cambiar de tamaño).
-    const measure = (): void => {
-        const padding = overlay ? paddingAround(container.getBoundingClientRect(), overlay.getBoundingClientRect()) : NO_PADDING;
-        control.options.fitBoundsOptions = { ...fitBoundsOptions, padding };
-    };
-    const resizes = new ResizeObserver(measure);
+    /** El foco estaba en el botón que se cambió: pasa al nuevo cuando esté listo. */
+    let refocus = false;
 
     // El aviso: junto al botón, sin tapar el mapa ni llevarse el foco. Entra
     // al documento al mostrarse (así lo anuncia el lector de pantalla) y sale
@@ -136,13 +123,30 @@ export function takeLocateControl(control: GeolocateControl, container: HTMLElem
     // Lo que anuncia el lector de pantalla cuando la ubicación llega: una
     // región viva tiene que estar en el documento antes de cambiar.
     const announcer = document.createElement('p');
-    announcer.className = 'sr-only';
+    announcer.className = 'veni-sr-only';
     announcer.setAttribute('aria-live', 'polite');
     container.append(announcer);
 
+    let control: GeolocateControl;
+    let button: HTMLButtonElement;
+    let group: HTMLElement;
+
+    /** MapLibre terminó de preparar el botón: con el seguimiento, le pone `aria-pressed`. */
+    const ready = (): boolean => button.hasAttribute('aria-pressed');
+
     const restoreButton = (): void => {
-        if (button.disabled) {
-            button.disabled = false;
+        if (ready()) {
+            if (button.disabled) {
+                button.disabled = false;
+            }
+
+            const focused = document.activeElement;
+
+            if (refocus && (focused === null || focused === document.body)) {
+                button.focus();
+            }
+
+            refocus = false;
         }
 
         if (button.title !== texts.button) {
@@ -164,8 +168,10 @@ export function takeLocateControl(control: GeolocateControl, container: HTMLElem
         } else {
             message.textContent = texts.problems[problem];
 
+            // Justo después del botón también en el orden del teclado: su
+            // esquina termina con él, y el aviso va a continuación.
             if (!notice.isConnected) {
-                container.append(notice);
+                (group.parentElement ?? group).after(notice);
             }
         }
     };
@@ -211,7 +217,6 @@ export function takeLocateControl(control: GeolocateControl, container: HTMLElem
     // anterior ya no vale. Sin geolocalización en el navegador, MapLibre
     // fallaría al pedirla: el toque no le llega y el aviso lo explica.
     const onClick = (event: MouseEvent): void => {
-        measure();
         shown.clear();
         located = false;
         hide();
@@ -232,49 +237,74 @@ export function takeLocateControl(control: GeolocateControl, container: HTMLElem
         report('outside');
     };
 
-    const onError = (event: GeolocateErrorEvent): void => {
-        // Sin permiso, MapLibre acaba de deshabilitar el botón: vuelve ya, sin
-        // esperar al observador, para que el foco no se pierda con él.
-        restoreButton();
-        report(event.code === PERMISSION_DENIED ? 'denied' : 'signal');
+    const observer = new MutationObserver(restoreButton);
+
+    const attach = (): void => {
+        control = create();
+        // MapLibre encuadra la ubicación con `fitBoundsOptions`, que lee cada
+        // vez: el margen se mide ahí, con el panel y el mapa como estén.
+        const fitBoundsOptions = { ...control.options.fitBoundsOptions };
+        Object.defineProperty(control.options, 'fitBoundsOptions', {
+            configurable: true,
+            enumerable: true,
+            get: () => ({ ...fitBoundsOptions, padding: padding() }),
+        });
+        map.addControl(control, 'top-right');
+
+        const found = container.querySelector<HTMLButtonElement>('button.maplibregl-ctrl-geolocate');
+
+        if (!found?.parentElement) {
+            throw new Error('El control de geolocalización no está en el mapa.');
+        }
+
+        button = found;
+        group = found.parentElement;
+        // El ícono de MapLibre es una imagen de su CSS; el de la app va en el DOM.
+        button.replaceChildren(iconElement(locateIcon));
+        observer.observe(button, { attributes: true, attributeFilter: ['disabled', 'title', 'aria-label', 'aria-pressed'] });
+        group.addEventListener('click', onClick, { capture: true });
+        control.on('geolocate', onFound);
+        control.on('outofmaxbounds', onOutside);
+        control.on('error', onError);
     };
 
-    // El ícono de MapLibre es una imagen de su CSS; el de la app va en el DOM.
-    button.replaceChildren(iconElement(locateIcon));
-    render();
+    const detach = (): void => {
+        observer.disconnect();
+        group.removeEventListener('click', onClick, { capture: true });
+        control.off('geolocate', onFound);
+        control.off('outofmaxbounds', onOutside);
+        control.off('error', onError);
+    };
 
-    const observer = new MutationObserver(restoreButton);
-    observer.observe(button, { attributes: true, attributeFilter: ['disabled', 'title', 'aria-label'] });
-    group.addEventListener('click', onClick, { capture: true });
+    function onError(event: GeolocateErrorEvent): void {
+        if (event.code !== PERMISSION_DENIED) {
+            report('signal');
+
+            return;
+        }
+
+        // Sin permiso, MapLibre acaba de deshabilitar el botón y apagar el
+        // control: va uno nuevo en su lugar, y el foco con él.
+        const focused = document.activeElement;
+        refocus = focused === null || focused === document.body || group.contains(focused);
+        detach();
+        map.removeControl(control);
+        attach();
+        report('denied');
+    }
+
+    attach();
+    render();
     close.addEventListener('click', onClose);
     notice.addEventListener('keydown', onNoticeKeydown);
-    control.on('geolocate', onFound);
-    control.on('outofmaxbounds', onOutside);
-    control.on('error', onError);
 
     return {
         relabel(next) {
             texts = next;
             render();
         },
-        setOverlay(next) {
-            resizes.disconnect();
-            overlay = next;
-
-            if (next) {
-                resizes.observe(container);
-                resizes.observe(next);
-            }
-
-            measure();
-        },
         dispose() {
-            observer.disconnect();
-            resizes.disconnect();
-            group.removeEventListener('click', onClick, { capture: true });
-            control.off('geolocate', onFound);
-            control.off('outofmaxbounds', onOutside);
-            control.off('error', onError);
+            detach();
             notice.remove();
             announcer.remove();
         },
