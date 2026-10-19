@@ -308,6 +308,10 @@ describe('presupuesto de descarga', () => {
         // de Tailwind es uno solo para todas las páginas, y el resto, los
         // enlaces del mapa a la ficha y el restaurante elegido en la dirección.
         // El código de la ficha no cuenta: es un chunk aparte que baja al abrirla.
+        // Antes de «¿Dónde estoy?» (#10) medía 81,7, y con él, 81,9: el botón y
+        // sus avisos viajan con el mapa (DOM y estilos del control, no
+        // componentes ni clases de Tailwind); al arranque solo llegan sus
+        // textos y el panel que la página le pasa al mapa.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(82);
     });
 

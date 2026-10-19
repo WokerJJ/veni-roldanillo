@@ -113,6 +113,7 @@ async function mountMap({
     mapError,
     attachTo,
     inside,
+    overlay,
 }: {
     theme?: 'light' | 'dark';
     locale?: 'es' | 'en';
@@ -120,6 +121,8 @@ async function mountMap({
     attachTo?: HTMLElement;
     /** Lo que la app pinta sobre el mapa: componentes dentro de <MapView>. */
     inside?: () => Component[];
+    /** Lo que la página pone encima del mapa (su panel). */
+    overlay?: HTMLElement;
 } = {}) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     const maplibre = (await import('maplibre-gl')) as unknown as typeof FakeMapLibre;
@@ -136,7 +139,7 @@ async function mountMap({
     const { default: ThemeToggle } = await import('./ThemeToggle.vue');
     const wrapper = mount(
         defineComponent({
-            render: () => [h(ThemeToggle), h(MapView, null, { default: () => (inside?.() ?? []).map((layer) => h(layer)) })],
+            render: () => [h(ThemeToggle), h(MapView, overlay ? { overlay } : null, { default: () => (inside?.() ?? []).map((layer) => h(layer)) })],
         }),
         attachTo ? { attachTo } : {},
     );
@@ -692,6 +695,140 @@ describe('MapView', () => {
                 await update();
 
                 expect(live().text()).toBe('');
+            });
+        });
+
+        describe('la cámara y el panel de la página', () => {
+            /** El mapa del inicio en un celular, bajo la cabecera, y el panel abajo, a lo ancho. */
+            const PHONE_MAP = new DOMRect(0, 64, 390, 780);
+            const SHEET = new DOMRect(12, 520, 366, 288);
+
+            function placeAt(element: Element, box: DOMRect): void {
+                vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(box);
+            }
+
+            /** Un ResizeObserver al que la prueba le dice cuándo cambió algo de tamaño. */
+            function stubResizeObserver() {
+                const observers: { callback: () => void; targets: Element[] }[] = [];
+
+                vi.stubGlobal(
+                    'ResizeObserver',
+                    class {
+                        private readonly entry: { callback: () => void; targets: Element[] };
+
+                        constructor(callback: () => void) {
+                            this.entry = { callback, targets: [] };
+                            observers.push(this.entry);
+                        }
+
+                        observe(target: Element): void {
+                            this.entry.targets.push(target);
+                        }
+
+                        disconnect(): void {
+                            this.entry.targets = [];
+                        }
+                    },
+                );
+
+                return {
+                    /** Cambió de tamaño `target`: avisa a quienes lo miran. */
+                    resize(target: Element): void {
+                        for (const { callback, targets } of observers) {
+                            if (targets.includes(target)) {
+                                callback();
+                            }
+                        }
+                    },
+                };
+            }
+
+            /** El margen con que MapLibre encuadró la ubicación la última vez. */
+            function lastPadding(map: FakeMapLibre.Map): unknown {
+                return map.fitBounds.mock.lastCall?.[1]?.padding;
+            }
+
+            it('al ubicarse, la cámara deja la ubicación en lo que el panel deja a la vista', async () => {
+                const device = stubGeolocation();
+                const panel = document.createElement('section');
+                const { loadedMap } = await mountMap({ overlay: panel });
+                const created = await loadedMap();
+                const button = await locateButton(created);
+                placeAt(created.container, PHONE_MAP);
+                placeAt(panel, SHEET);
+
+                button.click();
+                device.move(PLAZA);
+
+                expect(created.fitBounds.mock.lastCall?.[1]).toMatchObject({ maxZoom: 16 });
+                expect(lastPadding(created)).toEqual({ top: 0, right: 0, bottom: 324, left: 0 });
+            });
+
+            it('si el panel cambia de tamaño mientras la sigue, la siguiente posición ya lo tiene en cuenta', async () => {
+                const device = stubGeolocation();
+                const sizes = stubResizeObserver();
+                const panel = document.createElement('section');
+                const { loadedMap } = await mountMap({ overlay: panel });
+                const created = await loadedMap();
+                const button = await locateButton(created);
+                placeAt(created.container, PHONE_MAP);
+                placeAt(panel, SHEET);
+
+                button.click();
+                device.move(PLAZA);
+
+                // Se abre la lista: el panel crece hasta 10rem del borde de arriba.
+                placeAt(panel, new DOMRect(12, 224, 366, 584));
+                sizes.resize(panel);
+                device.move({ longitude: ELSEWHERE[0], latitude: ELSEWHERE[1] });
+
+                expect(lastPadding(created)).toEqual({ top: 0, right: 0, bottom: 620, left: 0 });
+            });
+
+            it('sin panel encima, sin margen', async () => {
+                const device = stubGeolocation();
+                const { loadedMap } = await mountMap();
+                const created = await loadedMap();
+                const button = await locateButton(created);
+
+                button.click();
+                device.move(PLAZA);
+
+                expect(lastPadding(created)).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
+            });
+
+            it('elegir un restaurante mientras sigue la ubicación: la cámara se queda en el restaurante', async () => {
+                const device = stubGeolocation();
+                const { useMap } = await import('@/map/useMapLayers');
+                const used: { map?: ReturnType<typeof useMap>['map'] } = {};
+                const Selection: Component = {
+                    setup() {
+                        used.map = useMap().map;
+
+                        return () => null;
+                    },
+                };
+                const { loadedMap } = await mountMap({ inside: () => [Selection] });
+                const created = await loadedMap();
+                const button = await locateButton(created);
+
+                button.click();
+                device.move(PLAZA);
+                // Como RestaurantsLayer al elegir uno (también desde ?r=slug).
+                used.map?.value?.showPoint(ELSEWHERE, { minZoom: 16 });
+                device.move({ longitude: -76.1551, latitude: 4.4131 });
+
+                expect(created.fitBounds).toHaveBeenCalledOnce();
+                expect(created.getCenter()).toEqual(ELSEWHERE);
+                // La marca sí sigue a quien camina; el botón, encendido, dice que la cámara ya no la sigue.
+                expect(userDot(created)?.dataset.lngLat).toBe('-76.1551,4.4131');
+                expect(button.classList.contains('maplibregl-ctrl-geolocate-background')).toBe(true);
+                expect(button.getAttribute('aria-pressed')).toBe('true');
+
+                // Tocarlo otra vez vuelve a llevar la cámara a la ubicación.
+                button.click();
+
+                expect(created.fitBounds).toHaveBeenCalledTimes(2);
             });
         });
 

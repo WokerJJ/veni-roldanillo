@@ -78,6 +78,11 @@ export interface MapHandle {
      * corta, que MapLibre omite con prefers-reduced-motion.
      */
     showPoint(center: [number, number], options?: { minZoom?: number }): void;
+    /**
+     * Lo que la página pone encima del mapa (su panel), o `null`: al ubicarse,
+     * la cámara deja la ubicación en el centro de lo que queda a la vista.
+     */
+    setOverlay(overlay: HTMLElement | null): void;
 }
 
 interface Camera {
@@ -451,6 +456,11 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
             }
         },
         addLayerGroup: (group) => layers.add(group),
+        setOverlay(overlay) {
+            if (!destroyed) {
+                locate.setOverlay(overlay);
+            }
+        },
         showPoint(center, { minZoom = 0 } = {}) {
             if (!destroyed) {
                 map.easeTo({ center, zoom: Math.max(map.getZoom(), minZoom) });

@@ -141,6 +141,12 @@ describe('Home', () => {
         );
     });
 
+    it('le pasa al mapa su panel: al ubicarse, la cámara deja la ubicación fuera de él', async () => {
+        const { wrapper, panel } = await mountHome();
+
+        expect(wrapper.getComponent({ name: 'MapView' }).props('overlay')).toBe(panel().element);
+    });
+
     it('no pone botones de tema ni de idioma sobre el mapa: son de la cabecera', async () => {
         const { wrapper } = await mountHome({ answer: [LA_CEIBA] });
 
@@ -291,7 +297,10 @@ describe('Home', () => {
         }
 
         it('el aviso del mapa no tapa el panel: va debajo, y la lista se sigue viendo', async () => {
-            const { listButton, mapAlert, page, panel, status } = await mountWithoutMap();
+            const { listButton, mapAlert, page, panel, status, wrapper } = await mountWithoutMap();
+
+            // Ya no va encima del mapa.
+            expect(wrapper.getComponent({ name: 'MapView' }).props('overlay')).toBeNull();
 
             expect(mapAlert().get('button').text()).toBe('Reintentar');
             // El aviso ocupa todo su mapa. El panel deja de flotar encima (quedaría

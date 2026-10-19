@@ -20,6 +20,8 @@ import type { GeolocateControl, GeolocateErrorEvent } from 'maplibre-gl';
 import closeIcon from '../../icons/colombia/cerrar.svg?raw';
 import locateIcon from '../../icons/colombia/ubicacion.svg?raw';
 
+import { NO_PADDING, paddingAround } from './padding';
+
 /** Por qué «¿Dónde estoy?» no puede mostrar la ubicación. */
 export type LocateProblem =
     /** Sin permiso: se negó, se cerró la pregunta o el navegador la bloquea. */
@@ -46,6 +48,11 @@ export interface LocateTexts {
 export interface LocateControl {
     /** Cambia los textos (otro idioma), sin tocar el estado. */
     relabel(texts: LocateTexts): void;
+    /**
+     * Lo que la página pone encima del mapa (su panel), o `null`: la cámara
+     * deja la ubicación en el centro de lo que queda a la vista.
+     */
+    setOverlay(overlay: HTMLElement | null): void;
     /** Deja de vigilar el botón y quita los avisos: el mapa se libera. */
     dispose(): void;
 }
@@ -100,6 +107,18 @@ export function takeLocateControl(control: GeolocateControl, container: HTMLElem
      * que falla, y un aviso cerrado no vuelve a abrirse cada 10 segundos.
      */
     const shown = new Set<LocateProblem>();
+    /** El panel de la página sobre el mapa. */
+    let overlay: HTMLElement | null = null;
+    const fitBoundsOptions = { ...control.options.fitBoundsOptions };
+
+    // MapLibre encuadra la ubicación con `fitBoundsOptions`, que lee cada vez:
+    // el margen del panel va ahí, medido cuando cambia de tamaño el panel o el
+    // mapa, y otra vez en cada toque (el panel pudo moverse sin cambiar de tamaño).
+    const measure = (): void => {
+        const padding = overlay ? paddingAround(container.getBoundingClientRect(), overlay.getBoundingClientRect()) : NO_PADDING;
+        control.options.fitBoundsOptions = { ...fitBoundsOptions, padding };
+    };
+    const resizes = new ResizeObserver(measure);
 
     // El aviso: junto al botón, sin tapar el mapa ni llevarse el foco. Entra
     // al documento al mostrarse (así lo anuncia el lector de pantalla) y sale
@@ -192,6 +211,7 @@ export function takeLocateControl(control: GeolocateControl, container: HTMLElem
     // anterior ya no vale. Sin geolocalización en el navegador, MapLibre
     // fallaría al pedirla: el toque no le llega y el aviso lo explica.
     const onClick = (event: MouseEvent): void => {
+        measure();
         shown.clear();
         located = false;
         hide();
@@ -237,8 +257,20 @@ export function takeLocateControl(control: GeolocateControl, container: HTMLElem
             texts = next;
             render();
         },
+        setOverlay(next) {
+            resizes.disconnect();
+            overlay = next;
+
+            if (next) {
+                resizes.observe(container);
+                resizes.observe(next);
+            }
+
+            measure();
+        },
         dispose() {
             observer.disconnect();
+            resizes.disconnect();
             group.removeEventListener('click', onClick, { capture: true });
             control.off('geolocate', onFound);
             control.off('outofmaxbounds', onOutside);

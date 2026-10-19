@@ -61,6 +61,7 @@ const mapView = useTemplateRef<{ focus: () => void }>('mapView');
 const list = useTemplateRef<{ focusItem: (slug: string) => Promise<void> }>('list');
 const listButton = useTemplateRef<HTMLButtonElement>('listButton');
 const statusRegion = useTemplateRef<HTMLElement>('statusRegion');
+const panel = useTemplateRef<HTMLElement>('panel');
 
 function selectFromMap(slug: string): void {
     openedFromList = false;
@@ -198,6 +199,7 @@ onBeforeUnmount(() => {
             entran los dos.
         -->
         <section
+            ref="panel"
             class="z-10 flex flex-col rounded-veni-md border border-line bg-canvas/95 p-4 shadow-lg"
             :class="
                 mapFailed
@@ -256,8 +258,12 @@ onBeforeUnmount(() => {
             </template>
         </section>
 
-        <!-- Sin mapa, su aviso se queda con el alto que deja el panel, y nunca con menos del que necesita. -->
-        <MapView ref="mapView" :class="{ 'min-h-56': mapFailed }" @status="mapFailed = $event === 'error'">
+        <!--
+            Sin mapa, su aviso se queda con el alto que deja el panel, y nunca
+            con menos del que necesita. Con mapa, el panel va encima: al
+            ubicarse, la cámara deja la ubicación fuera de él.
+        -->
+        <MapView ref="mapView" :overlay="mapFailed ? null : panel" :class="{ 'min-h-56': mapFailed }" @status="mapFailed = $event === 'error'">
             <RestaurantsLayer :restaurants="restaurants" :selected="selectedSlug" @select="selectFromMap" />
         </MapView>
     </div>

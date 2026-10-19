@@ -26,6 +26,14 @@ import { MAP_CONTEXT } from '@/map/useMapLayers';
  */
 type Status = 'loading' | 'ready' | 'error';
 
+const props = defineProps<{
+    /**
+     * Lo que la página pone encima del mapa (su panel): al ubicarse con
+     * «¿Dónde estoy?», la cámara deja la ubicación a la vista, fuera de él.
+     */
+    overlay?: HTMLElement | null;
+}>();
+
 const emit = defineEmits<{
     /** Cambió el estado del mapa: con `error` su aviso lo ocupa entero, y la página acomoda lo que tenía encima. */
     status: [status: Status];
@@ -178,6 +186,11 @@ watch([theme, locale], () => {
 
 watch(status, (current) => {
     emit('status', current);
+});
+
+// El panel de la página, también para el mapa del reintento.
+watch([handle, () => props.overlay], ([map, overlay]) => {
+    map?.setOverlay(overlay ?? null);
 });
 
 onMounted(() => {
