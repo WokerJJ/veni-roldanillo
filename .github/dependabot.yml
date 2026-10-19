@@ -26,6 +26,11 @@ updates:
     labels: ["type:chore", "area:deps"]
     commit-message:
       prefix: "fix(deps)"
+    # Las versiones mayores de Node cambian la imagen de producción: se suben
+    # a mano, con su propio issue, y no en un PR automático.
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
     groups:
       imagenes-base:
         patterns: ["*"]
