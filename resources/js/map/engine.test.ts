@@ -19,6 +19,7 @@ const STYLE = {
     version: 8,
     center: [-76.1547, 4.4128],
     zoom: 13.5,
+    metadata: { 'veni:bounds': [-76.3, 4.3, -76.0, 4.55] },
     sources: { protomaps: { type: 'vector', url: `pmtiles://${ARCHIVE_URL}` } },
     layers: [],
 };

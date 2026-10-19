@@ -22,7 +22,9 @@ import { fetchMapStyle } from './fetchStyle';
 import { createLayerRegistry } from './layerRegistry';
 import type { MapLayerGroup, MapLayerGroupHandle } from './layers';
 import type { LocateControl, LocateTexts } from './locate';
-import { takeLocateControl } from './locate';
+import { addLocateControl } from './locate';
+import type { MapPadding } from './padding';
+import { NO_PADDING, paddingAround } from './padding';
 
 setWorkerUrl(workerUrl);
 
@@ -88,7 +90,7 @@ export interface MapHandle {
 interface Camera {
     center: LngLatLike;
     zoom: number;
-    maxBounds?: LngLatBoundsLike;
+    maxBounds: LngLatBoundsLike;
 }
 
 const PMTILES_PROTOCOL = 'pmtiles';
@@ -168,10 +170,23 @@ function isNumberList(value: unknown, length: number): value is number[] {
     return Array.isArray(value) && value.length === length && value.every((item) => Number.isFinite(item));
 }
 
+/** `[oeste, sur, este, norte]`, en grados y con cada borde antes del opuesto. */
+function isBounds(value: unknown): value is [number, number, number, number] {
+    if (!isNumberList(value, 4)) {
+        return false;
+    }
+
+    const [west = NaN, south = NaN, east = NaN, north = NaN] = value;
+
+    return west >= -180 && west < east && east <= 180 && south >= -90 && south < north && north <= 90;
+}
+
 /**
  * Cámara inicial y límites, tomados del estilo: los fija veni-mapa con la
- * región del extracto (`center`, `zoom` y `metadata["veni:bounds"]`). La
- * cámara es obligatoria: sin ella MapLibre arranca en 0,0 con zoom 0.
+ * región del extracto (`center`, `zoom` y `metadata["veni:bounds"]`). Las dos
+ * cosas son obligatorias: sin cámara MapLibre arranca en 0,0 con zoom 0, y
+ * sin límites el mapa no tiene región y «¿Dónde estoy?» no sabría decir que
+ * alguien está fuera de ella.
  */
 function initialCamera(style: StyleSpecification): Camera {
     const { center, zoom } = style;
@@ -180,15 +195,14 @@ function initialCamera(style: StyleSpecification): Camera {
         throw new Error('El estilo del mapa no trae la cámara inicial (center y zoom).');
     }
 
-    const camera: Camera = { center: [center[0], center[1]], zoom };
     const bounds = (style.metadata as Record<string, unknown> | undefined)?.['veni:bounds'];
 
-    if (isNumberList(bounds, 4)) {
-        // [oeste, sur, este, norte]: la cámara no sale de la región del extracto.
-        camera.maxBounds = bounds as [number, number, number, number];
+    if (!isBounds(bounds)) {
+        throw new Error('El estilo del mapa no trae límites válidos (metadata["veni:bounds"]: oeste, sur, este y norte).');
     }
 
-    return camera;
+    // La cámara no sale de la región del extracto.
+    return { center: [center[0], center[1]], zoom, maxBounds: bounds };
 }
 
 function applyLabels(map: MapLibreMap, labels: MapLabels): void {
@@ -340,6 +354,15 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
     const layers = createLayerRegistry(map);
     /** «¿Dónde estoy?», cuando ya está en el mapa. */
     let locate: LocateControl | null = null;
+    /** Lo que la página pone encima del mapa (su panel). */
+    let overlay: HTMLElement | null = null;
+
+    /**
+     * Cuánto del mapa tapa ahora el panel de la página, medido al pedirlo: lo
+     * usa la cámara que debe dejar algo a la vista (la ubicación, y la ruta de #11).
+     */
+    const currentPadding = (): MapPadding =>
+        overlay ? paddingAround(map.getContainer().getBoundingClientRect(), overlay.getBoundingClientRect()) : { ...NO_PADDING };
 
     const destroy = (): void => {
         if (destroyed) {
@@ -364,9 +387,7 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
         map.keyboard.disableRotation();
         map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
         // Debajo de los de zoom: arriba a la derecha no lo tapa el panel de la página.
-        const geolocate = new GeolocateControl(LOCATE_OPTIONS);
-        map.addControl(geolocate, 'top-right');
-        locate = takeLocateControl(geolocate, map.getContainer(), labels.locate);
+        locate = addLocateControl(map, () => new GeolocateControl(LOCATE_OPTIONS), labels.locate, currentPadding);
         applyLabels(map, labels);
 
         let startedPainting: () => void = () => undefined;
@@ -456,10 +477,8 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
             }
         },
         addLayerGroup: (group) => layers.add(group),
-        setOverlay(overlay) {
-            if (!destroyed) {
-                locate.setOverlay(overlay);
-            }
+        setOverlay(next) {
+            overlay = next;
         },
         showPoint(center, { minZoom = 0 } = {}) {
             if (!destroyed) {
