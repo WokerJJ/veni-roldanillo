@@ -20,10 +20,16 @@ vi.mock('@/map/iconImage', () => ({ iconImage: () => new Promise(() => undefined
  * enseguida; sin él, el pedido queda en `network` para que la prueba lo
  * responda, lo haga fallar o lo deje esperando.
  */
-async function mountHome({ locale = 'es', answer }: { locale?: 'es' | 'en'; answer?: readonly Restaurant[] } = {}) {
+async function mountHome({ locale = 'es', answer, url = '/' }: { locale?: 'es' | 'en'; answer?: readonly Restaurant[]; url?: string } = {}) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     inertia.reset();
     inertia.receiveFromServer(locale, { replace: true });
+    // La dirección con que el servidor respondió el inicio (con ?r=slug, la de «Ver en el mapa»).
+    inertia.page.url = url;
+    // La visita que cambia la dirección en el dispositivo, sin pedirle nada al
+    // servidor ni sumar una entrada al historial: el router de mentira no la trae.
+    const replace = vi.fn();
+    Object.assign(inertia.router, { replace });
     // Los demás pedidos (MapView pide el estilo al montarse) no llegan nunca: aquí nada sale a la red.
     const network = stubRestaurantsFetch(answer);
 
@@ -40,6 +46,7 @@ async function mountHome({ locale = 'es', answer }: { locale?: 'es' | 'en'; answ
         Home,
         inertia,
         network,
+        replace,
         wrapper,
         panel,
         /** La región que anuncia el estado de los restaurantes. */
@@ -340,6 +347,12 @@ describe('Home', () => {
     });
 
     describe('la lista', () => {
+        it('cada restaurante de la lista enlaza a su ficha', async () => {
+            const { panel } = await mountWithList();
+
+            expect(panel().findAll('li > a').map((link) => link.attributes('href'))).toEqual(['/restaurants/prueba-la-ceiba', '/restaurants/prueba-el-guadual']);
+        });
+
         it('se abre con su botón, con todos los restaurantes y el foco en su título', async () => {
             const { items, panel, wrapper } = await mountWithList();
 
@@ -368,6 +381,95 @@ describe('Home', () => {
 
             expect(items()).toHaveLength(0);
             expect(document.activeElement).toBe(listButton()?.element);
+        });
+    });
+
+    describe('abierto con un restaurante en la dirección (?r=slug)', () => {
+        it('cuando llega la lista, ese restaurante abre elegido: su resumen, su marca en el mapa y el foco en su nombre', async () => {
+            const { layer, network, panel } = await mountHome({ url: '/?r=prueba-el-guadual' });
+            expect(panel().find('[role="dialog"]').exists()).toBe(false);
+
+            network.last()?.respond([LA_CEIBA, EL_GUADUAL]);
+            await flushPromises();
+
+            expect(panel().get('[role="dialog"] h2').text()).toBe('Restaurante de Prueba El Guadual (ficticio)');
+            expect(layer().props('selected')).toBe('prueba-el-guadual');
+            expect(document.activeElement).toBe(panel().get('h2').element);
+        });
+
+        it('al cerrarlo, el foco va al mapa: no se abrió desde la lista', async () => {
+            const { map, panel, pressEscape } = await mountHome({ url: '/?r=prueba-la-ceiba', answer: [LA_CEIBA, EL_GUADUAL] });
+            expect(panel().find('[role="dialog"]').exists()).toBe(true);
+
+            await pressEscape();
+
+            expect(panel().find('[role="dialog"]').exists()).toBe(false);
+            expect(document.activeElement).toBe(map().element);
+        });
+
+        it('si ese restaurante no está en la lista, el inicio abre como siempre', async () => {
+            const { layer, panel, status } = await mountHome({ url: '/?r=ya-no-esta', answer: [LA_CEIBA] });
+
+            expect(panel().find('[role="dialog"]').exists()).toBe(false);
+            expect(layer().props('selected')).toBeNull();
+            expect(status().text()).toBe('1 restaurante en el mapa');
+        });
+
+        it('se elige una sola vez: cerrado el resumen, volver a pedir la lista no lo reabre', async () => {
+            const { inertia, network, panel, pressEscape } = await mountHome({ url: '/?r=prueba-la-ceiba', answer: [LA_CEIBA] });
+            await pressEscape();
+
+            // Cambiar de idioma vuelve a pedir la lista.
+            inertia.receiveFromServer('en', { replace: true });
+            await flushPromises();
+            network.last()?.respond([LA_CEIBA]);
+            await flushPromises();
+
+            expect(panel().find('[role="dialog"]').exists()).toBe(false);
+        });
+
+        it('si la lista falla y llega al reintentar, lo elige igual', async () => {
+            const { network, panel } = await mountHome({ url: '/?r=prueba-la-ceiba' });
+            network.last()?.fail();
+            await flushPromises();
+
+            await panel().get('[role="alert"] button').trigger('click');
+            network.last()?.respond([LA_CEIBA]);
+            await flushPromises();
+
+            expect(panel().get('[role="dialog"] h2').text()).toBe('Restaurante de Prueba La Ceiba (ficticio)');
+        });
+
+        it('sin el parámetro no elige a nadie ni toca la dirección', async () => {
+            const { layer, panel, replace } = await mountHome({ url: '/?lang=es', answer: [LA_CEIBA] });
+
+            expect(panel().find('[role="dialog"]').exists()).toBe(false);
+            expect(layer().props('selected')).toBeNull();
+            expect(replace).not.toHaveBeenCalled();
+        });
+
+        // Si quedara, «atrás» desde otra ficha volvería a `/?r=slug` y reabriría
+        // a este, y no al mapa sin nadie elegido (ADR 0018).
+        it('una vez leído, el parámetro sale de la dirección, sin sumar una entrada al historial ni volver a montar la página', async () => {
+            const { network, replace } = await mountHome({ url: '/?r=prueba-la-ceiba' });
+            expect(replace).not.toHaveBeenCalled();
+
+            network.last()?.respond([LA_CEIBA, EL_GUADUAL]);
+            await flushPromises();
+
+            expect(replace).toHaveBeenCalledExactlyOnceWith({ url: '/', preserveScroll: true, preserveState: true });
+        });
+
+        it('también sale si ese restaurante no está en la lista', async () => {
+            const { replace } = await mountHome({ url: '/?r=ya-no-esta', answer: [LA_CEIBA] });
+
+            expect(replace).toHaveBeenCalledExactlyOnceWith({ url: '/', preserveScroll: true, preserveState: true });
+        });
+
+        it('los demás parámetros de la dirección se quedan', async () => {
+            const { replace } = await mountHome({ url: '/?lang=en&r=prueba-la-ceiba', answer: [LA_CEIBA] });
+
+            expect(replace).toHaveBeenCalledExactlyOnceWith({ url: '/?lang=en', preserveScroll: true, preserveState: true });
         });
     });
 
@@ -444,12 +546,12 @@ describe('Home', () => {
             expect(panel().get('[role="dialog"] h2').text()).toBe('Restaurante de Prueba El Guadual (ficticio)');
         });
 
-        it('todavía no enlaza a la ficha: no existe', async () => {
-            const { panel, tapOnMap } = await mountHome({ answer: [LA_CEIBA] });
+        it('enlaza a la ficha del restaurante elegido', async () => {
+            const { panel, tapOnMap } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
 
-            await tapOnMap('prueba-la-ceiba');
+            await tapOnMap('prueba-el-guadual');
 
-            expect(panel().find('a').exists()).toBe(false);
+            expect(panel().get('[role="dialog"] a').attributes('href')).toBe('/restaurants/prueba-el-guadual');
         });
 
         it('al cambiar de idioma sigue abierto, con las categorías en el idioma nuevo', async () => {

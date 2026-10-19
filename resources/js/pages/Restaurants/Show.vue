@@ -1,0 +1,163 @@
+<script setup lang="ts">
+import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, onBeforeUnmount, onMounted } from 'vue';
+
+import Icon from '@/components/Icon.vue';
+import RestaurantContact from '@/components/RestaurantContact.vue';
+import RestaurantDelivery from '@/components/RestaurantDelivery.vue';
+import RestaurantHours from '@/components/RestaurantHours.vue';
+import RestaurantMenu from '@/components/RestaurantMenu.vue';
+import SampleDataBadge from '@/components/SampleDataBadge.vue';
+import type { PageMeta } from '@/composables/useI18n';
+import { useI18n } from '@/composables/useI18n';
+import { useNow } from '@/composables/useNow';
+import { formatDate } from '@/i18n/intl';
+import { mapUrl } from '@/restaurants/links';
+import { openStatus } from '@/restaurants/openStatus';
+import type { RestaurantProfile } from '@/restaurants/profile';
+import { openStatusText } from '@/restaurants/statusText';
+
+/**
+ * La ficha de un restaurante (#13, ADR 0018): GET /restaurants/{slug}. Lo que
+ * muestra llega en `restaurant`, una lista blanca que arma el servidor
+ * (App\Http\Resources\RestaurantProfile); `meta` trae el título y la
+ * descripción del documento, que el servidor ya escribió en el HTML.
+ *
+ * «Abierto ahora» no viene del servidor: se calcula aquí con el horario de
+ * las props y el mismo módulo que usa el mapa (openStatus.ts, ADR 0017), y se
+ * pone al día solo mientras la página siga abierta.
+ *
+ * Las props sí envejecen: una app instalada pasa horas abierta sin volver a
+ * montarse. Cuando la pestaña vuelve del fondo con props de más de un minuto
+ * se piden otra vez, como la lista del mapa (useRestaurants.ts): el
+ * restaurante pudo cambiar el menú o el horario, o la ficha ocultarse.
+ */
+const { restaurant, meta } = defineProps<{
+    restaurant: RestaurantProfile;
+    meta: PageMeta;
+}>();
+
+/** Lo que duran las props a la vista: el mismo minuto que la lista del mapa. */
+const FRESH_FOR_MS = 60_000;
+
+const { t, locale } = useI18n();
+const now = useNow();
+
+const status = computed(() => openStatus(restaurant, now.value));
+const statusText = computed(() => openStatusText(status.value, t, locale.value));
+
+/** Cuándo llegaron las props que se ven, por el reloj del dispositivo. */
+let loadedAt = Date.now();
+
+const onVisible = (): void => {
+    if (document.visibilityState !== 'visible' || Date.now() - loadedAt <= FRESH_FOR_MS) {
+        return;
+    }
+
+    router.reload({
+        only: ['restaurant', 'meta'],
+        onSuccess: () => {
+            loadedAt = Date.now();
+        },
+        // La ficha ya no está (se ocultó): se pide como una página normal y
+        // el servidor responde su página de error. Con cualquier otro error
+        // se queda la ficha que había. false: sin el diálogo de Inertia.
+        onHttpException: (response) => {
+            if (response.status === 404) {
+                window.location.reload();
+            }
+
+            return false;
+        },
+        // Sin señal se queda la que había; al volver otra vez, se reintenta.
+        onNetworkError: () => false,
+    });
+};
+
+onMounted(() => {
+    document.addEventListener('visibilitychange', onVisible);
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('visibilitychange', onVisible);
+});
+</script>
+
+<template>
+    <Head :title="meta.title" />
+
+    <div class="mx-auto w-full max-w-3xl px-4 pt-2 pb-10">
+        <Link href="/" class="-ml-2 inline-flex min-h-touch items-center gap-1 rounded-full px-2 font-semibold hover:bg-surface" data-back>
+            <Icon name="chevron-izquierda" :size="20" />
+            {{ t('restaurant.back_to_map') }}
+        </Link>
+
+        <article>
+            <header class="mt-2">
+                <!-- Solo la recibe quien puede verla oculta: que no la tome por publicada. -->
+                <p v-if="restaurant.hidden" class="mb-3 flex items-start gap-2 rounded-veni-sm border border-line bg-surface p-3 text-sm" data-hidden>
+                    <Icon name="informacion" :size="20" class="shrink-0" />
+                    <span>{{ t('restaurant.hidden') }}</span>
+                </p>
+
+                <h1 class="text-2xl leading-tight wrap-anywhere min-[480px]:text-3xl">{{ restaurant.name }}</h1>
+
+                <p v-if="restaurant.fictitious" class="mt-2"><SampleDataBadge /></p>
+
+                <ul v-if="restaurant.categories.length > 0" class="mt-3 flex flex-wrap gap-1.5" :aria-label="t('restaurants.categories')">
+                    <li v-for="category in restaurant.categories" :key="category.slug" class="rounded-full bg-surface px-2.5 py-0.5 text-sm">
+                        {{ category.name }}
+                    </li>
+                </ul>
+
+                <p class="mt-3 flex items-start gap-2" :class="status.state === 'open' ? 'font-semibold' : 'text-ink-muted'" data-status>
+                    <Icon name="reloj" :size="20" class="mt-0.5 shrink-0" />
+                    <span>{{ statusText }}</span>
+                </p>
+
+                <p v-if="restaurant.delivery.available" class="mt-1.5 flex items-start gap-2" data-delivery>
+                    <Icon name="check" :size="20" class="mt-0.5 shrink-0" />
+                    <span>{{ t('restaurants.delivery') }}</span>
+                </p>
+
+                <!--
+                    Abre el mapa del inicio con este restaurante ya elegido
+                    (/?r=slug), y eso dice el botón. La ruta hasta él («Cómo
+                    llegar») es de #11 y se calcula allá, en el dispositivo.
+                    Una ficha oculta no está en el mapa: no hay a dónde llevar.
+                -->
+                <Link
+                    v-if="!restaurant.hidden"
+                    :href="mapUrl(restaurant.slug)"
+                    class="mt-4 inline-flex min-h-touch items-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                    data-see-on-map
+                >
+                    <Icon name="ubicacion" :size="20" />
+                    {{ t('restaurant.see_on_map') }}
+                </Link>
+
+                <p v-if="restaurant.description" class="mt-4 max-w-prose whitespace-pre-line" data-description>{{ restaurant.description }}</p>
+
+                <!-- Sin reclamar: nadie del restaurante confirmó estos datos. -->
+                <p v-if="restaurant.unverified" class="mt-3 flex items-start gap-2 text-sm text-ink-muted" data-unverified>
+                    <Icon name="informacion" :size="20" class="shrink-0" />
+                    <span>
+                        {{
+                            restaurant.updated_on
+                                ? t('restaurant.unverified_since', { date: formatDate(restaurant.updated_on, locale) })
+                                : t('restaurant.unverified')
+                        }}
+                    </span>
+                </p>
+            </header>
+
+            <RestaurantHours class="mt-8 border-t border-line pt-6" :hours="restaurant.hours" :special-hours="restaurant.special_hours" />
+
+            <RestaurantMenu class="mt-8 border-t border-line pt-6" :sections="restaurant.menu" />
+
+            <RestaurantDelivery v-if="restaurant.delivery.available" class="mt-8 border-t border-line pt-6" :delivery="restaurant.delivery" />
+
+            <RestaurantContact class="mt-8 border-t border-line pt-6" :restaurant="restaurant" />
+        </article>
+    </div>
+</template>

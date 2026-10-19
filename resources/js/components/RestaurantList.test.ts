@@ -21,6 +21,8 @@ async function mountList(locale: 'es' | 'en' = 'es', restaurants: readonly Resta
         wrapper,
         items: () => wrapper.findAll('button[data-slug]'),
         names: () => wrapper.findAll('button[data-slug] [data-name]').map((line) => line.text()),
+        /** El enlace a la ficha de cada restaurante. */
+        links: () => wrapper.findAll('li > a'),
         // El espacio que no parte la línea de «3:00 p. m.» se compara como uno común.
         statuses: () => wrapper.findAll('button[data-slug] [data-status]').map((line) => line.text().replaceAll(' ', ' ')),
     };
@@ -62,6 +64,48 @@ describe('RestaurantList', () => {
         for (const item of items()) {
             expect(item.classes()).toContain('min-h-touch');
         }
+    });
+
+    describe('enlace a la ficha', () => {
+        it.each([
+            ['es', ['Ver la ficha de Restaurante de Prueba La Ceiba (ficticio)', 'Ver la ficha de Restaurante de Prueba El Guadual (ficticio)']],
+            ['en', ['View details of Restaurante de Prueba La Ceiba (ficticio)', 'View details of Restaurante de Prueba El Guadual (ficticio)']],
+        ] as const)('en %s, cada restaurante lleva un enlace a su ficha, con su nombre', async (locale, names) => {
+            const { links } = await mountList(locale);
+
+            expect(links().map((link) => link.attributes('href'))).toEqual(['/restaurants/prueba-la-ceiba', '/restaurants/prueba-el-guadual']);
+            // El ícono solo no dice nada: el nombre del enlace dice a qué ficha lleva.
+            expect(links().map((link) => link.attributes('aria-label'))).toEqual(names);
+        });
+
+        it('cada enlace tiene un área táctil de 44 px', async () => {
+            const { links } = await mountList();
+
+            for (const link of links()) {
+                expect(link.classes()).toContain('size-touch');
+            }
+        });
+
+        it('va al lado del botón, no adentro: son dos acciones distintas', async () => {
+            const { wrapper, items } = await mountList();
+
+            expect(wrapper.findAll('li')).toHaveLength(2);
+
+            for (const row of wrapper.findAll('li')) {
+                expect(row.findAll('button')).toHaveLength(1);
+                expect(row.findAll('a')).toHaveLength(1);
+            }
+
+            expect(items()[0]?.find('a').exists()).toBe(false);
+        });
+
+        it('seguir el enlace no elige el restaurante en el mapa', async () => {
+            const { wrapper, links } = await mountList();
+
+            await links()[0]?.trigger('click');
+
+            expect(wrapper.emitted('select')).toBeUndefined();
+        });
     });
 
     it('elegir uno avisa cuál', async () => {

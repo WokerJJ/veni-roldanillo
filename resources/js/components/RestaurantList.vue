@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Link } from '@inertiajs/vue3';
 import { nextTick, onMounted, useId, useTemplateRef } from 'vue';
 
 import Icon from '@/components/Icon.vue';
@@ -6,6 +7,7 @@ import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import { useI18n } from '@/composables/useI18n';
 import { useNow } from '@/composables/useNow';
 import type { Restaurant } from '@/restaurants/api';
+import { restaurantUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
 import { openStatusText } from '@/restaurants/statusText';
 
@@ -14,7 +16,8 @@ import { openStatusText } from '@/restaurants/statusText';
  * usa teclado o lector de pantalla (los marcadores se dibujan en un lienzo y
  * no se pueden recorrer), y para quien prefiere leer. Cada uno es un botón
  * con su nombre y su estado, que abre el mismo resumen que tocar su marcador;
- * los de ejemplo llevan su rótulo.
+ * los de ejemplo llevan su rótulo. Al lado, un enlace lleva derecho a su
+ * ficha (#13), sin pasar por el resumen.
  *
  * Al abrirse toma el foco en el título; quien la muestra la cierra con
  * `close` (el botón o Escape).
@@ -69,10 +72,10 @@ defineExpose({
         </div>
 
         <ul ref="list" class="-mx-2 min-h-0 overflow-y-auto overscroll-contain">
-            <li v-for="restaurant in restaurants" :key="restaurant.slug">
+            <li v-for="restaurant in restaurants" :key="restaurant.slug" class="flex items-center gap-1">
                 <button
                     type="button"
-                    class="flex min-h-touch w-full flex-col justify-center rounded-veni-sm px-2 py-1.5 text-left hover:bg-surface"
+                    class="flex min-h-touch min-w-0 flex-1 flex-col justify-center rounded-veni-sm px-2 py-1.5 text-left hover:bg-surface"
                     :data-slug="restaurant.slug"
                     @click="$emit('select', restaurant.slug)"
                 >
@@ -82,6 +85,15 @@ defineExpose({
                     </span>
                     <span class="text-sm text-ink-muted" data-status>{{ statusOf(restaurant) }}</span>
                 </button>
+                <!-- El ícono solo no dice nada: el nombre del enlace lleva el del restaurante. -->
+                <Link
+                    :href="restaurantUrl(restaurant.slug)"
+                    class="inline-flex size-touch shrink-0 items-center justify-center rounded-full hover:bg-surface"
+                    :aria-label="t('restaurants.view_details_of', { name: restaurant.name })"
+                    :title="t('restaurants.view_details')"
+                >
+                    <Icon name="chevron-derecha" />
+                </Link>
             </li>
         </ul>
     </section>

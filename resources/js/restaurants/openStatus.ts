@@ -101,6 +101,26 @@ function localNow(now: Date): LocalNow {
     };
 }
 
+/** Un día del calendario de Colombia. */
+export interface BusinessDay {
+    /** `YYYY-MM-DD`, como llegan las fechas de los horarios especiales. */
+    date: string;
+    /** 0 = domingo … 6 = sábado. */
+    weekday: number;
+}
+
+/**
+ * El día que es en Colombia en el instante `now`, esté donde esté el
+ * teléfono: el «hoy» con que se calcula el estado, para quien muestra el
+ * horario (resaltar el día, dejar atrás los horarios especiales que ya pasaron).
+ */
+export function businessDay(now: Date): BusinessDay {
+    const today = localNow(now);
+
+    // Mediodía en UTC: la fecha escrita es la de Colombia, sin correrse de día.
+    return { date: new Date(Date.UTC(today.year, today.month - 1, today.day, 12)).toISOString().slice(0, 10), weekday: today.weekday };
+}
+
 /** `HH:MM` → minutos desde la medianoche; lo que no sea una hora, null. */
 function minutesOf(time: string | null): number | null {
     const [, hours, minutes] = /^(\d{1,2}):(\d{2})/.exec(time ?? '') ?? [];

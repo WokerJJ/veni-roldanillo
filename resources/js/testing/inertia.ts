@@ -11,7 +11,7 @@ import { vi } from 'vitest';
 import type { FunctionalComponent } from 'vue';
 import { h, reactive } from 'vue';
 
-import type { Locale } from '@/composables/useI18n';
+import type { Locale, PageMeta } from '@/composables/useI18n';
 
 import en from '../../../lang/en.json';
 import es from '../../../lang/es.json';
@@ -21,6 +21,8 @@ export const messages = { es, en } as const;
 interface FakePageProps {
     locale: Locale;
     translations: Record<string, string>;
+    /** Solo en las páginas con título y descripción propios (la ficha de un restaurante). */
+    meta?: PageMeta;
 }
 
 type FakeEventName = 'beforeUpdate' | 'navigate';
@@ -29,7 +31,9 @@ type FakeListener = (event: { detail: { page: { props: FakePageProps } } }) => v
 function createPage() {
     const props: FakePageProps = { locale: 'es', translations: { ...es } };
 
-    return reactive({ props });
+    // `url`: la ruta de la página con sus parámetros, como la manda el
+    // servidor. La prueba la cambia antes de montar (`page.url = '/?r=…'`).
+    return reactive({ props, url: '/' });
 }
 
 /**
@@ -74,6 +78,13 @@ function fire(type: FakeEventName, props: FakePageProps): void {
 function show(props: FakePageProps): void {
     page.props.locale = props.locale;
     page.props.translations = props.translations;
+
+    // Las props de la página anterior no quedan: una página sin `meta` no hereda la de otra.
+    if (props.meta) {
+        page.props.meta = props.meta;
+    } else {
+        delete page.props.meta;
+    }
 }
 
 /**
@@ -81,8 +92,8 @@ function show(props: FakePageProps): void {
  * «beforeUpdate», la muestra y, solo si agrega una entrada al historial (no
  * reemplaza la actual), avisa con «navigate».
  */
-export function receiveFromServer(locale: Locale, { replace = false } = {}): void {
-    const props: FakePageProps = { locale, translations: { ...messages[locale] } };
+export function receiveFromServer(locale: Locale, { replace = false, meta }: { replace?: boolean; meta?: PageMeta } = {}): void {
+    const props: FakePageProps = { locale, translations: { ...messages[locale] }, ...(meta ? { meta } : {}) };
 
     fire('beforeUpdate', props);
     show(props);

@@ -3,7 +3,16 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="description" content="{{ __('meta.description') }}">
+
+        {{--
+            Título y descripción del documento. Una página con los suyos (la
+            ficha de un restaurante) los manda en la prop `meta`; las demás
+            llevan los generales. Van en el HTML del servidor porque quien
+            arma la vista previa de un enlace compartido no ejecuta JavaScript;
+            al navegar sin recargar los mantienen <Head> y useI18n.
+        --}}
+        @php($meta = is_array($page['props']['meta'] ?? null) ? $page['props']['meta'] : [])
+        <meta name="description" content="{{ $meta['description'] ?? __('meta.description') }}">
 
         {{--
             App instalable (#5): el manifest y el color de la barra del sistema,
@@ -59,7 +68,7 @@
 
         @vite(['resources/js/app.ts', "resources/js/pages/{$page['component']}.vue"])
         <x-inertia::head>
-            <title>{{ config('app.name', 'Vení Roldanillo') }}</title>
+            <title>{{ isset($meta['title']) ? $meta['title'].' · ' : '' }}{{ config('app.name', 'Vení Roldanillo') }}</title>
         </x-inertia::head>
     </head>
     <body>

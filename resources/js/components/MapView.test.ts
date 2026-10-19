@@ -231,6 +231,15 @@ describe('MapView', () => {
             expect(created.container.parentElement?.getAttribute('aria-label')).toBe('Mapa de Roldanillo');
         });
 
+        it('el contenedor del mapa tiene alto propio: MapLibre le cambia la posición y sin él nacería con 300 px', async () => {
+            const { map } = await mountMap();
+            const created = await map();
+
+            // maplibre-gl.css le pone `position: relative` al contenedor: con
+            // solo `inset-0` mediría cero al crear el mapa (visto en Chrome).
+            expect([...created.container.classList]).toEqual(expect.arrayContaining(['inset-0', 'size-full']));
+        });
+
         it.each([
             ['light', 'en', styleUrl('claro', 'en')],
             ['dark', 'es', styleUrl('oscuro', 'es')],

@@ -3,13 +3,12 @@
 namespace App\Http\Resources;
 
 use App\Enums\Locale;
+use App\Http\Resources\Concerns\PresentsSchedule;
 use App\Models\Category;
-use App\Models\OpeningHour;
 use App\Models\Restaurant;
 use App\Models\SpecialHour;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use LogicException;
 
 /**
  * Un restaurante como figura (Feature) de GeoJSON para el mapa (#9).
@@ -44,6 +43,8 @@ use LogicException;
  */
 class RestaurantFeature extends JsonResource
 {
+    use PresentsSchedule;
+
     /** Decimales de las coordenadas: seis son unos 10 cm. */
     private const COORDINATE_DECIMALS = 6;
 
@@ -84,13 +85,7 @@ class RestaurantFeature extends JsonResource
                 // Las zonas mandan sobre la casilla (ver Restaurant).
                 'delivery' => $restaurant->delivery || $restaurant->getAttribute('delivery_zones_exists') === true,
                 'fictitious' => $restaurant->is_fictitious,
-                'hours' => array_values($restaurant->openingHours
-                    ->map(fn (OpeningHour $slot): array => [
-                        'weekday' => $slot->weekday,
-                        'opens' => self::time($slot->opens_at),
-                        'closes' => self::time($slot->closes_at),
-                    ])
-                    ->all()),
+                'hours' => self::weeklyHours($restaurant),
                 'special_hours' => array_values($restaurant->specialHours
                     ->map(fn (SpecialHour $day): array => [
                         'date' => $day->on_date->toDateString(),
@@ -101,15 +96,5 @@ class RestaurantFeature extends JsonResource
                     ->all()),
             ],
         ];
-    }
-
-    /** «11:00:00» de PostgreSQL → «11:00»: los horarios van al minuto. */
-    private static function time(string $value): string
-    {
-        if (preg_match('/^\d{2}:\d{2}/', $value, $match) !== 1) {
-            throw new LogicException("«{$value}» no es una hora.");
-        }
-
-        return $match[0];
     }
 }

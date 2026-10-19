@@ -51,4 +51,73 @@ describe('AppLayout', () => {
         expect(wrapper.get('main').attributes('id')).toBe('contenido');
         expect(wrapper.get('header').findAll('button').length).toBeGreaterThan(0);
     });
+
+    // El layout es persistente: al navegar no se vuelve a montar y el foco
+    // quedaría en <body>, sin que nada anuncie la página nueva.
+    describe('al navegar', () => {
+        /** El layout en el documento (el foco solo se mueve ahí), abierto en esa dirección. */
+        async function mountLayoutAt(url: string) {
+            const fake = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
+            fake.reset();
+            fake.page.url = url;
+
+            const { default: AppLayout } = await import('./AppLayout.vue');
+            const host = document.createElement('div');
+            document.body.append(host);
+            const wrapper = mount(AppLayout, { attachTo: host, slots: { default: '<p>Página</p>' } });
+
+            return { fake, main: wrapper.get('main').element };
+        }
+
+        afterEach(() => {
+            document.body.replaceChildren();
+        });
+
+        it('a otra página, lleva el foco al contenido', async () => {
+            const { fake, main } = await mountLayoutAt('/');
+
+            fake.page.url = '/restaurants/prueba-la-ceiba';
+            fake.receiveFromServer('es');
+
+            expect(document.activeElement).toBe(main);
+        });
+
+        it('con atrás y adelante, también', async () => {
+            const { fake, main } = await mountLayoutAt('/restaurants/prueba-la-ceiba');
+
+            fake.page.url = '/?r=prueba-la-ceiba';
+            fake.restoreFromHistory('es');
+
+            expect(document.activeElement).toBe(main);
+        });
+
+        it('en la primera carga no mueve el foco: Inertia también avisa ahí', async () => {
+            const { fake, main } = await mountLayoutAt('/restaurants/prueba-la-ceiba');
+
+            fake.receiveFromServer('es');
+
+            expect(document.activeElement).not.toBe(main);
+        });
+
+        it('si solo cambian los parámetros de la misma página, tampoco', async () => {
+            const { fake, main } = await mountLayoutAt('/?r=prueba-la-ceiba');
+
+            fake.page.url = '/';
+            fake.receiveFromServer('es');
+
+            expect(document.activeElement).not.toBe(main);
+        });
+
+        it('al volver a la página de antes, lo lleva otra vez', async () => {
+            const { fake, main } = await mountLayoutAt('/');
+            fake.page.url = '/restaurants/prueba-la-ceiba';
+            fake.receiveFromServer('es');
+            main.blur();
+
+            fake.page.url = '/';
+            fake.restoreFromHistory('es');
+
+            expect(document.activeElement).toBe(main);
+        });
+    });
 });

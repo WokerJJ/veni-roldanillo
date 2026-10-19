@@ -10,7 +10,7 @@ vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 /** Miércoles 7 de octubre de 2026, 12:30 en Colombia: La Ceiba (11 a 15) está abierta. */
 const WEDNESDAY_NOON = new Date('2026-10-07T12:30:00-05:00');
 
-async function mountSummary(props: { restaurant: Restaurant; href?: string }, locale: 'es' | 'en' = 'es') {
+async function mountSummary(props: { restaurant: Restaurant }, locale: 'es' | 'en' = 'es') {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     inertia.reset();
     inertia.receiveFromServer(locale, { replace: true });
@@ -152,19 +152,22 @@ describe('RestaurantSummary', () => {
     });
 
     describe('enlace a la ficha', () => {
-        it('sin ruta de ficha no hay enlace: nada que lleve a una página que no existe', async () => {
-            const { wrapper } = await mountSummary({ restaurant: LA_CEIBA });
-
-            expect(wrapper.find('a').exists()).toBe(false);
-        });
-
-        it('con la ruta, enlaza a la ficha', async () => {
-            const { wrapper } = await mountSummary({ restaurant: LA_CEIBA, href: '/restaurantes/prueba-la-ceiba' });
+        it.each([
+            ['es', 'Ver la ficha'],
+            ['en', 'View details'],
+        ] as const)('en %s termina en un enlace a la ficha de ese restaurante, de 44 px', async (locale, text) => {
+            const { wrapper } = await mountSummary({ restaurant: EL_GUADUAL }, locale);
             const link = wrapper.get('a');
 
-            expect(link.attributes('href')).toBe('/restaurantes/prueba-la-ceiba');
-            expect(link.text()).toBe('Ver la ficha');
+            expect(link.attributes('href')).toBe('/restaurants/prueba-el-guadual');
+            expect(link.text()).toBe(text);
             expect(link.classes()).toContain('min-h-touch');
+        });
+
+        it('es el único enlace del resumen', async () => {
+            const { wrapper } = await mountSummary({ restaurant: LA_CEIBA });
+
+            expect(wrapper.findAll('a')).toHaveLength(1);
         });
     });
 });
