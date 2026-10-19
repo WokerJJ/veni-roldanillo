@@ -69,10 +69,10 @@ El control de geolocalización de MapLibre, decidido en el [ADR 0019](adr/0019-d
 
 | Pieza | Dónde | Qué hace |
 | --- | --- | --- |
-| Control | `resources/js/map/engine.ts` | Lo añade debajo de los de zoom, con precisión alta, 10 s por lectura y zoom hasta 16. Los límites del mapa (`veni:bounds`) dicen qué es «fuera de Roldanillo» |
-| Botón y avisos | `resources/js/map/locate.ts` y `resources/css/map.css` | El nombre de la app y el ícono `ubicacion`, siempre habilitado. Los avisos (sin permiso, sin señal, fuera de la zona, sin geolocalización) son DOM del control junto al botón, y la llegada de la ubicación se anuncia al lector de pantalla. Viajan con el mapa |
+| Control | `resources/js/map/engine.ts` | Lo añade debajo de los de zoom, con precisión alta, 10 s por lectura y zoom hasta 16. Los límites del mapa (`veni:bounds`, obligatorios) dicen qué es «fuera de Roldanillo» |
+| Botón y avisos | `resources/js/map/locate.ts` y `resources/css/map.css` | El nombre de la app y el ícono `ubicacion`, habilitado desde que MapLibre lo prepara; con el permiso negado, un control nuevo. Los avisos (sin permiso, sin señal, fuera de la zona, sin geolocalización) son DOM del control junto al botón, y la llegada de la ubicación se anuncia al lector de pantalla. Viajan con el mapa |
 | Textos | `MapView.vue` (`MapLabels`) | Los da la app en su idioma, con los de los botones de zoom |
-| Margen del panel | `resources/js/map/padding.ts` y la prop `overlay` de `MapView` | La página pasa lo que pone encima del mapa; la cámara deja la ubicación en el centro de lo que queda a la vista |
+| Margen del panel | `resources/js/map/padding.ts`, el motor y la prop `overlay` de `MapView` | La página pasa lo que pone encima del mapa; el motor lo mide en cada encuadre y la cámara deja la ubicación en el centro de lo que queda a la vista |
 
 ### Restaurantes en el mapa
 
