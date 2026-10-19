@@ -16,7 +16,7 @@ Cerrada: versión 0.1.0.
 ## Fase 1 · MVP
 
 - [ ] Inicio: búsqueda, filtros (abierto ahora, domicilio, precio, categoría), "Almuerzos de hoy", "Sugiéreme algo"
-- [ ] Ficha del restaurante: datos, horarios con estado abierto/cerrado, menú por secciones
+- [x] Ficha del restaurante: datos, horarios con estado abierto/cerrado, menú por secciones (ADR 0018)
 - [ ] Menú con opciones obligatorias, adiciones, quitar ingredientes y nota
 - [ ] Carrito y mensaje de WhatsApp (barrio, dirección, referencia, ubicación opcional, pago, "¿con cuánto pagás?")
 - [ ] Direcciones y favoritos guardados en el dispositivo
