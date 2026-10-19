@@ -508,6 +508,80 @@ describe('MapView', () => {
             expect(device.geolocation.clearWatch).toHaveBeenCalledOnce();
             expect(device.watching()).toBe(0);
         });
+
+        /*
+        | Regla 3 de producto y ADR 0008: la posición se usa en el dispositivo
+        | y no sale de él. Lo que estas pruebas no ven (MapLibre de verdad, el
+        | service worker) lo cubre la verificación en un navegador real.
+        */
+        describe('la posición no sale del dispositivo', () => {
+            /** Una posición con cifras que no aparecen en ningún otro lado. */
+            const SECRET = { longitude: -76.1561937, latitude: 4.4093771 };
+            const SECRET_TRACE = /76\.15619|4\.40937|4,40937|76,15619/;
+
+            function leaks(value: unknown): boolean {
+                return SECRET_TRACE.test(typeof value === 'string' ? value : JSON.stringify(value));
+            }
+
+            function storageText(storage: Storage): string {
+                return Array.from({ length: storage.length }, (_, index) => {
+                    const key = storage.key(index) ?? '';
+
+                    return `${key}=${storage.getItem(key) ?? ''}`;
+                }).join('\n');
+            }
+
+            it('ni a la red, ni a la dirección, ni al almacenamiento del navegador', async () => {
+                const device = stubGeolocation();
+                const open = vi.spyOn(XMLHttpRequest.prototype, 'open');
+                const send = vi.spyOn(XMLHttpRequest.prototype, 'send');
+                const beacon = vi.spyOn(navigator, 'sendBeacon');
+                const pushState = vi.spyOn(window.history, 'pushState');
+                const replaceState = vi.spyOn(window.history, 'replaceState');
+                const { loadedMap, toggleTheme, inertia } = await mountMap();
+                const created = await loadedMap();
+                const button = await locateButton(created);
+                const href = window.location.href;
+
+                button.click();
+                device.move(SECRET);
+                device.move({ ...SECRET, accuracy: 5 });
+                // Con la ubicación en el mapa, otro tema y otro idioma: piden estilos nuevos a la red.
+                await toggleTheme();
+                inertia.receiveFromServer('en', { replace: true });
+                await vi.waitFor(() => {
+                    expect(created.setStyle).toHaveBeenCalledTimes(2);
+                });
+                await flushPromises();
+
+                // La posición sí llegó al mapa: la prueba no mira un mapa vacío.
+                expect(leaks(userDot(created)?.dataset.lngLat)).toBe(true);
+                expect(created.fitBounds).toHaveBeenCalledTimes(2);
+
+                expect(styles.fetchMock).toHaveBeenCalledTimes(3);
+                expect(styles.fetchMock.mock.calls.filter((call) => leaks(call))).toEqual([]);
+                expect(open).not.toHaveBeenCalled();
+                expect(send).not.toHaveBeenCalled();
+                expect(beacon).not.toHaveBeenCalled();
+                expect(leaks(Object.values(inertia.router).map((method) => (vi.isMockFunction(method) ? method.mock.calls : [])))).toBe(false);
+
+                expect(window.location.href).toBe(href);
+                expect(window.location.hash).toBe('');
+                expect(pushState).not.toHaveBeenCalled();
+                expect(replaceState).not.toHaveBeenCalled();
+
+                expect(leaks(storageText(window.localStorage))).toBe(false);
+                expect(leaks(storageText(window.sessionStorage))).toBe(false);
+                expect(leaks(document.cookie)).toBe(false);
+            });
+
+            it('la cámara, que sigue a la ubicación, no se escribe en la dirección', async () => {
+                const { map } = await mountMap();
+
+                // El `hash` de MapLibre pondría centro y zoom en la URL (#zoom/lat/lng).
+                expect((await map()).options.hash ?? false).toBe(false);
+            });
+        });
     });
 
     describe('tema e idioma', () => {
