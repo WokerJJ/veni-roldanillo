@@ -11,8 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * propias no tienen procedencia. Nada es asignable: la escribe solo la
  * importación (App\Console\Commands\ImportOsmRestaurants).
  *
- * Larastan tipa las columnas enum de la migración como literales; los
- * @property dejan el texto tal cual.
+ * Larastan tipa las columnas enum de la migración como literales: las
+ * propiedades de abajo las dejan como texto.
  *
  * @property string $source
  * @property string $element_type
