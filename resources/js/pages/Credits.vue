@@ -15,7 +15,7 @@ const OSM_COPYRIGHT_URL = 'https://www.openstreetmap.org/copyright';
 const ODBL_URL = 'https://opendatacommons.org/licenses/odbl/1-0/';
 const REQUEST_URL = 'https://github.com/WokerJJ/veni-roldanillo/issues/new';
 
-const linkClass = 'inline-flex min-h-touch items-center gap-1 font-semibold underline underline-offset-2';
+const linkClass = 'inline-flex min-h-touch items-center gap-1 font-semibold underline';
 </script>
 
 <template>
@@ -62,10 +62,10 @@ const linkClass = 'inline-flex min-h-touch items-center gap-1 font-semibold unde
 
         <section class="mt-8 border-t border-line pt-6" aria-labelledby="creditos-otros">
             <h2 id="creditos-otros" class="text-xl">{{ t('credits.others_heading') }}</h2>
-            <ul class="mt-3 max-w-prose list-disc space-y-2 pl-5">
-                <li>{{ t('credits.maplibre') }}</li>
-                <li>{{ t('credits.icons') }}</li>
-                <li>{{ t('credits.fonts') }}</li>
+            <ul class="mt-3 max-w-prose">
+                <li class="mt-2">{{ t('credits.maplibre') }}</li>
+                <li class="mt-2">{{ t('credits.icons') }}</li>
+                <li class="mt-2">{{ t('credits.fonts') }}</li>
             </ul>
         </section>
     </div>

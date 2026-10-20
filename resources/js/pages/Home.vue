@@ -382,7 +382,7 @@ onBeforeUnmount(() => {
                 </div>
 
                 <!-- El inicio no tiene pie: los créditos de OpenStreetMap (ADR 0021) van en la bienvenida. -->
-                <Link href="/credits" class="mt-1 inline-flex min-h-touch items-center self-start text-sm text-ink-muted underline underline-offset-2" data-credits>
+                <Link href="/credits" class="mt-1 inline-flex min-h-touch items-center self-start text-sm text-ink-muted underline" data-credits>
                     {{ t('credits.link') }}
                 </Link>
             </template>
