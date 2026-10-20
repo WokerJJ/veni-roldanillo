@@ -143,7 +143,9 @@ function routesGraph(routesUrl: string | undefined): RuntimeCaching[] {
             handler: 'StaleWhileRevalidate',
             options: {
                 cacheName: 'veni-map-routes',
-                // El de esta publicación y, mientras se renueva, el anterior.
+                // Con la URL fija queda una sola entrada: cada renovación
+                // reemplaza la anterior. El tope de 2 es por si la URL llega
+                // con parámetros (?v=…): la nueva no echa la otra antes de usarse.
                 expiration: { maxEntries: 2, maxAgeSeconds: 60 * DAY, purgeOnQuotaError: true },
                 cacheableResponse: { statuses: [200] },
             },

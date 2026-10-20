@@ -317,6 +317,13 @@ describe('presupuesto de descarga', () => {
         // primera; al arranque llegan el botón, el restaurante elegido en la
         // dirección y lo que carga lo demás. Para hacerle lugar, los colores
         // de la marca se importan solos y no todo brand/tokens.json (−0,2).
+        // La próxima vez que no alcance, antes de subirlo: sacar del arranque
+        // lo de «Cómo llegar» que sigue en él (el estado de la ruta y el aviso
+        // sin señal de Home.vue, el restaurante elegido en la dirección) a
+        // un chunk que baje con el resumen, y medir de nuevo. Solo si con eso
+        // no alcanza se sube, con un ADR que diga qué se sumó. Los textos
+        // (directions.* y los demás) no cuentan aquí: llegan con la página,
+        // en las props de Inertia; recortarlos es otra cuenta, la del HTML.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
