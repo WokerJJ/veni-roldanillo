@@ -45,7 +45,7 @@ Para la política de seguridad de contenido (ADR 0014): el navegador pide con `f
 
 ### Capas propias sobre el mapa
 
-Lo que la app pinta encima del mapa base (los restaurantes; después la ruta, #11) sigue un contrato, decidido en el [ADR 0016](adr/0016-capas-propias-sobre-el-mapa.md): cambiar de tema o de idioma es cambiar de estilo, y eso borra las fuentes, las capas y las imágenes añadidas en ejecución.
+Lo que la app pinta encima del mapa base (los restaurantes y la ruta de «Cómo llegar») sigue un contrato, decidido en el [ADR 0016](adr/0016-capas-propias-sobre-el-mapa.md): cambiar de tema o de idioma es cambiar de estilo, y eso borra las fuentes, las capas y las imágenes añadidas en ejecución.
 
 | Pieza | Dónde | Qué hace |
 | --- | --- | --- |
@@ -73,6 +73,19 @@ El control de geolocalización de MapLibre, decidido en el [ADR 0019](adr/0019-d
 | Botón y avisos | `resources/js/map/locate.ts` y `resources/css/map.css` | El nombre de la app y el ícono `ubicacion`, habilitado desde que MapLibre lo prepara; con el permiso negado, un control nuevo. Los avisos (sin permiso, sin señal, fuera de la zona, sin geolocalización) son DOM del control junto al botón, y la llegada de la ubicación se anuncia al lector de pantalla. Viajan con el mapa |
 | Textos | `MapView.vue` (`MapLabels`) | Los da la app en su idioma, con los de los botones de zoom |
 | Margen del panel | `resources/js/map/padding.ts`, el motor y la prop `overlay` de `MapView` | La página pasa lo que pone encima del mapa; el motor lo mide en cada encuadre y la cámara deja la ubicación en el centro de lo que queda a la vista |
+
+### Cómo llegar
+
+La ruta hasta el restaurante elegido, a pie y en carro, calculada en el teléfono ([ADR 0020](adr/0020-como-llegar-en-el-dispositivo.md)). Nada de esto viaja con el arranque: baja con `import()` al pedir la primera ruta.
+
+| Pieza | Dónde | Qué hace |
+| --- | --- | --- |
+| Router | `resources/js/routing/veni-mapa/` | Copia fija de `router.ts` y `graph.ts` del tag v0.2.0 de veni-mapa; se reemplaza entera, no se corrige |
+| Grafo | `resources/js/routing/loadRouter.ts` | Baja `VITE_MAP_ROUTES_URL` con la primera ruta, una vez por página; si falla, se reintenta. Queda en `veni-map-routes` |
+| Posición | `MapHandle.watchPosition` y `requestPosition` (`engine.ts`, `locate.ts`) | La de «¿Dónde estoy?», en memoria y solo dentro del dispositivo; `requestPosition` lo enciende como un toque |
+| Capa | `resources/js/components/RouteLayer.vue` | Dentro de `MapView`: calcula a pie y en carro, dibuja la elegida debajo de las etiquetas (`belowLabels`) y la encuadra con el margen del panel (`showBounds`). Solo devuelve distancia, duración y estado |
+| Panel | `resources/js/components/RouteDirections.vue` | En el resumen del restaurante: perfiles, estados en ES y EN, la aclaración de que es una estimación, «Abrir en Google Maps / Waze» (solo el destino) y la atribución de OpenStreetMap |
+| Dirección | `Home.vue`, `routing/intent.ts` | `?r=slug` mientras hay uno elegido, reemplazando la entrada del historial; desde la ficha, la ruta pedida va en memoria, no en la dirección |
 
 ### Restaurantes en el mapa
 
@@ -134,7 +147,7 @@ No viajan el id, los dueños, el plan, la ubicación exacta, los platos que el d
 
 | Pieza | Dónde | Qué hace |
 | --- | --- | --- |
-| Página | `resources/js/pages/Restaurants/Show.vue` | «Volver al mapa», el nombre, el tipo de comida, abierto o cerrado, «Ver en el mapa» (`/?r=slug`; la ruta, «Cómo llegar», es de #11), la descripción y los avisos: «Datos de ejemplo», «Información sin verificar» en las fichas sin reclamar y, para quien ve una oculta, que el público no la ve |
+| Página | `resources/js/pages/Restaurants/Show.vue` | «Volver al mapa», el nombre, el tipo de comida, abierto o cerrado, «Cómo llegar» (`/?r=slug`, con la ruta pedida: ADR 0020), la descripción y los avisos: «Datos de ejemplo», «Información sin verificar» en las fichas sin reclamar y, para quien ve una oculta, que el público no la ve |
 | Horario | `resources/js/components/RestaurantHours.vue` | La semana, de lunes a domingo, con hoy resaltado, y los horarios especiales que vienen con su nota. Si hoy tiene un horario especial, la fila de hoy muestra ese. Sin horario cargado, lo dice |
 | Menú | `resources/js/components/RestaurantMenu.vue` | Por secciones, en el orden del restaurante, con el precio de cada plato y «Agotado hoy». Sin menú cargado, lo dice |
 | Domicilios | `resources/js/components/RestaurantDelivery.vue` | Los barrios a los que lleva y el costo; sin zonas cargadas, que el costo se pregunta. Solo si hace domicilios |
@@ -176,7 +189,8 @@ Lo registra el bundle (`resources/js/pwa/serviceWorker.ts`), sin script en líne
 | Del origen de `VITE_MAP_STYLE_URL`, con la versión en la ruta (`/v0.2.0/`): estilos, glyphs y sprites | Cache first | `veni-map-release`, 60 entradas, 60 días | Una release publicada de veni-mapa no cambia |
 | Del mismo origen, sin versión: el estilo y la lista del sprite (`.json`) | Network first; lo guardado sale sin red o a los 3 segundos | `veni-map-style`, 12 entradas, 30 días | La demo de veni-mapa no es una versión fija (ADR 0007). Estos archivos dicen qué pedir y dónde está cada ícono: con uno viejo, un release nuevo se pintaría a medias |
 | Del mismo origen, sin versión: glyphs e imágenes del sprite (`.pbf`, `.png`, `.webp`) | Stale-while-revalidate | `veni-map`, 60 entradas, 30 días | Se muestra lo guardado y se actualiza detrás. Una visita al mapa guarda unas 7 entradas entre las dos cachés |
-| PMTiles y el grafo de rutas | No se guardan | — | Ver abajo |
+| El grafo de rutas (`VITE_MAP_ROUTES_URL`, solo esa URL) | Stale-while-revalidate | `veni-map-routes`, 2 entradas, 60 días | Baja con la primera ruta y desde ahí sale del teléfono, también sin señal; se renueva detrás. Es el mismo archivo para todos ([ADR 0020](adr/0020-como-llegar-en-el-dispositivo.md)) |
+| PMTiles | No se guarda | — | Ver abajo |
 | Los restaurantes del mapa (`/api/restaurants.geojson`) y todo `/api/` | No se guardan | — | Sin ruta en el service worker: solo la caché HTTP del navegador, un minuto y con ETag ([ADR 0017](adr/0017-restaurantes-en-el-mapa.md)). Una copia aquí podría volver a mostrar una ficha ya oculta, y sin red la app no abre igual |
 
 Cada caché es de una sola ruta, tiene tope, guarda solo respuestas 200 y es de las primeras en vaciarse si el teléfono se queda sin espacio. Lo fijan las pruebas de `runtimeCaching.ts`, junto con que ninguna ruta con caché recibe una navegación ni `PUT /locale`.
@@ -185,7 +199,7 @@ El precache sale del directorio de build (`public/build/assets`) y el manifest d
 
 **Por qué el mapa no va en el precache.** Son unos 310 kB comprimidos. El precache se baja entero o no se instala: con mala señal, más peso es más instalaciones fallidas, y cada despliegue que cambie el motor lo volvería a bajar a todos. Sin red, además, el motor no sirve de nada sin los tiles. Como el inicio muestra el mapa, la primera visita ya lo baja y desde la segunda sale de `veni-map-engine`.
 
-**Por qué el PMTiles no se guarda.** El mapa se pide por rangos (`Range`, respuestas 206) y la Cache API no guarda respuestas parciales. `RangeRequestsPlugin` de Workbox no lo resuelve: recorta respuestas de una copia **completa** ya guardada (el archivo de Roldanillo pesa 1,6 MB), y la biblioteca de PMTiles nunca pide el archivo entero, así que habría que bajarlo aparte, con datos móviles, sin que nadie lo pidiera. Con una URL que no es una versión fija, una copia guardada de una versión con los rangos nuevos de otra daría tiles rotos: PMTiles compara el ETag de cada respuesta y, si cambia, vuelve a pedir con `cache: 'reload'`, una indicación para la caché HTTP que una respuesta sacada de la Cache API no mira, así que seguiría recibiendo la copia vieja. Queda la caché HTTP del navegador. Si llega a hacer falta el mapa sin conexión, la forma es una descarga explícita («Descargar el mapa») de una release fija, con su tamaño a la vista. El grafo de rutas (más de 500 kB) se decide con las rutas (#10, #11).
+**Por qué el PMTiles no se guarda.** El mapa se pide por rangos (`Range`, respuestas 206) y la Cache API no guarda respuestas parciales. `RangeRequestsPlugin` de Workbox no lo resuelve: recorta respuestas de una copia **completa** ya guardada (el archivo de Roldanillo pesa 1,6 MB), y la biblioteca de PMTiles nunca pide el archivo entero, así que habría que bajarlo aparte, con datos móviles, sin que nadie lo pidiera. Con una URL que no es una versión fija, una copia guardada de una versión con los rangos nuevos de otra daría tiles rotos: PMTiles compara el ETag de cada respuesta y, si cambia, vuelve a pedir con `cache: 'reload'`, una indicación para la caché HTTP que una respuesta sacada de la Cache API no mira, así que seguiría recibiendo la copia vieja. Queda la caché HTTP del navegador. Si llega a hacer falta el mapa sin conexión, la forma es una descarga explícita («Descargar el mapa») de una release fija, con su tamaño a la vista.
 
 ### Sin conexión
 

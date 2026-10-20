@@ -518,6 +518,8 @@ class FakeMap {
     private center: unknown = [0, 0];
     private zoom: unknown = 0;
     private cameraUntouched = true;
+    /** Si la cámara está cambiando el zoom (lo que responde `isZooming`). */
+    private zooming = false;
 
     private base: FakeStyle = {};
     private sources = new Map<string, FakeSource>();
@@ -571,7 +573,16 @@ class FakeMap {
     });
     readonly fitBounds = vi.fn((bounds: unknown, _options?: Record<string, unknown>, eventData?: Record<string, unknown>) => {
         // Sin proyección no hay centro que calcular: queda la marca de que se movió.
-        this.moveCamera({ center: bounds }, eventData ?? {});
+        // Encuadrar cambia el zoom y MapLibre lo marca antes de avisar
+        // «movestart»: el control de la ubicación no lo toma como «otro movió
+        // la cámara» y, si la seguía, la sigue siguiendo.
+        this.zooming = true;
+
+        try {
+            this.moveCamera({ center: bounds }, eventData ?? {});
+        } finally {
+            this.zooming = false;
+        }
     });
     /** Como MapLibre: quita los controles (cada uno suelta lo suyo) y deja el contenedor vacío. */
     readonly remove = vi.fn(() => {
@@ -719,7 +730,7 @@ class FakeMap {
     }
 
     isZooming(): boolean {
-        return false;
+        return this.zooming;
     }
 
     /** Un texto de la interfaz de MapLibre: en inglés, como viene. */

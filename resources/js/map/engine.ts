@@ -21,7 +21,7 @@ import { MapUnavailableError } from './errors';
 import { fetchMapStyle } from './fetchStyle';
 import { createLayerRegistry } from './layerRegistry';
 import type { MapLayerGroup, MapLayerGroupHandle } from './layers';
-import type { LocateControl, LocateTexts } from './locate';
+import type { LocateControl, LocateEvent, LocateTexts } from './locate';
 import { addLocateControl } from './locate';
 import type { MapPadding } from './padding';
 import { NO_PADDING, paddingAround } from './padding';
@@ -85,6 +85,20 @@ export interface MapHandle {
      * la cámara deja la ubicación en el centro de lo que queda a la vista.
      */
     setOverlay(overlay: HTMLElement | null): void;
+    /**
+     * Encuadra una región, `[oeste, sur, este, norte]`, en lo que el panel de
+     * la página deja a la vista (la ruta de «Cómo llegar», #11).
+     */
+    showBounds(bounds: [number, number, number, number]): void;
+    /**
+     * La ubicación de «¿Dónde estoy?», en memoria y solo dentro del
+     * dispositivo (ADR 0019 y 0020): la usa la ruta de #11 para calcularse y
+     * dibujarse. Devuelve con qué darse de baja; al liberar el mapa se corta.
+     * Nada de lo que la recibe la guarda ni la manda.
+     */
+    watchPosition(listener: (event: LocateEvent) => void): () => void;
+    /** Enciende «¿Dónde estoy?» como si lo tocaran, si no lo está: pide el permiso si hace falta. */
+    requestPosition(): void;
 }
 
 interface Camera {
@@ -94,6 +108,16 @@ interface Camera {
 }
 
 const PMTILES_PROTOCOL = 'pmtiles';
+
+/** Margen, en px, alrededor de lo que se encuadra con `showBounds`, además del panel. */
+const BOUNDS_MARGIN = 48;
+/**
+ * La columna de los botones del mapa, arriba a la derecha (10 px de margen y
+ * 44 del botón): `showBounds` no deja nada debajo de ellos.
+ */
+const CONTROLS_WIDTH = 54;
+/** Hasta dónde se acerca `showBounds`: una ruta de una cuadra no llena la pantalla. */
+const BOUNDS_MAX_ZOOM = 17;
 
 /** Plazo para que el mapa empiece a pintar; pasado, se muestra el error con «Reintentar». */
 const FIRST_PAINT_TIMEOUT_MS = 20_000;
@@ -483,6 +507,42 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
         showPoint(center, { minZoom = 0 } = {}) {
             if (!destroyed) {
                 map.easeTo({ center, zoom: Math.max(map.getZoom(), minZoom) });
+            }
+        },
+        showBounds(bounds) {
+            if (destroyed) {
+                return;
+            }
+
+            // Si «¿Dónde estoy?» seguía la ubicación, la siguiente lectura
+            // desharía el encuadre: queda encendido, sin mover la cámara.
+            locate.release();
+
+            const panel = currentPadding();
+            const { width, height } = map.getContainer().getBoundingClientRect();
+            // El margen nunca deja sin lugar lo que se encuadra: con poco
+            // mapa a la vista (el panel alto en un celular), se achica. La
+            // columna de los botones, también, en un mapa muy angosto.
+            const controls = Math.max(0, Math.min(CONTROLS_WIDTH, width - panel.left - panel.right - 44));
+            const marginX = Math.max(0, Math.min(BOUNDS_MARGIN, (width - panel.left - panel.right - controls - 44) / 2));
+            const marginY = Math.max(0, Math.min(BOUNDS_MARGIN, (height - panel.top - panel.bottom - 44) / 2));
+
+            map.fitBounds(bounds, {
+                padding: {
+                    top: panel.top + marginY,
+                    right: panel.right + controls + marginX,
+                    bottom: panel.bottom + marginY,
+                    left: panel.left + marginX,
+                },
+                maxZoom: BOUNDS_MAX_ZOOM,
+            });
+        },
+        watchPosition(listener) {
+            return destroyed ? () => undefined : locate.subscribe(listener);
+        },
+        requestPosition() {
+            if (!destroyed) {
+                locate.request();
             }
         },
     };

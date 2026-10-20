@@ -1,5 +1,5 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import type { Restaurant } from '@/restaurants/api';
 import type * as FakeInertia from '@/testing/inertia';
@@ -457,16 +457,14 @@ describe('Home', () => {
             expect(replace).not.toHaveBeenCalled();
         });
 
-        // Si quedara, «atrás» desde otra ficha volvería a `/?r=slug` y reabriría
-        // a este, y no al mapa sin nadie elegido (ADR 0018).
-        it('una vez leído, el parámetro sale de la dirección, sin sumar una entrada al historial ni volver a montar la página', async () => {
+        // Queda en la dirección: «atrás» desde su ficha vuelve al mapa con él (#11).
+        it('si el restaurante está en la lista, el parámetro se queda en la dirección', async () => {
             const { network, replace } = await mountHome({ url: '/?r=prueba-la-ceiba' });
-            expect(replace).not.toHaveBeenCalled();
 
             network.last()?.respond([LA_CEIBA, EL_GUADUAL]);
             await flushPromises();
 
-            expect(replace).toHaveBeenCalledExactlyOnceWith({ url: '/', preserveScroll: true, preserveState: true });
+            expect(replace).not.toHaveBeenCalled();
         });
 
         it('también sale si ese restaurante no está en la lista', async () => {
@@ -476,9 +474,149 @@ describe('Home', () => {
         });
 
         it('los demás parámetros de la dirección se quedan', async () => {
-            const { replace } = await mountHome({ url: '/?lang=en&r=prueba-la-ceiba', answer: [LA_CEIBA] });
+            const { replace } = await mountHome({ url: '/?lang=en&r=ya-no-esta', answer: [LA_CEIBA] });
 
             expect(replace).toHaveBeenCalledExactlyOnceWith({ url: '/?lang=en', preserveScroll: true, preserveState: true });
+        });
+
+        it('con la ruta pedida desde su ficha, abre también «Cómo llegar»', async () => {
+            const { askDirections } = await import('@/routing/intent');
+            askDirections('prueba-la-ceiba');
+            const { panel } = await mountHome({ url: '/?r=prueba-la-ceiba', answer: [LA_CEIBA, EL_GUADUAL] });
+            await vi.dynamicImportSettled();
+            await flushPromises();
+
+            expect(panel().find('[data-directions] h3').text()).toBe('Cómo llegar');
+            expect(panel().get('[data-route-status]').text()).toBe('Buscando tu ubicación… Si te pregunta, tocá «Permitir».');
+        });
+
+        it('un enlace a /?r=slug sin pasar por la ficha abre el restaurante, sin pedir la ruta ni la ubicación', async () => {
+            const { panel } = await mountHome({ url: '/?r=prueba-la-ceiba', answer: [LA_CEIBA] });
+            await vi.dynamicImportSettled();
+
+            expect(panel().find('[role="dialog"]').exists()).toBe(true);
+            expect(panel().find('[data-route-status]').exists()).toBe(false);
+            expect(panel().get('button[data-directions]').text()).toBe('Cómo llegar');
+        });
+    });
+
+    describe('el restaurante elegido en la dirección', () => {
+        it('elegirlo lo pone en la dirección, sin sumar una entrada al historial', async () => {
+            const { replace, tapOnMap } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+
+            await tapOnMap('prueba-el-guadual');
+
+            expect(replace).toHaveBeenCalledExactlyOnceWith({ url: '/?r=prueba-el-guadual', preserveScroll: true, preserveState: true });
+        });
+
+        it('cerrarlo lo saca, y los demás parámetros se quedan', async () => {
+            const { inertia, replace, tapOnMap, pressEscape } = await mountHome({ url: '/?lang=en', answer: [LA_CEIBA] });
+            replace.mockImplementation(({ url }: { url: string }) => {
+                inertia.page.url = url;
+            });
+
+            await tapOnMap('prueba-la-ceiba');
+            await pressEscape();
+
+            expect(replace.mock.calls).toEqual([
+                [{ url: '/?lang=en&r=prueba-la-ceiba', preserveScroll: true, preserveState: true }],
+                [{ url: '/?lang=en', preserveScroll: true, preserveState: true }],
+            ]);
+        });
+    });
+
+    describe('cómo llegar', () => {
+        it('el resumen lo ofrece; al tocarlo, el panel de la ruta lo reemplaza y toma el foco', async () => {
+            const { panel, tapOnMap } = await mountHome({ answer: [LA_CEIBA] });
+            await tapOnMap('prueba-la-ceiba');
+
+            await panel().get('button[data-directions]').trigger('click');
+            await vi.dynamicImportSettled();
+            await flushPromises();
+
+            expect(panel().find('button[data-directions]').exists()).toBe(false);
+            expect(document.activeElement).toBe(panel().get('[data-directions] h3').element);
+            // Con la ruta el panel crece: se desplaza por dentro, sin pasar de su alto.
+            expect(panel().classes()).toContain('overflow-y-auto');
+            expect(panel().get('[data-google-maps]').attributes('href')).toBe('https://www.google.com/maps/dir/?api=1&destination=4.4128%2C-76.1547&travelmode=walking');
+        });
+
+        it('si «Cómo llegar» no baja (sin señal), lo dice y «Volver a intentar» lo vuelve a pedir', async () => {
+            const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            // La capa de la ruta llega con import(): el primer pedido falla, como sin señal.
+            const routeImport = { failures: 1, calls: 0 };
+            vi.doMock('@/components/RouteLayer.vue', async (importOriginal) => {
+                routeImport.calls += 1;
+
+                if (routeImport.failures > 0) {
+                    routeImport.failures -= 1;
+                    throw new TypeError('Failed to fetch dynamically imported module');
+                }
+
+                return await importOriginal();
+            });
+            onTestFinished(() => {
+                vi.doUnmock('@/components/RouteLayer.vue');
+                errors.mockRestore();
+            });
+            const { panel, tapOnMap } = await mountHome({ answer: [LA_CEIBA] });
+            await tapOnMap('prueba-la-ceiba');
+            await panel().get('button[data-directions]').trigger('click');
+            await vi.dynamicImportSettled();
+            await flushPromises();
+
+            expect(panel().get('[data-route-status]').text()).toContain('parece que estás sin señal');
+
+            await panel().findAll('[data-directions] button').find((button) => button.text() === 'Volver a intentar')?.trigger('click');
+            await vi.dynamicImportSettled();
+            await flushPromises();
+
+            // La capa de verdad trae al bajar el router y sus módulos: tarda un poco más.
+            await vi.waitFor(() => {
+                expect(panel().find('[data-directions] h3').exists()).toBe(true);
+            });
+
+            expect(routeImport.calls).toBe(2);
+            expect(panel().get('[data-directions] h3').text()).toBe('Cómo llegar');
+            expect(panel().get('[data-route-status]').text()).not.toContain('sin señal');
+        });
+
+        it('al ocultar la ruta vuelve el botón, con el foco', async () => {
+            const { panel, tapOnMap } = await mountHome({ answer: [LA_CEIBA] });
+            await tapOnMap('prueba-la-ceiba');
+            await panel().get('button[data-directions]').trigger('click');
+            await vi.dynamicImportSettled();
+            await flushPromises();
+
+            await panel().get('[data-directions] button').trigger('click');
+            await flushPromises();
+
+            expect(document.activeElement).toBe(panel().get('button[data-directions]').element);
+        });
+
+        it('elegir otro restaurante cierra la ruta hasta el anterior', async () => {
+            const { panel, tapOnMap } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+            await tapOnMap('prueba-la-ceiba');
+            await panel().get('button[data-directions]').trigger('click');
+            await vi.dynamicImportSettled();
+            await flushPromises();
+
+            await tapOnMap('prueba-el-guadual');
+
+            expect(panel().find('[data-route-status]').exists()).toBe(false);
+            expect(panel().find('button[data-directions]').exists()).toBe(true);
+        });
+
+        it('si el mapa no carga, lo dice y deja las otras apps', async () => {
+            engine.fails = true;
+            const { panel, tapOnMap } = await mountHome({ answer: [LA_CEIBA] });
+            await tapOnMap('prueba-la-ceiba');
+            await panel().get('button[data-directions]').trigger('click');
+            await vi.dynamicImportSettled();
+            await flushPromises();
+
+            expect(panel().get('[data-route-status]').text()).toBe('Sin el mapa no podemos calcular la ruta aquí: abrila en Google Maps o Waze.');
+            expect(panel().find('[data-waze]').exists()).toBe(true);
         });
     });
 
