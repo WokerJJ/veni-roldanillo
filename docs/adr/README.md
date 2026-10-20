@@ -22,3 +22,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0016](0016-capas-propias-sobre-el-mapa.md) | Capas propias sobre el mapa: un registro en el motor y componentes dentro de `MapView` | Aceptada |
 | [0017](0017-restaurantes-en-el-mapa.md) | Restaurantes en el mapa: GeoJSON público con caché corta y «abierto ahora» calculado en el dispositivo | Aceptada |
 | [0018](0018-ficha-del-restaurante.md) | La ficha del restaurante: una dirección por slug, datos por lista blanca y el restaurante elegido en la dirección del mapa | Aceptada |
+| [0019](0019-donde-estoy-en-el-mapa.md) | «¿Dónde estoy?»: el control de geolocalización de MapLibre, siguiendo la ubicación, con sus avisos dentro del mapa | Aceptada |

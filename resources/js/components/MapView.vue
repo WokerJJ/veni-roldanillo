@@ -15,7 +15,7 @@ import { MAP_CONTEXT } from '@/map/useMapLayers';
  * Mapa de Roldanillo de veni-mapa, del tamaño de su contenedor. El tema y el
  * idioma los pone la app: elige el estilo `veni-{tema}-{idioma}.json` y lo
  * cambia cuando cambian, sin mover la cámara. No trae botones de tema ni de
- * idioma, solo los de zoom y la atribución de OpenStreetMap.
+ * idioma, solo los de zoom, «¿Dónde estoy?» y la atribución de OpenStreetMap.
  *
  * Lo que la app pinta encima va adentro, como componentes (ADR 0016):
  *
@@ -25,6 +25,14 @@ import { MAP_CONTEXT } from '@/map/useMapLayers';
  * montan con el mapa todavía cargando: el mapa les llega cuando ya pinta.
  */
 type Status = 'loading' | 'ready' | 'error';
+
+const props = defineProps<{
+    /**
+     * Lo que la página pone encima del mapa (su panel): al ubicarse con
+     * «¿Dónde estoy?», la cámara deja la ubicación a la vista, fuera de él.
+     */
+    overlay?: HTMLElement | null;
+}>();
 
 const emit = defineEmits<{
     /** Cambió el estado del mapa: con `error` su aviso lo ocupa entero, y la página acomoda lo que tenía encima. */
@@ -60,6 +68,17 @@ function labels(): MapLabels {
         canvas: t('map.canvas_label'),
         zoomIn: t('map.zoom_in'),
         zoomOut: t('map.zoom_out'),
+        locate: {
+            button: t('map.locate'),
+            found: t('map.locate_found'),
+            close: t('map.locate_close'),
+            problems: {
+                denied: t('map.locate_denied'),
+                signal: t('map.locate_signal'),
+                outside: t('map.locate_outside'),
+                unsupported: t('map.locate_unsupported'),
+            },
+        },
     };
 }
 
@@ -169,6 +188,11 @@ watch(status, (current) => {
     emit('status', current);
 });
 
+// El panel de la página, también para el mapa del reintento.
+watch([handle, () => props.overlay], ([map, overlay]) => {
+    map?.setOverlay(overlay ?? null);
+});
+
 onMounted(() => {
     void load();
 });
@@ -205,8 +229,11 @@ defineExpose({
             nacería con 300 px de alto, hasta el primer cambio de tamaño. Una
             cámara que se moviera en ese rato (el inicio abierto con ?r=slug)
             dejaría el punto fuera del centro.
+
+            Oculto con `style` y no con una clase: al cambiar `:class`, Vue
+            reescribe las clases del elemento y se llevaría la de MapLibre.
         -->
-        <div ref="container" class="absolute inset-0 size-full" :class="{ invisible: status !== 'ready' }" />
+        <div ref="container" class="absolute inset-0 size-full" :style="{ visibility: status === 'ready' ? undefined : 'hidden' }" />
 
         <div
             v-if="status === 'loading'"

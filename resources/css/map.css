@@ -47,9 +47,147 @@
     border-radius: 0 0 var(--veni-radius-sm) var(--veni-radius-sm);
 }
 
+/* Un grupo de un solo botón (la ubicación) redondea las cuatro esquinas. */
+.maplibregl-ctrl-group button:focus:only-child {
+    border-radius: var(--veni-radius-sm);
+}
+
 /* Los íconos de MapLibre son oscuros: en el tema oscuro se invierten. */
 [data-theme='dark'] .maplibregl-ctrl-group .maplibregl-ctrl-icon {
     filter: invert(1);
+}
+
+/*
+ * «¿Dónde estoy?» (resources/js/map/locate.ts). El ícono es el de
+ * colombia-icons, dentro del botón, y toma su color: no hace falta invertirlo
+ * en el tema oscuro y en los colores forzados del sistema se ve igual. Los
+ * estados son las clases que pone MapLibre; la misma especificidad que su
+ * regla de :hover, y después, para que no la tape.
+ */
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate {
+    border-radius: var(--veni-radius-sm);
+    color: var(--ink);
+}
+
+.maplibregl-ctrl-geolocate .veni-ctrl-icon {
+    display: block;
+    width: 24px;
+    height: 24px;
+    margin: auto;
+}
+
+/* Encendido y siguiendo la ubicación: el botón queda «apretado». */
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active {
+    background-color: var(--ink);
+    color: var(--canvas);
+}
+
+/* Encendido, pero la cámara ya no la sigue: se movió el mapa. */
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background {
+    background-color: var(--surface);
+}
+
+/* Encendido, sin ubicación que mostrar (sin señal o fuera de la región): lo explica el aviso. */
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-active-error,
+.maplibregl-ctrl button.maplibregl-ctrl-geolocate.maplibregl-ctrl-geolocate-background-error {
+    background-color: var(--surface);
+    color: var(--ink-muted);
+}
+
+/* Buscando: el ícono late (el de MapLibre gira). */
+.maplibregl-ctrl-geolocate-waiting .veni-ctrl-icon {
+    animation: veni-locate-waiting 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes veni-locate-waiting {
+    to {
+        opacity: 0.35;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .maplibregl-ctrl-geolocate-waiting .veni-ctrl-icon {
+        animation: none;
+    }
+}
+
+/*
+ * El aviso de «¿Dónde estoy?», junto a su botón: a la altura de él (10 px de
+ * margen, los dos de zoom de 44 y otros 10) y a su izquierda (10 + 44 + 8).
+ * Como el panel de la página, a todo el ancho en un celular vertical y de
+ * 20rem desde 480 px. Con el z-index del panel (10) y después en el
+ * documento: si se cruzan, el aviso queda encima. Clases propias y no de
+ * Tailwind: así su CSS viaja con el mapa y no con el arranque.
+ */
+.veni-locate-notice {
+    position: absolute;
+    top: 108px;
+    right: 62px;
+    left: 12px;
+    z-index: 10;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 8px 4px 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--veni-radius-md);
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    box-shadow:
+        0 10px 15px -3px rgb(0 0 0 / 10%),
+        0 4px 6px -4px rgb(0 0 0 / 10%);
+}
+
+@media (min-width: 480px) {
+    .veni-locate-notice {
+        left: auto;
+        width: 20rem;
+    }
+}
+
+.veni-locate-notice p {
+    flex-grow: 1;
+    padding: 4px 0;
+}
+
+.veni-locate-close {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--veni-touch-min);
+    height: var(--veni-touch-min);
+    border-radius: 9999px;
+    transition: background-color 150ms;
+}
+
+.veni-locate-close:hover {
+    background-color: var(--surface);
+}
+
+.veni-locate-close:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.veni-locate-close .veni-ctrl-icon {
+    width: 20px;
+    height: 20px;
+}
+
+/* Lo que solo oye el lector de pantalla (que la ubicación llegó). */
+.veni-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
 }
 
 /* Atribución: siempre legible, en claro y en oscuro (contraste de --ink sobre --canvas). */

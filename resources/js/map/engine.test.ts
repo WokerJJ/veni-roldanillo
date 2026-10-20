@@ -19,6 +19,7 @@ const STYLE = {
     version: 8,
     center: [-76.1547, 4.4128],
     zoom: 13.5,
+    metadata: { 'veni:bounds': [-76.3, 4.3, -76.0, 4.55] },
     sources: { protomaps: { type: 'vector', url: `pmtiles://${ARCHIVE_URL}` } },
     layers: [],
 };
@@ -78,7 +79,17 @@ async function setUp() {
             const created = createMap({
                 container: document.createElement('div'),
                 style: fetchMapStyle(STYLE_URL, controller.signal),
-                labels: { canvas: 'Mapa', zoomIn: 'Acercar', zoomOut: 'Alejar' },
+                labels: {
+                    canvas: 'Mapa',
+                    zoomIn: 'Acercar',
+                    zoomOut: 'Alejar',
+                    locate: {
+                        button: '¿Dónde estoy?',
+                        found: 'Listo',
+                        close: 'Cerrar',
+                        problems: { denied: 'Sin permiso', signal: 'Sin señal', outside: 'Fuera', unsupported: 'Sin geolocalización' },
+                    },
+                },
                 signal: controller.signal,
             });
 

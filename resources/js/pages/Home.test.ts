@@ -132,13 +132,19 @@ describe('Home', () => {
         expect(panel().classes()).toContain('bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))]');
     });
 
-    it('en un celular vertical el panel no llega a los botones de zoom, por larga que sea la lista', async () => {
+    it('en un celular vertical el panel no llega a los botones del mapa, por larga que sea la lista', async () => {
         const { panel } = await mountHome();
 
-        // Los botones ocupan 10 + 88 px desde arriba: el panel deja 7rem (112 px).
+        // Los botones ocupan 10 + 88 + 10 + 44 px desde arriba: el panel deja 10rem (160 px).
         expect(panel().classes()).toContain(
-            'max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_7rem)]',
+            'max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_10rem)]',
         );
+    });
+
+    it('le pasa al mapa su panel: al ubicarse, la cámara deja la ubicación fuera de él', async () => {
+        const { wrapper, panel } = await mountHome();
+
+        expect(wrapper.getComponent({ name: 'MapView' }).props('overlay')).toBe(panel().element);
     });
 
     it('no pone botones de tema ni de idioma sobre el mapa: son de la cabecera', async () => {
@@ -291,7 +297,10 @@ describe('Home', () => {
         }
 
         it('el aviso del mapa no tapa el panel: va debajo, y la lista se sigue viendo', async () => {
-            const { listButton, mapAlert, page, panel, status } = await mountWithoutMap();
+            const { listButton, mapAlert, page, panel, status, wrapper } = await mountWithoutMap();
+
+            // Ya no va encima del mapa.
+            expect(wrapper.getComponent({ name: 'MapView' }).props('overlay')).toBeNull();
 
             expect(mapAlert().get('button').text()).toBe('Reintentar');
             // El aviso ocupa todo su mapa. El panel deja de flotar encima (quedaría

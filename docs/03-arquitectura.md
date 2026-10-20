@@ -36,16 +36,16 @@ VPS 2 vCPU / 4 GB, Ubuntu LTS, SSH solo con llaves, UFW (80/443), fail2ban, actu
 El mapa base lo produce y publica el repositorio [veni-mapa](https://github.com/WokerJJ/veni-mapa) (ADR 0007): PMTiles de Roldanillo, estilos `veni-{claro,oscuro}-{es,en}.json` con la marca, fuentes, sprites y el grafo de rutas `roldanillo-rutas.json`, en releases versionadas con SHA-256.
 
 1. La app lo consume por `VITE_MAP_STYLE_URL` y `VITE_MAP_ROUTES_URL`. Hoy apuntan a la demo pública de veni-mapa, que sigue su rama `main` y **no es una versión fija**: el ADR 0007 la tolera mientras no haya hosting versionado. En producción irán a una release fija en `tiles.veniroldanillo.co` (Cloudflare R2 con CORS limitado al dominio): el día que se definan las variables del repositorio, `docker.yml` exige que apunten a `…/vX.Y.Z/…` (ver [Entrega y despliegue](despliegue.md#el-mapa-dentro-de-la-imagen)). `VITE_MAP_STYLE_URL` es una plantilla, `…/veni-{theme}-{locale}.json`: la app pone `claro` u `oscuro` y `es` o `en`; sin alguno de los dos marcadores `vite build` se detiene y `vite` avisa. Las dos se fijan al compilar los assets (en la imagen de producción, como argumentos de build con la demo pública por defecto).
-2. MapLibre y PMTiles se cargan solo en las pantallas con mapa (carga perezosa): el componente `MapView` importa el motor (`resources/js/map/engine.ts`) con `import()` al montarse y pide el estilo a la vez, sin esperar a que baje; la vista raíz adelanta la conexión con el host del mapa (`<link rel="preconnect">`). Una prueba que compila el frontend (`resources/js/map/bundle.test.ts`) falla si MapLibre llega al bundle inicial, si el worker deja de poder cargarse o si lo que se descarga pasa del presupuesto (comprimido con gzip). El mapa se deja ver en cuanto empieza a pintar; si en 20 s no empieza, o si fallan la fuente de los tiles o el worker, muestra el error con «Reintentar». Tema e idioma los elige la app, que cambia de estilo sin mover la cámara; el mapa no trae botones propios, solo los de zoom y la atribución. La cámara inicial y los límites salen del estilo (`center`, `zoom` y `metadata["veni:bounds"]`).
+2. MapLibre y PMTiles se cargan solo en las pantallas con mapa (carga perezosa): el componente `MapView` importa el motor (`resources/js/map/engine.ts`) con `import()` al montarse y pide el estilo a la vez, sin esperar a que baje; la vista raíz adelanta la conexión con el host del mapa (`<link rel="preconnect">`). Una prueba que compila el frontend (`resources/js/map/bundle.test.ts`) falla si MapLibre llega al bundle inicial, si el worker deja de poder cargarse o si lo que se descarga pasa del presupuesto (comprimido con gzip). El mapa se deja ver en cuanto empieza a pintar; si en 20 s no empieza, o si fallan la fuente de los tiles o el worker, muestra el error con «Reintentar». Tema e idioma los elige la app, que cambia de estilo sin mover la cámara; el mapa no trae botones de tema ni de idioma, solo los de zoom, «¿Dónde estoy?» y la atribución. La cámara inicial y los límites salen del estilo (`center`, `zoom` y `metadata["veni:bounds"]`).
 3. Restaurantes como capa GeoJSON desde la API: `GET /api/restaurants.geojson` (abajo, «Restaurantes en el mapa»).
-4. Ubicación y rutas en el dispositivo (ADR 0008): la posición nunca sale del teléfono ni queda en la URL; el grafo se descarga al pedir la primera ruta.
-5. Atribución obligatoria: "© colaboradores de OpenStreetMap" (ODbL), sin ocultar el control. Sus enlaces miden unos 20 px de alto, menos que los 44 px de las áreas táctiles de la app: son enlaces dentro de una línea de texto, la excepción «en línea» del criterio 2.5.8 de WCAG 2.2 (tamaño del objetivo), y agrandarlos taparía el mapa. Los botones de zoom sí miden 44 px.
+4. Ubicación y rutas en el dispositivo (ADR 0008): la posición nunca sale del teléfono ni queda en la URL; el grafo se descarga al pedir la primera ruta. La ubicación es el control de geolocalización de MapLibre (abajo, «¿Dónde estoy?», y ADR 0019).
+5. Atribución obligatoria: "© colaboradores de OpenStreetMap" (ODbL), sin ocultar el control. Sus enlaces miden unos 20 px de alto, menos que los 44 px de las áreas táctiles de la app: son enlaces dentro de una línea de texto, la excepción «en línea» del criterio 2.5.8 de WCAG 2.2 (tamaño del objetivo), y agrandarlos taparía el mapa. Los botones de zoom y el de la ubicación sí miden 44 px.
 
 Para la política de seguridad de contenido (ADR 0014): el navegador pide con `fetch` el estilo, los tiles, las fuentes, los sprites y el grafo de rutas al host del mapa (`connect-src`, también en `img-src`); la CSP toma ese host de `VITE_MAP_STYLE_URL` y `VITE_MAP_ROUTES_URL`, que la imagen de producción guarda en su entorno. El worker de MapLibre se sirve desde el mismo origen de la app (`worker-src 'self'`); en desarrollo sale del servidor de Vite y MapLibre lo arranca desde una URL `blob:`. Los íconos de los controles van en el CSS como `data:` y, en navegadores sin `createImageBitmap`, los sprites se arman con una URL `blob:` (`img-src`).
 
 ### Capas propias sobre el mapa
 
-Lo que la app pinta encima del mapa base (los restaurantes; después la ubicación, #10, y la ruta, #11) sigue un contrato, decidido en el [ADR 0016](adr/0016-capas-propias-sobre-el-mapa.md): cambiar de tema o de idioma es cambiar de estilo, y eso borra las fuentes, las capas y las imágenes añadidas en ejecución.
+Lo que la app pinta encima del mapa base (los restaurantes; después la ruta, #11) sigue un contrato, decidido en el [ADR 0016](adr/0016-capas-propias-sobre-el-mapa.md): cambiar de tema o de idioma es cambiar de estilo, y eso borra las fuentes, las capas y las imágenes añadidas en ejecución.
 
 | Pieza | Dónde | Qué hace |
 | --- | --- | --- |
@@ -60,8 +60,19 @@ Reglas del contrato:
 2. **Los ids de un grupo llevan su id como prefijo** (`restaurants`, `restaurants-points`): el registro rechaza los demás.
 3. **Los datos cambian con `setData`**, no volviendo a registrar el grupo: registrar rehace las capas (y, con agrupación, el índice de puntos).
 4. **Mientras carga un estilo nuevo, nada toca el mapa**: MapLibre no deja. Los cambios quedan anotados en el registro y entran con el estilo.
-5. **Orden**: todos los grupos van sobre el mapa base; entre ellos, `order` (los restaurantes usan 20; la ruta irá debajo y la ubicación encima).
+5. **Orden**: todos los grupos van sobre el mapa base; entre ellos, `order` (los restaurantes usan 20; la ruta irá debajo). La ubicación no es un grupo: su marca es del control de MapLibre (abajo).
 6. **Áreas táctiles de 44 px**: el registro busca la figura tocable más cercana en un cuadrado de 44 px alrededor del toque, se dibuje del tamaño que se dibuje.
+
+### ¿Dónde estoy?
+
+El control de geolocalización de MapLibre, decidido en el [ADR 0019](adr/0019-donde-estoy-en-el-mapa.md). El permiso se pide recién al tocarlo; es un interruptor que sigue la ubicación, y la posición no sale del motor: ni a la página, ni a la red, ni a la dirección, ni al almacenamiento.
+
+| Pieza | Dónde | Qué hace |
+| --- | --- | --- |
+| Control | `resources/js/map/engine.ts` | Lo añade debajo de los de zoom, con precisión alta, 10 s por lectura y zoom hasta 16. Los límites del mapa (`veni:bounds`, obligatorios) dicen qué es «fuera de Roldanillo» |
+| Botón y avisos | `resources/js/map/locate.ts` y `resources/css/map.css` | El nombre de la app y el ícono `ubicacion`, habilitado desde que MapLibre lo prepara; con el permiso negado, un control nuevo. Los avisos (sin permiso, sin señal, fuera de la zona, sin geolocalización) son DOM del control junto al botón, y la llegada de la ubicación se anuncia al lector de pantalla. Viajan con el mapa |
+| Textos | `MapView.vue` (`MapLabels`) | Los da la app en su idioma, con los de los botones de zoom |
+| Margen del panel | `resources/js/map/padding.ts`, el motor y la prop `overlay` de `MapView` | La página pasa lo que pone encima del mapa; el motor lo mide en cada encuadre y la cámara deja la ubicación en el centro de lo que queda a la vista |
 
 ### Restaurantes en el mapa
 
@@ -186,7 +197,7 @@ Cambiar de idioma exige red (ADR 0010): los textos del otro idioma vienen del se
 
 ## Geolocalización
 
-- API Geolocation del navegador (PWA) y plugin de Capacitor (fase 2).
+- API Geolocation del navegador (PWA) y plugin de Capacitor (fase 2). «¿Dónde estoy?» la usa solo en el dispositivo, con el control de MapLibre (ADR 0019).
 - PostGIS: `ST_DWithin` para cercanía y verificación de visita; polígonos de zonas de domicilio por barrio.
 - Turf.js en el cliente para calcular zona de domicilio.
 - Sin geocodificación de pago: el dueño ubica su pin; el usuario elige barrio de una lista.
