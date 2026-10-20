@@ -1,5 +1,5 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import type { Restaurant } from '@/restaurants/api';
 import type * as FakeInertia from '@/testing/inertia';
@@ -536,7 +536,49 @@ describe('Home', () => {
 
             expect(panel().find('button[data-directions]').exists()).toBe(false);
             expect(document.activeElement).toBe(panel().get('[data-directions] h3').element);
+            // Con la ruta el panel crece: se desplaza por dentro, sin pasar de su alto.
+            expect(panel().classes()).toContain('overflow-y-auto');
             expect(panel().get('[data-google-maps]').attributes('href')).toBe('https://www.google.com/maps/dir/?api=1&destination=4.4128%2C-76.1547&travelmode=walking');
+        });
+
+        it('si «Cómo llegar» no baja (sin señal), lo dice y «Volver a intentar» lo vuelve a pedir', async () => {
+            const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            // La capa de la ruta llega con import(): el primer pedido falla, como sin señal.
+            const routeImport = { failures: 1, calls: 0 };
+            vi.doMock('@/components/RouteLayer.vue', async (importOriginal) => {
+                routeImport.calls += 1;
+
+                if (routeImport.failures > 0) {
+                    routeImport.failures -= 1;
+                    throw new TypeError('Failed to fetch dynamically imported module');
+                }
+
+                return await importOriginal();
+            });
+            onTestFinished(() => {
+                vi.doUnmock('@/components/RouteLayer.vue');
+                errors.mockRestore();
+            });
+            const { panel, tapOnMap } = await mountHome({ answer: [LA_CEIBA] });
+            await tapOnMap('prueba-la-ceiba');
+            await panel().get('button[data-directions]').trigger('click');
+            await vi.dynamicImportSettled();
+            await flushPromises();
+
+            expect(panel().get('[data-route-status]').text()).toContain('parece que estás sin señal');
+
+            await panel().findAll('[data-directions] button').find((button) => button.text() === 'Volver a intentar')?.trigger('click');
+            await vi.dynamicImportSettled();
+            await flushPromises();
+
+            // La capa de verdad trae al bajar el router y sus módulos: tarda un poco más.
+            await vi.waitFor(() => {
+                expect(panel().find('[data-directions] h3').exists()).toBe(true);
+            });
+
+            expect(routeImport.calls).toBe(2);
+            expect(panel().get('[data-directions] h3').text()).toBe('Cómo llegar');
+            expect(panel().get('[data-route-status]').text()).not.toContain('sin señal');
         });
 
         it('al ocultar la ruta vuelve el botón, con el foco', async () => {

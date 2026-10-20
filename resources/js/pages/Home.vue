@@ -163,6 +163,8 @@ async function closeDirections(): Promise<void> {
 function retryDirections(): void {
     routeState.value = { status: 'locating' };
     routeAttempt.value += 1;
+    // Si lo que no bajó fue «Cómo llegar» mismo, se vuelve a pedir.
+    loadRouteParts();
 }
 
 function retryRestaurants(): void {
@@ -295,11 +297,13 @@ onBeforeUnmount(() => {
         <section
             ref="panel"
             class="z-10 flex flex-col rounded-veni-md border border-line bg-canvas/95 p-4 shadow-lg"
-            :class="
+            :class="[
                 mapFailed
                     ? 'mx-3 mt-3 shrink-0 min-[480px]:mx-4 min-[480px]:mt-4 min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm'
-                    : 'absolute inset-x-3 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_10rem)] min-[480px]:inset-x-auto min-[480px]:top-4 min-[480px]:bottom-auto min-[480px]:left-4 min-[480px]:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm'
-            "
+                    : 'absolute inset-x-3 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_10rem)] min-[480px]:inset-x-auto min-[480px]:top-4 min-[480px]:bottom-auto min-[480px]:left-4 min-[480px]:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm',
+                // Con la ruta abierta el panel crece: se desplaza por dentro, sin pasar de su alto.
+                { 'overflow-y-auto': directionsOpen },
+            ]"
         >
             <!-- El título de la página sigue en el documento aunque el panel muestre otra cosa. -->
             <h1 :class="selected || listOpen ? 'sr-only' : 'text-xl min-[480px]:text-2xl'">{{ t('home.heading') }}</h1>
@@ -320,6 +324,17 @@ onBeforeUnmount(() => {
                     @retry="retryDirections"
                     @close="closeDirections"
                 />
+                <!-- Si su panel no bajó (sin señal), queda cómo pedirlo de nuevo. -->
+                <div v-if="routeParts === null && routeState.status === 'offline'" class="mt-3 border-t border-line pt-3" data-directions>
+                    <p role="status" class="text-sm" data-route-status>{{ t('directions.offline') }}</p>
+                    <button
+                        type="button"
+                        class="mt-2 inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
+                        @click="retryDirections"
+                    >
+                        {{ t('directions.retry') }}
+                    </button>
+                </div>
             </RestaurantSummary>
 
             <RestaurantList v-else-if="listOpen" ref="list" :restaurants="restaurants" @select="selectFromList" @close="closeList" />

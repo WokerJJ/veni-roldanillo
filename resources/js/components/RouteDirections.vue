@@ -44,8 +44,10 @@ const MESSAGES: Readonly<Record<Exclude<RouteState['status'], 'ready'>, Translat
     calculating: 'directions.calculating',
     'no-route': 'directions.no_route',
     far: 'directions.far',
+    'destination-far': 'directions.destination_far',
     outside: 'directions.outside',
     offline: 'directions.offline',
+    error: 'directions.error',
     denied: 'directions.denied',
     signal: 'directions.signal',
     unsupported: 'directions.unsupported',
@@ -132,12 +134,13 @@ const canRetry = computed(() => ['no-route', 'far', 'outside', 'offline', 'denie
         </button>
 
         <p class="mt-3 text-sm">{{ t('directions.navigate') }}</p>
-        <div class="mt-1 flex flex-wrap gap-2">
+        <!-- En una fila: con la ruta, el panel no tapa más mapa del necesario. -->
+        <div class="mt-1 grid grid-cols-2 gap-2">
             <a
                 :href="googleMapsUrl(destination, profile)"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex min-h-touch items-center gap-1.5 rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
+                class="inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full border border-line px-3 font-semibold transition-colors hover:bg-surface"
                 data-google-maps
             >
                 {{ t('directions.google_maps') }}
@@ -147,7 +150,7 @@ const canRetry = computed(() => ['no-route', 'far', 'outside', 'offline', 'denie
                 :href="wazeUrl(destination)"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex min-h-touch items-center gap-1.5 rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
+                class="inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full border border-line px-3 font-semibold transition-colors hover:bg-surface"
                 data-waze
             >
                 {{ t('directions.waze') }}
@@ -155,6 +158,10 @@ const canRetry = computed(() => ['no-route', 'far', 'outside', 'offline', 'denie
             </a>
         </div>
 
-        <p class="mt-2 text-xs text-ink-muted">{{ t('directions.attribution') }}</p>
+        <!-- La licencia de los datos (ODbL) pide nombrarla y enlazar a ella. -->
+        <p class="mt-2 text-xs text-ink-muted" data-attribution>
+            {{ t('directions.attribution') }}
+            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" class="underline">{{ t('directions.attribution_link') }}</a>.
+        </p>
     </div>
 </template>

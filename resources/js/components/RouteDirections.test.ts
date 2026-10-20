@@ -61,7 +61,8 @@ describe('RouteDirections', () => {
 
         expect(status()).toBe('By car: about 3 min (940 m).');
         expect(wrapper.get('[data-estimate]').text()).toContain('estimates');
-        expect(wrapper.get('[data-google-maps]').text()).toBe('Open in Google Maps');
+        expect(wrapper.get('[data-google-maps]').text()).toBe('Google Maps');
+        expect(wrapper.get('[data-attribution] a').text()).toBe('© OpenStreetMap contributors (ODbL)');
     });
 
     it('tocar en carro lo pide a la página', async () => {
@@ -90,6 +91,8 @@ describe('RouteDirections', () => {
         [{ status: 'unsupported' }, 'Este navegador no puede darnos tu ubicación', false],
         [{ status: 'off' }, 'Apagaste «¿Dónde estoy?»', true],
         [{ status: 'unavailable' }, 'Sin el mapa', false],
+        [{ status: 'destination-far' }, 'Este restaurante está lejos de las calles del mapa', false],
+        [{ status: 'error' }, 'No podemos calcular rutas', false],
     ] as [RouteState, string, boolean][])('%o: lo dice, y «Volver a intentar» solo si sirve', async (state, text, retry) => {
         const { status, retry: retryButton, wrapper } = await mountDirections(state);
 
@@ -125,6 +128,24 @@ describe('RouteDirections', () => {
         const { wrapper } = await mountDirections(READY);
 
         expect(wrapper.text()).toContain('© colaboradores de OpenStreetMap');
+    });
+
+    it('nombra la licencia de los datos y enlaza a su página', async () => {
+        const { wrapper } = await mountDirections(READY);
+        const link = wrapper.get('[data-attribution] a');
+
+        expect(link.text()).toBe('© colaboradores de OpenStreetMap (ODbL)');
+        expect(link.attributes('href')).toBe('https://www.openstreetmap.org/copyright');
+        expect(link.attributes('target')).toBe('_blank');
+        expect(link.attributes('rel')).toBe('noopener noreferrer');
+    });
+
+    it('los dos enlaces a otras apps van en una fila, para que el panel tape menos', async () => {
+        const { wrapper } = await mountDirections(READY);
+
+        expect(wrapper.get('[data-google-maps]').element.parentElement?.classList).toContain('grid-cols-2');
+        expect(wrapper.get('[data-google-maps]').text()).toBe('Google Maps');
+        expect(wrapper.get('[data-waze]').text()).toBe('Waze');
     });
 
     it('su botón de cerrar tiene nombre y 44 px', async () => {
