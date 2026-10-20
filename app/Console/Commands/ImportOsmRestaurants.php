@@ -77,7 +77,8 @@ class ImportOsmRestaurants extends Command
 
         if (! $dryRun) {
             $path = $this->writeChecklist($report);
-            $this->components->info('Listado para el recorrido: '.Storage::disk('local')->path($path));
+            // Con line(): el formato de components->info() se come las barras de la ruta.
+            $this->line('Listado para el recorrido: '.Storage::disk('local')->path($path));
         }
 
         return self::SUCCESS;
