@@ -6,7 +6,7 @@ import type { MapGeoJson, MapLayerGroup } from '@/map/layers';
 import type { LocateEvent } from '@/map/locate';
 import { useMap, useMapLayers } from '@/map/useMapLayers';
 import type { RouteProfile, RouteState, RouteSummary } from '@/routing/directions';
-import { loadRouter } from '@/routing/loadRouter';
+import { loadRouter, RoutesOfflineError } from '@/routing/loadRouter';
 import { distanceM } from '@/routing/veni-mapa/graph.ts';
 import type { LngLat, Route } from '@/routing/veni-mapa/router.ts';
 import { color } from '@brand/tokens.json';
@@ -98,6 +98,14 @@ export default defineComponent({
         let position: LngLat | null = null;
         /** De dónde sale la ruta que se ve, y las de cada perfil. */
         let origin: LngLat | null = null;
+        /** De dónde salió el último cálculo, con ruta o sin ella: hasta moverse 25 m no se repite. */
+        let tried: LngLat | null = null;
+        /**
+         * Sin arreglo mientras la página siga abierta: el restaurante está lejos
+         * de las calles o no hay con qué calcular (otro formato de grafo, sin
+         * URL). Ninguna lectura nueva lo cambia.
+         */
+        let stopped = false;
         let routes: Record<RouteProfile, Route | null> | null = null;
         let framed = false;
         /** Cada cálculo nuevo deja viejos los que siguen en curso. */
@@ -167,7 +175,12 @@ export default defineComponent({
         }
 
         async function calculate(from: LngLat): Promise<void> {
+            if (stopped) {
+                return;
+            }
+
             run += 1;
+            tried = from;
             const mine = run;
 
             if (routes === null) {
@@ -178,6 +191,14 @@ export default defineComponent({
                 const router = await loadRouter();
 
                 if (mine !== run || disposed) {
+                    return;
+                }
+
+                if (router.nearest(props.destination, 'foot') < 0 && router.nearest(props.destination, 'car') < 0) {
+                    stopped = true;
+                    clear();
+                    report({ status: 'destination-far' });
+
                     return;
                 }
 
@@ -201,9 +222,14 @@ export default defineComponent({
                 }
             } catch (error) {
                 if (mine === run && !disposed) {
-                    console.error('[ruta] No se pudo bajar el grafo de rutas.', error);
+                    // Sin señal se puede reintentar; lo demás no se arregla así.
+                    const offline = error instanceof RoutesOfflineError;
+                    console.error(offline ? '[ruta] No se pudo bajar el grafo de rutas.' : '[ruta] No se puede calcular la ruta.', error);
                     clear();
-                    report({ status: 'offline' });
+                    stopped = !offline;
+                    // La próxima lectura vuelve a intentar bajarlo.
+                    tried = null;
+                    report({ status: offline ? 'offline' : 'error' });
                 }
             }
         }
@@ -211,7 +237,7 @@ export default defineComponent({
         function onLocate(event: LocateEvent): void {
             if (event.type === 'position') {
                 position = event.at;
-                const moved = origin === null || distanceM(origin[0], origin[1], position[0], position[1]) >= RECALCULATE_AFTER_M;
+                const moved = tried === null || distanceM(tried[0], tried[1], position[0], position[1]) >= RECALCULATE_AFTER_M;
 
                 // Quien camina mueve la ruta; el error del GPS, no.
                 if (moved) {
@@ -227,6 +253,7 @@ export default defineComponent({
             }
 
             position = null;
+            tried = null;
             clear();
             report({ status: event.type === 'off' ? 'off' : event.problem });
         }
@@ -270,6 +297,7 @@ export default defineComponent({
             disposed = true;
             position = null;
             origin = null;
+            tried = null;
             routes = null;
         });
 

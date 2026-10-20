@@ -78,8 +78,11 @@ describe('loadRouter', () => {
         const network = stubGraphFetch();
         const { loadRouter } = await import('./loadRouter');
         network.fail(true);
+        const { RoutesOfflineError } = await import('./loadRouter');
 
-        await expect(loadRouter(URL_ROUTES)).rejects.toThrow('HTTP 503');
+        const failed = loadRouter(URL_ROUTES);
+        await expect(failed).rejects.toThrow('HTTP 503');
+        await expect(failed).rejects.toBeInstanceOf(RoutesOfflineError);
 
         network.fail(false);
         await expect(loadRouter(URL_ROUTES)).resolves.toBeDefined();
@@ -91,7 +94,9 @@ describe('loadRouter', () => {
         vi.stubGlobal('fetch', fetchMock);
         const { loadRouter } = await import('./loadRouter');
 
-        await expect(loadRouter(URL_ROUTES)).rejects.toThrow('Failed to fetch');
+        const { RoutesOfflineError } = await import('./loadRouter');
+
+        await expect(loadRouter(URL_ROUTES)).rejects.toBeInstanceOf(RoutesOfflineError);
         await expect(loadRouter(URL_ROUTES)).resolves.toBeDefined();
     });
 
@@ -99,7 +104,11 @@ describe('loadRouter', () => {
         vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ ...MAIN_STREET, version: 2 }) }));
         const { loadRouter } = await import('./loadRouter');
 
-        await expect(loadRouter(URL_ROUTES)).rejects.toThrow('formato no soportado');
+        const { RoutesOfflineError } = await import('./loadRouter');
+
+        const rejected = loadRouter(URL_ROUTES);
+        await expect(rejected).rejects.toThrow('formato no soportado');
+        await expect(rejected).rejects.not.toBeInstanceOf(RoutesOfflineError);
     });
 
     it('sin URL del grafo no sale a la red', async () => {

@@ -32,10 +32,14 @@ export type RouteState =
     | { status: 'no-route' }
     /** La posición está a más de 1 km de cualquier vía del mapa. */
     | { status: 'far' }
+    /** El restaurante está a más de 1 km de cualquier vía del mapa: desde ningún lado hay ruta. */
+    | { status: 'destination-far' }
     /** La posición está fuera de la región del mapa. */
     | { status: 'outside' }
     /** El grafo no bajó (sin señal). */
     | { status: 'offline' }
+    /** No hay con qué calcular: el grafo es de otro formato, falta su URL o el router falló. */
+    | { status: 'error' }
     /** Sin permiso para la ubicación. */
     | { status: 'denied' }
     /** El dispositivo no da la ubicación (sin señal de GPS o tiempo agotado). */

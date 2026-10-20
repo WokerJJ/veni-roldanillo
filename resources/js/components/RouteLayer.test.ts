@@ -46,12 +46,12 @@ function style(url: string) {
     };
 }
 
-/** fetch de mentira: el estilo y el grafo. Con `offline`, el grafo no baja. */
+/** fetch de mentira: el estilo y el grafo. Con `offline`, el grafo no baja; `graph` es el que baja. */
 function stubNetwork() {
-    const network = { offline: false };
+    const network: { offline: boolean; graph: unknown } = { offline: false, graph: MAIN_STREET };
     const fetchMock = vi.fn((url: string) => {
         if (url === ROUTES) {
-            return network.offline ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(MAIN_STREET) });
+            return network.offline ? Promise.reject(new TypeError('Failed to fetch')) : Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(network.graph) });
         }
 
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(style(url)) });
@@ -61,7 +61,7 @@ function stubNetwork() {
     return Object.assign(network, { fetchMock });
 }
 
-async function mountRoute() {
+async function mountRoute(destination: [number, number] = RESTAURANT) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     const maplibre = (await import('maplibre-gl')) as unknown as typeof FakeMapLibre;
     inertia.reset();
@@ -78,7 +78,7 @@ async function mountRoute() {
                 h(MapView, null, {
                     default: () => [
                         h(RouteLayer, {
-                            destination: RESTAURANT,
+                            destination,
                             profile: props.profile,
                             attempt: props.attempt,
                             onState: (state: RouteState) => states.push(state),
@@ -239,6 +239,71 @@ describe('RouteLayer', () => {
         await settle();
 
         expect(last()?.status).toBe('ready');
+    });
+
+    it('un grafo de otro formato no es falta de señal: lo dice sin ofrecer reintentar', async () => {
+        const device = stubGeolocation();
+        network.graph = { ...MAIN_STREET, version: 2 };
+        const { last } = await mountRoute();
+        await flushPromises();
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        onTestFinished(() => {
+            errors.mockRestore();
+        });
+
+        device.move(SECRET);
+        await settle();
+
+        expect(last()).toEqual({ status: 'error' });
+    });
+
+    it('sin la URL del grafo, tampoco es falta de señal', async () => {
+        const device = stubGeolocation();
+        vi.stubEnv('VITE_MAP_ROUTES_URL', '');
+        const { last } = await mountRoute();
+        await flushPromises();
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        onTestFinished(() => {
+            errors.mockRestore();
+        });
+
+        device.move(SECRET);
+        await settle();
+
+        expect(last()).toEqual({ status: 'error' });
+        expect(network.fetchMock.mock.calls.map(([url]) => url)).not.toContain(ROUTES);
+    });
+
+    it('con el restaurante lejos de las calles, lo dice y no recalcula con cada lectura', async () => {
+        const device = stubGeolocation();
+        const { last, states } = await mountRoute([-76.25, 4.35]);
+        await flushPromises();
+
+        device.move(SECRET);
+        await settle();
+        expect(last()).toEqual({ status: 'destination-far' });
+        const reported = states.length;
+
+        device.move({ longitude: -76.155, latitude: 4.4129 });
+        await settle();
+
+        expect(states).toHaveLength(reported);
+    });
+
+    it('sin ruta desde donde está, no recalcula mientras no se mueva 25 m', async () => {
+        const device = stubGeolocation();
+        const { last, states } = await mountRoute();
+        await flushPromises();
+
+        device.move({ longitude: -76.25, latitude: 4.35 });
+        await settle();
+        expect(last()).toEqual({ status: 'far' });
+        const reported = states.length;
+
+        device.move({ longitude: -76.25005, latitude: 4.35005 });
+        await settle();
+
+        expect(states).toHaveLength(reported);
     });
 
     it('lejos de las calles del mapa, dentro de la región, lo dice', async () => {
