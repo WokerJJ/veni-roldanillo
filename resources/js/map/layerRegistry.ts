@@ -59,9 +59,18 @@ export function createLayerRegistry(map: MapLibreMap): LayerRegistry {
     let styleLoading = false;
     let disposed = false;
 
+    /** 0: debajo de las etiquetas del mapa base; 1: encima de todo el mapa base. */
+    const band = ({ group }: Registered): number => (group.belowLabels === true ? 0 : 1);
+
     /** De abajo hacia arriba, como se pintan. */
     const ordered = (): Registered[] =>
-        [...groups.values()].sort((a, b) => (a.group.order ?? 0) - (b.group.order ?? 0) || a.sequence - b.sequence);
+        [...groups.values()].sort((a, b) => band(a) - band(b) || (a.group.order ?? 0) - (b.group.order ?? 0) || a.sequence - b.sequence);
+
+    const ownLayerIds = (): Set<string> => new Set([...groups.values()].flatMap(({ group }) => group.layers.map((layer) => layer.id)));
+
+    /** La primera etiqueta del mapa base (su primera capa `symbol`), en una lista de capas. */
+    const firstLabel = (layers: readonly { id: string; type: string }[], own: Set<string>): string | undefined =>
+        layers.find((layer) => layer.type === 'symbol' && !own.has(layer.id))?.id;
 
     const styleReady = (): boolean => !disposed && !styleLoading;
 
@@ -76,14 +85,24 @@ export function createLayerRegistry(map: MapLibreMap): LayerRegistry {
         }
     };
 
-    /** La primera capa, ya en el mapa, de los grupos que van encima de este. */
+    /**
+     * Antes de qué capa va el grupo: la primera, ya en el mapa, de los grupos
+     * que van encima de él. Un grupo de debajo de las etiquetas que es el más
+     * alto de los suyos va antes de la primera etiqueta del mapa base.
+     */
     const firstLayerAbove = (registered: Registered): string | undefined => {
-        const above = ordered();
+        const all = ordered();
+        const above = all.slice(all.indexOf(registered) + 1);
+        const firstOf = (others: Registered[]): string | undefined =>
+            others.flatMap((other) => other.group.layers).find((layer) => map.getLayer(layer.id) !== undefined)?.id;
 
-        return above
-            .slice(above.indexOf(registered) + 1)
-            .flatMap((other) => other.group.layers)
-            .find((layer) => map.getLayer(layer.id) !== undefined)?.id;
+        if (band(registered) === 1) {
+            return firstOf(above);
+        }
+
+        return (
+            firstOf(above.filter((other) => band(other) === 0)) ?? firstLabel(map.getStyle().layers, ownLayerIds()) ?? firstOf(above)
+        );
     };
 
     const attach = (registered: Registered): void => {
@@ -260,11 +279,16 @@ export function createLayerRegistry(map: MapLibreMap): LayerRegistry {
 
         transformStyle: (_previous, next) => {
             const own = ordered();
+            const layersOf = (registered: Registered[]): StyleSpecification['layers'] => registered.flatMap(({ group }) => group.layers);
+            const below = layersOf(own.filter((registered) => band(registered) === 0));
+            const above = layersOf(own.filter((registered) => band(registered) === 1));
+            const label = next.layers.findIndex((layer) => layer.type === 'symbol');
+            const split = label === -1 ? next.layers.length : label;
 
             return {
                 ...next,
                 sources: Object.assign({}, next.sources, ...own.map(sourcesOf)) as StyleSpecification['sources'],
-                layers: [...next.layers, ...own.flatMap(({ group }) => group.layers)],
+                layers: [...next.layers.slice(0, split), ...below, ...next.layers.slice(split), ...above],
             };
         },
 

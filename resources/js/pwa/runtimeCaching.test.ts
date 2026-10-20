@@ -250,6 +250,9 @@ describe('rutas del service worker', () => {
         // Con versión, nunca cambia.
         ['el estilo de una versión del mapa', `${MAP}/v0.2.0/style/veni-claro-es.json`, 'CacheFirst', 'veni-map-release'],
         ['los glyphs de una versión del mapa', `${MAP}/v0.2.0/fonts/Figtree%20Regular/0-255.pbf`, 'CacheFirst', 'veni-map-release'],
+        // «Cómo llegar» (#11): baja con la primera ruta y desde ahí sirve sin señal.
+        ['el grafo de rutas', ENV.VITE_MAP_ROUTES_URL, 'StaleWhileRevalidate', 'veni-map-routes'],
+        ['el grafo de rutas con parámetros', `${ENV.VITE_MAP_ROUTES_URL}?v=2`, 'StaleWhileRevalidate', 'veni-map-routes'],
     ])('%s: %s en %s', (_name, url, handler, cacheName) => {
         const route = routeFor(routes, { url });
 
@@ -260,7 +263,6 @@ describe('rutas del service worker', () => {
     it.each([
         ['el PMTiles', `${MAP}/roldanillo.pmtiles`],
         ['el PMTiles de una versión', `${MAP}/v0.2.0/roldanillo.pmtiles`],
-        ['el grafo de rutas', ENV.VITE_MAP_ROUTES_URL],
         ['el manifest del build', '/build/manifest.json'],
     ])('%s no pasa por ninguna ruta', (_name, url) => {
         expect(routeFor(routes, { url })).toBeUndefined();
@@ -306,5 +308,23 @@ describe('rutas del service worker', () => {
         expect(routeFor(withoutMap, { url: `${MAP}/style/veni-claro-es.json` })).toBeUndefined();
         expect(routeFor(withoutMap, { url: `${MAP}/v0.2.0/style/veni-claro-es.json` })).toBeUndefined();
         expect(withoutMap.map((route) => route.options?.cacheName)).toEqual([undefined, 'veni-map-engine', 'veni-assets', 'veni-fonts']);
+    });
+
+    it('el grafo de rutas guarda solo ese archivo: otro .json del mismo origen no entra en su caché', () => {
+        expect(routeFor(routes, { url: `${MAP}/roldanillo-rutas-viejo.json` })?.options?.cacheName).toBe('veni-map-style');
+        expect(routeFor(routes, { url: `${MAP}/otra/roldanillo-rutas.json` })?.options?.cacheName).toBe('veni-map-style');
+    });
+
+    it('el grafo de rutas se guarda aunque falte la URL del estilo, y sin su URL no hay ruta para él', () => {
+        const onlyRoutes = runtimeCaching({ VITE_MAP_ROUTES_URL: ENV.VITE_MAP_ROUTES_URL });
+        const withoutRoutes = runtimeCaching({ VITE_MAP_STYLE_URL: ENV.VITE_MAP_STYLE_URL });
+
+        expect(routeFor(onlyRoutes, { url: ENV.VITE_MAP_ROUTES_URL })?.options?.cacheName).toBe('veni-map-routes');
+        expect(caching(withoutRoutes).map((route) => route.options?.cacheName)).not.toContain('veni-map-routes');
+        expect(routeFor(withoutRoutes, { url: ENV.VITE_MAP_ROUTES_URL })?.options?.cacheName).toBe('veni-map-style');
+    });
+
+    it('del grafo guarda la publicación actual y la anterior, no más', () => {
+        expect(routeFor(routes, { url: ENV.VITE_MAP_ROUTES_URL })?.options?.expiration?.maxEntries).toBe(2);
     });
 });

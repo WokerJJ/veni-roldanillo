@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { mapCachePattern } from './mapCache';
+import { mapCachePattern, routesCachePattern } from './mapCache';
 
 const STYLE = 'https://wokerjj.github.io/veni-mapa/style/veni-{theme}-{locale}.json';
 const ROUTES = 'https://wokerjj.github.io/veni-mapa/roldanillo-rutas.json';
@@ -113,5 +113,24 @@ describe('el mapa con la versión en la ruta y sin ella', () => {
         expect(images?.test(`${BASE}/sprites/light@2x.png`)).toBe(true);
         expect(images?.test(`${BASE}/fonts/Figtree%20Regular/0-255.pbf`)).toBe(true);
         expect(images?.test(`${BASE}/sprites/light.json`)).toBe(false);
+    });
+});
+
+describe('routesCachePattern', () => {
+    it.each([
+        ['el grafo', ROUTES, true],
+        ['el grafo con parámetros', `${ROUTES}?v=2`, true],
+        ['otro archivo del mismo origen', `${BASE}/style/veni-claro-es.json`, false],
+        ['un archivo que empieza igual', `${ROUTES}.bak`, false],
+        ['el mismo nombre en otra carpeta', `${BASE}/otra/roldanillo-rutas.json`, false],
+        ['un host que solo se parece', 'https://wokerjjXgithub.io/veni-mapa/roldanillo-rutas.json', false],
+    ])('%s: %s', (_name, url, expected) => {
+        expect(routesCachePattern(ROUTES)?.test(url)).toBe(expected);
+    });
+
+    it('sin una URL http o https no hay patrón', () => {
+        expect(routesCachePattern(undefined)).toBeNull();
+        expect(routesCachePattern('')).toBeNull();
+        expect(routesCachePattern('javascript://wokerjj.github.io/rutas.json')).toBeNull();
     });
 });

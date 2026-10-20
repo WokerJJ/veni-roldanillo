@@ -21,7 +21,7 @@ const MARKER: MapImage = { data: { width: 36, height: 36, data: new Uint8Clamped
 const iconImage = vi.fn<() => Promise<MapImage>>();
 vi.mock('@/map/iconImage', () => ({ iconImage: () => iconImage() }));
 
-const STYLE = { version: 8, center: [-76.1547, 4.4128], zoom: 13.5, sources: {}, layers: [{ id: 'background' }, { id: 'places' }] };
+const STYLE = { version: 8, center: [-76.1547, 4.4128], zoom: 13.5, metadata: { 'veni:bounds': [-76.3, 4.3, -76.0, 4.55] }, sources: {}, layers: [{ id: 'background' }, { id: 'places' }] };
 /** Lo que puede tardar un import() en frío con la máquina cargada: más que el segundo que espera vi.waitFor. */
 const IMPORT_TIMEOUT = 10_000;
 
