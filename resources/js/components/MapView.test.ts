@@ -530,7 +530,65 @@ describe('MapView', () => {
 
                 holder.map?.showBounds([-76.16, 4.41, -76.15, 4.42]);
 
-                expect(created.fitBounds).toHaveBeenCalledWith([-76.16, 4.41, -76.15, 4.42], { padding: { top: 48, right: 48, bottom: 48, left: 48 }, maxZoom: 17 });
+                // A la derecha, además, la columna de los botones del mapa (10 px de margen y 44 del botón).
+                expect(created.fitBounds).toHaveBeenCalledWith([-76.16, 4.41, -76.15, 4.42], { padding: { top: 48, right: 102, bottom: 48, left: 48 }, maxZoom: 17 });
+            });
+
+            it('showBounds con el panel alto en un celular achica los márgenes, sin dejar sin lugar lo que encuadra', async () => {
+                stubGeolocation();
+                const { Grabber, holder } = await withHandle();
+                const overlay = document.createElement('div');
+                const { loadedMap } = await mountMap({ inside: () => [Grabber] });
+                const created = await loadedMap();
+                vi.spyOn(created.container, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 390, 700));
+                // El panel, abajo, deja 140 px de mapa a la vista.
+                vi.spyOn(overlay, 'getBoundingClientRect').mockReturnValue(new DOMRect(12, 140, 366, 560));
+                holder.map?.setOverlay(overlay);
+
+                holder.map?.showBounds([-76.16, 4.41, -76.15, 4.42]);
+
+                expect(created.fitBounds).toHaveBeenCalledWith([-76.16, 4.41, -76.15, 4.42], { padding: { top: 48, right: 102, bottom: 608, left: 48 }, maxZoom: 17 });
+            });
+
+            it('showBounds en un mapa angosto achica también la columna de los botones', async () => {
+                stubGeolocation();
+                const { Grabber, holder } = await withHandle();
+                const { loadedMap } = await mountMap({ inside: () => [Grabber] });
+                const created = await loadedMap();
+                vi.spyOn(created.container, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 120, 700));
+
+                holder.map?.showBounds([-76.16, 4.41, -76.15, 4.42]);
+
+                const padding = (created.fitBounds.mock.calls[0]?.[1] as { padding: { left: number; right: number } }).padding;
+                expect(120 - padding.left - padding.right).toBeGreaterThanOrEqual(44);
+            });
+
+            it('showBounds deja de seguir la ubicación: la siguiente lectura no mueve la cámara', async () => {
+                const device = stubGeolocation();
+                const { Grabber, holder } = await withHandle();
+                const { loadedMap } = await mountMap({ inside: () => [Grabber] });
+                const created = await loadedMap();
+                const button = await locateButton(created);
+                const events: unknown[] = [];
+                holder.map?.watchPosition((event) => events.push(event));
+                holder.map?.requestPosition();
+                device.move(PLAZA);
+
+                holder.map?.showBounds([-76.16, 4.41, -76.15, 4.42]);
+                created.fitBounds.mockClear();
+                created.easeTo.mockClear();
+                created.jumpTo.mockClear();
+                const center = created.getCenter();
+                device.move({ longitude: -76.1545, latitude: 4.4126 });
+
+                expect(created.fitBounds).not.toHaveBeenCalled();
+                expect(created.easeTo).not.toHaveBeenCalled();
+                expect(created.jumpTo).not.toHaveBeenCalled();
+                expect(created.getCenter()).toEqual(center);
+                // Sigue encendido, en segundo plano: la ruta recibe la posición.
+                expect(button.getAttribute('aria-pressed')).toBe('true');
+                expect(button.classList.contains('maplibregl-ctrl-geolocate-background')).toBe(true);
+                expect(events).toHaveLength(2);
             });
         });
 

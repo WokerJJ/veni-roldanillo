@@ -67,6 +67,12 @@ export interface LocateControl {
      * da enseguida. Devuelve con qué darse de baja.
      */
     subscribe(listener: (event: LocateEvent) => void): () => void;
+    /**
+     * Si la cámara sigue la ubicación, deja de seguirla, como cuando otro mueve
+     * el mapa: la ubicación sigue encendida y llegando, pero la siguiente
+     * lectura no mueve la cámara. Lo pide quien la va a mover (la ruta, ADR 0020).
+     */
+    release(): void;
     /** Deja de vigilar el botón y quita los avisos: el mapa se libera. */
     dispose(): void;
 }
@@ -361,6 +367,14 @@ export function addLocateControl(map: MapLibreMap, create: () => GeolocateContro
             } else if (button.getAttribute('aria-pressed') !== 'true') {
                 // Por el mismo camino que un toque: sin geolocalización, el aviso.
                 button.click();
+            }
+        },
+        release() {
+            // MapLibre no tiene cómo pedirlo: pasa a segundo plano cuando
+            // algo que no es él mueve la cámara sin cambiar el zoom. Encuadrar
+            // cambia el zoom y no basta; un salto en el lugar sí.
+            if (button.classList.contains('maplibregl-ctrl-geolocate-active')) {
+                map.jumpTo({ center: map.getCenter() });
             }
         },
         subscribe(listener) {

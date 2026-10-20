@@ -111,6 +111,11 @@ const PMTILES_PROTOCOL = 'pmtiles';
 
 /** Margen, en px, alrededor de lo que se encuadra con `showBounds`, además del panel. */
 const BOUNDS_MARGIN = 48;
+/**
+ * La columna de los botones del mapa, arriba a la derecha (10 px de margen y
+ * 44 del botón): `showBounds` no deja nada debajo de ellos.
+ */
+const CONTROLS_WIDTH = 54;
 /** Hasta dónde se acerca `showBounds`: una ruta de una cuadra no llena la pantalla. */
 const BOUNDS_MAX_ZOOM = 17;
 
@@ -509,17 +514,23 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
                 return;
             }
 
+            // Si «¿Dónde estoy?» seguía la ubicación, la siguiente lectura
+            // desharía el encuadre: queda encendido, sin mover la cámara.
+            locate.release();
+
             const panel = currentPadding();
             const { width, height } = map.getContainer().getBoundingClientRect();
             // El margen nunca deja sin lugar lo que se encuadra: con poco
-            // mapa a la vista (el panel alto en un celular), se achica.
-            const marginX = Math.max(0, Math.min(BOUNDS_MARGIN, (width - panel.left - panel.right - 44) / 2));
+            // mapa a la vista (el panel alto en un celular), se achica. La
+            // columna de los botones, también, en un mapa muy angosto.
+            const controls = Math.max(0, Math.min(CONTROLS_WIDTH, width - panel.left - panel.right - 44));
+            const marginX = Math.max(0, Math.min(BOUNDS_MARGIN, (width - panel.left - panel.right - controls - 44) / 2));
             const marginY = Math.max(0, Math.min(BOUNDS_MARGIN, (height - panel.top - panel.bottom - 44) / 2));
 
             map.fitBounds(bounds, {
                 padding: {
                     top: panel.top + marginY,
-                    right: panel.right + marginX,
+                    right: panel.right + controls + marginX,
                     bottom: panel.bottom + marginY,
                     left: panel.left + marginX,
                 },
