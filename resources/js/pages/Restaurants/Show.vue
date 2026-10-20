@@ -75,6 +75,17 @@ const onVisible = (): void => {
     });
 };
 
+/**
+ * La ruta se deja pedida solo si el mapa se abre en esta pestaña: con Ctrl,
+ * Cmd, Shift, Alt o otro botón el navegador lo abre aparte, y esta página
+ * quedaría con un pedido que nadie usó.
+ */
+function onDirectionsClick(event: MouseEvent): void {
+    if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+        askDirections(restaurant.slug);
+    }
+}
+
 onMounted(() => {
     document.addEventListener('visibilitychange', onVisible);
 });
@@ -134,7 +145,7 @@ onBeforeUnmount(() => {
                     :href="mapUrl(restaurant.slug)"
                     class="mt-4 inline-flex min-h-touch items-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
                     data-directions
-                    @click="askDirections(restaurant.slug)"
+                    @click="onDirectionsClick"
                 >
                     <Icon name="ubicacion" :size="20" />
                     {{ t('restaurant.directions') }}

@@ -154,6 +154,22 @@ describe('Restaurants/Show', () => {
             expect(stored.join(' ')).not.toContain('prueba-la-ceiba');
         });
 
+        it.each([
+            ['Ctrl', { ctrlKey: true }],
+            ['Cmd', { metaKey: true }],
+            ['Shift', { shiftKey: true }],
+            ['Alt', { altKey: true }],
+            ['la rueda', { button: 1 }],
+        ] as const)('abierto con %s (otra pestaña o ventana), no deja pedida la ruta en esta', async (_name, init) => {
+            const { wrapper } = await mountShow();
+            const { takeDirections } = await import('@/routing/intent');
+
+            wrapper.get('[data-directions]').element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ...init }));
+            await flushPromises();
+
+            expect(takeDirections('prueba-la-ceiba')).toBe(false);
+        });
+
         it('una ficha oculta no lo lleva: no está en el mapa', async () => {
             const { wrapper } = await mountShow(profile({ hidden: true }));
 
