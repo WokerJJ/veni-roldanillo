@@ -16,6 +16,7 @@ import { mapUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
 import type { RestaurantProfile } from '@/restaurants/profile';
 import { openStatusText } from '@/restaurants/statusText';
+import { askDirections } from '@/routing/intent';
 
 /**
  * La ficha de un restaurante (#13, ADR 0018): GET /restaurants/{slug}. Lo que
@@ -121,19 +122,22 @@ onBeforeUnmount(() => {
                 </p>
 
                 <!--
-                    Abre el mapa del inicio con este restaurante ya elegido
-                    (/?r=slug), y eso dice el botón. La ruta hasta él («Cómo
-                    llegar») es de #11 y se calcula allá, en el dispositivo.
-                    Una ficha oculta no está en el mapa: no hay a dónde llevar.
+                    «Cómo llegar» (#11): abre el mapa del inicio con este
+                    restaurante elegido (/?r=slug) y la ruta hasta él, que se
+                    calcula allá, en el dispositivo. Que se pidió la ruta no va
+                    en la dirección (routing/intent.ts): un enlace compartido
+                    abre el restaurante sin pedir la ubicación de nadie. Una
+                    ficha oculta no está en el mapa: no hay a dónde llevar.
                 -->
                 <Link
                     v-if="!restaurant.hidden"
                     :href="mapUrl(restaurant.slug)"
                     class="mt-4 inline-flex min-h-touch items-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
-                    data-see-on-map
+                    data-directions
+                    @click="askDirections(restaurant.slug)"
                 >
                     <Icon name="ubicacion" :size="20" />
-                    {{ t('restaurant.see_on_map') }}
+                    {{ t('restaurant.directions') }}
                 </Link>
 
                 <p v-if="restaurant.description" class="mt-4 max-w-prose whitespace-pre-line" data-description>{{ restaurant.description }}</p>

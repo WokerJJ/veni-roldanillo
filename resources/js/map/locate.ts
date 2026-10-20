@@ -130,6 +130,8 @@ export function addLocateControl(map: MapLibreMap, create: () => GeolocateContro
     let last: LocateEvent = { type: 'off' };
     /** El botón estaba encendido (`aria-pressed`): al apagarse se avisa `off`. */
     let pressed = false;
+    /** Se pidió la ubicación antes de que MapLibre terminara de preparar el botón. */
+    let requested = false;
 
     const emit = (event: LocateEvent): void => {
         last = event;
@@ -178,6 +180,11 @@ export function addLocateControl(map: MapLibreMap, create: () => GeolocateContro
         if (ready()) {
             if (button.disabled) {
                 button.disabled = false;
+            }
+
+            if (requested) {
+                requested = false;
+                button.click();
             }
 
             const focused = document.activeElement;
@@ -348,7 +355,10 @@ export function addLocateControl(map: MapLibreMap, create: () => GeolocateContro
             render();
         },
         request() {
-            if (button.getAttribute('aria-pressed') !== 'true') {
+            // Antes de estar listo, MapLibre no atiende el toque: va cuando lo esté.
+            if (!ready()) {
+                requested = true;
+            } else if (button.getAttribute('aria-pressed') !== 'true') {
                 // Por el mismo camino que un toque: sin geolocalización, el aviso.
                 button.click();
             }

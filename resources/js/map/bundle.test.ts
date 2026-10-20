@@ -301,7 +301,7 @@ describe('página sin conexión', () => {
 | en el mismo cambio que lo justifica.
 */
 describe('presupuesto de descarga', () => {
-    it('el arranque (entrada, página de inicio y sus estilos) no pasa de 82 kB comprimidos', () => {
+    it('el arranque (entrada, página de inicio y sus estilos) no pasa de 83 kB comprimidos', () => {
         // Medido al fijarlo en 80: 70 kB (Vue e Inertia son casi todo). Con
         // los restaurantes sobre el mapa (#9) llegó a 79, y con la ficha (#13),
         // a 80,5: de los 1,5 kB que suma, 0,6 son sus estilos, porque el CSS
@@ -312,7 +312,23 @@ describe('presupuesto de descarga', () => {
         // sus avisos viajan con el mapa (DOM y estilos del control, no
         // componentes ni clases de Tailwind); al arranque solo llegan sus
         // textos y el panel que la página le pasa al mapa.
-        expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(82);
+        // «Cómo llegar» (#11) lo subió a 83 (ADR 0020): medía 82,6. El
+        // router, el grafo, la capa y el panel de la ruta bajan al pedir la
+        // primera; al arranque llegan el botón, el restaurante elegido en la
+        // dirección y lo que carga lo demás. Para hacerle lugar, los colores
+        // de la marca se importan solos y no todo brand/tokens.json (−0,2).
+        expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
+    });
+
+    it('la ruta (router, grafo, capa y panel) no baja con el arranque: son chunks que se piden con import()', () => {
+        const initial = initialChunks();
+        const route = /\/resources\/js\/(?:routing\/|components\/Route(?:Layer|Directions)\.vue)/;
+
+        expect(initial.filter((chunk) => chunk.moduleIds.some((id) => route.test(normalize(id)) && !normalize(id).endsWith('/routing/intent.ts')))).toEqual([]);
+        expect(chunkOf('/resources/js/pages/Home.vue').dynamicImports).toEqual(
+            expect.arrayContaining([chunkOf('/resources/js/components/RouteLayer.vue').fileName, chunkOf('/resources/js/components/RouteDirections.vue').fileName]),
+        );
+        expect(loadedWith(chunkOf('/resources/js/components/RouteLayer.vue')).some((chunk) => has(chunk, /\/resources\/js\/routing\/veni-mapa\/router\.ts$/))).toBe(true);
     });
 
     it('la ficha de un restaurante no baja con el arranque: es un chunk aparte', () => {

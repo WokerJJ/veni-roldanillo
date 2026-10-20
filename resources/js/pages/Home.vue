@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, usePage } from '@inertiajs/vue3';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
+import type { Component, FunctionalComponent } from 'vue';
+import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
 
 import Icon from '@/components/Icon.vue';
 import MapView from '@/components/MapView.vue';
@@ -11,6 +12,37 @@ import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import { useI18n } from '@/composables/useI18n';
 import { SELECTED_PARAM, selectedFromUrl } from '@/restaurants/links';
 import { useRestaurants } from '@/restaurants/useRestaurants';
+// Solo los tipos: la ruta llega con import() al pedirla (ADR 0020).
+import type { RouteProfile, RouteState } from '@/routing/directions';
+import { takeDirections } from '@/routing/intent';
+
+/*
+| «Cómo llegar» (#11): la capa de la ruta (con el router y el grafo) y su
+| panel bajan recién cuando alguien pide la primera ruta, no con el inicio.
+| Con import() a mano y no con defineAsyncComponent, que sumaría su código
+| (y el de Suspense) al arranque.
+*/
+const routeParts = shallowRef<{ layer: Component; panel: Component } | null>(null);
+
+/** Lo que bajó de «Cómo llegar», con los atributos que le da la plantilla; hasta que baja, nada. */
+const RouteLayer: FunctionalComponent = (_props, { attrs }) => (routeParts.value ? h(routeParts.value.layer, attrs) : null);
+const RouteDirections: FunctionalComponent = (_props, { attrs }) => (routeParts.value ? h(routeParts.value.panel, attrs) : null);
+
+function loadRouteParts(): void {
+    if (routeParts.value !== null) {
+        return;
+    }
+
+    Promise.all([import('@/components/RouteLayer.vue'), import('@/components/RouteDirections.vue')])
+        .then(([layer, panel]) => {
+            routeParts.value = { layer: layer.default, panel: panel.default };
+        })
+        .catch((error: unknown) => {
+            // Sin señal a mitad de la descarga: el panel lo dice y la próxima vez se reintenta.
+            console.error('[ruta] No se pudo cargar «Cómo llegar».', error);
+            routeState.value = { status: 'offline' };
+        });
+}
 
 // El mapa ocupa todo el alto bajo la cabecera: el layout va sin pie de página.
 defineOptions({ layout: { immersive: true } });
@@ -28,13 +60,24 @@ let openedFromList = false;
 const page = usePage();
 /**
  * El restaurante que pide la dirección con que se abrió el inicio (`/?r=slug`,
- * ADR 0018): a donde lleva «Ver en el mapa» desde una ficha. Se elige una sola
- * vez, cuando llega la lista, y ahí sale de la dirección. En la dirección solo
- * viaja el restaurante.
+ * ADR 0018 y 0020): a donde lleva «Cómo llegar» desde una ficha, o «atrás»
+ * desde la ficha que se abrió con uno elegido. Se elige una sola vez, cuando
+ * llega la lista. Desde ahí la dirección dice cuál está elegido. En la
+ * dirección solo viaja el restaurante, nunca la ubicación de quien usa el mapa.
  */
 let requestedSlug = selectedFromUrl(page.url);
 
+/** El restaurante hasta el que se pidió la ruta (siempre el elegido), o null. */
+const directionsFor = ref<string | null>(null);
+const profile = ref<RouteProfile>('foot');
+const routeState = ref<RouteState>({ status: 'locating' });
+/** Sube con «Volver a intentar»: la capa de la ruta lo vuelve a pedir. */
+const routeAttempt = ref(0);
+
 const selected = computed(() => restaurants.value.find(({ slug }) => slug === selectedSlug.value) ?? null);
+const directionsOpen = computed(() => selected.value !== null && directionsFor.value === selected.value.slug);
+/** Sin mapa no hay ubicación ni dónde dibujar: el panel solo ofrece las otras apps. */
+const shownRouteState = computed<RouteState>(() => (mapFailed.value ? { status: 'unavailable' } : routeState.value));
 const hasRestaurants = computed(() => status.value === 'ready' && restaurants.value.length > 0);
 const hasSampleData = computed(() => restaurants.value.some(({ fictitious }) => fictitious));
 
@@ -101,16 +144,43 @@ async function closeList(): Promise<void> {
     listButton.value?.focus();
 }
 
+function openDirections(): void {
+    if (selectedSlug.value === null) {
+        return;
+    }
+
+    routeState.value = { status: 'locating' };
+    directionsFor.value = selectedSlug.value;
+    loadRouteParts();
+}
+
+async function closeDirections(): Promise<void> {
+    directionsFor.value = null;
+    await nextTick();
+    panel.value?.querySelector<HTMLElement>('button[data-directions]')?.focus();
+}
+
+function retryDirections(): void {
+    routeState.value = { status: 'locating' };
+    routeAttempt.value += 1;
+}
+
 function retryRestaurants(): void {
     // El botón desaparece al reintentar: el foco pasa al estado, que dice «Cargando…».
     statusRegion.value?.focus();
     retry();
 }
 
-/** La dirección de la página (`page.url` de Inertia) sin el restaurante elegido. */
-function withoutSelected(url: string): string {
+/** La dirección de la página (`page.url` de Inertia) con ese restaurante elegido, o sin ninguno. */
+function withSelected(url: string, slug: string | null): string {
     const { pathname, searchParams, hash } = new URL(url, window.location.href);
-    searchParams.delete(SELECTED_PARAM);
+
+    if (slug === null) {
+        searchParams.delete(SELECTED_PARAM);
+    } else {
+        searchParams.set(SELECTED_PARAM, slug);
+    }
+
     const query = searchParams.toString();
 
     return `${pathname}${query === '' ? '' : `?${query}`}${hash}`;
@@ -128,15 +198,23 @@ function onKeydown(event: KeyboardEvent): void {
     }
 }
 
+/**
+ * La dirección dice qué restaurante está elegido (`?r=slug`): así «atrás»
+ * desde su ficha vuelve al mapa con él. La visita es en el dispositivo y
+ * reemplaza la entrada del historial: no pide nada al servidor, no vuelve a
+ * montar la página ni suma una entrada por cada restaurante que se toca.
+ */
+function syncUrl(slug: string | null): void {
+    if (selectedFromUrl(page.url) !== slug) {
+        router.replace({ url: withSelected(page.url, slug), preserveScroll: true, preserveState: true });
+    }
+}
+
 // Llegó la lista: si la dirección pedía un restaurante y está en ella, abre
 // elegido, como si lo hubieran tocado en el mapa (la cámara va hasta él:
-// RestaurantsLayer). Si no está (se ocultó, o el enlace está mal escrito), el
-// inicio abre como siempre.
-//
-// Ahí el parámetro sale de la dirección: si quedara, «atrás» desde otra ficha
-// volvería a `/?r=slug` y reabriría a este, y no al mapa sin nadie elegido.
-// La visita es en el dispositivo y reemplaza la entrada del historial: no
-// pide nada al servidor ni vuelve a montar la página.
+// RestaurantsLayer), y con la ruta si se pidió desde su ficha. Si no está (se
+// ocultó, o el enlace está mal escrito), el inicio abre como siempre y el
+// parámetro sale de la dirección.
 watch(status, (current) => {
     if (current !== 'ready' || requestedSlug === null) {
         return;
@@ -144,10 +222,26 @@ watch(status, (current) => {
 
     const slug = requestedSlug;
     requestedSlug = null;
-    router.replace({ url: withoutSelected(page.url), preserveScroll: true, preserveState: true });
 
     if (restaurants.value.some((restaurant) => restaurant.slug === slug)) {
         selectFromMap(slug);
+
+        if (takeDirections(slug)) {
+            openDirections();
+        }
+    } else {
+        syncUrl(null);
+    }
+});
+
+// Otro elegido, o ninguno: la dirección lo dice, y la ruta, que era hasta el anterior, se cierra.
+watch(selectedSlug, (slug) => {
+    if (directionsFor.value !== slug) {
+        directionsFor.value = null;
+    }
+
+    if (requestedSlug === null) {
+        syncUrl(slug);
     }
 });
 
@@ -210,7 +304,23 @@ onBeforeUnmount(() => {
             <!-- El título de la página sigue en el documento aunque el panel muestre otra cosa. -->
             <h1 :class="selected || listOpen ? 'sr-only' : 'text-xl min-[480px]:text-2xl'">{{ t('home.heading') }}</h1>
 
-            <RestaurantSummary v-if="selected" :key="selected.slug" :restaurant="selected" @close="closeSummary" />
+            <RestaurantSummary
+                v-if="selected"
+                :key="selected.slug"
+                :restaurant="selected"
+                :directions-open="directionsOpen"
+                @close="closeSummary"
+                @directions="openDirections"
+            >
+                <RouteDirections
+                    :state="shownRouteState"
+                    :profile="profile"
+                    :destination="selected.coordinates"
+                    @profile="profile = $event"
+                    @retry="retryDirections"
+                    @close="closeDirections"
+                />
+            </RestaurantSummary>
 
             <RestaurantList v-else-if="listOpen" ref="list" :restaurants="restaurants" @select="selectFromList" @close="closeList" />
 
@@ -265,6 +375,14 @@ onBeforeUnmount(() => {
         -->
         <MapView ref="mapView" :overlay="mapFailed ? null : panel" :class="{ 'min-h-56': mapFailed }" @status="mapFailed = $event === 'error'">
             <RestaurantsLayer :restaurants="restaurants" :selected="selectedSlug" @select="selectFromMap" />
+            <RouteLayer
+                v-if="directionsOpen && selected"
+                :key="selected.slug"
+                :destination="selected.coordinates"
+                :profile="profile"
+                :attempt="routeAttempt"
+                @state="routeState = $event"
+            />
         </MapView>
     </div>
 </template>
