@@ -8,7 +8,9 @@
  * dentro del mapa, con los textos que da la app y los estilos de map.css.
  * Viajan con el motor y no pesan en el arranque. Y la posición no sale de
  * aquí: MapLibre la usa para la marca y la cámara, y los avisos dicen qué
- * pasó, nunca dónde (ADR 0008).
+ * pasó, nunca dónde (ADR 0008). La única salida es la suscripción en memoria
+ * de `subscribe`, que el motor le da a la ruta de «Cómo llegar» (#11, ADR
+ * 0019 y 0020): se calcula y se dibuja en el dispositivo con ella.
  *
  * Solo importa tipos de MapLibre: el control lo crea engine.ts, el único que
  * lo importa.
@@ -45,9 +47,26 @@ export interface LocateTexts {
     problems: Readonly<Record<LocateProblem, string>>;
 }
 
+/**
+ * Lo que pasa con la ubicación, para quien la usa dentro del dispositivo (la
+ * ruta de #11): llegó una posición (`[longitud, latitud]`), hubo un problema
+ * (el mismo que dice el aviso) o se apagó.
+ */
+export type LocateEvent = { type: 'position'; at: [number, number] } | { type: 'problem'; problem: LocateProblem } | { type: 'off' };
+
 export interface LocateControl {
     /** Cambia los textos (otro idioma), sin tocar el estado. */
     relabel(texts: LocateTexts): void;
+    /**
+     * Pide la ubicación como si tocaran el botón, si no está encendido: el
+     * permiso, si hace falta, lo pide el navegador. Encendido, no hace nada.
+     */
+    request(): void;
+    /**
+     * Avisa cada cambio de la ubicación, en memoria; si ya hay una posición, la
+     * da enseguida. Devuelve con qué darse de baja.
+     */
+    subscribe(listener: (event: LocateEvent) => void): () => void;
     /** Deja de vigilar el botón y quita los avisos: el mapa se libera. */
     dispose(): void;
 }
@@ -106,6 +125,19 @@ export function addLocateControl(map: MapLibreMap, create: () => GeolocateContro
     const shown = new Set<LocateProblem>();
     /** El foco estaba en el botón que se cambió: pasa al nuevo cuando esté listo. */
     let refocus = false;
+    /** Quienes usan la ubicación en el dispositivo (la ruta), y lo último que pasó con ella. */
+    const listeners = new Set<(event: LocateEvent) => void>();
+    let last: LocateEvent = { type: 'off' };
+    /** El botón estaba encendido (`aria-pressed`): al apagarse se avisa `off`. */
+    let pressed = false;
+
+    const emit = (event: LocateEvent): void => {
+        last = event;
+
+        for (const listener of [...listeners]) {
+            listener(event);
+        }
+    };
 
     // El aviso: junto al botón, sin tapar el mapa ni llevarse el foco. Entra
     // al documento al mostrarse (así lo anuncia el lector de pantalla) y sale
@@ -135,6 +167,14 @@ export function addLocateControl(map: MapLibreMap, create: () => GeolocateContro
     const ready = (): boolean => button.hasAttribute('aria-pressed');
 
     const restoreButton = (): void => {
+        const nowPressed = button.getAttribute('aria-pressed') === 'true';
+
+        if (pressed && !nowPressed) {
+            emit({ type: 'off' });
+        }
+
+        pressed = nowPressed;
+
         if (ready()) {
             if (button.disabled) {
                 button.disabled = false;
@@ -189,6 +229,7 @@ export function addLocateControl(map: MapLibreMap, create: () => GeolocateContro
 
     const report = (reason: LocateProblem): void => {
         located = false;
+        emit({ type: 'problem', problem: reason });
 
         if (!shown.has(reason)) {
             shown.add(reason);
@@ -227,10 +268,11 @@ export function addLocateControl(map: MapLibreMap, create: () => GeolocateContro
         }
     };
 
-    const onFound = (): void => {
+    const onFound = (event: { coords: { longitude: number; latitude: number } }): void => {
         shown.clear();
         located = true;
         hide();
+        emit({ type: 'position', at: [event.coords.longitude, event.coords.latitude] });
     };
 
     const onOutside = (): void => {
@@ -241,6 +283,8 @@ export function addLocateControl(map: MapLibreMap, create: () => GeolocateContro
 
     const attach = (): void => {
         control = create();
+        // Un control nuevo (el del permiso negado) empieza apagado: no avisa `off`.
+        pressed = false;
         // MapLibre encuadra la ubicación con `fitBoundsOptions`, que lee cada
         // vez: el margen se mide ahí, con el panel y el mapa como estén.
         const fitBoundsOptions = { ...control.options.fitBoundsOptions };
@@ -303,7 +347,25 @@ export function addLocateControl(map: MapLibreMap, create: () => GeolocateContro
             texts = next;
             render();
         },
+        request() {
+            if (button.getAttribute('aria-pressed') !== 'true') {
+                // Por el mismo camino que un toque: sin geolocalización, el aviso.
+                button.click();
+            }
+        },
+        subscribe(listener) {
+            listeners.add(listener);
+
+            if (last.type === 'position') {
+                listener(last);
+            }
+
+            return () => {
+                listeners.delete(listener);
+            };
+        },
         dispose() {
+            listeners.clear();
             detach();
             notice.remove();
             announcer.remove();

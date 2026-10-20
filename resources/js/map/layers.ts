@@ -53,6 +53,14 @@ export interface MapLayerGroup {
      * número, encima el que se registró después. Todos van sobre el mapa base.
      */
     order?: number;
+    /**
+     * Con `true`, el grupo va debajo de las etiquetas del mapa base (nombres de
+     * calles y lugares, sus primeras capas `symbol`): lo que se dibuja a lo
+     * largo de las calles, como la ruta de «Cómo llegar», no tapa sus nombres.
+     * Estos grupos quedan debajo de todos los demás; `order` los ordena entre
+     * ellos. Si el mapa base no tiene etiquetas, van sobre él, como el resto.
+     */
+    belowLabels?: boolean;
     /** Los datos de cada fuente son los iniciales: después se cambian con `setData`. */
     sources: Readonly<Record<string, GeoJSONSourceSpecification>>;
     /** En el orden en que se pintan: la última queda encima. */

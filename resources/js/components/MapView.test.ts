@@ -3,6 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished,
 import type { Component } from 'vue';
 import { defineComponent, h } from 'vue';
 
+import type { MapHandle } from '@/map/engine';
 import type { MapGeoJson, MapLayerGroup } from '@/map/layers';
 import type { MapLayers } from '@/map/useMapLayers';
 import { removeGeolocation, stubGeolocation } from '@/testing/geolocation';
@@ -419,6 +420,119 @@ describe('MapView', () => {
         function userDot(map: FakeMapLibre.Map): HTMLElement | null {
             return map.container.querySelector('.maplibregl-user-location-dot');
         }
+
+        /*
+        | La ruta de «Cómo llegar» (#11, ADR 0020) recibe la ubicación dentro
+        | del motor, por una suscripción en memoria.
+        */
+        describe('la ubicación para la ruta', () => {
+            /** Un componente dentro de <MapView> que se queda con el mapa, como la capa de la ruta. */
+            async function withHandle() {
+                const { useMap } = await import('@/map/useMapLayers');
+                const holder: { map: MapHandle | null } = { map: null };
+                const Grabber: Component = {
+                    setup() {
+                        const { map } = useMap();
+
+                        return () => {
+                            holder.map = map.value;
+
+                            return null;
+                        };
+                    },
+                };
+
+                return { Grabber, holder };
+            }
+
+            it('requestPosition enciende el control como un toque y la posición llega a quien se suscribió', async () => {
+                const device = stubGeolocation();
+                const { Grabber, holder } = await withHandle();
+                const { loadedMap } = await mountMap({ inside: () => [Grabber] });
+                const created = await loadedMap();
+                const button = await locateButton(created);
+                const events: unknown[] = [];
+
+                const stop = holder.map?.watchPosition((event) => events.push(event));
+                holder.map?.requestPosition();
+                device.move(PLAZA);
+
+                expect(button.getAttribute('aria-pressed')).toBe('true');
+                expect(events).toEqual([{ type: 'position', at: [PLAZA.longitude, PLAZA.latitude] }]);
+
+                // Encendido, pedirla otra vez no lo apaga.
+                holder.map?.requestPosition();
+                expect(button.getAttribute('aria-pressed')).toBe('true');
+
+                stop?.();
+                device.move({ longitude: -76.15, latitude: 4.41 });
+                expect(events).toHaveLength(1);
+            });
+
+            it('quien se suscribe con la ubicación ya en el mapa la recibe enseguida', async () => {
+                const device = stubGeolocation();
+                const { Grabber, holder } = await withHandle();
+                const { loadedMap } = await mountMap({ inside: () => [Grabber] });
+                const button = await locateButton(await loadedMap());
+                button.click();
+                device.move(PLAZA);
+                const events: unknown[] = [];
+
+                holder.map?.watchPosition((event) => events.push(event));
+
+                expect(events).toEqual([{ type: 'position', at: [PLAZA.longitude, PLAZA.latitude] }]);
+            });
+
+            it('avisa los problemas, y que se apagó', async () => {
+                const device = stubGeolocation();
+                const { Grabber, holder } = await withHandle();
+                const { loadedMap } = await mountMap({ inside: () => [Grabber] });
+                const button = await locateButton(await loadedMap());
+                const events: unknown[] = [];
+                holder.map?.watchPosition((event) => events.push(event));
+
+                holder.map?.requestPosition();
+                device.move({ longitude: -74.0721, latitude: 4.711 });
+                device.move(PLAZA);
+                // Dos toques: el primero vuelve a centrar, el segundo lo apaga.
+                button.click();
+                button.click();
+                await flushPromises();
+
+                expect(events).toEqual([
+                    { type: 'problem', problem: 'outside' },
+                    { type: 'position', at: [PLAZA.longitude, PLAZA.latitude] },
+                    { type: 'off' },
+                ]);
+            });
+
+            it('con el permiso negado avisa el problema, sin un «apagado» después', async () => {
+                const device = stubGeolocation();
+                const { Grabber, holder } = await withHandle();
+                const { loadedMap } = await mountMap({ inside: () => [Grabber] });
+                await locateButton(await loadedMap());
+                const events: unknown[] = [];
+                holder.map?.watchPosition((event) => events.push(event));
+
+                holder.map?.requestPosition();
+                device.fail(1);
+                await flushPromises();
+
+                expect(events).toEqual([{ type: 'problem', problem: 'denied' }]);
+            });
+
+            it('showBounds encuadra la región en lo que el panel deja a la vista, con margen', async () => {
+                stubGeolocation();
+                const { Grabber, holder } = await withHandle();
+                const { loadedMap } = await mountMap({ inside: () => [Grabber] });
+                const created = await loadedMap();
+                vi.spyOn(created.container, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 390, 700));
+
+                holder.map?.showBounds([-76.16, 4.41, -76.15, 4.42]);
+
+                expect(created.fitBounds).toHaveBeenCalledWith([-76.16, 4.41, -76.15, 4.42], { padding: { top: 48, right: 48, bottom: 48, left: 48 }, maxZoom: 17 });
+            });
+        });
 
         it('es el control de geolocalización de MapLibre, debajo de los de zoom, con su nombre en el idioma actual', async () => {
             stubGeolocation();
