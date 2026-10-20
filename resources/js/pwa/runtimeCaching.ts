@@ -1,6 +1,6 @@
 import type { VitePWAOptions } from 'vite-plugin-pwa';
 
-import { mapCachePattern } from './mapCache';
+import { mapCachePattern, routesCachePattern } from './mapCache';
 
 /*
 | Qué hace el service worker con cada pedido que no está en el precache (#5).
@@ -118,7 +118,36 @@ export function runtimeCaching(env: Readonly<Record<string, string | undefined>>
                 cacheableResponse: { statuses: [200] },
             },
         },
+        ...routesGraph(env.VITE_MAP_ROUTES_URL),
         ...mapRoutes(env.VITE_MAP_STYLE_URL, env.VITE_MAP_ROUTES_URL),
+    ];
+}
+
+/**
+ * El grafo de rutas de «Cómo llegar» (#11, ADR 0020): baja al pedir la
+ * primera ruta y desde ahí sale de la caché, también sin señal. Se renueva
+ * detrás, porque sin versión en la URL cambia con cada publicación de
+ * veni-mapa; un grafo viejo sigue sirviendo para calcular. Solo guarda ese
+ * archivo, que es el mismo para todos: nada de quien usa la app.
+ */
+function routesGraph(routesUrl: string | undefined): RuntimeCaching[] {
+    const pattern = routesCachePattern(routesUrl);
+
+    if (pattern === null) {
+        return [];
+    }
+
+    return [
+        {
+            urlPattern: pattern,
+            handler: 'StaleWhileRevalidate',
+            options: {
+                cacheName: 'veni-map-routes',
+                // El de esta publicación y, mientras se renueva, el anterior.
+                expiration: { maxEntries: 2, maxAgeSeconds: 60 * DAY, purgeOnQuotaError: true },
+                cacheableResponse: { statuses: [200] },
+            },
+        },
     ];
 }
 

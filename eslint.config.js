@@ -7,7 +7,9 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig(
     {
-        ignores: ['public/**', 'vendor/**', 'node_modules/**', 'bootstrap/ssr/**', 'storage/**'],
+        // resources/js/routing/veni-mapa: copia fija del router de veni-mapa,
+        // con su propio estilo; se reemplaza entera, no se corrige (ADR 0020).
+        ignores: ['public/**', 'vendor/**', 'node_modules/**', 'bootstrap/ssr/**', 'storage/**', 'resources/js/routing/veni-mapa/**'],
     },
     js.configs.recommended,
     ...tseslint.configs.strictTypeChecked,
