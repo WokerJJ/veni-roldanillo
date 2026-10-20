@@ -83,6 +83,10 @@ onBeforeUnmount(stopFocusingContent);
         <footer v-if="!immersive" class="border-t border-line">
             <div class="mx-auto max-w-5xl px-4 py-6 text-sm text-ink-muted">
                 <p>{{ t('layout.footer', { year }) }}</p>
+                <!-- La atribución de OpenStreetMap (ODbL) y cómo pedir sus datos: ADR 0021. -->
+                <Link href="/credits" class="inline-flex min-h-touch items-center underline underline-offset-2" data-credits>
+                    {{ t('credits.link') }}
+                </Link>
             </div>
         </footer>
 

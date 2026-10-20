@@ -32,6 +32,8 @@ describe('AppLayout', () => {
         expect(wrapper.classes()).not.toContain('h-dvh');
         expect(wrapper.get('main').text()).toBe('Página');
         expect(wrapper.get('footer').text()).toContain('Vení Roldanillo');
+        // La atribución de OpenStreetMap (ADR 0021), en cada página con pie.
+        expect(wrapper.get('footer [data-credits]').attributes('href')).toBe('/credits');
     });
 
     it('en modo inmersivo ocupa justo el alto de la pantalla, sin pie de página', async () => {
