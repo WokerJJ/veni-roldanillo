@@ -65,3 +65,19 @@ export function mapCachePattern(styleUrl: string | undefined, routesUrl?: string
 
     return new RegExp(`^${escapeRegExp(origin)}${version}/${withoutRoutes}[^?#]*\\.(?:${files})(?:[?#].*)?$`);
 }
+
+/**
+ * El grafo de rutas (`VITE_MAP_ROUTES_URL`, #11): exactamente esa URL, con o
+ * sin parámetros. Lo pide el dispositivo al calcular la primera ruta y es el
+ * mismo para todos: la URL no lleva nada de quien la pide. Sin URL http o
+ * https, no hay patrón.
+ */
+export function routesCachePattern(routesUrl: string | undefined): RegExp | null {
+    if (originOf(routesUrl) === null || routesUrl === undefined) {
+        return null;
+    }
+
+    const { origin, pathname } = new URL(routesUrl.trim());
+
+    return new RegExp(`^${escapeRegExp(origin + pathname)}(?:[?#].*)?$`);
+}

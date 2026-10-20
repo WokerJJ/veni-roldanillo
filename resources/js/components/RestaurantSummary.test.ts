@@ -170,4 +170,37 @@ describe('RestaurantSummary', () => {
             expect(wrapper.findAll('a')).toHaveLength(1);
         });
     });
+
+    describe('cómo llegar', () => {
+        it('ofrece la ruta con un botón de 44 px, que la pide a la página', async () => {
+            const { wrapper } = await mountSummary({ restaurant: LA_CEIBA });
+            const button = wrapper.get('button[data-directions]');
+
+            await button.trigger('click');
+
+            expect(button.text()).toBe('Cómo llegar');
+            expect(button.classes()).toContain('min-h-touch');
+            expect(wrapper.emitted('directions')).toHaveLength(1);
+        });
+
+        it('en inglés', async () => {
+            const { wrapper } = await mountSummary({ restaurant: LA_CEIBA }, 'en');
+
+            expect(wrapper.get('button[data-directions]').text()).toBe('Directions');
+        });
+
+        it('con la ruta pedida, en lugar del botón va lo que la página pone, y sigue el enlace a la ficha', async () => {
+            const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
+            inertia.reset();
+            inertia.receiveFromServer('es', { replace: true });
+            const { default: RestaurantSummary } = await import('./RestaurantSummary.vue');
+            const wrapper = mount(RestaurantSummary, { props: { restaurant: LA_CEIBA, directionsOpen: true }, slots: { default: '<p data-panel>La ruta</p>' } });
+            await flushPromises();
+
+            expect(wrapper.find('button[data-directions]').exists()).toBe(false);
+            expect(wrapper.get('[data-panel]').text()).toBe('La ruta');
+            expect(wrapper.get('a').text()).toBe('Ver la ficha');
+        });
+    });
 });
+

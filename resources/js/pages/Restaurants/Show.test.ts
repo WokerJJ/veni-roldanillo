@@ -114,33 +114,66 @@ describe('Restaurants/Show', () => {
         expect(real.wrapper.text()).not.toContain('Datos de ejemplo');
     });
 
-    describe('ver en el mapa', () => {
-        // Dice lo que hace: abre el mapa con el restaurante elegido. La ruta
-        // hasta él («Cómo llegar») todavía no existe.
+    describe('cómo llegar', () => {
+        // Abre el mapa del inicio con este restaurante elegido y la ruta hasta él (#11).
         it.each([
-            ['es', 'Ver en el mapa'],
-            ['en', 'See on the map'],
+            ['es', 'Cómo llegar'],
+            ['en', 'Directions'],
         ] as const)('en %s, el botón abre el mapa del inicio con este restaurante elegido', async (locale, text) => {
             const { wrapper } = await mountShow(profile(), locale);
-            const seeOnMap = wrapper.get('[data-see-on-map]');
+            const directions = wrapper.get('[data-directions]');
 
-            expect(seeOnMap.element.tagName).toBe('A');
-            expect(seeOnMap.text()).toBe(text);
-            expect(seeOnMap.attributes('href')).toBe('/?r=prueba-la-ceiba');
-            expect(seeOnMap.classes()).toContain('min-h-touch');
+            expect(directions.element.tagName).toBe('A');
+            expect(directions.text()).toBe(text);
+            expect(directions.attributes('href')).toBe('/?r=prueba-la-ceiba');
+            expect(directions.classes()).toContain('min-h-touch');
         });
 
         it('en la dirección solo va el restaurante', async () => {
             const { wrapper } = await mountShow();
-            const href = wrapper.get('[data-see-on-map]').attributes('href') ?? '';
+            const href = wrapper.get('[data-directions]').attributes('href') ?? '';
 
             expect([...new URLSearchParams(href.slice(href.indexOf('?'))).keys()]).toEqual(['r']);
+        });
+
+        it('al tocarlo, deja pedida la ruta hasta este restaurante, en la memoria de la página', async () => {
+            const { wrapper } = await mountShow();
+            const { takeDirections } = await import('@/routing/intent');
+
+            await wrapper.get('[data-directions]').trigger('click');
+
+            expect(takeDirections('otro')).toBe(false);
+            await wrapper.get('[data-directions]').trigger('click');
+            expect(takeDirections('prueba-la-ceiba')).toBe(true);
+            // Una sola vez.
+            expect(takeDirections('prueba-la-ceiba')).toBe(false);
+            // Ni en el almacenamiento del navegador.
+            const stored = [window.localStorage, window.sessionStorage].flatMap((storage) =>
+                Array.from({ length: storage.length }, (_, index) => `${storage.key(index) ?? ''}=${storage.getItem(storage.key(index) ?? '') ?? ''}`),
+            );
+            expect(stored.join(' ')).not.toContain('prueba-la-ceiba');
+        });
+
+        it.each([
+            ['Ctrl', { ctrlKey: true }],
+            ['Cmd', { metaKey: true }],
+            ['Shift', { shiftKey: true }],
+            ['Alt', { altKey: true }],
+            ['la rueda', { button: 1 }],
+        ] as const)('abierto con %s (otra pestaña o ventana), no deja pedida la ruta en esta', async (_name, init) => {
+            const { wrapper } = await mountShow();
+            const { takeDirections } = await import('@/routing/intent');
+
+            wrapper.get('[data-directions]').element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ...init }));
+            await flushPromises();
+
+            expect(takeDirections('prueba-la-ceiba')).toBe(false);
         });
 
         it('una ficha oculta no lo lleva: no está en el mapa', async () => {
             const { wrapper } = await mountShow(profile({ hidden: true }));
 
-            expect(wrapper.find('[data-see-on-map]').exists()).toBe(false);
+            expect(wrapper.find('[data-directions]').exists()).toBe(false);
         });
     });
 

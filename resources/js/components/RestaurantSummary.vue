@@ -20,11 +20,14 @@ import { openStatusText } from '@/restaurants/statusText';
  * Al abrirse toma el foco en el nombre, para que se anuncie de quién es; quien
  * lo muestra lo cierra con `close` (el botón o Escape) y devuelve el foco.
  *
- * Termina en el enlace a la ficha completa del restaurante (#13).
+ * Termina en «Cómo llegar» (#11), que pide la ruta con `directions`, y en el
+ * enlace a la ficha completa del restaurante (#13). Con la ruta pedida
+ * (`directionsOpen`), en lugar del botón va lo que la página ponga en el slot:
+ * el panel de la ruta, que llega con import(). Va dentro del diálogo.
  */
-const { restaurant } = defineProps<{ restaurant: Restaurant }>();
+const { restaurant, directionsOpen } = defineProps<{ restaurant: Restaurant; directionsOpen?: boolean }>();
 
-defineEmits<{ close: [] }>();
+defineEmits<{ close: []; directions: [] }>();
 
 const { t, locale } = useI18n();
 const now = useNow();
@@ -73,12 +76,26 @@ onMounted(() => {
             <span>{{ t('restaurants.delivery') }}</span>
         </p>
 
-        <Link
-            :href="restaurantUrl(restaurant.slug)"
-            class="mt-3 inline-flex min-h-touch items-center gap-1 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
-        >
-            {{ t('restaurants.view_details') }}
-            <Icon name="chevron-derecha" :size="20" />
-        </Link>
+        <slot v-if="directionsOpen" />
+
+        <div class="mt-3 flex flex-wrap gap-2">
+            <button
+                v-if="!directionsOpen"
+                type="button"
+                class="inline-flex min-h-touch items-center gap-1.5 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                data-directions
+                @click="$emit('directions')"
+            >
+                <Icon name="ubicacion" :size="20" />
+                {{ t('directions.open') }}
+            </button>
+            <Link
+                :href="restaurantUrl(restaurant.slug)"
+                class="inline-flex min-h-touch items-center gap-1 rounded-full border border-line px-5 font-semibold hover:bg-surface"
+            >
+                {{ t('restaurants.view_details') }}
+                <Icon name="chevron-derecha" :size="20" />
+            </Link>
+        </div>
     </section>
 </template>

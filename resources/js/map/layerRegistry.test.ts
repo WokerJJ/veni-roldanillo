@@ -52,8 +52,8 @@ function route(extra: Partial<MapLayerGroup> = {}): MapLayerGroup {
     };
 }
 
-function setUp() {
-    const map = new maplibre.Map({ container: document.createElement('div'), style: structuredClone(BASE) });
+function setUp(base: maplibre.FakeStyle = BASE) {
+    const map = new maplibre.Map({ container: document.createElement('div'), style: structuredClone(base) });
     const registry = createLayerRegistry(map as unknown as MapLibreMap);
 
     return {
@@ -288,6 +288,71 @@ describe('registro de capas propias', () => {
             registry.add(restaurants());
 
             expect(layerIds().slice(3)).toEqual(['route-line', 'restaurants-clusters', 'restaurants-points']);
+        });
+
+        /*
+        | Lo que va a lo largo de las calles (la ruta de «Cómo llegar», #11)
+        | va debajo de las etiquetas del mapa base: no tapa los nombres.
+        */
+        describe('debajo de las etiquetas', () => {
+            const LABELED = {
+                ...BASE,
+                layers: [
+                    { id: 'background', type: 'background' },
+                    { id: 'roads', type: 'line' },
+                    { id: 'roads-labels', type: 'symbol' },
+                    { id: 'places', type: 'symbol' },
+                ],
+            };
+            const LABELED_DARK = { ...LABELED, name: 'oscuro' };
+
+            it('el grupo va antes de la primera etiqueta del mapa base, y los demás siguen encima de todo', () => {
+                const { registry, layerIds } = setUp(LABELED);
+
+                registry.add(restaurants({ order: 20 }));
+                registry.add(route({ order: 10, belowLabels: true }));
+
+                expect(layerIds()).toEqual(['background', 'roads', 'route-line', 'roads-labels', 'places', 'restaurants-clusters', 'restaurants-points']);
+            });
+
+            it('queda ahí al cambiar de estilo', async () => {
+                const { registry, changeStyle, layerIds } = setUp(LABELED);
+
+                registry.add(route({ order: 10, belowLabels: true }));
+                registry.add(restaurants({ order: 20 }));
+                changeStyle(LABELED_DARK);
+                await Promise.resolve();
+
+                expect(layerIds()).toEqual(['background', 'roads', 'route-line', 'roads-labels', 'places', 'restaurants-clusters', 'restaurants-points']);
+            });
+
+            it('va debajo de los demás grupos aunque su order sea mayor', () => {
+                const { registry, layerIds } = setUp(LABELED);
+
+                registry.add(restaurants({ order: 0 }));
+                registry.add(route({ order: 50, belowLabels: true }));
+
+                expect(layerIds().indexOf('route-line')).toBeLessThan(layerIds().indexOf('roads-labels'));
+            });
+
+            it('entre dos de debajo de las etiquetas, order los ordena', () => {
+                const { registry, layerIds } = setUp(LABELED);
+                const casing = { ...route({ order: 5, belowLabels: true }), id: 'casing', sources: { casing: { type: 'geojson' as const, data: EMPTY } }, layers: [{ id: 'casing-line', type: 'line' as const, source: 'casing' }] };
+
+                registry.add(route({ order: 10, belowLabels: true }));
+                registry.add(casing);
+
+                expect(layerIds().slice(2, 4)).toEqual(['casing-line', 'route-line']);
+            });
+
+            it('si el mapa base no tiene etiquetas, va sobre él como los demás', () => {
+                const { registry, layerIds } = setUp();
+
+                registry.add(restaurants({ order: 20 }));
+                registry.add(route({ order: 10, belowLabels: true }));
+
+                expect(layerIds()).toEqual(['background', 'roads', 'places', 'route-line', 'restaurants-clusters', 'restaurants-points']);
+            });
         });
     });
 
