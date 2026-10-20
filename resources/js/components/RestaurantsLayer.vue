@@ -7,7 +7,7 @@ import { iconImage } from '@/map/iconImage';
 import type { MapGeoJson, MapHit, MapImage, MapLayerGroup } from '@/map/layers';
 import { useMap, useMapLayers } from '@/map/useMapLayers';
 import type { Restaurant } from '@/restaurants/api';
-import tokens from '@brand/tokens.json';
+import { color } from '@brand/tokens.json';
 
 /**
  * Los restaurantes sobre el mapa (#9). Va dentro de `<MapView>` y no pinta
@@ -49,9 +49,9 @@ const CLUSTER_MAX_ZOOM = 15;
 /** Zoom al que se lleva la cámara para ver uno elegido desde la lista. */
 const SELECTED_ZOOM = CLUSTER_MAX_ZOOM + 1;
 
-const ARREBOL = tokens.color.arrebol.$value;
-const CIRUELA = tokens.color.ciruela.$value;
-const BLANCO = tokens.color.blanco.$value;
+const ARREBOL = color.arrebol.$value;
+const CIRUELA = color.ciruela.$value;
+const BLANCO = color.blanco.$value;
 
 /**
  * Fuente de los números de los grupos: una de las que publica veni-mapa con
