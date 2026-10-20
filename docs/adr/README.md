@@ -24,3 +24,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0018](0018-ficha-del-restaurante.md) | La ficha del restaurante: una dirección por slug, datos por lista blanca y el restaurante elegido en la dirección del mapa | Aceptada |
 | [0019](0019-donde-estoy-en-el-mapa.md) | «¿Dónde estoy?»: el control de geolocalización de MapLibre, siguiendo la ubicación, con sus avisos dentro del mapa | Aceptada |
 | [0020](0020-como-llegar-en-el-dispositivo.md) | «Cómo llegar»: el router de veni-mapa copiado del tag v0.2.0, el grafo bajado con la primera ruta y la posición solo dentro del motor | Aceptada |
+| [0021](0021-locales-de-openstreetmap.md) | Locales de OpenStreetMap: borradores ocultos con su procedencia, bajo ODbL | Aceptada |

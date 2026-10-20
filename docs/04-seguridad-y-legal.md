@@ -31,8 +31,8 @@ Un origen nuevo que la página necesite (otro host del mapa, un servicio externo
 
 - **Ley 1581 de 2012 (Habeas Data):** política de tratamiento de datos, autorización explícita al registrarse, derechos de consulta, actualización y supresión. Datos mínimos (celular, alias). Direcciones solo en el dispositivo; ubicación: solo el resultado de la verificación.
 - **Ley 1480 de 2011 (Estatuto del Consumidor):** publicidad veraz; lo pagado se marca "Patrocinado".
-- **Derechos de autor:** solo información pública de los negocios; fotos y logos con autorización escrita; no copiar datos ni fotos de Google, TripAdvisor u otros.
-- **OpenStreetMap (ODbL):** atribución visible en el mapa.
+- **Derechos de autor:** solo información pública de los negocios; fotos y logos con autorización escrita; no copiar datos ni fotos de Google, TripAdvisor u otros. Única excepción: OpenStreetMap (ADR 0021).
+- **OpenStreetMap (ODbL):** atribución visible en el mapa y en la página de créditos (`/credits`). De OpenStreetMap se importan solo nombre, tipo y punto de los locales de comida, como fichas ocultas hasta verificarlas en la calle y con su procedencia guardada; nunca teléfonos, correos, sitios web ni redes. La parte de la base que viene de allí queda bajo ODbL y se entrega a quien la pida.
 - **Reseñas:** prohibido condicionar premios a calificaciones altas; política de reseñas pública.
 - **Propiedad intelectual:** software registrado ante la DNDA; marca ante la SIC (clases 9, 35, 42). El software no es patentable en Colombia (Decisión 486 de la CAN).
 

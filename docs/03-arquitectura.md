@@ -239,8 +239,15 @@ Implementado en la Fase 0 (#6); decisiones en el ADR 0009. Convenciones: precios
 | `restaurant_claims` | restaurant_id, user_id, status (pending/approved/rejected), message, reviewed_by, reviewed_at | una pendiente por usuario y restaurante; resuelta si y solo si tiene reviewed_at; índices en restaurant_id, user_id y reviewed_by |
 | `order_intents` | restaurant_id, user_id (nullable), device_hash, confirmed (null/sí/no), created_at | sin direcciones, contenido del pedido ni ubicación; al borrar el usuario queda anónima (un trigger borra también device_hash) |
 | `users` | + role (user/admin), locale (es/en o nulo: decide el dispositivo, ADR 0010) | ser dueño o empleado va en `restaurant_user` |
+| `restaurant_sources` | restaurant_id, source (openstreetmap), element_type (node/way/relation), element_id, element_kind, fetched_at, imported_hash, missing_since | procedencia de una ficha importada (ADR 0021): una por ficha, en cascada; único por fuente, tipo e id del objeto; las fichas propias no tienen fila |
 
 Autorización: `RestaurantPolicy` (el dueño solo edita el suyo; el administrador todo; borrar solo el administrador). El contenido del restaurante (secciones, platos, grupos de opciones, opciones, almuerzos del día, promociones, horarios, horarios especiales y zonas) usa `RestaurantContentPolicy`, que delega en `RestaurantPolicy` a través de `BelongsToRestaurant::owningRestaurant()`; crear recibe el restaurante de la ruta. Los platos se crean con `$restaurant->dishes()->create()` (`restaurant_id` no es asignable). Menús y opciones se ordenan por `position` y luego `id`.
+
+### Locales importados de OpenStreetMap
+
+Decisiones en el ADR 0021. `php artisan veni:osm-import` (`app/Console/Commands/ImportOsmRestaurants.php`) consulta Overpass por el límite de Roldanillo (relación 1473594; si falla, por su recuadro) y crea fichas **ocultas** con nombre, categoría y punto; nunca teléfonos, correos, sitios web ni redes. La procedencia va en `restaurant_sources`. Volver a correrlo no duplica y no pisa lo que se editó, verificó o publicó; los locales sin nombre no se importan. Informa creadas, actualizadas, sin cambios, omitidas y las que ya no están en OpenStreetMap, y escribe el listado del recorrido en `storage/app/private/osm/`. `--dry-run` cuenta sin escribir. Las pruebas usan una respuesta guardada (`tests/fixtures/overpass-roldanillo.json`), sin red.
+
+La atribución y cómo pedir la parte de la base que viene de OpenStreetMap están en `/credits` (página `Credits`), enlazada desde la atribución del mapa y desde el pie.
 
 ### Pendiente para fases posteriores
 
