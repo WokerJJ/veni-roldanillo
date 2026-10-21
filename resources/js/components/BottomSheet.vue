@@ -148,7 +148,7 @@ defineExpose({ root });
     <section
         ref="root"
         class="flex flex-col"
-        :class="{ 'max-md:motion-safe:transition-[height] max-md:motion-safe:duration-200': !props.docked && dragHeight === null }"
+        :class="{ 'max-md:motion-safe:transition-[max-height] max-md:motion-safe:duration-200': !props.docked && dragHeight === null }"
         :style="props.docked ? undefined : { '--sheet-height': height }"
         :data-sheet="props.docked ? undefined : props.snap"
     >

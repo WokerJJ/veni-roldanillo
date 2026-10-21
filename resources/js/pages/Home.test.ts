@@ -134,10 +134,10 @@ describe('Home', () => {
         expect(panel().classes()).toContain('bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))]');
     });
 
-    it('en el celular el panel va abajo con el alto de su altura; desde 768 px, a la izquierda, sin pasar del mapa', async () => {
+    it('en el celular el panel va abajo, sin pasar del alto de su altura; desde 768 px, a la izquierda, sin pasar del mapa', async () => {
         const { panel } = await mountHome();
 
-        expect(panel().classes()).toEqual(expect.arrayContaining(['h-(--sheet-height)', 'md:h-auto', 'md:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)]']));
+        expect(panel().classes()).toEqual(expect.arrayContaining(['max-h-(--sheet-height)', 'md:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)]']));
         expect(panel().attributes('style')).toContain('--sheet-height: 7.5rem');
     });
 

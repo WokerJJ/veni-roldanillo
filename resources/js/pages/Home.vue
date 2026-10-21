@@ -376,7 +376,7 @@ onBeforeUnmount(() => {
             :class="
                 mapFailed
                     ? 'mx-3 mt-3 shrink-0 md:mx-4 md:mt-4 md:w-[calc(100%_-_2rem)] md:max-w-sm'
-                    : 'absolute inset-x-2 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] h-(--sheet-height) md:inset-x-auto md:top-4 md:bottom-auto md:left-4 md:h-auto md:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] md:w-[calc(100%_-_2rem)] md:max-w-sm'
+                    : 'absolute inset-x-2 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-(--sheet-height) md:inset-x-auto md:top-4 md:bottom-auto md:left-4 md:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] md:w-[calc(100%_-_2rem)] md:max-w-sm'
             "
         >
             <!-- El título de la página sigue en el documento aunque el panel muestre otra cosa. -->

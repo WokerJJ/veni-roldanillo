@@ -122,7 +122,7 @@ describe('BottomSheet', () => {
         await pointer(handle(), 'pointermove', 500, 600);
 
         expect(section.attributes('style')).toContain('--sheet-height: 320px');
-        expect(section.classes()).not.toContain('max-md:motion-safe:transition-[height]');
+        expect(section.classes()).not.toContain('max-md:motion-safe:transition-[max-height]');
 
         await pointer(handle(), 'pointerup', 500, 900);
         // El clic que sigue al arrastre no sube otro escalón.
@@ -130,7 +130,7 @@ describe('BottomSheet', () => {
 
         expect(model.value).toBe('half');
         expect(section.attributes('style')).toContain('--sheet-height: 50%');
-        expect(section.classes()).toContain('max-md:motion-safe:transition-[height]');
+        expect(section.classes()).toContain('max-md:motion-safe:transition-[max-height]');
     });
 
     it('un gesto rápido hacia arriba lo lleva a la altura siguiente aunque no llegue a la mitad', async () => {

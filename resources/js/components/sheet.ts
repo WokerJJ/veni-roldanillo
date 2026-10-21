@@ -13,7 +13,9 @@ export const PEEK_REM = 7.5;
 /**
  * El alto de cada una, como lo entiende CSS (`--sheet-height`). Media altura es
  * la mitad del mapa; completo, todo el mapa menos la franja de la atribución,
- * el aviso de versión nueva si se ve y un respiro arriba.
+ * el aviso de versión nueva si se ve y un respiro arriba. Es un alto máximo:
+ * si lo de adentro es más corto (la ruta compacta), el panel se ajusta a él y
+ * no tapa mapa de más.
  */
 export const SNAP_HEIGHTS: Readonly<Record<SheetSnap, string>> = {
     peek: `${String(PEEK_REM)}rem`,
