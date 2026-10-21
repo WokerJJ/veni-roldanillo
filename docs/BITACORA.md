@@ -83,3 +83,15 @@ Diario de avance del proyecto: qué se hizo en cada bloque, decisiones y aprendi
 - Aprendizajes: lo que se probó solo con dobles hay que verlo en un navegador antes de darlo por hecho; las tres correcciones de navegación se confirmaron así. Y cuando dos personas corrigen a la vez sobre el mismo árbol, el reparto de archivos tiene que quedar escrito.
 - Quedan con seguimiento: la vista previa al compartir y la URL canónica (#59), el límite de peticiones de la ficha (#54) y «actualizada el…» (#18).
 - Sigue «¿Dónde estoy?» (#10).
+
+## 2026-10-20 · Parte 8 · ¿Dónde estoy? y Cómo llegar
+
+- **Versión 0.2.0 publicada**, con los restaurantes sobre el mapa y la ficha.
+- **#10 integrado:** «¿Dónde estoy?» con el control de geolocalización de MapLibre (ADR 0019). El permiso se pide solo al tocar el botón, y la posición no sale del dispositivo: ni al servidor, ni a la URL, ni al almacenamiento. Hay pruebas que lo comprueban. Avisos en ES y EN para permiso negado, sin señal, fuera de Roldanillo y navegador sin ubicación.
+- La revisión del #10 encontró que, después de negar el permiso y volver a tocar, MapLibre pedía la posición sin precisión alta ni plazo, porque no descuenta un contador interno. Ahora el control se reemplaza; se comprobó en Chrome.
+- **#11 integrado:** «Cómo llegar» con la ruta calculada en el teléfono (ADR 0020), a pie y en carro, con el router de veni-mapa v0.2.0. El grafo de calles baja la primera vez (570 ms en la prueba) y queda guardado para usarlo sin señal. Google Maps y Waze por enlace, con solo el destino.
+- La revisión del #11 encontró que la siguiente lectura del GPS deshacía el encuadre de la ruta, y que un grafo de otro formato se anunciaba como «sin señal». Las dos quedaron corregidas.
+- **Red y tiempos:** desde esta parte se revisan las peticiones de la página y sus tiempos en cada verificación. En la imagen de producción el servidor responde el inicio en unos 30 ms y la lista de restaurantes en unos 60 ms; de 84 peticiones al pedir una ruta, ninguna lleva coordenadas.
+- **Dependencias:** las versiones mayores de Node ya no llegan solas (regla en `dependabot.yml`). MapLibre 6.14 cambió cómo empaqueta su worker y se sube a propósito en #70.
+- Aprendizajes: una prueba contra una imitación de MapLibre no ve lo que la librería real hace mal; para la ubicación se sumó una prueba de contrato con el control real. Y el peso del arranque ya está al límite: la regla para la próxima vez quedó escrita.
+- Sigue el directorio inicial desde OpenStreetMap (#58).
