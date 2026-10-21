@@ -1,5 +1,5 @@
-import { enableAutoUnmount, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { h, nextTick, ref } from 'vue';
 
 import type { SheetSnap } from '@/components/sheet';
@@ -46,7 +46,8 @@ async function mountSheet({ snap = 'peek', docked = false }: { snap?: SheetSnap;
             await pointer(handle(), 'pointermove', (from + to) / 2, Math.abs(to - from) / 2);
             await pointer(handle(), 'pointermove', to, Math.abs(to - from));
             await pointer(handle(), 'pointerup', to, Math.abs(to - from) + (slow ? 500 : 10));
-            await handle().trigger('click');
+            // Con el mouse, al soltar llega un clic (con el dedo, no).
+            await handle().trigger('click', { detail: 1 });
         },
     };
 }
@@ -75,12 +76,13 @@ describe('BottomSheet', () => {
         expect(section.attributes('data-sheet')).toBe('half');
     });
 
-    it('la manija es un botón con nombre, que dice en qué altura está y solo se ve en el celular', async () => {
+    it('la manija es un botón con un nombre fijo, que solo se ve en el celular', async () => {
         const { handle } = await mountSheet();
 
         expect(handle().element.tagName).toBe('BUTTON');
-        expect(handle().attributes('aria-label')).toBe('Cambiar el alto del panel (ahora asomado)');
-        expect(handle().classes()).toEqual(expect.arrayContaining(['md:hidden', 'touch-none', 'h-11', 'w-24']));
+        // El nombre no cambia: la altura nueva la dice la región viva.
+        expect(handle().attributes('aria-label')).toBe('Cambiar el alto del panel');
+        expect(handle().classes()).toEqual(expect.arrayContaining(['side:hidden', 'touch-none', 'h-11', 'w-24']));
     });
 
     it('tocarla sube un escalón y, desde el completo, vuelve a asomado; cada cambio se anuncia', async () => {
@@ -122,15 +124,15 @@ describe('BottomSheet', () => {
         await pointer(handle(), 'pointermove', 500, 600);
 
         expect(section.attributes('style')).toContain('--sheet-height: 320px');
-        expect(section.classes()).not.toContain('max-md:motion-safe:transition-[max-height]');
+        expect(section.classes()).not.toContain('sheet:motion-safe:transition-[max-height]');
 
         await pointer(handle(), 'pointerup', 500, 900);
-        // El clic que sigue al arrastre no sube otro escalón.
-        await handle().trigger('click');
+        // El clic que sigue al arrastre con el mouse no sube otro escalón.
+        await handle().trigger('click', { detail: 1 });
 
         expect(model.value).toBe('half');
         expect(section.attributes('style')).toContain('--sheet-height: 50%');
-        expect(section.classes()).toContain('max-md:motion-safe:transition-[max-height]');
+        expect(section.classes()).toContain('sheet:motion-safe:transition-[max-height]');
     });
 
     it('un gesto rápido hacia arriba lo lleva a la altura siguiente aunque no llegue a la mitad', async () => {
@@ -161,6 +163,91 @@ describe('BottomSheet', () => {
         await handle().trigger('click');
 
         expect(model.value).toBe('half');
+    });
+
+    it('si la altura no cambia, no se anuncia nada', async () => {
+        const { handle, model, announced } = await mountSheet();
+
+        handle().element.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true }));
+        await nextTick();
+
+        expect(model.value).toBe('peek');
+        expect(announced()).toBe('');
+    });
+
+    it('con el dedo no llega un clic al soltar: el toque siguiente sí sube un escalón', async () => {
+        const { handle, model } = await mountSheet();
+
+        await pointer(handle(), 'pointerdown', 700, 0);
+        await pointer(handle(), 'pointermove', 500, 600);
+        await pointer(handle(), 'pointerup', 500, 900);
+        expect(model.value).toBe('half');
+
+        // Un toque: apoyar, soltar y el clic que el navegador manda después.
+        await pointer(handle(), 'pointerdown', 400, 2000);
+        await pointer(handle(), 'pointerup', 400, 2050);
+        await handle().trigger('click', { detail: 1 });
+
+        expect(model.value).toBe('full');
+    });
+
+    it('tras arrastrarla con el dedo, Enter sube un escalón', async () => {
+        const { handle, model } = await mountSheet();
+
+        await pointer(handle(), 'pointerdown', 700, 0);
+        await pointer(handle(), 'pointermove', 500, 600);
+        await pointer(handle(), 'pointerup', 500, 900);
+
+        // Enter sobre un botón manda un clic sin puntero (detail 0).
+        await handle().trigger('click', { detail: 0 });
+
+        expect(model.value).toBe('full');
+    });
+
+    it.each(['lostpointercapture', 'pointercancel'])('si pierde el puntero a mitad del arrastre (%s), no queda pegada al dedo', async (type) => {
+        const { handle, section } = await mountSheet();
+
+        await pointer(handle(), 'pointerdown', 700, 0);
+        await pointer(handle(), 'pointermove', 500, 600);
+        expect(section.attributes('style')).toContain('--sheet-height: 320px');
+
+        await pointer(handle(), type, 500, 700);
+
+        expect(section.attributes('style')).not.toContain('px');
+        expect(section.classes()).toContain('sheet:motion-safe:transition-[max-height]');
+    });
+
+    it('dice cuándo termina de moverse: al acabar la transición de su alto o, sin transición, enseguida', async () => {
+        const { section, model, wrapper } = await mountSheet();
+        const sheet = wrapper.getComponent({ name: 'BottomSheet' }).vm as unknown as { settled: () => Promise<void> };
+        const done = vi.fn();
+
+        // Sin transición (prefers-reduced-motion o desde 768 px): ya está.
+        model.value = 'half';
+        await nextTick();
+        await sheet.settled().then(done);
+        expect(done).toHaveBeenCalledOnce();
+
+        // Con transición, recién al terminar la del alto máximo (happy-dom no aplica las clases).
+        const computed = window.getComputedStyle.bind(window);
+        const style = vi
+            .spyOn(window, 'getComputedStyle')
+            .mockImplementation((element) => (element === section.element ? ({ transitionDuration: '0.2s' } as CSSStyleDeclaration) : computed(element)));
+        onTestFinished(() => {
+            style.mockRestore();
+        });
+        model.value = 'full';
+        await nextTick();
+        done.mockReset();
+        void sheet.settled().then(done);
+        await flushPromises();
+        expect(done).not.toHaveBeenCalled();
+
+        const end = new Event('transitionend', { bubbles: true });
+        Object.defineProperty(end, 'propertyName', { value: 'max-height' });
+        section.element.dispatchEvent(end);
+        await flushPromises();
+        expect(done).toHaveBeenCalledOnce();
     });
 
     it('sin mapa no flota: ni manija, ni alturas, ni anuncios', async () => {

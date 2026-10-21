@@ -1,9 +1,20 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
-import { settle, SNAP_HEIGHTS, stepSnap } from './sheet';
+import { CONTROLS_REM, settle, SNAP_HEIGHTS, stepSnap } from './sheet';
 
 // Un celular de 390 × 844: el mapa mide unos 760 px de alto bajo la cabecera.
 const HEIGHTS = { peek: 120, half: 380, full: 716 };
+
+describe('cuándo el panel va abajo y cuándo al costado', () => {
+    it('abajo por debajo de 480 px, y hasta 767 px si hay alto; al costado desde 768 px o, desde 480, con poco alto (acostado)', () => {
+        const css = readFileSync('resources/css/app.css', 'utf8');
+
+        expect(css).toMatch(/@custom-variant sheet \{\s*@media \(width < 30rem\), \(width < 48rem\) and \(height >= 32rem\) \{/);
+        expect(css).toMatch(/@custom-variant side \{\s*@media \(width >= 48rem\), \(width >= 30rem\) and \(height < 32rem\) \{/);
+    });
+});
 
 describe('las alturas del panel de abajo', () => {
     it('suben y bajan de a una, sin pasarse de los extremos', () => {
@@ -19,6 +30,11 @@ describe('las alturas del panel de abajo', () => {
         expect(SNAP_HEIGHTS.half).toBe('50%');
         expect(SNAP_HEIGHTS.full).toContain('var(--veni-attribution-clearance)');
         expect(SNAP_HEIGHTS.full).toContain('var(--veni-update-prompt-space, 0px)');
+    });
+
+    it('completo deja libre arriba la franja de los botones del mapa (zoom y «¿Dónde estoy?»)', () => {
+        expect(CONTROLS_REM).toBe(10);
+        expect(SNAP_HEIGHTS.full).toContain(`- ${String(CONTROLS_REM)}rem`);
     });
 
     it.each([
