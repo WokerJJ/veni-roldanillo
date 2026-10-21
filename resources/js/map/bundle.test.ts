@@ -327,7 +327,8 @@ describe('presupuesto de descarga', () => {
         // Con el panel de abajo del celular (#81) no alcanzaba: se hizo lo de
         // arriba (ADR 0022). El resumen (con «Cómo llegar» y su aviso sin
         // señal) y la lista bajan aparte, apenas monta el inicio, y el
-        // arranque bajó de 82,9 a 80,4 antes de sumar el panel.
+        // arranque bajó de 82,9 a 80,4 antes de sumar el panel; con él y
+        // lo demás de #81, 82,5.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
