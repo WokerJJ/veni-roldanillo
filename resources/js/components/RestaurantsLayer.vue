@@ -17,7 +17,10 @@ import { color } from '@brand/tokens.json';
  * - Cada restaurante es un círculo arrebol con borde blanco y un ícono; los que
  *   se superponen se juntan en un círculo blanco con borde arrebol y la
  *   cantidad, que al tocarlo acerca el mapa hasta separarlos.
- * - El elegido (`selected`) lleva un halo. Si se eligió desde fuera del mapa
+ * - El elegido (`selected`) nunca entra en un grupo (#81): sale de la fuente
+ *   agrupada y se dibuja aparte, con un halo, encima de todos los grupos.
+ *   Así no queda escondido en un círculo «2» mientras su resumen o su ruta
+ *   están abiertos. Si se eligió desde fuera del mapa
  *   (la lista, o la dirección con que se abrió el inicio: `?r=slug`), la
  *   cámara va hasta él, lo bastante cerca para que no quede dentro de un
  *   grupo. Si el mapa todavía no pinta, va cuando empieza a pintar.
@@ -34,6 +37,7 @@ const SELECTED_SOURCE = 'restaurants-selected';
 const CLUSTERS = 'restaurants-clusters';
 const POINTS = 'restaurants-points';
 const MARKER = 'restaurants-marker';
+const SELECTED_POINT = 'restaurants-selected-point';
 
 /** Con qué ícono de colombia-icons se marca un restaurante. */
 const MARKER_ICON = 'sancocho';
@@ -82,6 +86,16 @@ const POINT_ICONS: MapLayerGroup['layers'][number] = {
     layout: { 'icon-image': MARKER, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
 };
 
+/** El mismo ícono sobre el elegido, que va en su propia fuente. */
+const SELECTED_ICON: MapLayerGroup['layers'][number] = { ...POINT_ICONS, id: 'restaurants-selected-icon', source: SELECTED_SOURCE, filter: ['all'] };
+
+const POINT_PAINT = {
+    'circle-color': ARREBOL,
+    'circle-radius': POINT_RADIUS,
+    'circle-stroke-width': 2,
+    'circle-stroke-color': BLANCO,
+};
+
 function group(marker: MapImage | null, onSelect: (hit: MapHit) => void): MapLayerGroup {
     return {
         id: SOURCE,
@@ -91,18 +105,6 @@ function group(marker: MapImage | null, onSelect: (hit: MapHit) => void): MapLay
             [SELECTED_SOURCE]: { type: 'geojson', data: EMPTY },
         },
         layers: [
-            {
-                id: 'restaurants-selected',
-                type: 'circle',
-                source: SELECTED_SOURCE,
-                paint: {
-                    'circle-radius': POINT_RADIUS + 9,
-                    'circle-color': ARREBOL,
-                    'circle-opacity': 0.25,
-                    'circle-stroke-width': 2,
-                    'circle-stroke-color': ARREBOL,
-                },
-            },
             {
                 id: CLUSTERS,
                 type: 'circle',
@@ -130,23 +132,27 @@ function group(marker: MapImage | null, onSelect: (hit: MapHit) => void): MapLay
                 // Ciruela sobre blanco: el número se lee en los dos temas.
                 paint: { 'text-color': CIRUELA },
             },
-            {
-                id: POINTS,
-                type: 'circle',
-                source: SOURCE,
-                filter: ['!', ['has', 'point_count']],
-                paint: {
-                    'circle-color': ARREBOL,
-                    'circle-radius': POINT_RADIUS,
-                    'circle-stroke-width': 2,
-                    'circle-stroke-color': BLANCO,
-                },
-            },
+            { id: POINTS, type: 'circle', source: SOURCE, filter: ['!', ['has', 'point_count']], paint: POINT_PAINT },
             // Sin el ícono (no bajó) quedan los círculos, que ya se pueden tocar.
             ...(marker === null ? [] : [POINT_ICONS]),
+            // El elegido, después: encima de los grupos y de los demás.
+            {
+                id: 'restaurants-selected',
+                type: 'circle',
+                source: SELECTED_SOURCE,
+                paint: {
+                    'circle-radius': POINT_RADIUS + 9,
+                    'circle-color': ARREBOL,
+                    'circle-opacity': 0.25,
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': ARREBOL,
+                },
+            },
+            { id: SELECTED_POINT, type: 'circle', source: SELECTED_SOURCE, paint: POINT_PAINT },
+            ...(marker === null ? [] : [SELECTED_ICON]),
         ],
         images: marker === null ? {} : { [MARKER]: marker },
-        interaction: { layers: [CLUSTERS, POINTS], onSelect },
+        interaction: { layers: [CLUSTERS, POINTS, SELECTED_POINT], onSelect },
     };
 }
 
@@ -207,15 +213,16 @@ export default defineComponent({
             alive = false;
         });
 
+        const selectedRestaurant = computed(() => props.restaurants.find(({ slug }) => slug === props.selected) ?? null);
+
+        // Los que se agrupan: todos menos el elegido, que va aparte.
         watch(
-            () => props.restaurants,
-            (restaurants) => {
-                layers.setData(SOURCE, featuresOf(restaurants));
+            () => props.restaurants.filter((restaurant) => restaurant !== selectedRestaurant.value),
+            (others) => {
+                layers.setData(SOURCE, featuresOf(others));
             },
             { immediate: true },
         );
-
-        const selectedRestaurant = computed(() => props.restaurants.find(({ slug }) => slug === props.selected) ?? null);
 
         watch(
             selectedRestaurant,

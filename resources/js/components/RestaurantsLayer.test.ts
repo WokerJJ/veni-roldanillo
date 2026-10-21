@@ -133,11 +133,13 @@ describe('RestaurantsLayer', () => {
         expect(layerIds()).toEqual([
             'background',
             'places',
-            'restaurants-selected',
             'restaurants-clusters',
             'restaurants-cluster-count',
             'restaurants-points',
             'restaurants-points-icon',
+            'restaurants-selected',
+            'restaurants-selected-point',
+            'restaurants-selected-icon',
         ]);
         expect(source('restaurants')).toMatchObject({ type: 'geojson', cluster: true });
         expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba', 'prueba-el-guadual']);
@@ -182,7 +184,7 @@ describe('RestaurantsLayer', () => {
         iconImage.mockReset().mockRejectedValue(new Error('El navegador no decodificó la imagen.'));
         const { layerIds, map } = await mountLayer();
 
-        expect(layerIds()).toEqual(['background', 'places', 'restaurants-selected', 'restaurants-clusters', 'restaurants-cluster-count', 'restaurants-points']);
+        expect(layerIds()).toEqual(['background', 'places', 'restaurants-clusters', 'restaurants-cluster-count', 'restaurants-points', 'restaurants-selected', 'restaurants-selected-point']);
         expect(map.imageIds()).toEqual([]);
     });
 
@@ -205,6 +207,20 @@ describe('RestaurantsLayer', () => {
 
             expect(onSelect).toHaveBeenCalledExactlyOnceWith('prueba-el-guadual');
             expect(map.easeTo).not.toHaveBeenCalled();
+        });
+
+        it('el elegido nunca entra en un grupo: sale de la fuente agrupada y se dibuja encima, y al soltarlo vuelve', async () => {
+            const { selected, slugsIn } = await mountLayer();
+
+            selected.value = 'prueba-el-guadual';
+            await flushPromises();
+            expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba']);
+            expect(slugsIn('restaurants-selected')).toEqual(['prueba-el-guadual']);
+
+            selected.value = null;
+            await flushPromises();
+            expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba', 'prueba-el-guadual']);
+            expect(slugsIn('restaurants-selected')).toEqual([]);
         });
 
         it('el tocado, ya elegido, lleva su halo y la cámara sigue quieta: ya estaba a la vista', async () => {
@@ -239,7 +255,7 @@ describe('RestaurantsLayer', () => {
             map.click({ x: x + 20, y: y - 20 });
 
             expect(onSelect).toHaveBeenCalledExactlyOnceWith('prueba-la-ceiba');
-            expect(map.queryRenderedFeatures.mock.calls.at(-1)?.[1]).toEqual({ layers: ['restaurants-clusters', 'restaurants-points'] });
+            expect(map.queryRenderedFeatures.mock.calls.at(-1)?.[1]).toEqual({ layers: ['restaurants-clusters', 'restaurants-points', 'restaurants-selected-point'] });
         });
     });
 
@@ -340,13 +356,16 @@ describe('RestaurantsLayer', () => {
             });
 
             expect(layerIds().slice(2)).toEqual([
-                'restaurants-selected',
                 'restaurants-clusters',
                 'restaurants-cluster-count',
                 'restaurants-points',
                 'restaurants-points-icon',
+                'restaurants-selected',
+                'restaurants-selected-point',
+                'restaurants-selected-icon',
             ]);
-            expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba', 'prueba-el-guadual']);
+            // El elegido va aparte, también en el estilo nuevo.
+            expect(slugsIn('restaurants')).toEqual(['prueba-el-guadual']);
             expect(slugsIn('restaurants-selected')).toEqual(['prueba-la-ceiba']);
             expect(map.imageIds()).toEqual(['restaurants-marker']);
         });
