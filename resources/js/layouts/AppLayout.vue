@@ -57,8 +57,14 @@ onBeforeUnmount(stopFocusingContent);
             {{ t('layout.skip_to_content') }}
         </a>
 
+        <!--
+            En el celular, 52 px (el área táctil del logo y 4 px arriba y
+            abajo): el mapa gana alto. Con el mapa (immersive), la cabecera va
+            a lo ancho, con el mismo margen de 16 px que el panel del inicio:
+            una sola grilla, sin el logo corrido hacia el centro.
+        -->
         <header class="border-b border-line">
-            <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-2">
+            <div class="flex items-center justify-between gap-4 px-4 py-1 md:py-2" :class="{ 'mx-auto max-w-5xl': !immersive }">
                 <Link href="/" class="inline-flex min-h-touch items-center rounded-veni-sm">
                     <img :src="wordmark" :alt="t('layout.home_link')" width="72" height="40" class="h-10 w-auto dark:hidden">
                     <img
