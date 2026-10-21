@@ -13,6 +13,7 @@ $tables = [
     'categories', 'neighborhoods', 'restaurants', 'category_restaurant', 'restaurant_user',
     'opening_hours', 'special_hours', 'menu_sections', 'dishes', 'option_groups', 'options',
     'daily_menus', 'promotions', 'delivery_zones', 'restaurant_claims', 'order_intents',
+    'restaurant_sources',
 ];
 
 test('las migraciones suben, bajan por completo y vuelven a subir', function () use ($tables) {

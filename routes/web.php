@@ -14,6 +14,10 @@ Route::get('/restaurants/{slug}', [RestaurantController::class, 'show'])
     ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
     ->name('restaurants.show');
 
+// Créditos (#58, ADR 0021): la atribución a OpenStreetMap (ODbL) y cómo pedir
+// la parte de la base que viene de allí.
+Route::inertia('/credits', 'Credits')->name('credits');
+
 // Límite por IP real (AppServiceProvider): 429 con el aviso en el idioma de la petición.
 Route::put('/locale', LocaleController::class)
     ->middleware('throttle:locale')

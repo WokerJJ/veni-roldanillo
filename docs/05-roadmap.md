@@ -22,7 +22,8 @@ Cerrada: versión 0.1.0.
 - [ ] Direcciones y favoritos guardados en el dispositivo
 - [x] Mapa de veni-mapa en el inicio (ADR 0007)
 - [x] Restaurantes sobre el mapa, con su resumen y el estado «abierto ahora» (ADR 0016 y 0017)
-- [ ] Ubicación del usuario y ruta en el dispositivo (ADR 0008)
+- [x] Locales de OpenStreetMap como fichas ocultas para verificar en la calle, con su atribución en `/credits` (#58, ADR 0021)
+- [x] Ubicación del usuario y ruta en el dispositivo (ADR 0008, 0019 y 0020)
 - [ ] Búsqueda por plato con Meilisearch
 - [ ] Panel de dueño (Filament): ficha, menú, agotado hoy, promociones, horarios especiales, aviso de demora
 - [ ] Panel de administración: alta de restaurantes, reclamación de fichas, moderación

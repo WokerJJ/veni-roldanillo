@@ -131,5 +131,22 @@
     "sheet.peek": "peeking",
     "sheet.half": "at half height",
     "sheet.full": "at full height",
-    "sheet.announce": "Panel :height"
+    "sheet.announce": "Panel :height",
+    "credits.link": "Credits and OpenStreetMap data",
+    "credits.title": "Credits",
+    "credits.intro": "Vení is built with open data and open tools. This is what we use and under which license.",
+    "credits.osm_heading": "OpenStreetMap",
+    "credits.osm_body": "The map, the routes and the starting point of the directory come from OpenStreetMap, the free map made by people.",
+    "credits.osm_import": "From OpenStreetMap we only take the name, the type and the location of food places. No phone numbers, emails or social media. Before publishing a place we check it in person, and every listing keeps track of where it came from.",
+    "credits.osm_attribution": "© OpenStreetMap contributors",
+    "credits.osm_license": "The data is available under the Open Database License (ODbL).",
+    "credits.osm_license_link": "Read the ODbL license",
+    "credits.request_heading": "Ask for the data",
+    "credits.request_body": "The part of our database that comes from OpenStreetMap is open too, under the same license (ODbL). If you want it, ask for it and we will send it with the name, type, location and OpenStreetMap identifier.",
+    "credits.request_link": "Ask for it on the project repository",
+    "credits.others_heading": "Other tools",
+    "credits.maplibre": "MapLibre GL JS draws the map (3-clause BSD license).",
+    "credits.icons": "Icons come from colombia-icons (MIT license).",
+    "credits.fonts": "The Bricolage Grotesque and Figtree typefaces are used under the SIL Open Font License.",
+    "credits.opens_new_tab": "(opens in a new tab)"
 }

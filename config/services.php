@@ -43,4 +43,12 @@ return [
         'routes_url' => env('VITE_MAP_ROUTES_URL'),
     ],
 
+    // Overpass, de donde veni:osm-import lee los locales de OpenStreetMap
+    // (ADR 0021). Una instancia pública: una consulta por corrida y con un
+    // User-Agent que diga quién pregunta.
+    'overpass' => [
+        'url' => env('OVERPASS_URL', 'https://overpass-api.de/api/interpreter'),
+        'user_agent' => env('OVERPASS_USER_AGENT', 'veni-roldanillo/1.0 (+https://github.com/WokerJJ/veni-roldanillo)'),
+    ],
+
 ];

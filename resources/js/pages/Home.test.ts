@@ -135,6 +135,14 @@ describe('Home', () => {
         expect(wrapper.get('inertia-head + div').classes()).toEqual(expect.arrayContaining(['absolute', 'inset-0']));
     });
 
+    it('el inicio no tiene pie: la bienvenida enlaza los créditos de OpenStreetMap', async () => {
+        const { wrapper } = await mountHome();
+
+        const credits = wrapper.get('section [data-credits]');
+        expect(credits.attributes('href')).toBe('/credits');
+        expect(credits.text()).toBe('Créditos y datos de OpenStreetMap');
+    });
+
     it('muestra el mapa de Roldanillo', async () => {
         const { map } = await mountHome();
 

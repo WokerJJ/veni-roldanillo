@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import type { Component, FunctionalComponent } from 'vue';
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
 
@@ -490,6 +490,11 @@ onBeforeUnmount(() => {
                         </button>
                     </div>
                 </div>
+
+                <!-- El inicio no tiene pie: los créditos de OpenStreetMap (ADR 0021) van en la bienvenida. -->
+                <Link href="/credits" class="mt-1 inline-flex min-h-touch items-center self-start text-sm text-ink-muted underline" data-credits>
+                    {{ t('credits.link') }}
+                </Link>
             </template>
         </BottomSheet>
 
