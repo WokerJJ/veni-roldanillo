@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
 
@@ -268,6 +269,16 @@ class Restaurant extends Model
             ->as('zone')
             ->withPivot('id', 'fee')
             ->withTimestamps();
+    }
+
+    /**
+     * De dónde vino la ficha, si se importó (ADR 0021). Las propias no tienen.
+     *
+     * @return HasOne<RestaurantSource, $this>
+     */
+    public function source(): HasOne
+    {
+        return $this->hasOne(RestaurantSource::class);
     }
 
     /** @return HasMany<RestaurantClaim, $this> */
