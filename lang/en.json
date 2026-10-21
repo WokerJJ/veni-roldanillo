@@ -124,5 +124,10 @@
     "pwa.update_available": "There is a new version of Vení.",
     "pwa.update": "Update",
     "pwa.dismiss": "Not now",
-    "locale.offline": "You are offline, so we cannot change the language. Try again when the signal is back."
+    "locale.offline": "You are offline, so we cannot change the language. Try again when the signal is back.",
+    "sheet.handle": "Change the panel height (now :height)",
+    "sheet.peek": "peeking",
+    "sheet.half": "at half height",
+    "sheet.full": "at full height",
+    "sheet.announce": "Panel :height"
 }

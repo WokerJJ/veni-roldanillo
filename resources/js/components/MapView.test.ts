@@ -1016,6 +1016,28 @@ describe('MapView', () => {
                 expect(lastPadding(created)).toEqual({ top: 0, right: 0, bottom: 324, left: 0 });
             });
 
+            it('un punto que se muestra queda en el centro de lo que el panel deja a la vista, sin dejarle un margen puesto a la cámara', async () => {
+                const { useMap } = await import('@/map/useMapLayers');
+                const used: { map?: ReturnType<typeof useMap>['map'] } = {};
+                const Camera: Component = {
+                    setup() {
+                        used.map = useMap().map;
+
+                        return () => null;
+                    },
+                };
+                const panel = document.createElement('section');
+                const { loadedMap } = await mountMap({ overlay: panel, inside: () => [Camera] });
+                const created = await loadedMap();
+                placeAt(created.container, PHONE_MAP);
+                placeAt(panel, SHEET);
+
+                used.map?.value?.showPoint(ELSEWHERE, { minZoom: 16 });
+
+                // El panel de abajo tapa 324 px: el punto sube la mitad.
+                expect(created.easeTo).toHaveBeenLastCalledWith({ center: ELSEWHERE, zoom: 16, offset: [0, -162] });
+            });
+
             it('si el panel cambia de tamaño mientras la sigue, la siguiente posición ya lo tiene en cuenta', async () => {
                 const device = stubGeolocation();
                 const sizes = stubResizeObserver();

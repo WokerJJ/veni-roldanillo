@@ -134,13 +134,32 @@ describe('Home', () => {
         expect(panel().classes()).toContain('bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))]');
     });
 
-    it('en un celular vertical el panel no llega a los botones del mapa, por larga que sea la lista', async () => {
+    it('en el celular el panel va abajo con el alto de su altura; desde 768 px, a la izquierda, sin pasar del mapa', async () => {
         const { panel } = await mountHome();
 
-        // Los botones ocupan 10 + 88 + 10 + 44 px desde arriba: el panel deja 10rem (160 px).
-        expect(panel().classes()).toContain(
-            'max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_10rem)]',
-        );
+        expect(panel().classes()).toEqual(expect.arrayContaining(['h-(--sheet-height)', 'md:h-auto', 'md:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)]']));
+        expect(panel().attributes('style')).toContain('--sheet-height: 7.5rem');
+    });
+
+    it('el panel toma la altura de lo que muestra: asomado con la bienvenida, a media altura con la lista o un resumen', async () => {
+        const { panel, listButton, items } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        expect(panel().attributes('data-sheet')).toBe('peek');
+
+        await listButton()?.trigger('click');
+        expect(panel().attributes('data-sheet')).toBe('half');
+
+        // Quien la cambia con la manija manda, hasta que el panel muestra otra cosa.
+        await panel().get('[data-sheet-handle]').trigger('keydown', { key: 'ArrowUp' });
+        expect(panel().attributes('data-sheet')).toBe('full');
+
+        await items()[0]?.trigger('click');
+        expect(panel().attributes('data-sheet')).toBe('half');
+    });
+
+    it('si no hay restaurantes, el aviso abre el panel a media altura para leerse', async () => {
+        const { panel } = await mountHome({ answer: [] });
+
+        expect(panel().attributes('data-sheet')).toBe('half');
     });
 
     it('le pasa al mapa su panel: al ubicarse, la cámara deja la ubicación fuera de él', async () => {
@@ -152,7 +171,8 @@ describe('Home', () => {
     it('no pone botones de tema ni de idioma sobre el mapa: son de la cabecera', async () => {
         const { wrapper } = await mountHome({ answer: [LA_CEIBA] });
 
-        expect(wrapper.findAll('button').map((button) => button.text())).toEqual(['Ver la lista']);
+        // La manija del panel no es un botón del mapa: cambia el alto del panel.
+        expect(wrapper.findAll('button:not([data-sheet-handle])').map((button) => button.text())).toEqual(['Ver la lista']);
     });
 
     describe('los restaurantes', () => {
@@ -200,11 +220,11 @@ describe('Home', () => {
 
         it('con restaurantes en el mapa, en un celular vertical la presentación les deja el lugar', async () => {
             const loading = await mountHome();
-            expect(loading.panel().get('h1 + p').classes()).not.toContain('max-[479px]:hidden');
+            expect(loading.panel().get('h1 + p').classes()).not.toContain('max-md:hidden');
             loading.wrapper.unmount();
 
             const ready = await mountHome({ answer: [LA_CEIBA] });
-            expect(ready.panel().get('h1 + p').classes()).toContain('max-[479px]:hidden');
+            expect(ready.panel().get('h1 + p').classes()).toContain('max-md:hidden');
         });
     });
 
@@ -539,7 +559,7 @@ describe('Home', () => {
             expect(panel().find('button[data-directions]').exists()).toBe(false);
             expect(document.activeElement).toBe(panel().get('[data-directions] h3').element);
             // Con la ruta el panel crece: se desplaza por dentro, sin pasar de su alto.
-            expect(panel().classes()).toContain('overflow-y-auto');
+            expect(panel().get('[data-sheet-body]').classes()).toContain('overflow-y-auto');
             expect(panel().get('[data-google-maps]').attributes('href')).toBe('https://www.google.com/maps/dir/?api=1&destination=4.4128%2C-76.1547&travelmode=walking');
         });
 

@@ -76,8 +76,9 @@ export interface MapHandle {
     addLayerGroup(group: MapLayerGroup): MapLayerGroupHandle;
     /**
      * Lleva la cámara a un punto, `[longitud, latitud]`, sin alejarla: con
-     * `minZoom`, se acerca hasta ahí si estaba más lejos. Es una animación
-     * corta, que MapLibre omite con prefers-reduced-motion.
+     * `minZoom`, se acerca hasta ahí si estaba más lejos. El punto queda en
+     * el centro de lo que el panel de la página deja a la vista. Es una
+     * animación corta, que MapLibre omite con prefers-reduced-motion.
      */
     showPoint(center: [number, number], options?: { minZoom?: number }): void;
     /**
@@ -505,9 +506,19 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
             overlay = next;
         },
         showPoint(center, { minZoom = 0 } = {}) {
-            if (!destroyed) {
-                map.easeTo({ center, zoom: Math.max(map.getZoom(), minZoom) });
+            if (destroyed) {
+                return;
             }
+
+            // En el centro de lo que el panel deja a la vista, medido ahora
+            // (en el celular, el panel de abajo a la altura que tenga: ADR
+            // 0022). Con `offset` y no con `padding`, que MapLibre dejaría
+            // puesto para los movimientos que siguen (ADR 0019).
+            const panel = currentPadding();
+            const offset: [number, number] = [(panel.left - panel.right) / 2, (panel.top - panel.bottom) / 2];
+            const zoom = Math.max(map.getZoom(), minZoom);
+
+            map.easeTo(offset[0] === 0 && offset[1] === 0 ? { center, zoom } : { center, zoom, offset });
         },
         showBounds(bounds) {
             if (destroyed) {
