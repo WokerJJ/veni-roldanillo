@@ -610,7 +610,8 @@ describe('Home', () => {
             await vi.dynamicImportSettled();
             await flushPromises();
 
-            await panel().get('[data-directions] button').trigger('click');
+            // El único botón de cerrar, en la línea del restaurante.
+            await panel().get('button[data-close-directions]').trigger('click');
             await flushPromises();
 
             expect(document.activeElement).toBe(panel().get('button[data-directions]').element);

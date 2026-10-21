@@ -379,6 +379,7 @@ onBeforeUnmount(() => {
                 :directions-open="directionsOpen"
                 @close="closeSummary"
                 @directions="openDirections"
+                @close-directions="closeDirections"
             >
                 <RouteDirections
                     :state="shownRouteState"
@@ -386,10 +387,9 @@ onBeforeUnmount(() => {
                     :destination="selected.coordinates"
                     @profile="profile = $event"
                     @retry="retryDirections"
-                    @close="closeDirections"
                 />
                 <!-- Si su panel no bajó (sin señal), queda cómo pedirlo de nuevo. -->
-                <div v-if="routeParts === null && routeState.status === 'offline'" class="mt-3 border-t border-line pt-3" data-directions>
+                <div v-if="routeParts === null && routeState.status === 'offline'" class="mt-1" data-directions>
                     <p role="status" class="text-sm" data-route-status>{{ t('directions.offline') }}</p>
                     <button
                         type="button"

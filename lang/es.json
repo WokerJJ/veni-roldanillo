@@ -63,6 +63,7 @@
     "directions.off": "Apagaste «¿Dónde estoy?»: sin tu ubicación no hay ruta. Tocá «Volver a intentar» para encenderlo.",
     "directions.unavailable": "Sin el mapa no podemos calcular la ruta aquí: abrila en Google Maps o Waze.",
     "directions.retry": "Volver a intentar",
+    "directions.more": "Más opciones",
     "directions.navigate": "Para ir paso a paso, abrí la ruta en otra app (solo le pasamos el restaurante, no tu ubicación):",
     "directions.google_maps": "Google Maps",
     "directions.waze": "Waze",

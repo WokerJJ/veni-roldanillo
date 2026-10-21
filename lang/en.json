@@ -63,6 +63,7 @@
     "directions.off": "You turned off “Where am I?”: without your location there's no route. Tap “Try again” to turn it on.",
     "directions.unavailable": "Without the map we can't work out the route here: open it in Google Maps or Waze.",
     "directions.retry": "Try again",
+    "directions.more": "More options",
     "directions.navigate": "For turn-by-turn directions, open the route in another app (we only send the restaurant, not your location):",
     "directions.google_maps": "Google Maps",
     "directions.waze": "Waze",
