@@ -1,0 +1,98 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62.11 87bfad18",
+  "osm3s": {
+    "timestamp_osm_base": "2026-10-20T21:51:21Z",
+    "timestamp_areas_base": "2026-10-20T20:12:04Z",
+    "copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."
+  },
+  "remark": "Respuesta de prueba con la forma de la de Overpass (out tags center). Los locales, ids y teléfonos son inventados.",
+  "elements": [
+    {
+      "type": "node",
+      "id": 9000000001,
+      "lat": 4.4128,
+      "lon": -76.1547,
+      "tags": {
+        "amenity": "restaurant",
+        "name": "Fonda de Prueba",
+        "cuisine": "regional",
+        "phone": "+57 300 000 0001",
+        "contact:whatsapp": "+57 300 000 0001",
+        "email": "fonda@ejemplo.invalid",
+        "website": "https://fonda.ejemplo.invalid",
+        "contact:instagram": "fondadeprueba",
+        "opening_hours": "Mo-Sa 11:00-15:00",
+        "addr:street": "Calle de Prueba"
+      }
+    },
+    {
+      "type": "way",
+      "id": 9000000002,
+      "center": { "lat": 4.4093, "lon": -76.1556 },
+      "tags": { "amenity": "fast_food", "name": "  Perros   de Prueba ", "phone": "3000000002" }
+    },
+    {
+      "type": "node",
+      "id": 9000000003,
+      "lat": 4.4162,
+      "lon": -76.156,
+      "tags": { "amenity": "cafe", "name": "Café de Prueba" }
+    },
+    {
+      "type": "node",
+      "id": 9000000004,
+      "lat": 4.415,
+      "lon": -76.15,
+      "tags": { "amenity": "bar", "name": "Bar de Prueba" }
+    },
+    {
+      "type": "node",
+      "id": 9000000005,
+      "lat": 4.4118,
+      "lon": -76.1598,
+      "tags": { "amenity": "pub", "name": "Taberna de Prueba" }
+    },
+    {
+      "type": "node",
+      "id": 9000000006,
+      "lat": 4.41,
+      "lon": -76.1492,
+      "tags": { "amenity": "ice_cream", "name": "Helados de Prueba" }
+    },
+    {
+      "type": "relation",
+      "id": 9000000007,
+      "center": { "lat": 4.4132, "lon": -76.1542 },
+      "tags": { "amenity": "food_court", "name": "Plazoleta de Prueba", "type": "multipolygon" }
+    },
+    {
+      "type": "node",
+      "id": 9000000008,
+      "lat": 4.4075,
+      "lon": -76.152,
+      "tags": { "shop": "bakery", "name": "Panadería de Prueba" }
+    },
+    {
+      "type": "node",
+      "id": 9000000009,
+      "lat": 4.4081,
+      "lon": -76.1531,
+      "tags": { "shop": "pastry", "name": "Café de Prueba" }
+    },
+    {
+      "type": "node",
+      "id": 9000000010,
+      "lat": 4.4111,
+      "lon": -76.1511,
+      "tags": { "amenity": "fast_food", "phone": "3000000010" }
+    },
+    {
+      "type": "node",
+      "id": 9000000011,
+      "lat": 4.4122,
+      "lon": -76.1522,
+      "tags": { "amenity": "bank", "name": "Banco de Prueba" }
+    }
+  ]
+}

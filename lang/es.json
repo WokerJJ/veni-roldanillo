@@ -124,5 +124,22 @@
     "pwa.update_available": "Hay una versión nueva de Vení.",
     "pwa.update": "Actualizar",
     "pwa.dismiss": "Ahora no",
-    "locale.offline": "Sin conexión no podemos cambiar el idioma. Probá de nuevo cuando vuelva la señal."
+    "locale.offline": "Sin conexión no podemos cambiar el idioma. Probá de nuevo cuando vuelva la señal.",
+    "credits.link": "Créditos y datos de OpenStreetMap",
+    "credits.title": "Créditos",
+    "credits.intro": "Vení está hecho con datos y herramientas libres. Esto es lo que usamos y bajo qué licencia.",
+    "credits.osm_heading": "OpenStreetMap",
+    "credits.osm_body": "El mapa, las rutas y el punto de partida del directorio vienen de OpenStreetMap, el mapa libre que hace la gente.",
+    "credits.osm_import": "De OpenStreetMap solo tomamos el nombre, el tipo y el punto de los locales de comida. Ningún teléfono, correo ni red social. Antes de publicar un local lo verificamos en la calle, y cada ficha guarda de dónde vino.",
+    "credits.osm_attribution": "© colaboradores de OpenStreetMap",
+    "credits.osm_license": "Los datos están disponibles bajo la Open Database License (ODbL).",
+    "credits.osm_license_link": "Leé la licencia ODbL",
+    "credits.request_heading": "Pedí los datos",
+    "credits.request_body": "La parte de nuestra base que viene de OpenStreetMap también es libre, bajo la misma licencia (ODbL). Si la querés, pedila y te la mandamos con nombre, tipo, punto e identificador de OpenStreetMap.",
+    "credits.request_link": "Pedila en el repositorio del proyecto",
+    "credits.others_heading": "Otras herramientas",
+    "credits.maplibre": "MapLibre GL JS dibuja el mapa (licencia BSD de 3 cláusulas).",
+    "credits.icons": "Los íconos son de colombia-icons (licencia MIT).",
+    "credits.fonts": "Las tipografías Bricolage Grotesque y Figtree se usan bajo la SIL Open Font License.",
+    "credits.opens_new_tab": "(se abre en otra pestaña)"
 }
