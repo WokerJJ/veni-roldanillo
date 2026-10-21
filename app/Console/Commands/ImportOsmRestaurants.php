@@ -2,10 +2,13 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\RestaurantStatus;
 use App\Models\Restaurant;
 use App\Models\RestaurantSource;
 use App\Support\Osm\OsmImporter;
+use App\Support\Osm\OsmImportRefused;
 use App\Support\Osm\OsmImportReport;
+use App\Support\Osm\OsmPlace;
 use App\Support\Osm\OverpassClient;
 use App\Support\Osm\OverpassRateLimited;
 use Illuminate\Console\Attributes\Description;
@@ -24,25 +27,12 @@ use RuntimeException;
 #[Description('Importa los locales de comida de OpenStreetMap como fichas ocultas')]
 class ImportOsmRestaurants extends Command
 {
-    /** Cómo se lee cada tipo de local en el listado del recorrido. */
-    private const array KIND_LABELS = [
-        'amenity=restaurant' => 'restaurante',
-        'amenity=fast_food' => 'comidas rápidas',
-        'amenity=cafe' => 'café',
-        'amenity=bar' => 'bar',
-        'amenity=pub' => 'pub',
-        'amenity=ice_cream' => 'heladería',
-        'amenity=food_court' => 'plazoleta de comidas',
-        'shop=bakery' => 'panadería',
-        'shop=pastry' => 'pastelería',
-    ];
-
     public function handle(OverpassClient $overpass, OsmImporter $importer): int
     {
         $dryRun = (bool) $this->option('dry-run');
 
         try {
-            $elements = $overpass->fetch();
+            $result = $overpass->fetch();
         } catch (OverpassRateLimited) {
             $this->components->error('Overpass pidió esperar (429). Volvé a correrlo más tarde.');
 
@@ -55,24 +45,38 @@ class ImportOsmRestaurants extends Command
 
         $this->components->info(sprintf(
             'Overpass (%s): %d elementos.%s',
-            $overpass->scope === 'area' ? 'límite de Roldanillo' : 'recuadro del límite, respaldo',
-            count($elements),
+            $result->withinBoundary ? 'límite de Roldanillo' : 'recuadro del límite, respaldo',
+            count($result->elements),
             $dryRun ? ' Prueba sin escribir (--dry-run).' : '',
         ));
 
-        $report = $importer->import($elements, $dryRun);
+        try {
+            $report = $importer->import($result, $dryRun);
+        } catch (OsmImportRefused $refused) {
+            $this->components->error("{$refused->getMessage()} No se importó nada.");
+
+            return self::FAILURE;
+        }
+
+        if (! $result->withinBoundary) {
+            $this->components->warn("Respaldo por recuadro, que también cubre parte de los municipios vecinos: {$report->notCreated} locales nuevos sin crear y nada marcado como ido. Volvé a correrlo cuando responda la consulta por el límite.");
+        }
 
         $this->table(['', 'Fichas'], [
             ['Creadas (ocultas)', $report->created],
             ['Actualizadas', $report->updated],
             ['Sin cambios', $report->unchanged],
-            ['Omitidas: editadas, verificadas o publicadas', count($report->skipped)],
+            ['Omitidas: editadas, verificadas, publicadas o descartadas', count($report->skipped)],
             ['Omitidas: sin nombre', count($report->unnamed)],
             ['Ya no están en OpenStreetMap', count($report->missing)],
         ]);
 
         foreach ($report->missing as $source) {
             $this->line("  Ya no está: {$source->restaurant?->name} ({$source->url()})");
+        }
+
+        foreach ($report->duplicates as [$newSlug, , $oldSlug]) {
+            $this->line("  Posible duplicado: {$newSlug} y {$oldSlug}");
         }
 
         if (! $dryRun) {
@@ -86,7 +90,8 @@ class ImportOsmRestaurants extends Command
 
     /**
      * El listado para el recorrido, en Markdown: las fichas importadas que
-     * falta verificar, los locales sin nombre y los que ya no están.
+     * siguen ocultas y falta verificar (con cómo publicarlas o descartarlas),
+     * los posibles duplicados, los locales sin nombre y los que ya no están.
      */
     private function writeChecklist(OsmImportReport $report): string
     {
@@ -95,7 +100,9 @@ class ImportOsmRestaurants extends Command
             ->with('source')
             ->whereHas('source', fn ($sources) => $sources
                 ->where('source', RestaurantSource::OPENSTREETMAP)
-                ->whereNull('missing_since'))
+                ->whereNull('missing_since')
+                ->whereNull('dismissed_at'))
+            ->where('status', RestaurantStatus::Hidden)
             ->whereNull('verified_at')
             ->orderBy('name')
             ->get();
@@ -113,14 +120,24 @@ class ImportOsmRestaurants extends Command
         foreach ($pending as $restaurant) {
             /** @var RestaurantSource $source */
             $source = $restaurant->source;
-            $lines[] = "- [ ] **{$restaurant->name}** · {$this->kindLabel($source->element_kind)} · [punto en OpenStreetMap]({$source->url()}) · `{$restaurant->slug}`";
-            $lines[] = '  - [ ] Existe y está abierto  - [ ] El nombre está bien  - [ ] El punto está bien  - [ ] El tipo está bien';
+            $lines[] = "- [ ] **{$restaurant->name}** · ".OsmPlace::label($source->element_kind)." · [punto en OpenStreetMap]({$source->url()}) · `{$restaurant->slug}`";
+            $lines[] = '  - [ ] Existe y está abierto';
+            $lines[] = '  - [ ] El nombre está bien';
+            $lines[] = '  - [ ] El punto está bien';
+            $lines[] = '  - [ ] La categoría está bien';
+            $lines[] = "  - Verificada: `php artisan veni:publish {$restaurant->slug} --verified` · Si no existe: `php artisan veni:osm-dismiss {$restaurant->slug}`";
+        }
+
+        $lines = [...$lines, '', '## Posibles duplicados ('.count($report->duplicates).')', ''];
+
+        foreach ($report->duplicates as [$newSlug, $newName, $oldSlug, $oldName]) {
+            $lines[] = "- [ ] `{$newSlug}` ({$newName}) y `{$oldSlug}` ({$oldName}), a menos de 30 m";
         }
 
         $lines = [...$lines, '', '## Sin nombre en OpenStreetMap ('.count($report->unnamed).')', ''];
 
         foreach ($report->unnamed as $place) {
-            $lines[] = "- [ ] {$this->kindLabel($place->kind)} sin nombre · [punto en OpenStreetMap]({$place->url()})";
+            $lines[] = '- [ ] '.OsmPlace::label($place->kind)." sin nombre · [punto en OpenStreetMap]({$place->url()})";
         }
 
         $lines = [...$lines, '', '## Ya no están en OpenStreetMap ('.count($report->missing).')', ''];
@@ -133,10 +150,5 @@ class ImportOsmRestaurants extends Command
         Storage::disk('local')->put($path, implode("\n", $lines)."\n");
 
         return $path;
-    }
-
-    private function kindLabel(string $kind): string
-    {
-        return self::KIND_LABELS[$kind] ?? $kind;
     }
 }

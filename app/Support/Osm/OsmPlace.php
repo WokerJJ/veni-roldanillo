@@ -31,6 +31,23 @@ final readonly class OsmPlace
     ];
 
     /**
+     * Cómo se lee cada tipo de local en el listado del recorrido.
+     *
+     * @var array<string, string>
+     */
+    public const array KIND_LABELS = [
+        'amenity=restaurant' => 'restaurante',
+        'amenity=fast_food' => 'comidas rápidas',
+        'amenity=cafe' => 'café',
+        'amenity=bar' => 'bar',
+        'amenity=pub' => 'pub',
+        'amenity=ice_cream' => 'heladería',
+        'amenity=food_court' => 'plazoleta de comidas',
+        'shop=bakery' => 'panadería',
+        'shop=pastry' => 'pastelería',
+    ];
+
+    /**
      * Las categorías que la importación crea si faltan, con su nombre en
      * español e inglés. Una que ya existe se usa con el nombre que tenga.
      *
@@ -106,6 +123,12 @@ final readonly class OsmPlace
     public function url(): string
     {
         return "https://www.openstreetmap.org/{$this->type}/{$this->id}";
+    }
+
+    /** El tipo de local («amenity=cafe») como se lee en el listado. */
+    public static function label(string $kind): string
+    {
+        return self::KIND_LABELS[$kind] ?? $kind;
     }
 
     /**

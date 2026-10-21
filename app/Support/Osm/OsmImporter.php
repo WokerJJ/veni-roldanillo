@@ -20,22 +20,36 @@ use Illuminate\Support\Str;
  * dueño y con la misma huella. Lo que no tiene nombre no se importa. Los
  * objetos que ya no vienen quedan marcados, sin borrar ni ocultar nada.
  *
+ * Si la consulta fue por el recuadro, que también cubre parte de los
+ * municipios vecinos, solo actualiza lo ya importado: no crea fichas ni
+ * marca como ido lo que no vino.
+ *
  * Con $dryRun hace lo mismo dentro de una transacción que se deshace: la
  * cuenta es la que daría la corrida de verdad.
  */
 class OsmImporter
 {
-    /**
-     * @param  list<array<mixed>>  $elements  los elementos de Overpass
-     */
-    public function import(array $elements, bool $dryRun = false): OsmImportReport
+    /** Cerrojo de PostgreSQL (pg_advisory_xact_lock): una importación a la vez. */
+    public const int LOCK_KEY = 58_000_001;
+
+    /** Metros dentro de los que una ficha con nombre parecido es un posible duplicado. */
+    private const int DUPLICATE_RADIUS = 30;
+
+    public function import(OverpassResult $result, bool $dryRun = false): OsmImportReport
     {
         $report = new OsmImportReport;
         $now = Carbon::now();
 
+        // Por tipo e id: el orden de la respuesta no cambia los sufijos de los slugs.
+        $elements = $result->elements;
+        usort($elements, fn (array $a, array $b): int => [self::sortKey($a['type'] ?? null), self::sortKey($a['id'] ?? null)]
+            <=> [self::sortKey($b['type'] ?? null), self::sortKey($b['id'] ?? null)]);
+
         DB::beginTransaction();
 
         try {
+            $this->refuseIfUnsafe($elements);
+
             $categories = $this->categories();
             $seen = [];
 
@@ -53,10 +67,12 @@ class OsmImporter
                 }
 
                 $seen[$place->type][$place->id] = true;
-                $this->importPlace($place, $categories[$place->category()], $now, $report);
+                $this->importPlace($place, $categories[$place->category()], $now, $report, $result->withinBoundary);
             }
 
-            $this->markMissing($seen, $now, $report);
+            if ($result->withinBoundary) {
+                $this->markMissing($seen, $now, $report);
+            }
 
             $dryRun ? DB::rollBack() : DB::commit();
         } catch (\Throwable $error) {
@@ -86,16 +102,46 @@ class OsmImporter
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
     }
 
-    private function importPlace(OsmPlace $place, Category $category, Carbon $now, OsmImportReport $report): void
+    /**
+     * Otra importación a la vez, o una respuesta vacía cuando ya hay fichas
+     * importadas (marcaría todas como idas): no se escribe nada.
+     *
+     * @param  list<array<mixed>>  $elements
+     */
+    private function refuseIfUnsafe(array $elements): void
+    {
+        $locked = DB::selectOne('select pg_try_advisory_xact_lock(?) as locked', [self::LOCK_KEY]);
+
+        if (! is_object($locked) || ($locked->locked ?? false) !== true) {
+            throw new OsmImportRefused('Ya hay otra importación corriendo; esperá a que termine.');
+        }
+
+        $imported = RestaurantSource::query()->where('source', RestaurantSource::OPENSTREETMAP)->count();
+
+        if ($elements === [] && $imported > 0) {
+            throw new OsmImportRefused("Overpass no devolvió ningún local y ya hay {$imported} fichas importadas.");
+        }
+    }
+
+    private static function sortKey(mixed $value): int|string
+    {
+        return is_int($value) || is_string($value) ? $value : '';
+    }
+
+    private function importPlace(OsmPlace $place, Category $category, Carbon $now, OsmImportReport $report, bool $withinBoundary): void
     {
         if ($place->name === null) {
-            $report->unnamed[] = $place;
+            // Sin nombre no hay procedencia: desde el recuadro puede ser de un vecino.
+            if ($withinBoundary) {
+                $report->unnamed[] = $place;
+            } else {
+                $report->notCreated++;
+            }
 
             return;
         }
 
         $source = RestaurantSource::query()
-            ->with('restaurant.categories:id,slug')
             ->where('source', RestaurantSource::OPENSTREETMAP)
             ->where('element_type', $place->type)
             ->where('element_id', $place->id)
@@ -104,14 +150,25 @@ class OsmImporter
         $hash = self::fingerprint($place->name, $place->point, [$category->slug]);
 
         if ($source === null) {
-            $this->create($place, $category, $hash, $now);
+            if (! $withinBoundary) {
+                $report->notCreated++;
+
+                return;
+            }
+
+            $this->create($place, $category, $hash, $now, $report);
             $report->created++;
 
             return;
         }
 
-        /** @var Restaurant $restaurant */
-        $restaurant = $source->restaurant;
+        // Bloqueada hasta el final de la transacción: una edición a la vez
+        // espera, y una que ya se guardó se ve aquí y suelta la ficha.
+        $restaurant = Restaurant::query()
+            ->with('categories:id,slug')
+            ->whereKey($source->restaurant_id)
+            ->lockForUpdate()
+            ->firstOrFail();
         $source->forceFill(['fetched_at' => $now, 'missing_since' => null, 'element_kind' => $place->kind]);
 
         if (! $this->untouched($restaurant, $source)) {
@@ -134,7 +191,7 @@ class OsmImporter
         $report->updated++;
     }
 
-    private function create(OsmPlace $place, Category $category, string $hash, Carbon $now): void
+    private function create(OsmPlace $place, Category $category, string $hash, Carbon $now, OsmImportReport $report): void
     {
         /** @var string $name */
         $name = $place->name;
@@ -158,15 +215,62 @@ class OsmImporter
             'fetched_at' => $now,
             'imported_hash' => $hash,
         ])->save();
+
+        $this->reportDuplicates($restaurant, $report);
     }
 
     /**
-     * La ficha sigue como la dejó la importación: nadie la publicó, la
-     * verificó, la tocó su dueño ni le cambió nombre, punto o categorías.
+     * Las fichas a menos de 30 m con un nombre parecido van al informe como
+     * posibles duplicados; decidir si lo son queda para el recorrido.
+     */
+    private function reportDuplicates(Restaurant $restaurant, OsmImportReport $report): void
+    {
+        $nearby = Restaurant::query()
+            ->select(['id', 'name', 'slug'])
+            ->whereKeyNot($restaurant->id)
+            ->whereRaw('ST_DWithin(location, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)', [
+                $restaurant->location->longitude,
+                $restaurant->location->latitude,
+                self::DUPLICATE_RADIUS,
+            ])
+            ->orderBy('id')
+            ->get();
+
+        foreach ($nearby as $other) {
+            if (self::similarNames($restaurant->name, $other->name)) {
+                $report->duplicates[] = [$restaurant->slug, $restaurant->name, $other->slug, $other->name];
+            }
+        }
+    }
+
+    /** Iguales sin tildes ni mayúsculas, uno dentro del otro o casi iguales. */
+    private static function similarNames(string $a, string $b): bool
+    {
+        $a = Str::slug($a);
+        $b = Str::slug($b);
+
+        if ($a === '' || $b === '') {
+            return false;
+        }
+
+        if (str_contains($a, $b) || str_contains($b, $a)) {
+            return true;
+        }
+
+        similar_text($a, $b, $percent);
+
+        return $percent >= 80;
+    }
+
+    /**
+     * La ficha sigue como la dejó la importación: nadie la descartó, la
+     * publicó, la verificó, la tocó su dueño ni le cambió nombre, punto o
+     * categorías.
      */
     private function untouched(Restaurant $restaurant, RestaurantSource $source): bool
     {
-        if ($restaurant->status !== RestaurantStatus::Hidden
+        if ($source->dismissed_at !== null
+            || $restaurant->status !== RestaurantStatus::Hidden
             || $restaurant->verified_at !== null
             || $restaurant->updated_by_owner_at !== null) {
             return false;
@@ -180,7 +284,7 @@ class OsmImporter
 
     /**
      * Marca los objetos que ya no vinieron y los lista todos (los de esta
-     * corrida y los que ya faltaban).
+     * corrida y los que ya faltaban). Los descartados no.
      *
      * @param  array<string, array<int, true>>  $seen
      */
@@ -189,6 +293,7 @@ class OsmImporter
         $sources = RestaurantSource::query()
             ->with('restaurant:id,name,slug,status')
             ->where('source', RestaurantSource::OPENSTREETMAP)
+            ->whereNull('dismissed_at')
             ->orderBy('id')
             ->get();
 

@@ -11,8 +11,9 @@ use RuntimeException;
  * Lee de Overpass los locales de comida de Roldanillo (ADR 0021).
  *
  * Primero por el límite administrativo del municipio; si esa consulta falla
- * (la de área suele dar 504), una sola vez más por el recuadro del límite. Un
- * 429 no se reintenta: Overpass está pidiendo que se espere.
+ * (la de área suele dar 504), una sola vez más por el recuadro del límite: a
+ * lo sumo dos consultas por corrida. Un 429 no se reintenta: Overpass está
+ * pidiendo que se espere.
  */
 class OverpassClient
 {
@@ -25,26 +26,16 @@ class OverpassClient
     /** Segundos que Overpass dedica a la consulta; el cliente espera un poco más. */
     private const int QUERY_TIMEOUT = 90;
 
-    /** Cómo se resolvió la última consulta: 'area' o 'bbox'. */
-    public ?string $scope = null;
-
-    /**
-     * @return list<array<mixed>> los elementos de la respuesta
-     */
-    public function fetch(): array
+    public function fetch(): OverpassResult
     {
         $area = 3600000000 + self::BOUNDARY_RELATION;
 
         try {
-            $this->scope = 'area';
-
-            return $this->query("area({$area})->.roldanillo;", '(area.roldanillo)');
+            return new OverpassResult($this->query("area({$area})->.roldanillo;", '(area.roldanillo)'), withinBoundary: true);
         } catch (OverpassRateLimited $limited) {
             throw $limited;
         } catch (RuntimeException|ConnectionException) {
-            $this->scope = 'bbox';
-
-            return $this->query('', '('.self::BOUNDARY_BBOX.')');
+            return new OverpassResult($this->query('', '('.self::BOUNDARY_BBOX.')'), withinBoundary: false);
         }
     }
 

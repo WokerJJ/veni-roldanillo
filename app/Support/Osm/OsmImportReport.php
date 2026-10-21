@@ -18,8 +18,14 @@ final class OsmImportReport
     public int $ignored = 0;
 
     /**
+     * Locales nuevos que no se crearon porque la consulta fue por el
+     * recuadro, que también cubre parte de los municipios vecinos.
+     */
+    public int $notCreated = 0;
+
+    /**
      * Nombres de las fichas que no se tocaron porque alguien las editó,
-     * verificó o publicó.
+     * verificó, publicó o descartó.
      *
      * @var list<string>
      */
@@ -38,4 +44,12 @@ final class OsmImportReport
      * @var list<RestaurantSource>
      */
     public array $missing = [];
+
+    /**
+     * Fichas creadas con otra a menos de 30 m y un nombre parecido: slug y
+     * nombre de la nueva y de la que ya estaba. No se fusiona nada.
+     *
+     * @var list<array{string, string, string, string}>
+     */
+    public array $duplicates = [];
 }
