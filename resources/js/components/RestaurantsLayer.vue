@@ -167,11 +167,17 @@ export default defineComponent({
         /** Alguien tocó un restaurante en el mapa. */
         select: (slug: string) => typeof slug === 'string',
     },
-    setup(props, { emit }) {
+    setup(props, { emit, expose }) {
         const { map } = useMap();
         const marker = shallowRef<MapImage | null>(null);
         /** El último que se eligió tocando el mapa: ya está a la vista, la cámara no se mueve. */
         let tapped: string | null = null;
+        /**
+         * El recién elegido, hasta que el panel de la página toma su alto
+         * nuevo (`reveal`): la cámara lo midió antes. `center`: se eligió
+         * desde fuera del mapa y va al centro; si no, solo si quedó tapado.
+         */
+        let pending: { slug: string; center: boolean } | null = null;
         let alive = true;
 
         const layers = useMapLayers(
@@ -234,6 +240,12 @@ export default defineComponent({
                     map.value?.showPoint(restaurant.coordinates, { minZoom: SELECTED_ZOOM });
                 }
 
+                if (!restaurant) {
+                    pending = null;
+                } else if (restaurant.slug !== previous?.slug) {
+                    pending = { slug: restaurant.slug, center: restaurant.slug !== tapped };
+                }
+
                 if (!restaurant || restaurant.slug !== tapped) {
                     tapped = null;
                 }
@@ -251,6 +263,26 @@ export default defineComponent({
                 current.showPoint(restaurant.coordinates, { minZoom: SELECTED_ZOOM });
             }
         });
+
+        /**
+         * El panel de la página terminó de moverse tras elegir uno (ADR 0022):
+         * con su alto nuevo, la cámara vuelve a centrar al elegido desde fuera
+         * del mapa y, al tocado, lo saca de debajo del panel. Una sola vez por
+         * elegido: si después alguien mueve el panel, la cámara no lo sigue.
+         */
+        function reveal(): void {
+            const restaurant = selectedRestaurant.value;
+            const current = pending;
+            pending = null;
+
+            if (!restaurant || current?.slug !== restaurant.slug) {
+                return;
+            }
+
+            map.value?.showPoint(restaurant.coordinates, current.center ? { minZoom: SELECTED_ZOOM } : { ifHidden: true });
+        }
+
+        expose({ reveal });
 
         return () => null;
     },

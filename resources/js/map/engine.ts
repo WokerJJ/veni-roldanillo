@@ -78,9 +78,11 @@ export interface MapHandle {
      * Lleva la cámara a un punto, `[longitud, latitud]`, sin alejarla: con
      * `minZoom`, se acerca hasta ahí si estaba más lejos. El punto queda en
      * el centro de lo que el panel de la página deja a la vista. Es una
-     * animación corta, que MapLibre omite con prefers-reduced-motion.
+     * animación corta, que MapLibre omite con prefers-reduced-motion. Con
+     * `ifHidden`, solo si el punto quedó debajo del panel o fuera de lo que
+     * se ve (un restaurante tocado en el mapa, ADR 0022).
      */
-    showPoint(center: [number, number], options?: { minZoom?: number }): void;
+    showPoint(center: [number, number], options?: { minZoom?: number; ifHidden?: boolean }): void;
     /**
      * Lo que la página pone encima del mapa (su panel), o `null`: al ubicarse,
      * la cámara deja la ubicación en el centro de lo que queda a la vista.
@@ -112,6 +114,8 @@ const PMTILES_PROTOCOL = 'pmtiles';
 
 /** Margen, en px, alrededor de lo que se encuadra con `showBounds`, además del panel. */
 const BOUNDS_MARGIN = 48;
+/** Lo que un punto debe quedar adentro de lo que se ve (px) para que `showPoint` con `ifHidden` lo deje donde está: su marca y su halo. */
+const POINT_MARGIN = 24;
 /**
  * La columna de los botones del mapa, arriba a la derecha (10 px de margen y
  * 44 del botón): `showBounds` no deja nada debajo de ellos.
@@ -505,7 +509,7 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
         setOverlay(next) {
             overlay = next;
         },
-        showPoint(center, { minZoom = 0 } = {}) {
+        showPoint(center, { minZoom = 0, ifHidden = false } = {}) {
             if (destroyed) {
                 return;
             }
@@ -515,6 +519,21 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
             // 0022). Con `offset` y no con `padding`, que MapLibre dejaría
             // puesto para los movimientos que siguen (ADR 0019).
             const panel = currentPadding();
+
+            if (ifHidden) {
+                const { width, height } = map.getContainer().getBoundingClientRect();
+                const { x, y } = map.project(center);
+
+                if (
+                    x >= panel.left + POINT_MARGIN &&
+                    x <= width - panel.right - POINT_MARGIN &&
+                    y >= panel.top + POINT_MARGIN &&
+                    y <= height - panel.bottom - POINT_MARGIN
+                ) {
+                    return;
+                }
+            }
+
             const offset: [number, number] = [(panel.left - panel.right) / 2, (panel.top - panel.bottom) / 2];
             const zoom = Math.max(map.getZoom(), minZoom);
 

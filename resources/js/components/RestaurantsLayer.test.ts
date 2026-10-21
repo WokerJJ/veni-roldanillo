@@ -92,6 +92,10 @@ async function mountLayer(initial: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL
             map.click(map.project(coordinates));
         },
         toggleTheme: () => wrapper.get('button[aria-pressed]').trigger('click'),
+        /** El panel de la página terminó de tomar su alto nuevo. */
+        reveal: () => {
+            (wrapper.getComponent({ name: 'RestaurantsLayer' }).vm as unknown as { reveal: () => void }).reveal();
+        },
     };
 }
 
@@ -331,6 +335,41 @@ describe('RestaurantsLayer', () => {
 
             expect(slugsIn('restaurants-selected')).toEqual(['prueba-la-ceiba']);
             expect(map.easeTo).toHaveBeenCalledOnce();
+        });
+
+        it('tocado en el mapa, cuando el panel termina de moverse y lo tapa, la cámara lo deja a la vista, sin acercarse', async () => {
+            const { map, selected, tap, reveal } = await mountLayer();
+            tap(EL_GUADUAL);
+            selected.value = 'prueba-el-guadual';
+            await flushPromises();
+            expect(map.easeTo).not.toHaveBeenCalled();
+
+            // El mapa de prueba no mide nada: cualquier punto queda fuera de lo que se ve.
+            reveal();
+
+            expect(map.easeTo).toHaveBeenCalledExactlyOnceWith({ center: EL_GUADUAL.coordinates, zoom: 13.5 });
+        });
+
+        it('elegido desde la lista, cuando el panel termina de moverse la cámara lo vuelve a centrar con el alto nuevo', async () => {
+            const { map, selected, reveal } = await mountLayer();
+            selected.value = 'prueba-el-guadual';
+            await flushPromises();
+
+            reveal();
+
+            expect(map.easeTo).toHaveBeenCalledTimes(2);
+            expect(map.easeTo).toHaveBeenLastCalledWith({ center: EL_GUADUAL.coordinates, zoom: 16 });
+        });
+
+        it('si el panel se mueve después (con la manija), la cámara ya no lo sigue', async () => {
+            const { map, selected, reveal } = await mountLayer();
+            selected.value = 'prueba-el-guadual';
+            await flushPromises();
+            reveal();
+
+            reveal();
+
+            expect(map.easeTo).toHaveBeenCalledTimes(2);
         });
 
         it('un elegido que no está en la lista no deja halo ni mueve la cámara', async () => {

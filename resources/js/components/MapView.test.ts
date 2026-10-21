@@ -1038,6 +1038,39 @@ describe('MapView', () => {
                 expect(created.easeTo).toHaveBeenLastCalledWith({ center: ELSEWHERE, zoom: 16, offset: [0, -162] });
             });
 
+            it('con `ifHidden`, solo mueve la cámara si el punto queda debajo del panel o fuera de lo que se ve', async () => {
+                const { useMap } = await import('@/map/useMapLayers');
+                const used: { map?: ReturnType<typeof useMap>['map'] } = {};
+                const Camera: Component = {
+                    setup() {
+                        used.map = useMap().map;
+
+                        return () => null;
+                    },
+                };
+                const panel = document.createElement('section');
+                const { loadedMap } = await mountMap({ overlay: panel, inside: () => [Camera] });
+                const created = await loadedMap();
+                placeAt(created.container, PHONE_MAP);
+                placeAt(panel, SHEET);
+                const project = vi.spyOn(created, 'project');
+
+                // Arriba del panel, a la vista: la cámara se queda.
+                project.mockReturnValue({ x: 195, y: 200 });
+                used.map?.value?.showPoint(ELSEWHERE, { ifHidden: true });
+                expect(created.easeTo).not.toHaveBeenCalled();
+
+                // Debajo del panel (que tapa de 456 px para abajo): lo sube al centro de lo que queda.
+                project.mockReturnValue({ x: 195, y: 600 });
+                used.map?.value?.showPoint(ELSEWHERE, { ifHidden: true });
+                expect(created.easeTo).toHaveBeenLastCalledWith({ center: ELSEWHERE, zoom: created.getZoom(), offset: [0, -162] });
+
+                // Pegado al borde de arriba: tampoco se ve bien.
+                project.mockReturnValue({ x: 195, y: 4 });
+                used.map?.value?.showPoint(ELSEWHERE, { ifHidden: true });
+                expect(created.easeTo).toHaveBeenCalledTimes(2);
+            });
+
             it('si el panel cambia de tamaño mientras la sigue, la siguiente posición ya lo tiene en cuenta', async () => {
                 const device = stubGeolocation();
                 const sizes = stubResizeObserver();
