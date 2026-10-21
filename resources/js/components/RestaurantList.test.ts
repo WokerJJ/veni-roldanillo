@@ -7,7 +7,11 @@ import { EL_GUADUAL, LA_CEIBA, restaurant } from '@/testing/restaurants';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 
-async function mountList(locale: 'es' | 'en' = 'es', restaurants: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL]) {
+async function mountList(
+    locale: 'es' | 'en' = 'es',
+    restaurants: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL],
+    distances: Record<string, number> | null = null,
+) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     inertia.reset();
     inertia.receiveFromServer(locale, { replace: true });
@@ -15,7 +19,7 @@ async function mountList(locale: 'es' | 'en' = 'es', restaurants: readonly Resta
     const { default: RestaurantList } = await import('./RestaurantList.vue');
     const host = document.createElement('div');
     document.body.append(host);
-    const wrapper = mount(RestaurantList, { props: { restaurants }, attachTo: host });
+    const wrapper = mount(RestaurantList, { props: { restaurants, distances }, attachTo: host });
 
     return {
         wrapper,
@@ -142,5 +146,41 @@ describe('RestaurantList', () => {
         expect(wrapper.get('h2').text()).toBe('Restaurants');
         expect(wrapper.find('button[aria-label="Close the list"]').exists()).toBe(true);
         expect(statuses()[0]).toBe('Open now · closes at 3:00 PM');
+    });
+
+    describe('compacta (#81)', () => {
+        const LA_PLAZA = restaurant({ slug: 'prueba-la-plaza', name: 'La Plaza de prueba' });
+
+        it('primero los abiertos ahora, y entre ellos el orden de siempre si no hay ubicación', async () => {
+            const { names, wrapper } = await mountList('es', [EL_GUADUAL, LA_CEIBA, LA_PLAZA]);
+
+            expect(names()).toEqual([LA_CEIBA.name, LA_PLAZA.name, EL_GUADUAL.name]);
+            expect(wrapper.find('[data-distance]').exists()).toBe(false);
+        });
+
+        it('con ubicación, entre los abiertos va primero el más cerca, con su distancia junto al estado', async () => {
+            const { names, wrapper } = await mountList('es', [EL_GUADUAL, LA_CEIBA, LA_PLAZA], {
+                'prueba-la-ceiba': 1250,
+                'prueba-la-plaza': 320,
+                'prueba-el-guadual': 40,
+            });
+
+            // El Guadual está más cerca, pero cerrado: va después.
+            expect(names()).toEqual([LA_PLAZA.name, LA_CEIBA.name, EL_GUADUAL.name]);
+            expect(wrapper.findAll('[data-distance]').map((distance) => distance.text().replaceAll(' ', ' '))).toEqual(['320 m', '1,3 km', '40 m']);
+        });
+
+        it('si todos son de ejemplo, lo dice una sola vez, arriba', async () => {
+            const { wrapper } = await mountList();
+
+            expect(wrapper.findAll('[data-sample]')).toHaveLength(1);
+            expect(wrapper.find('li [data-sample]').exists()).toBe(false);
+        });
+
+        it('si solo algunos lo son, lo lleva cada uno de ellos', async () => {
+            const { wrapper } = await mountList('es', [LA_CEIBA, restaurant({ slug: 'real', name: 'Uno de verdad', fictitious: false })]);
+
+            expect(wrapper.findAll('li [data-sample]')).toHaveLength(1);
+        });
     });
 });

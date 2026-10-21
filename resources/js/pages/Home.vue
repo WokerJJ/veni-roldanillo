@@ -34,11 +34,12 @@ const RouteDirections: FunctionalComponent = (_props, { attrs }) => (routeParts.
 | esperar a que alguien los pida, pero fuera del arranque (ADR 0022). Mientras
 | tanto, y si no bajan, el panel sigue con la bienvenida.
 */
-const panelParts = shallowRef<{ summary: Component; list: Component } | null>(null);
+const panelParts = shallowRef<{ summary: Component; list: Component; distances: Component } | null>(null);
 let loadingPanelParts = false;
 
 const RestaurantSummary: FunctionalComponent = (_props, { attrs, slots }) => (panelParts.value ? h(panelParts.value.summary, attrs, slots) : null);
 const RestaurantList: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.list, attrs) : null);
+const RestaurantDistances: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.distances, attrs) : null);
 
 function loadPanelParts(): void {
     if (panelParts.value !== null || loadingPanelParts) {
@@ -46,9 +47,9 @@ function loadPanelParts(): void {
     }
 
     loadingPanelParts = true;
-    Promise.all([import('@/components/RestaurantSummary.vue'), import('@/components/RestaurantList.vue')])
-        .then(([summary, list]) => {
-            panelParts.value = { summary: summary.default, list: list.default };
+    Promise.all([import('@/components/RestaurantSummary.vue'), import('@/components/RestaurantList.vue'), import('@/components/RestaurantDistances.vue')])
+        .then(([summary, list, distances]) => {
+            panelParts.value = { summary: summary.default, list: list.default, distances: distances.default };
         })
         .catch((error: unknown) => {
             // Sin señal y sin la PWA guardada: se vuelve a pedir al tocar un restaurante o «Ver la lista».
@@ -84,6 +85,8 @@ const { status, restaurants, retry } = useRestaurants();
 /** Slug del restaurante con el resumen abierto. */
 const selectedSlug = ref<string | null>(null);
 const listOpen = ref(false);
+/** Metros hasta cada restaurante con «¿Dónde estoy?» encendido y la lista abierta; si no, null. */
+const distances = ref<Record<string, number> | null>(null);
 /** El mapa no cargó: su aviso lo ocupa entero y el panel, con la lista, deja de ir encima. */
 const mapFailed = ref(false);
 /** De dónde se abrió el resumen: al cerrarlo, el foco vuelve ahí. */
@@ -320,6 +323,13 @@ watch(selected, (restaurant) => {
     }
 });
 
+// Cerrada la lista, sus distancias se olvidan: la próxima vez se calculan de nuevo.
+watch(listOpen, (open) => {
+    if (!open) {
+        distances.value = null;
+    }
+});
+
 // Sin restaurantes no hay lista que mostrar.
 watch(restaurants, (current) => {
     if (current.length === 0) {
@@ -401,7 +411,7 @@ onBeforeUnmount(() => {
                 </div>
             </RestaurantSummary>
 
-            <RestaurantList v-else-if="listOpen && panelParts" :restaurants="restaurants" @select="selectFromList" @close="closeList" />
+            <RestaurantList v-else-if="listOpen && panelParts" :restaurants="restaurants" :distances="distances" @select="selectFromList" @close="closeList" />
 
             <template v-else>
                 <!--
@@ -458,6 +468,8 @@ onBeforeUnmount(() => {
         -->
         <MapView ref="mapView" :overlay="mapFailed ? null : panel" :class="{ 'min-h-56': mapFailed }" @status="mapFailed = $event === 'error'">
             <RestaurantsLayer :restaurants="restaurants" :selected="selectedSlug" @select="selectFromMap" />
+            <!-- Las distancias de la lista: la ubicación queda dentro, solo salen los metros. -->
+            <RestaurantDistances v-if="listOpen" :restaurants="restaurants" @distances="distances = $event" />
             <RouteLayer
                 v-if="directionsOpen && selected"
                 :key="selected.slug"

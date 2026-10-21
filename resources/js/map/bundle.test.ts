@@ -331,9 +331,9 @@ describe('presupuesto de descarga', () => {
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
-    it('el resumen y la lista no bajan con el arranque: el inicio los pide con import() apenas monta', () => {
+    it('el resumen y la lista (con sus distancias) no bajan con el arranque: el inicio los pide con import() apenas monta', () => {
         const initial = initialChunks();
-        const panels = /\/resources\/js\/(?:components\/Restaurant(?:Summary|List)\.vue|restaurants\/(?:openStatus|statusText)\.ts)$/;
+        const panels = /\/resources\/js\/(?:components\/Restaurant(?:Summary|List|Distances)\.vue|restaurants\/(?:openStatus|statusText|distance)\.ts)$/;
 
         expect(initial.filter((chunk) => has(chunk, panels))).toEqual([]);
         expect(chunkOf('/resources/js/pages/Home.vue').dynamicImports).toEqual(
