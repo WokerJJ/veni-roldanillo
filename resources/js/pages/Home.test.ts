@@ -91,7 +91,8 @@ function watchSheetMoves(home: Awaited<ReturnType<typeof mountHome>>) {
         target === element ? ({ transitionDuration: '0.2s' } as CSSStyleDeclaration) : computed(target),
     );
     const reveal = vi.fn();
-    Object.assign((home.wrapper.vm as unknown as { $refs: { layer: object } }).$refs.layer, { reveal });
+    // La capa baja aparte (ADR 0022): la página la guarda en `layer` cuando llega.
+    Object.assign((home.wrapper.vm as unknown as { layer: object }).layer, { reveal });
 
     return {
         reveal,

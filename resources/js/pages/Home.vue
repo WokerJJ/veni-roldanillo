@@ -6,7 +6,6 @@ import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, use
 import BottomSheet from '@/components/BottomSheet.vue';
 import Icon from '@/components/Icon.vue';
 import MapView from '@/components/MapView.vue';
-import RestaurantsLayer from '@/components/RestaurantsLayer.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import type { SheetSnap } from '@/components/sheet';
 import { useI18n } from '@/composables/useI18n';
@@ -45,7 +44,39 @@ const list = shallowRef<{ focusItem: (slug: string) => void } | null>(null);
 const RestaurantList: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.list, { ...attrs, ref: list }) : null);
 const RestaurantDistances: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.distances, attrs) : null);
 
+/*
+| Los restaurantes sobre el mapa no se ven hasta que llega MapLibre, que baja
+| aparte y pesa mucho más: su capa baja apenas monta el inicio, junto con el
+| motor, y no con el arranque (ADR 0022). Si no bajó, se vuelve a pedir
+| cuando se pide el panel.
+*/
+const restaurantsLayer = shallowRef<Component | null>(null);
+let requestedRestaurantsLayer = false;
+/** La capa que bajó: la cámara deja a la vista al elegido cuando el panel termina de moverse. */
+const layer = shallowRef<{ reveal: () => void } | null>(null);
+const RestaurantsOnMap: FunctionalComponent = (_props, { attrs }) =>
+    restaurantsLayer.value ? h(restaurantsLayer.value, { ...attrs, ref: layer }) : null;
+
+function loadRestaurantsLayer(): void {
+    // Pedida o ya aquí: no se vuelve a pedir.
+    if (requestedRestaurantsLayer) {
+        return;
+    }
+
+    requestedRestaurantsLayer = true;
+    import('@/components/RestaurantsLayer.vue')
+        .then((module) => {
+            restaurantsLayer.value = module.default;
+        })
+        .catch((error: unknown) => {
+            console.error('[inicio] No se pudieron cargar los restaurantes del mapa.', error);
+            requestedRestaurantsLayer = false;
+        });
+}
+
 function loadPanelParts(): void {
+    loadRestaurantsLayer();
+
     if (panelParts.value !== null || loadingPanelParts) {
         return;
     }
@@ -144,7 +175,6 @@ const mapView = useTemplateRef<{ focus: () => void }>('mapView');
 const listButton = useTemplateRef<HTMLButtonElement>('listButton');
 const statusRegion = useTemplateRef<HTMLElement>('statusRegion');
 const sheet = useTemplateRef<{ root: HTMLElement | null; settled: () => Promise<void> }>('sheet');
-const layer = useTemplateRef<{ reveal: () => void }>('layer');
 /** El panel encima del mapa: el motor mide cuánto lo tapa (ADR 0019). */
 const panel = computed(() => sheet.value?.root ?? null);
 
@@ -504,7 +534,7 @@ onBeforeUnmount(() => {
             ubicarse, la cámara deja la ubicación fuera de él.
         -->
         <MapView ref="mapView" :overlay="mapFailed ? null : panel" :class="{ 'min-h-56': mapFailed }" @status="mapFailed = $event === 'error'">
-            <RestaurantsLayer ref="layer" :restaurants="restaurants" :selected="selectedSlug" @select="selectFromMap" />
+            <RestaurantsOnMap :restaurants="restaurants" :selected="selectedSlug" @select="selectFromMap" />
             <!-- Las distancias de la lista: la ubicación queda dentro, solo salen los metros. -->
             <RestaurantDistances v-if="listOpen" :restaurants="restaurants" @distances="distances = $event" />
             <RouteLayer
