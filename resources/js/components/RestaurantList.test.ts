@@ -143,21 +143,4 @@ describe('RestaurantList', () => {
         expect(wrapper.find('button[aria-label="Close the list"]').exists()).toBe(true);
         expect(statuses()[0]).toBe('Open now · closes at 3:00 PM');
     });
-
-    it('deja devolver el foco al botón de un restaurante', async () => {
-        const { wrapper, items } = await mountList();
-
-        await (wrapper.vm as unknown as { focusItem: (slug: string) => Promise<void> }).focusItem('prueba-el-guadual');
-
-        expect(document.activeElement).toBe(items()[1]?.element);
-    });
-
-    it('si ese restaurante ya no está en la lista, el foco va al título', async () => {
-        const { wrapper } = await mountList();
-        wrapper.get<HTMLButtonElement>('button[aria-label="Cerrar la lista"]').element.focus();
-
-        await (wrapper.vm as unknown as { focusItem: (slug: string) => Promise<void> }).focusItem('ya-no-esta');
-
-        expect(document.activeElement).toBe(wrapper.get('h2').element);
-    });
 });

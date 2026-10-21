@@ -5,9 +5,7 @@ import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, use
 
 import Icon from '@/components/Icon.vue';
 import MapView from '@/components/MapView.vue';
-import RestaurantList from '@/components/RestaurantList.vue';
 import RestaurantsLayer from '@/components/RestaurantsLayer.vue';
-import RestaurantSummary from '@/components/RestaurantSummary.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import { useI18n } from '@/composables/useI18n';
 import { SELECTED_PARAM, selectedFromUrl } from '@/restaurants/links';
@@ -27,6 +25,37 @@ const routeParts = shallowRef<{ layer: Component; panel: Component } | null>(nul
 /** Lo que bajó de «Cómo llegar», con los atributos que le da la plantilla; hasta que baja, nada. */
 const RouteLayer: FunctionalComponent = (_props, { attrs }) => (routeParts.value ? h(routeParts.value.layer, attrs) : null);
 const RouteDirections: FunctionalComponent = (_props, { attrs }) => (routeParts.value ? h(routeParts.value.panel, attrs) : null);
+
+/*
+| El resumen y la lista (con lo que necesitan: el estado de cada horario y
+| «Cómo llegar») no se ven al abrir el inicio: bajan apenas monta, sin
+| esperar a que alguien los pida, pero fuera del arranque (ADR 0022). Mientras
+| tanto, y si no bajan, el panel sigue con la bienvenida.
+*/
+const panelParts = shallowRef<{ summary: Component; list: Component } | null>(null);
+let loadingPanelParts = false;
+
+const RestaurantSummary: FunctionalComponent = (_props, { attrs, slots }) => (panelParts.value ? h(panelParts.value.summary, attrs, slots) : null);
+const RestaurantList: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.list, attrs) : null);
+
+function loadPanelParts(): void {
+    if (panelParts.value !== null || loadingPanelParts) {
+        return;
+    }
+
+    loadingPanelParts = true;
+    Promise.all([import('@/components/RestaurantSummary.vue'), import('@/components/RestaurantList.vue')])
+        .then(([summary, list]) => {
+            panelParts.value = { summary: summary.default, list: list.default };
+        })
+        .catch((error: unknown) => {
+            // Sin señal y sin la PWA guardada: se vuelve a pedir al tocar un restaurante o «Ver la lista».
+            console.error('[inicio] No se pudo cargar el resumen ni la lista.', error);
+        })
+        .finally(() => {
+            loadingPanelParts = false;
+        });
+}
 
 function loadRouteParts(): void {
     if (routeParts.value !== null) {
@@ -101,17 +130,23 @@ const statusMessage = computed(() => {
 });
 
 const mapView = useTemplateRef<{ focus: () => void }>('mapView');
-const list = useTemplateRef<{ focusItem: (slug: string) => Promise<void> }>('list');
 const listButton = useTemplateRef<HTMLButtonElement>('listButton');
 const statusRegion = useTemplateRef<HTMLElement>('statusRegion');
 const panel = useTemplateRef<HTMLElement>('panel');
 
+function openList(): void {
+    loadPanelParts();
+    listOpen.value = true;
+}
+
 function selectFromMap(slug: string): void {
+    loadPanelParts();
     openedFromList = false;
     selectedSlug.value = slug;
 }
 
 function selectFromList(slug: string): void {
+    loadPanelParts();
     openedFromList = true;
     selectedSlug.value = slug;
 }
@@ -132,7 +167,10 @@ async function closeSummary(): Promise<void> {
     await nextTick();
 
     if (openedFromList && listOpen.value) {
-        await list.value?.focusItem(slug);
+        // Al botón de ese restaurante en la lista; si ya no está, a su título.
+        const items = [...(panel.value?.querySelectorAll<HTMLElement>('button[data-slug]') ?? [])];
+
+        (items.find((item) => item.dataset.slug === slug) ?? panel.value?.querySelector<HTMLElement>('h2'))?.focus();
     } else {
         mapView.value?.focus();
     }
@@ -263,6 +301,7 @@ watch(restaurants, (current) => {
 
 onMounted(() => {
     document.addEventListener('keydown', onKeydown);
+    loadPanelParts();
 });
 
 onBeforeUnmount(() => {
@@ -306,10 +345,10 @@ onBeforeUnmount(() => {
             ]"
         >
             <!-- El título de la página sigue en el documento aunque el panel muestre otra cosa. -->
-            <h1 :class="selected || listOpen ? 'sr-only' : 'text-xl min-[480px]:text-2xl'">{{ t('home.heading') }}</h1>
+            <h1 :class="panelParts && (selected || listOpen) ? 'sr-only' : 'text-xl min-[480px]:text-2xl'">{{ t('home.heading') }}</h1>
 
             <RestaurantSummary
-                v-if="selected"
+                v-if="selected && panelParts"
                 :key="selected.slug"
                 :restaurant="selected"
                 :directions-open="directionsOpen"
@@ -337,7 +376,7 @@ onBeforeUnmount(() => {
                 </div>
             </RestaurantSummary>
 
-            <RestaurantList v-else-if="listOpen" ref="list" :restaurants="restaurants" @select="selectFromList" @close="closeList" />
+            <RestaurantList v-else-if="listOpen && panelParts" :restaurants="restaurants" @select="selectFromList" @close="closeList" />
 
             <template v-else>
                 <!-- En un celular vertical, con restaurantes en el mapa, la presentación les deja el lugar: el panel tapa menos. -->
@@ -372,7 +411,7 @@ onBeforeUnmount(() => {
                             ref="listButton"
                             type="button"
                             class="inline-flex min-h-touch items-center gap-2 rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
-                            @click="listOpen = true"
+                            @click="openList"
                         >
                             <Icon name="menu-hamburguesa" :size="20" />
                             {{ t('restaurants.show_list') }}

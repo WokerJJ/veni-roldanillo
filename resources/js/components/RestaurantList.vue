@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { nextTick, onMounted, useId, useTemplateRef } from 'vue';
+import { onMounted, useId, useTemplateRef } from 'vue';
 
 import Icon from '@/components/Icon.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
@@ -20,7 +20,8 @@ import { openStatusText } from '@/restaurants/statusText';
  * ficha (#13), sin pasar por el resumen.
  *
  * Al abrirse toma el foco en el título; quien la muestra la cierra con
- * `close` (el botón o Escape).
+ * `close` (el botón o Escape) y, al volver de un resumen, devuelve el foco al
+ * botón de ese restaurante (`data-slug`).
  */
 const { restaurants } = defineProps<{ restaurants: readonly Restaurant[] }>();
 
@@ -33,7 +34,6 @@ const { t, locale } = useI18n();
 const now = useNow();
 const headingId = useId();
 const heading = useTemplateRef<HTMLElement>('heading');
-const list = useTemplateRef<HTMLElement>('list');
 
 function statusOf(restaurant: Restaurant): string {
     return openStatusText(openStatus(restaurant, now.value), t, locale.value);
@@ -41,17 +41,6 @@ function statusOf(restaurant: Restaurant): string {
 
 onMounted(() => {
     heading.value?.focus({ preventScroll: true });
-});
-
-defineExpose({
-    /** Devuelve el foco al botón de un restaurante (al cerrar su resumen). */
-    async focusItem(slug: string): Promise<void> {
-        await nextTick();
-
-        const item = [...(list.value?.querySelectorAll<HTMLElement>('button[data-slug]') ?? [])].find((button) => button.dataset.slug === slug);
-
-        (item ?? heading.value)?.focus();
-    },
 });
 </script>
 
@@ -71,7 +60,7 @@ defineExpose({
             </button>
         </div>
 
-        <ul ref="list" class="-mx-2 min-h-0 overflow-y-auto overscroll-contain">
+        <ul class="-mx-2 min-h-0 overflow-y-auto overscroll-contain">
             <li v-for="restaurant in restaurants" :key="restaurant.slug" class="flex items-center gap-1">
                 <button
                     type="button"

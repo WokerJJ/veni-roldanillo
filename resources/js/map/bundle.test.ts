@@ -324,7 +324,21 @@ describe('presupuesto de descarga', () => {
         // no alcanza se sube, con un ADR que diga qué se sumó. Los textos
         // (directions.* y los demás) no cuentan aquí: llegan con la página,
         // en las props de Inertia; recortarlos es otra cuenta, la del HTML.
+        // Con el panel de abajo del celular (#81) no alcanzaba: se hizo lo de
+        // arriba (ADR 0022). El resumen (con «Cómo llegar» y su aviso sin
+        // señal) y la lista bajan aparte, apenas monta el inicio, y el
+        // arranque bajó de 82,9 a 80,4 antes de sumar el panel.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
+    });
+
+    it('el resumen y la lista no bajan con el arranque: el inicio los pide con import() apenas monta', () => {
+        const initial = initialChunks();
+        const panels = /\/resources\/js\/(?:components\/Restaurant(?:Summary|List)\.vue|restaurants\/(?:openStatus|statusText)\.ts)$/;
+
+        expect(initial.filter((chunk) => has(chunk, panels))).toEqual([]);
+        expect(chunkOf('/resources/js/pages/Home.vue').dynamicImports).toEqual(
+            expect.arrayContaining([chunkOf('/resources/js/components/RestaurantSummary.vue').fileName, chunkOf('/resources/js/components/RestaurantList.vue').fileName]),
+        );
     });
 
     it('la ruta (router, grafo, capa y panel) no baja con el arranque: son chunks que se piden con import()', () => {

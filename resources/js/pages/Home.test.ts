@@ -37,6 +37,8 @@ async function mountHome({ locale = 'es', answer, url = '/' }: { locale?: 'es' |
     const host = document.createElement('div');
     document.body.append(host);
     const wrapper = mount(Home, { attachTo: host });
+    // El resumen y la lista bajan aparte, apenas monta (ADR 0022).
+    await vi.dynamicImportSettled();
     await flushPromises();
 
     /** El panel sobre el mapa: va primero en el documento. */
