@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { computed, onMounted, useId, useTemplateRef } from 'vue';
+import { computed, onMounted, shallowRef, useId, useTemplateRef, watch } from 'vue';
 
 import Icon from '@/components/Icon.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
@@ -23,10 +23,13 @@ import { formatDistance } from '@/routing/directions';
  * encendido, los más cercanos, con la distancia en la línea del estado
  * (`distances`, calculadas en el dispositivo: RestaurantDistances.vue). Si
  * todos son de ejemplo, lo dice una vez arriba; si solo algunos, cada uno.
+ * El orden se fija al abrirla y, con «¿Dónde estoy?», con la primera
+ * distancia: mientras está abierta nada cambia de lugar bajo el dedo (quien
+ * camina, o uno que abre o cierra); solo el texto de la distancia.
  *
  * Al abrirse toma el foco en el título; quien la muestra la cierra con
  * `close` (el botón o Escape) y, al volver de un resumen, devuelve el foco al
- * botón de ese restaurante (`data-slug`).
+ * botón de ese restaurante con `focusItem`.
  */
 const { restaurants, distances = null } = defineProps<{
     restaurants: readonly Restaurant[];
@@ -43,30 +46,63 @@ const { t, locale } = useI18n();
 const now = useNow();
 const headingId = useId();
 const heading = useTemplateRef<HTMLElement>('heading');
+const list = useTemplateRef<HTMLElement>('list');
 
-const rows = computed(() =>
-    restaurants
-        .map((restaurant) => {
-            const status = openStatus(restaurant, now.value);
-            const meters = distances?.[restaurant.slug];
+const details = computed(() =>
+    restaurants.map((restaurant) => {
+        const status = openStatus(restaurant, now.value);
+        const meters = distances?.[restaurant.slug];
 
-            return {
-                restaurant,
-                open: status.state === 'open',
-                meters: meters ?? Number.POSITIVE_INFINITY,
-                status: openStatusText(status, t, locale.value),
-                distance: meters === undefined ? null : formatDistance(meters, locale.value),
-            };
-        })
-        // Abiertos primero; entre ellos, el más cerca. Si empatan, el orden de siempre (sort es estable).
-        .sort((a, b) => Number(b.open) - Number(a.open) || a.meters - b.meters),
+        return {
+            restaurant,
+            open: status.state === 'open',
+            meters: meters ?? Number.POSITIVE_INFINITY,
+            status: openStatusText(status, t, locale.value),
+            distance: meters === undefined ? null : formatDistance(meters, locale.value),
+        };
+    }),
 );
+
+/** Abiertos primero; entre ellos, el más cerca. Si empatan, el orden de siempre (sort es estable). */
+function ranking(): string[] {
+    return [...details.value].sort((a, b) => Number(b.open) - Number(a.open) || a.meters - b.meters).map(({ restaurant }) => restaurant.slug);
+}
+
+/** Los slugs en el orden en que se muestran: fijo mientras la lista está abierta. */
+const order = shallowRef(ranking());
+let rankedByDistance = distances !== null;
+
+watch(
+    () => distances,
+    (current) => {
+        if (current !== null && !rankedByDistance) {
+            rankedByDistance = true;
+            order.value = ranking();
+        }
+    },
+);
+
+// Uno que no estaba al fijar el orden (la lista se volvió a pedir) va al final.
+const rows = computed(() => {
+    const place = new Map(order.value.map((slug, index) => [slug, index]));
+
+    return [...details.value].sort((a, b) => (place.get(a.restaurant.slug) ?? place.size) - (place.get(b.restaurant.slug) ?? place.size));
+});
 
 const allSamples = computed(() => restaurants.length > 0 && restaurants.every(({ fictitious }) => fictitious));
 
 onMounted(() => {
     heading.value?.focus({ preventScroll: true });
 });
+
+/** Lleva el foco al botón de ese restaurante; si ya no está en la lista, al título. */
+function focusItem(slug: string): void {
+    const items = [...(list.value?.querySelectorAll<HTMLElement>('button[data-slug]') ?? [])];
+
+    (items.find((item) => item.dataset.slug === slug) ?? heading.value)?.focus();
+}
+
+defineExpose({ focusItem });
 </script>
 
 <template>
@@ -87,7 +123,7 @@ onMounted(() => {
 
         <p v-if="allSamples" class="mb-1"><SampleDataBadge /></p>
 
-        <ul class="-mx-2 min-h-0 overflow-y-auto overscroll-contain">
+        <ul ref="list" class="-mx-2 min-h-0 overflow-y-auto overscroll-contain">
             <li v-for="{ restaurant, status, distance } in rows" :key="restaurant.slug" class="flex items-center gap-1">
                 <button
                     type="button"

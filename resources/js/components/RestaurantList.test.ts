@@ -129,6 +129,17 @@ describe('RestaurantList', () => {
         expect(document.activeElement).toBe(heading.element);
     });
 
+    it('deja devolverle el foco al botón de un restaurante y, si ya no está, a su título', async () => {
+        const { wrapper } = await mountList();
+        const list = wrapper.vm as unknown as { focusItem: (slug: string) => void };
+
+        list.focusItem('prueba-el-guadual');
+        expect(document.activeElement).toBe(wrapper.get('button[data-slug="prueba-el-guadual"]').element);
+
+        list.focusItem('no-existe');
+        expect(document.activeElement).toBe(wrapper.get('h2').element);
+    });
+
     it('se cierra con un botón con nombre', async () => {
         const { wrapper } = await mountList();
         const close = wrapper.get('button[aria-label="Cerrar la lista"]');
@@ -168,6 +179,30 @@ describe('RestaurantList', () => {
             // El Guadual está más cerca, pero cerrado: va después.
             expect(names()).toEqual([LA_PLAZA.name, LA_CEIBA.name, EL_GUADUAL.name]);
             expect(wrapper.findAll('[data-distance]').map((distance) => distance.text().replaceAll(' ', ' '))).toEqual(['320 m', '1,3 km', '40 m']);
+        });
+
+        it('abierta, el orden se fija con la primera ubicación: después solo cambia el texto de la distancia', async () => {
+            const { names, wrapper } = await mountList('es', [EL_GUADUAL, LA_CEIBA, LA_PLAZA]);
+            const distances = () => wrapper.findAll('[data-distance]').map((distance) => distance.text().replaceAll(' ', ' '));
+
+            // Llega la primera posición: se ordena por cercanía una vez.
+            await wrapper.setProps({ distances: { 'prueba-la-ceiba': 1250, 'prueba-la-plaza': 320, 'prueba-el-guadual': 40 } });
+            expect(names()).toEqual([LA_PLAZA.name, LA_CEIBA.name, EL_GUADUAL.name]);
+
+            // Quien la usa camina: La Ceiba queda más cerca, pero nada salta bajo el dedo.
+            await wrapper.setProps({ distances: { 'prueba-la-ceiba': 90, 'prueba-la-plaza': 600, 'prueba-el-guadual': 40 } });
+            expect(names()).toEqual([LA_PLAZA.name, LA_CEIBA.name, EL_GUADUAL.name]);
+            expect(distances()).toEqual(['600 m', '90 m', '40 m']);
+        });
+
+        it('abierta, si uno abre o cierra mientras se mira, no cambia de lugar', async () => {
+            const { names } = await mountList('es', [EL_GUADUAL, LA_CEIBA, LA_PLAZA]);
+
+            // 15:30: La Ceiba ya cerró.
+            vi.setSystemTime(new Date('2026-10-07T15:30:00-05:00'));
+            await vi.advanceTimersByTimeAsync(60_000);
+
+            expect(names()).toEqual([LA_CEIBA.name, LA_PLAZA.name, EL_GUADUAL.name]);
         });
 
         it('si todos son de ejemplo, lo dice una sola vez, arriba', async () => {
