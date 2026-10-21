@@ -32,6 +32,9 @@ return new class extends Migration
             $table->char('imported_hash', 64);
             // Desde cuándo el objeto ya no aparece en la fuente (null: sigue).
             $table->timestampTz('missing_since')->nullable();
+            // Desde cuándo se descartó (veni:osm-dismiss): la importación ya
+            // no la actualiza ni la lista, y la ficha sigue oculta.
+            $table->timestampTz('dismissed_at')->nullable();
             $table->timestampsTz();
 
             // Un mismo objeto de OSM no da dos fichas.

@@ -1,9 +1,11 @@
 <?php
 
+use App\Enums\RestaurantRole;
 use App\Enums\RestaurantStatus;
 use App\Models\Category;
 use App\Models\Restaurant;
 use App\Models\RestaurantSource;
+use App\Models\User;
 use App\Support\GeoPoint;
 use App\Support\Osm\OsmImporter;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -91,7 +93,7 @@ test('crea fichas ocultas con nombre, categoría y punto, y guarda de dónde vin
             ['Creadas (ocultas)', 9],
             ['Actualizadas', 0],
             ['Sin cambios', 0],
-            ['Omitidas: editadas, verificadas o publicadas', 0],
+            ['Omitidas: editadas, verificadas, publicadas o descartadas', 0],
             ['Omitidas: sin nombre', 1],
             ['Ya no están en OpenStreetMap', 0],
         ])
@@ -182,7 +184,7 @@ test('se puede volver a correr: no duplica nada', function () {
             ['Creadas (ocultas)', 0],
             ['Actualizadas', 0],
             ['Sin cambios', 9],
-            ['Omitidas: editadas, verificadas o publicadas', 0],
+            ['Omitidas: editadas, verificadas, publicadas o descartadas', 0],
             ['Omitidas: sin nombre', 1],
             ['Ya no están en OpenStreetMap', 0],
         ])
@@ -218,7 +220,7 @@ test('actualiza lo que no se tocó y no pisa lo editado, verificado o publicado'
             ['Creadas (ocultas)', 0],
             ['Actualizadas', 1],
             ['Sin cambios', 4],
-            ['Omitidas: editadas, verificadas o publicadas', 4],
+            ['Omitidas: editadas, verificadas, publicadas o descartadas', 4],
             ['Omitidas: sin nombre', 1],
             ['Ya no están en OpenStreetMap', 0],
         ])
@@ -280,7 +282,7 @@ test('--dry-run cuenta lo mismo y no escribe nada', function () {
             ['Creadas (ocultas)', 9],
             ['Actualizadas', 0],
             ['Sin cambios', 0],
-            ['Omitidas: editadas, verificadas o publicadas', 0],
+            ['Omitidas: editadas, verificadas, publicadas o descartadas', 0],
             ['Omitidas: sin nombre', 1],
             ['Ya no están en OpenStreetMap', 0],
         ])
@@ -304,7 +306,8 @@ test('escribe el listado para el recorrido con nombre, tipo, enlace y casillas',
         ->toContain('ODbL')
         ->toContain('- [ ] **Fonda de Prueba** · restaurante · [punto en OpenStreetMap](https://www.openstreetmap.org/node/9000000001)')
         ->toContain('- [ ] **Perros de Prueba** · comidas rápidas · [punto en OpenStreetMap](https://www.openstreetmap.org/way/9000000002)')
-        ->toContain('- [ ] Existe y está abierto')
+        ->toContain("  - [ ] Existe y está abierto\n  - [ ] El nombre está bien\n  - [ ] El punto está bien\n  - [ ] La categoría está bien\n")
+        ->toContain('php artisan veni:publish fonda-de-prueba --verified')
         ->toContain('## Sin nombre en OpenStreetMap (1)')
         ->toContain('- [ ] comidas rápidas sin nombre · [punto en OpenStreetMap](https://www.openstreetmap.org/node/9000000010)')
         ->not->toContain('300');
@@ -327,7 +330,42 @@ test('si la consulta por área falla, repite una vez por el recuadro del límite
 
     Http::assertSentCount(2);
     Http::assertSent(fn (Request $request): bool => str_contains((string) $request['data'], '('.'4.3712195,-76.2811191,4.5165178,-76.0657686'.')'));
-    expect(Restaurant::query()->count())->toBe(9);
+    // El recuadro también cubre parte de los municipios vecinos: no crea fichas.
+    expect(Restaurant::query()->count())->toBe(0);
+});
+
+test('el respaldo por recuadro no crea locales fuera del límite ni marca idos: solo actualiza lo ya importado', function () {
+    $neighbour = ['type' => 'node', 'id' => 9000000099, 'lat' => 4.5, 'lon' => -76.27, 'tags' => ['amenity' => 'restaurant', 'name' => 'Fonda del Municipio Vecino']];
+    $bbox = fn (array $body): array => [
+        ...$body,
+        'elements' => [
+            ...array_values(array_filter(withTags($body, 9000000005, ['name' => 'Taberna Nueva'])['elements'], fn (array $element): bool => $element['id'] !== 9000000004)),
+            $neighbour,
+        ],
+    ];
+    Http::fake([OVERPASS_TEST_URL => Http::sequence()
+        ->push(overpassResponse())
+        ->push('Gateway Timeout', 504)
+        ->push(overpassResponse($bbox))]);
+
+    $this->artisan('veni:osm-import')->assertSuccessful();
+
+    $this->artisan('veni:osm-import')
+        ->expectsOutputToContain('2 locales nuevos sin crear')
+        ->expectsTable(['', 'Fichas'], [
+            ['Creadas (ocultas)', 0],
+            ['Actualizadas', 1],
+            ['Sin cambios', 7],
+            ['Omitidas: editadas, verificadas, publicadas o descartadas', 0],
+            ['Omitidas: sin nombre', 0],
+            ['Ya no están en OpenStreetMap', 0],
+        ])
+        ->assertSuccessful();
+
+    expect(Restaurant::query()->count())->toBe(9)
+        ->and(Restaurant::query()->where('name', 'Fonda del Municipio Vecino')->exists())->toBeFalse()
+        ->and(restaurantFromOsm(9000000005)->name)->toBe('Taberna Nueva')
+        ->and(RestaurantSource::query()->whereNotNull('missing_since')->count())->toBe(0);
 });
 
 test('con un 429 no reintenta y no escribe nada', function () {
@@ -378,4 +416,201 @@ test('la huella no depende del orden de las categorías', function () {
 
     expect(OsmImporter::fingerprint('A', $point, ['b', 'a']))
         ->toBe(OsmImporter::fingerprint('A', $point, ['a', 'b']));
+});
+
+test('una respuesta vacía con fichas ya importadas falla sin escribir nada', function () {
+    fakeOverpass();
+    $this->artisan('veni:osm-import')->assertSuccessful();
+
+    fakeOverpass(['elements' => []]);
+
+    $this->artisan('veni:osm-import')->expectsOutputToContain('No se importó nada')->assertFailed();
+
+    expect(RestaurantSource::query()->whereNotNull('missing_since')->count())->toBe(0);
+});
+
+test('el orden de la respuesta no cambia los slugs', function () {
+    fakeOverpass(overpassResponse(fn (array $body): array => [...$body, 'elements' => array_reverse($body['elements'])]));
+
+    $this->artisan('veni:osm-import')->assertSuccessful();
+
+    expect(restaurantFromOsm(9000000003)->slug)->toBe('cafe-de-prueba')
+        ->and(restaurantFromOsm(9000000009)->slug)->toBe('cafe-de-prueba-2');
+});
+
+test('el listado por verificar solo trae las fichas ocultas', function () {
+    fakeOverpass();
+    $this->artisan('veni:osm-import')->assertSuccessful();
+
+    // Publicada sin verificar (antes del comando de publicar).
+    restaurantFromOsm(9000000004)->forceFill(['status' => RestaurantStatus::Unclaimed])->save();
+    Storage::disk('local')->deleteDirectory('osm');
+    $this->artisan('veni:osm-import')->assertSuccessful();
+
+    $list = (string) Storage::disk('local')->get(Storage::disk('local')->files('osm')[0]);
+    expect($list)->not->toContain('Bar de Prueba')
+        ->toContain('## Fichas ocultas por verificar (8)');
+});
+
+test('avisa de un posible duplicado a menos de 30 m con un nombre parecido, sin fusionar nada', function () {
+    $own = Restaurant::factory()->hidden()->create(['name' => 'Fonda de Prueba', 'slug' => 'fonda-de-prueba', 'location' => new GeoPoint(4.4129, -76.1547)]);
+    // Lejos o con otro nombre: no es duplicado.
+    Restaurant::factory()->create(['name' => 'Perros de Prueba', 'slug' => 'perros-lejos', 'location' => new GeoPoint(4.4160, -76.1500)]);
+    Restaurant::factory()->create(['name' => 'Otra Cosa', 'slug' => 'otra-cosa', 'location' => new GeoPoint(4.4128, -76.1547)]);
+    fakeOverpass();
+
+    $this->artisan('veni:osm-import')
+        ->expectsOutputToContain('Posible duplicado: fonda-de-prueba-2 y fonda-de-prueba')
+        ->assertSuccessful();
+
+    expect(Restaurant::query()->count())->toBe(12)
+        ->and($own->fresh()?->name)->toBe('Fonda de Prueba');
+
+    $list = (string) Storage::disk('local')->get(Storage::disk('local')->files('osm')[0]);
+    expect($list)->toContain('## Posibles duplicados (1)')
+        ->toContain('- [ ] `fonda-de-prueba-2` (Fonda de Prueba) y `fonda-de-prueba` (Fonda de Prueba), a menos de 30 m')
+        ->not->toContain('perros-lejos')
+        ->not->toContain('otra-cosa');
+});
+
+test('dos corridas a la vez: la segunda termina con un mensaje claro', function () {
+    config(['database.connections.pgsql_other' => config('database.connections.pgsql')]);
+    $other = DB::connection('pgsql_other');
+    $other->select('select pg_advisory_lock(?)', [OsmImporter::LOCK_KEY]);
+    fakeOverpass();
+
+    try {
+        $this->artisan('veni:osm-import')->expectsOutputToContain('Ya hay otra importación corriendo')->assertFailed();
+    } finally {
+        $other->select('select pg_advisory_unlock(?)', [OsmImporter::LOCK_KEY]);
+        $other->disconnect();
+    }
+
+    expect(Restaurant::query()->count())->toBe(0);
+});
+
+test('bloquea la ficha mientras decide si la actualiza, para no pisar una edición a la vez', function () {
+    fakeOverpass();
+    $this->artisan('veni:osm-import')->assertSuccessful();
+
+    $locked = [];
+    DB::listen(function ($query) use (&$locked): void {
+        if (str_contains($query->sql, 'from "restaurants"') && str_contains($query->sql, 'for update')) {
+            $locked[] = $query->sql;
+        }
+    });
+    $this->artisan('veni:osm-import')->assertSuccessful();
+
+    expect($locked)->toHaveCount(9);
+});
+
+test('veni:osm-dismiss descarta un local: la importación ya no lo actualiza ni lo lista', function () {
+    fakeOverpass();
+    $this->artisan('veni:osm-import')->assertSuccessful();
+
+    $this->artisan('veni:osm-dismiss', ['slug' => 'bar-de-prueba'])->assertSuccessful();
+    expect(RestaurantSource::query()->where('element_id', 9000000004)->value('dismissed_at'))->not->toBeNull();
+
+    // Cambia en OpenStreetMap y después desaparece: ni se actualiza ni figura como ido.
+    fakeOverpass(overpassResponse(fn (array $body): array => withTags($body, 9000000004, ['name' => 'Bar Nuevo'])));
+    Storage::disk('local')->deleteDirectory('osm');
+    $this->artisan('veni:osm-import')
+        ->expectsTable(['', 'Fichas'], [
+            ['Creadas (ocultas)', 0],
+            ['Actualizadas', 0],
+            ['Sin cambios', 8],
+            ['Omitidas: editadas, verificadas, publicadas o descartadas', 1],
+            ['Omitidas: sin nombre', 1],
+            ['Ya no están en OpenStreetMap', 0],
+        ])
+        ->assertSuccessful();
+    expect(restaurantFromOsm(9000000004)->name)->toBe('Bar de Prueba');
+
+    $list = (string) Storage::disk('local')->get(Storage::disk('local')->files('osm')[0]);
+    expect($list)->not->toContain('Bar de Prueba');
+
+    fakeOverpass(overpassResponse(fn (array $body): array => [...$body, 'elements' => array_values(array_filter($body['elements'], fn (array $element): bool => $element['id'] !== 9000000004))]));
+    $this->artisan('veni:osm-import')->doesntExpectOutputToContain('Ya no está: Bar de Prueba')->assertSuccessful();
+});
+
+test('veni:osm-dismiss solo descarta fichas importadas y ocultas', function () {
+    Restaurant::factory()->hidden()->create(['slug' => 'propia']);
+
+    $this->artisan('veni:osm-dismiss', ['slug' => 'propia'])->expectsOutputToContain('no viene de OpenStreetMap')->assertFailed();
+    $this->artisan('veni:osm-dismiss', ['slug' => 'no-existe'])->expectsOutputToContain('No hay ninguna ficha')->assertFailed();
+
+    fakeOverpass();
+    $this->artisan('veni:osm-import')->assertSuccessful();
+    restaurantFromOsm(9000000004)->forceFill(['status' => RestaurantStatus::Unclaimed])->save();
+
+    $this->artisan('veni:osm-dismiss', ['slug' => 'bar-de-prueba'])->expectsOutputToContain('está publicada')->assertFailed();
+});
+
+test('veni:publish exige la verificación o que se registre con --verified', function () {
+    fakeOverpass();
+    $this->artisan('veni:osm-import')->assertSuccessful();
+
+    $this->artisan('veni:publish', ['slug' => 'fonda-de-prueba'])->expectsOutputToContain('--verified')->assertFailed();
+    expect(restaurantFromOsm(9000000001)->status)->toBe(RestaurantStatus::Hidden);
+
+    $this->artisan('veni:publish', ['slug' => 'fonda-de-prueba', '--verified' => true])->assertSuccessful();
+    $fonda = restaurantFromOsm(9000000001);
+    expect($fonda->status)->toBe(RestaurantStatus::Unclaimed)
+        ->and($fonda->status->isPublished())->toBeTrue()
+        ->and($fonda->verified_at)->not->toBeNull();
+
+    // Ya verificada en la calle: no hace falta --verified.
+    restaurantFromOsm(9000000003)->forceFill(['verified_at' => now()])->save();
+    $this->artisan('veni:publish', ['slug' => 'cafe-de-prueba'])->assertSuccessful();
+
+    // Publicada, descartada o inexistente: no.
+    $this->artisan('veni:publish', ['slug' => 'fonda-de-prueba'])->expectsOutputToContain('ya está publicada')->assertFailed();
+    $this->artisan('veni:osm-dismiss', ['slug' => 'bar-de-prueba'])->assertSuccessful();
+    $this->artisan('veni:publish', ['slug' => 'bar-de-prueba', '--verified' => true])->expectsOutputToContain('descartada')->assertFailed();
+    $this->artisan('veni:publish', ['slug' => 'no-existe'])->assertFailed();
+});
+
+test('veni:publish deja reclamada la ficha que ya tiene dueño', function () {
+    $restaurant = Restaurant::factory()->hidden()->create(['slug' => 'con-duenio', 'verified_at' => now()]);
+    $restaurant->members()->attach(User::factory()->create(), ['role' => RestaurantRole::Owner->value]);
+
+    $this->artisan('veni:publish', ['slug' => 'con-duenio'])->assertSuccessful();
+
+    expect($restaurant->fresh()?->status)->toBe(RestaurantStatus::Claimed);
+});
+
+test('veni:osm-export entrega en GeoJSON la parte de la base que viene de OpenStreetMap, bajo ODbL', function () {
+    Restaurant::factory()->create(['name' => 'Propia de Prueba']);
+    fakeOverpass();
+    $this->artisan('veni:osm-import')->assertSuccessful();
+
+    $this->artisan('veni:osm-export')->expectsOutputToContain('9 locales')->assertSuccessful();
+
+    $files = Storage::disk('local')->files('osm/export');
+    expect($files)->toHaveCount(1)->and($files[0])->toEndWith('.geojson');
+
+    /** @var array<string, mixed> $export */
+    $export = json_decode((string) Storage::disk('local')->get($files[0]), true, flags: JSON_THROW_ON_ERROR);
+    expect($export['type'])->toBe('FeatureCollection')
+        ->and($export['license'])->toBe('ODbL-1.0')
+        ->and($export['attribution'])->toContain('OpenStreetMap')
+        ->and($export['features'])->toHaveCount(9);
+
+    $fonda = collect($export['features'])->firstWhere('properties.osm_id', 9000000001);
+    expect($fonda)->toBe([
+        'type' => 'Feature',
+        'geometry' => ['type' => 'Point', 'coordinates' => [-76.1547, 4.4128]],
+        'properties' => [
+            'name' => 'Fonda de Prueba',
+            'kind' => 'amenity=restaurant',
+            'osm_type' => 'node',
+            'osm_id' => 9000000001,
+            'osm_url' => 'https://www.openstreetmap.org/node/9000000001',
+            'source' => 'openstreetmap',
+        ],
+    ]);
+
+    expect((string) Storage::disk('local')->get($files[0]))
+        ->not->toContain('Propia de Prueba')
+        ->not->toContain('300');
 });

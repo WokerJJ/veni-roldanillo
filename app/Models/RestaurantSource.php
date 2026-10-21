@@ -8,8 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * De dónde vino una ficha importada (#58, ADR 0021): la fuente, el tipo y el
  * id del objeto y la fecha de la última consulta en que estaba. Las fichas
- * propias no tienen procedencia. Nada es asignable: la escribe solo la
- * importación (App\Console\Commands\ImportOsmRestaurants).
+ * propias no tienen procedencia. Nada es asignable: la escriben solo la
+ * importación (App\Console\Commands\ImportOsmRestaurants) y el descarte
+ * (App\Console\Commands\DismissOsmRestaurant).
  *
  * Larastan tipa las columnas enum de la migración como literales: las
  * propiedades de abajo las dejan como texto.
@@ -34,6 +35,7 @@ class RestaurantSource extends Model
             'element_id' => 'integer',
             'fetched_at' => 'datetime',
             'missing_since' => 'datetime',
+            'dismissed_at' => 'datetime',
         ];
     }
 
