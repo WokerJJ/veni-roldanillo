@@ -194,7 +194,7 @@ export default defineComponent({
                     return;
                 }
 
-                if (router.nearest(props.destination, 'foot') < 0 && router.nearest(props.destination, 'car') < 0) {
+                if (router.snap(props.destination, 'foot') === null && router.snap(props.destination, 'car') === null) {
                     stopped = true;
                     clear();
                     report({ status: 'destination-far' });
@@ -205,7 +205,7 @@ export default defineComponent({
                 const next = { foot: router.route(from, props.destination, 'foot'), car: router.route(from, props.destination, 'car') };
 
                 if (next.foot === null && next.car === null) {
-                    const far = router.nearest(from, 'foot') < 0 && router.nearest(from, 'car') < 0;
+                    const far = router.snap(from, 'foot') === null && router.snap(from, 'car') === null;
                     clear();
                     report({ status: far ? 'far' : 'no-route' });
 
