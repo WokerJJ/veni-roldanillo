@@ -194,17 +194,18 @@ export default defineComponent({
                     return;
                 }
 
-                if (router.snap(props.destination, 'foot') === null && router.snap(props.destination, 'car') === null) {
-                    stopped = true;
-                    clear();
-                    report({ status: 'destination-far' });
-
-                    return;
-                }
-
                 const next = { foot: router.route(from, props.destination, 'foot'), car: router.route(from, props.destination, 'car') };
 
+                // Solo sin ruta vale la pena saber por qué: primero el restaurante, que no cambia.
                 if (next.foot === null && next.car === null) {
+                    if (router.snap(props.destination, 'foot') === null && router.snap(props.destination, 'car') === null) {
+                        stopped = true;
+                        clear();
+                        report({ status: 'destination-far' });
+
+                        return;
+                    }
+
                     const far = router.snap(from, 'foot') === null && router.snap(from, 'car') === null;
                     clear();
                     report({ status: far ? 'far' : 'no-route' });
