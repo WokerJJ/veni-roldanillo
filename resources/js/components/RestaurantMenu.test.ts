@@ -1,5 +1,5 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import type { MenuSection } from '@/restaurants/profile';
 import type * as FakeInertia from '@/testing/inertia';
@@ -258,6 +258,49 @@ describe('RestaurantMenu: armar el pedido (#14)', () => {
         expect(document.activeElement).toBe(opener.element);
         expect(wrapper.get('[data-order-announcement]').text()).toBe('Sancocho de prueba quedó en tu pedido.');
         expect(wrapper.get('[data-order-summary]').text().replace(/[\u00a0\u202f]/g, ' ')).toBe('Tu pedido: 1 plato · total estimado $ 19.500');
+    });
+
+    it('si no cabe todo, agrega hasta 20 y anuncia cuántas entraron', async () => {
+        const { wrapper, dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+        const { useOrder } = await import('@/order/useOrder');
+        useOrder('la-ceiba').add({ dish: 'Gaseosa de prueba', unitPrice: 3500, quantity: 15, choices: [], removed: [], note: null });
+
+        await nth(dishes(), 3).get('button').trigger('click');
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+
+        for (let i = 1; i < 10; i++) {
+            await wrapper.get('[data-increase]').trigger('click');
+        }
+
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+
+        expect(wrapper.get('[data-order-announcement]').text()).toBe('Solo caben 20 de Gaseosa de prueba en el pedido: se agregaron 5.');
+        expect(useOrder('la-ceiba').count.value).toBe(20);
+    });
+
+    it('si el selector no se puede cargar, lo anuncia y no abre nada', async () => {
+        vi.doMock('@/components/DishPicker.vue', () => {
+            throw new Error('Sin conexión');
+        });
+        onTestFinished(() => {
+            vi.doUnmock('@/components/DishPicker.vue');
+        });
+
+        const { wrapper, dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+        const opener = nth(dishes(), 3).get('button');
+
+        opener.element.focus();
+        await opener.trigger('click');
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+
+        expect(wrapper.find('dialog').exists()).toBe(false);
+        expect(wrapper.get('[data-order-announcement]').text()).toBe('No se pudo abrir el plato. Revisá la conexión e intentá de nuevo.');
+        expect(document.activeElement).toBe(opener.element);
     });
 
     it('cerrar sin agregar no cambia el pedido y devuelve el foco', async () => {

@@ -31,8 +31,11 @@ import type { MenuDish, MenuOptionGroup } from '@/restaurants/profile';
  * vertical sale de abajo, como el panel del mapa (ADR 0022); desde 768 px
  * queda centrado. Lo carga RestaurantMenu recién cuando se toca un plato:
  * no pesa en la ficha ni en el arranque.
+ *
+ * `soldOut` lo calcula el menú, con su reloj: si el plato se agota con el
+ * selector abierto, «Agregar» ya no lo deja en el pedido y lo anuncia.
  */
-const { dish } = defineProps<{ dish: MenuDish }>();
+const { dish, soldOut } = defineProps<{ dish: MenuDish; soldOut?: boolean }>();
 
 const emit = defineEmits<{ add: [item: OrderItem]; close: [] }>();
 
@@ -45,6 +48,8 @@ const selection = ref(emptySelection(dish));
 /** Los errores se muestran después del primer intento de agregar, no antes. */
 const attempted = ref(false);
 const announcement = ref('');
+/** Si el último toque empezó en el fondo: arrastrar desde la hoja y soltar afuera no cierra. */
+let pressedOnBackdrop = false;
 
 const problems = computed(() => selectionProblems(dish, selection.value));
 const total = computed(() => linePrice(dish, selection.value));
@@ -110,9 +115,23 @@ function optionLabel(group: MenuOptionGroup, name: string): string {
     return group.kind === 'removal' ? t('order.picker.remove_option', { name }) : name;
 }
 
+/** Vaciar y volver a escribir: así la región viva lo anuncia cada vez. */
+async function announce(text: string): Promise<void> {
+    announcement.value = '';
+    await nextTick();
+    announcement.value = text;
+}
+
 // Sin el modificador .prevent: su código sumaría al chunk de Vue, el del arranque.
 async function submit(event: Event): Promise<void> {
     event.preventDefault();
+
+    if (soldOut) {
+        await announce(t('order.picker.sold_out'));
+
+        return;
+    }
+
     const item = toOrderItem(dish, selection.value);
 
     if (item !== null) {
@@ -122,18 +141,26 @@ async function submit(event: Event): Promise<void> {
     }
 
     attempted.value = true;
-    // Vaciar y volver a escribir: así la región viva lo anuncia cada vez.
-    announcement.value = '';
-    await nextTick();
-    announcement.value = t('order.picker.errors');
+    await announce(t('order.picker.errors'));
 
     const first = problems.value.findIndex((problem) => problem !== null);
     dialog.value?.querySelector<HTMLInputElement>(`[data-group="${String(first)}"] input:not(:disabled)`)?.focus();
 }
 
-/** Un toque en el fondo (fuera de la hoja) cierra, como Escape. */
+function onPointerDown(event: PointerEvent): void {
+    pressedOnBackdrop = event.target === dialog.value;
+}
+
+/**
+ * Un toque en el fondo (fuera de la hoja) cierra, como Escape. Solo si
+ * también empezó ahí: al seleccionar texto de la nota y soltar afuera, el
+ * click cae en el <dialog> pero no es un toque en el fondo.
+ */
 function onClick(event: MouseEvent): void {
-    if (event.target === dialog.value) {
+    const fromBackdrop = pressedOnBackdrop;
+    pressedOnBackdrop = false;
+
+    if (fromBackdrop && event.target === dialog.value) {
         emit('close');
     }
 }
@@ -168,7 +195,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <dialog ref="dialog" class="dish-picker text-ink" :aria-labelledby="`${id}-title`" data-dish-picker @cancel="onCancel" @click="onClick">
+    <dialog ref="dialog" class="dish-picker text-ink" :aria-labelledby="`${id}-title`" data-dish-picker @cancel="onCancel" @pointerdown="onPointerDown" @click="onClick">
         <form class="flex min-h-0 flex-1 flex-col" novalidate @submit="submit">
             <header class="dish-picker-header flex items-start justify-between gap-3 border-b border-line">
                 <div class="min-w-0">

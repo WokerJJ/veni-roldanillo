@@ -97,6 +97,48 @@ describe('DishPicker', () => {
         expect(addText()).toBe('Agregar · $ 43.000');
     });
 
+    it('una adición opcional de una sola opción es casilla y se puede desmarcar', async () => {
+        const dish: MenuDish = {
+            ...SANCOCHO,
+            groups: [{ name: 'Adición (prueba)', kind: 'choice', min: 0, max: 1, options: [{ name: 'Huevo (prueba)', price: 1500 }, { name: 'Maduro (prueba)', price: 1500 }] }],
+        };
+        const { option, addText } = await mountPicker(dish);
+
+        expect(option(0, 0).attributes('type')).toBe('checkbox');
+
+        await option(0, 0).setValue(true);
+        expect(addText()).toBe('Agregar · $ 20.000');
+
+        await option(0, 0).setValue(false);
+        expect(addText()).toBe('Agregar · $ 18.500');
+    });
+
+    it('si el plato se agota con el selector abierto, no agrega y lo anuncia', async () => {
+        const { wrapper, added } = await mountPicker({ ...SANCOCHO, groups: [] });
+
+        await wrapper.setProps({ soldOut: true });
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+
+        expect(added()).toEqual([]);
+        expect(wrapper.get('[role="alert"]').text()).toBe('Este plato se agotó: ya no se puede agregar.');
+    });
+
+    it('arrastrar desde la hoja y soltar en el fondo no cierra', async () => {
+        const { wrapper } = await mountPicker();
+        const dialog = wrapper.get('dialog');
+
+        // Empieza en la nota (seleccionar texto) y el click cae en el fondo.
+        await wrapper.get('[data-note]').trigger('pointerdown');
+        await dialog.trigger('click');
+        expect(wrapper.emitted('close')).toBeUndefined();
+
+        // Empieza y termina en el fondo: cierra.
+        await dialog.trigger('pointerdown');
+        await dialog.trigger('click');
+        expect(wrapper.emitted('close')).toHaveLength(1);
+    });
+
     it('con el grupo lleno, las demás casillas quedan deshabilitadas', async () => {
         const { option } = await mountPicker();
 
@@ -178,6 +220,7 @@ describe('DishPicker', () => {
 
         await wrapper.get('[data-close]').trigger('click');
         wrapper.get('dialog').element.dispatchEvent(new Event('cancel', { cancelable: true }));
+        await wrapper.get('dialog').trigger('pointerdown');
         await wrapper.get('dialog').trigger('click');
         // Un toque dentro de la hoja no cierra.
         await wrapper.get('h2').trigger('click');

@@ -7,7 +7,7 @@ import { useI18n } from '@/composables/useI18n';
 import { useNow } from '@/composables/useNow';
 import { formatPesos } from '@/i18n/intl';
 import type { OrderItem } from '@/order/selection';
-import { isOrderable, isSoldOut } from '@/order/selection';
+import { isOrderable, isSoldOut, MAX_QUANTITY } from '@/order/selection';
 import { useOrder } from '@/order/useOrder';
 import { businessDay } from '@/restaurants/openStatus';
 import type { MenuDish, MenuSection } from '@/restaurants/profile';
@@ -67,7 +67,17 @@ function unavailable(dish: MenuDish): boolean {
 async function open(dish: MenuDish, event: MouseEvent): Promise<void> {
     opener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
     announcement.value = '';
-    DishPicker.value ??= (await import('@/components/DishPicker.vue')).default;
+
+    try {
+        DishPicker.value ??= (await import('@/components/DishPicker.vue')).default;
+    } catch {
+        // Sin conexión (o un despliegue nuevo) el chunk no baja: se dice y el
+        // foco se queda en el plato, para volver a intentar.
+        announcement.value = t('order.picker.load_error');
+
+        return;
+    }
+
     picking.value = dish;
 }
 
@@ -79,9 +89,10 @@ async function close(): Promise<void> {
 }
 
 async function add(item: OrderItem): Promise<void> {
-    order?.add(item);
+    const added = order?.add(item) ?? item.quantity;
     await close();
-    announcement.value = t('order.added', { name: item.dish });
+    announcement.value =
+        added < item.quantity ? t('order.added_capped', { name: item.dish, max: MAX_QUANTITY, count: added }) : t('order.added', { name: item.dish });
 }
 
 const summary = computed(() => {
@@ -128,6 +139,6 @@ const summary = computed(() => {
 
         <p role="status" class="sr-only" data-order-announcement>{{ announcement }}</p>
 
-        <DishPicker v-if="DishPicker && picking" :dish="picking" @add="add" @close="close" />
+        <DishPicker v-if="DishPicker && picking" :dish="picking" :sold-out="soldOut(picking)" @add="add" @close="close" />
     </section>
 </template>
