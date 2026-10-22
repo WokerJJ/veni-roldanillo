@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OptionGroupKind;
 use App\Models\Concerns\HasTranslatableFields;
 use App\Models\Contracts\BelongsToRestaurant;
 use App\Policies\RestaurantContentPolicy;
@@ -14,10 +15,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Grupo de opciones de un plato: obligatorio (p. ej. proteína, min 1 / max 1)
- * o de adiciones opcionales con recargo.
+ * Grupo de opciones de un plato: obligatorio (p. ej. proteína, min 1 / max 1),
+ * de adiciones opcionales con recargo o, con `kind` Removal, de ingredientes
+ * que se pueden quitar (ADR 0023).
+ *
+ * Larastan lee la columna `kind` de la migración como texto y no conoce el
+ * cast: el @property fija el tipo del enum PHP (como en Restaurant).
+ *
+ * @property OptionGroupKind $kind
  */
-#[Fillable(['name_es', 'name_en', 'required', 'min_choices', 'max_choices', 'position'])]
+#[Fillable(['kind', 'name_es', 'name_en', 'required', 'min_choices', 'max_choices', 'position'])]
 #[UsePolicy(RestaurantContentPolicy::class)]
 class OptionGroup extends Model implements BelongsToRestaurant
 {
@@ -30,6 +37,7 @@ class OptionGroup extends Model implements BelongsToRestaurant
     protected function casts(): array
     {
         return [
+            'kind' => OptionGroupKind::class,
             'required' => 'boolean',
             'min_choices' => 'integer',
             'max_choices' => 'integer',

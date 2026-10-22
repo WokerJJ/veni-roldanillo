@@ -1,9 +1,12 @@
 <?php
 
+use App\Enums\OptionGroupKind;
 use App\Enums\RestaurantStatus;
 use App\Models\DeliveryZone;
 use App\Models\Dish;
 use App\Models\Neighborhood;
+use App\Models\Option;
+use App\Models\OptionGroup;
 use App\Models\Restaurant;
 use App\Models\User;
 use Database\Seeders\CategorySeeder;
@@ -94,6 +97,18 @@ test('el seeder arma menús con opciones obligatorias y adiciones', function () 
 
     expect($dish->optionGroups()->where('required', false)->exists())->toBeTrue()
         ->and(Restaurant::query()->whereHas('owners')->count())->toBe(1);
+});
+
+test('el seeder deja ingredientes para quitar y opciones rotuladas de prueba, solo en restaurantes ficticios', function () {
+    $this->seed(DatabaseSeeder::class);
+
+    $removal = OptionGroup::query()->where('kind', OptionGroupKind::Removal)->with('options')->firstOrFail();
+
+    expect($removal->required)->toBeFalse()
+        ->and($removal->options->pluck('price_delta')->unique()->all())->toBe([0])
+        ->and(Option::query()->where('name_es', 'not like', '%(prueba)')->exists())->toBeFalse()
+        ->and(Option::query()->where('available', false)->exists())->toBeTrue()
+        ->and(Dish::query()->whereHas('optionGroups')->whereHas('restaurant', fn ($q) => $q->where('is_fictitious', false))->exists())->toBeFalse();
 });
 
 test('el seeder deja una ficha completa: menú por secciones, un plato agotado y horarios especiales que vienen', function () {
