@@ -126,7 +126,7 @@ El panel del inicio muestra una de tres cosas: la bienvenida con el estado de la
 
 Los marcadores son figuras del lienzo, no elementos de la página: no reciben foco ni los lee un lector de pantalla. Por eso la lista no es un extra: es la forma accesible de llegar a cada restaurante.
 
-Los seeders dejan ocho restaurantes ficticios en puntos fijos del casco urbano (uno oculto): el mapa abre siempre con los mismos siete, cinco sueltos y un grupo de dos. Llevan un menú fijo de tres secciones, en español e inglés, con un plato agotado hoy en algunos; uno tiene horarios especiales cerca de la fecha y otro cierra hoy; uno queda sin menú y otro sin horario, para ver la ficha cuando faltan.
+Los seeders dejan ocho restaurantes ficticios en puntos fijos del casco urbano (uno oculto): el mapa abre siempre con los mismos siete, cinco sueltos y un grupo de dos. Llevan un menú fijo de tres secciones, en español e inglés, con un plato agotado hoy en algunos y opciones de ejemplo (proteína obligatoria, adiciones, ingredientes para quitar y la preparación del jugo, rotuladas «(prueba)»); uno tiene horarios especiales cerca de la fecha y otro cierra hoy; uno queda sin menú y otro sin horario, para ver la ficha cuando faltan.
 
 **«Abierto ahora» no viene del servidor**: lo calcula el dispositivo con esos horarios y la hora de Colombia (`resources/js/restaurants/openStatus.ts`, la única implementación). Así la respuesta guardada no envejece: el horario cambia poco y el estado se recalcula cada medio minuto con la página abierta. Las reglas: una franja pertenece al día en que empieza y, si cierra antes de lo que abre, termina al día siguiente; un horario especial reemplaza al semanal en su fecha (cerrado, o con otras franjas) sin tocar la madrugada que viene de la víspera; a la hora de cierre ya cerró; sin horarios cargados, «Horario sin confirmar». `statusText.ts` lo pone en palabras («Cerrado · abre mañana a las 11:00 a. m.») en el idioma de la interfaz.
 
@@ -136,20 +136,22 @@ Decidida en el [ADR 0018](adr/0018-ficha-del-restaurante.md).
 
 `GET /restaurants/{slug}` (`restaurants.show`) pinta la página `Restaurants/Show` de Inertia. El slug es el del GeoJSON; lo que no tiene forma de slug es un 404 sin consultar la base. La ven todos si está publicada; una oculta, solo un administrador y la gente del restaurante (`RestaurantPolicy::view`), y los demás reciben el mismo 404 que el de una que no existe.
 
-`RestaurantController` hace ocho consultas, tenga el menú que tenga (el restaurante y una por tabla), y manda dos props:
+`RestaurantController` hace diez consultas, tenga el menú que tenga (el restaurante y una por tabla), y manda dos props:
 
 | Prop | Qué trae |
 | --- | --- |
-| `restaurant` | La lista blanca de `App\Http\Resources\RestaurantProfile`: `slug`, `name`, `description`, `categories`, `fictitious`, `hidden`, `unverified`, `updated_on`, `price_level`, `address`, `reference`, `phone`, `whatsapp`, `payment_methods`, `delivery` (`available`, `notes`, `zones` con barrio y costo), `hours`, `special_hours` (con `note`) y `menu` (secciones con sus platos: `name`, `description`, `price`, `sold_out_until`) |
+| `restaurant` | La lista blanca de `App\Http\Resources\RestaurantProfile`: `slug`, `name`, `description`, `categories`, `fictitious`, `hidden`, `unverified`, `updated_on`, `price_level`, `address`, `reference`, `phone`, `whatsapp`, `payment_methods`, `delivery` (`available`, `notes`, `zones` con barrio y costo), `hours`, `special_hours` (con `note`) y `menu` (secciones con sus platos: `name`, `description`, `price`, `sold_out_until` y `groups`, sus grupos de opciones: `name`, `kind`, `min`, `max` y `options` con `name` y `price`) |
 | `meta` | `title` y `description` del documento, en el idioma de la petición. La vista raíz los escribe en el HTML (quien arma la vista previa de un enlace no ejecuta JavaScript); al navegar sin recargar los mantienen `<Head>` y `useI18n` |
 
-No viajan el id, los dueños, el plan, la ubicación exacta, los platos que el dueño sacó del menú (`available`) ni las opciones y adiciones (#14). Los textos traducibles salen en el idioma de la petición y, si falta el inglés, en español (`HasTranslatableFields`).
+No viajan el id, los dueños, el plan, la ubicación exacta, los platos ni las opciones que el dueño sacó del menú (`available`), ni los grupos que se quedan sin opciones. Las opciones, las adiciones y los ingredientes para quitar viajan desde #14 ([ADR 0023](adr/0023-opciones-y-quitar-ingredientes.md)). Los textos traducibles salen en el idioma de la petición y, si falta el inglés, en español (`HasTranslatableFields`).
 
 | Pieza | Dónde | Qué hace |
 | --- | --- | --- |
 | Página | `resources/js/pages/Restaurants/Show.vue` | «Volver al mapa», el nombre, el tipo de comida, abierto o cerrado, «Cómo llegar» (`/?r=slug`, con la ruta pedida: ADR 0020), la descripción y los avisos: «Datos de ejemplo», «Información sin verificar» en las fichas sin reclamar y, para quien ve una oculta, que el público no la ve |
 | Horario | `resources/js/components/RestaurantHours.vue` | La semana, de lunes a domingo, con hoy resaltado, y los horarios especiales que vienen con su nota. Si hoy tiene un horario especial, la fila de hoy muestra ese. Sin horario cargado, lo dice |
-| Menú | `resources/js/components/RestaurantMenu.vue` | Por secciones, en el orden del restaurante, con el precio de cada plato y «Agotado hoy». Sin menú cargado, lo dice |
+| Menú | `resources/js/components/RestaurantMenu.vue` y `MenuDishLine.vue` | Por secciones, en el orden del restaurante, con el precio de cada plato, «Agotado hoy» y «No disponible hoy» (un grupo obligatorio sin opciones suficientes). Sin menú cargado, lo dice. Cada plato que se puede pedir hoy es un botón que abre su selector, y debajo del título se ve «Tu pedido» con el total estimado |
+| Selector de un plato | `resources/js/components/DishPicker.vue` | Un `<dialog>` modal (hoja de abajo en el celular) con opciones obligatorias, adiciones con precio, ingredientes para quitar, nota (140 caracteres), cantidad (1 a 20) y el precio de la línea. Valida antes de agregar, anuncia los errores y lleva el foco al primero. Se importa al tocar el primer plato (ADR 0023) |
+| Pedido | `resources/js/order/selection.ts` y `useOrder.ts` | Funciones puras de selección, validación y precio en pesos enteros, y el pedido de cada restaurante en memoria (nada al servidor ni al dispositivo). El carrito y el mensaje de WhatsApp son de #15 |
 | Domicilios | `resources/js/components/RestaurantDelivery.vue` | Los barrios a los que lleva y el costo; sin zonas cargadas, que el costo se pregunta. Solo si hace domicilios |
 | Contacto | `resources/js/components/RestaurantContact.vue` | Dirección con su referencia, teléfono (`tel:`), WhatsApp (un enlace a `wa.me` sin mensaje: el pedido es de #15), medios de pago y nivel de precios. Lo que el restaurante no cargó no deja ni el rótulo |
 | Direcciones | `resources/js/restaurants/links.ts` | `restaurantUrl(slug)` y `mapUrl(slug)`: el frontend no conoce las rutas de Laravel y repite el literal, que fija una prueba |
@@ -231,7 +233,7 @@ Implementado en la Fase 0 (#6); decisiones en el ADR 0009. Convenciones: precios
 | `special_hours` | restaurant_id, on_date, closed, opens_at, closes_at, note_es/en | cerrado sin horas o abierto con ambas; por fecha, o un solo «cerrado» o franjas que no se solapan (`EXCLUDE`); ninguna hora es las 24:00; índice B-tree en (restaurant_id, on_date) |
 | `menu_sections` | restaurant_id, name_es/en, position | |
 | `dishes` | restaurant_id, menu_section_id, name_es/en, description_es/en, price, photo_path, tags (jsonb), available, sold_out_until, position | FK compuesta (sección del mismo restaurante) |
-| `option_groups` | dish_id, name_es/en, required, min_choices, max_choices, position | obligatorio si y solo si min_choices >= 1; max >= min |
+| `option_groups` | dish_id, kind (choice/removal), name_es/en, required, min_choices, max_choices, position | obligatorio si y solo si min_choices >= 1; max >= min; un grupo de quitar (`removal`, ADR 0023) nunca es obligatorio |
 | `options` | option_group_id, name_es/en, price_delta, available, position | price_delta >= 0 |
 | `daily_menus` | restaurant_id, served_on, description_es/en, price | único por restaurante y fecha; índice en served_on |
 | `promotions` | restaurant_id, title_es/en, starts_at, ends_at | ends_at > starts_at |
