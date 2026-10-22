@@ -20,7 +20,8 @@ export interface Order {
     count: ComputedRef<number>;
     /** Total estimado, en pesos (sin domicilio). */
     total: ComputedRef<number>;
-    add: (item: OrderItem) => void;
+    /** Agrega el ítem y devuelve cuántas unidades entraron (al juntar líneas, no pasa de 20). */
+    add: (item: OrderItem) => number;
     clear: () => void;
 }
 
@@ -45,7 +46,12 @@ export function useOrder(slug: string): Order {
         count: computed(() => itemsCount(items.value)),
         total: computed(() => itemsTotal(items.value)),
         add: (item) => {
-            update(slug, addItem(items.value, item));
+            const before = itemsCount(items.value);
+            const next = addItem(items.value, item);
+
+            update(slug, next);
+
+            return itemsCount(next) - before;
         },
         clear: () => {
             update(slug, []);

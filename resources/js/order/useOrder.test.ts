@@ -29,6 +29,16 @@ describe('useOrder', () => {
         expect(order.total.value).toBe(13500);
     });
 
+    it('al juntar líneas no pasa de 20 unidades y dice cuántas entraron', () => {
+        const order = useOrder('la-ceiba');
+
+        expect(order.add({ ...juice, quantity: 15 })).toBe(15);
+        expect(order.add({ ...juice, quantity: 10 })).toBe(5);
+        expect(order.add(juice)).toBe(0);
+
+        expect(order.count.value).toBe(20);
+    });
+
     it('cada restaurante tiene su pedido, y lo comparten quienes lo usan', () => {
         useOrder('la-ceiba').add(juice);
 
