@@ -168,7 +168,7 @@ onBeforeUnmount(() => {
 
             <RestaurantHours class="mt-8 border-t border-line pt-6" :hours="restaurant.hours" :special-hours="restaurant.special_hours" />
 
-            <RestaurantMenu class="mt-8 border-t border-line pt-6" :sections="restaurant.menu" />
+            <RestaurantMenu class="mt-8 border-t border-line pt-6" :sections="restaurant.menu" :slug="restaurant.slug" />
 
             <RestaurantDelivery v-if="restaurant.delivery.available" class="mt-8 border-t border-line pt-6" :delivery="restaurant.delivery" />
 

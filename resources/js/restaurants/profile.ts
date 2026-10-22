@@ -27,6 +27,27 @@ export interface DeliveryZone {
     fee: number;
 }
 
+/** Una opción de un grupo, en el idioma de la página. */
+export interface MenuOption {
+    name: string;
+    /** Recargo en pesos, sin decimales; 0 si no suma (y siempre 0 al quitar). */
+    price: number;
+}
+
+/**
+ * Un grupo de opciones de un plato (#14, ADR 0023): lo que hay que elegir
+ * (`min` >= 1, como la proteína), las adiciones (`min` 0) o, con `kind`
+ * `removal`, los ingredientes que se pueden quitar. Solo trae las opciones
+ * disponibles, en el orden del restaurante, y `max` no pasa de ellas.
+ */
+export interface MenuOptionGroup {
+    name: string;
+    kind: 'choice' | 'removal';
+    min: number;
+    max: number;
+    options: MenuOption[];
+}
+
 export interface MenuDish {
     name: string;
     description: string | null;
@@ -38,6 +59,8 @@ export interface MenuDish {
      * dispositivo con el día de Colombia, como «abierto ahora».
      */
     sold_out_until: string | null;
+    /** Opciones, adiciones e ingredientes para quitar; vacía si el plato no tiene. */
+    groups: MenuOptionGroup[];
 }
 
 export interface MenuSection {

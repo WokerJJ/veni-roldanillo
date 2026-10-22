@@ -3,12 +3,14 @@
 namespace App\Http\Resources;
 
 use App\Enums\Locale;
+use App\Enums\OptionGroupKind;
 use App\Enums\PaymentMethod;
 use App\Enums\RestaurantStatus;
 use App\Http\Resources\Concerns\PresentsSchedule;
 use App\Models\Category;
 use App\Models\Dish;
 use App\Models\MenuSection;
+use App\Models\Option;
 use App\Models\Restaurant;
 use App\Models\SpecialHour;
 use Illuminate\Http\Request;
@@ -28,16 +30,19 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * dispositivo lo calcula con el mismo módulo (ADR 0017).
  *
  * Espera las relaciones ya cargadas y en orden (categories, openingHours,
- * specialHours, menuSections con sus dishes y deliveryZones con su
- * neighborhood): las carga RestaurantController en una consulta por tabla.
- * De cada plato necesita `available`: con él decide si sale.
+ * specialHours, menuSections con sus dishes, los optionGroups de cada plato
+ * con sus options, y deliveryZones con su neighborhood): las carga
+ * RestaurantController en una consulta por tabla. De cada plato y de cada
+ * opción necesita `available`: con él decide si sale.
  *
  * @phpstan-import-type WeeklyHours from PresentsSchedule
  *
  * @phpstan-type ProfileCategory array{slug: string, name: string}
  * @phpstan-type ProfileSpecialHours array{date: string, closed: bool, opens: string|null, closes: string|null, note: string|null}
  * @phpstan-type ProfileZone array{neighborhood: string, fee: int}
- * @phpstan-type ProfileDish array{name: string, description: string|null, price: int, sold_out_until: string|null}
+ * @phpstan-type ProfileOption array{name: string, price: int}
+ * @phpstan-type ProfileOptionGroup array{name: string, kind: string, min: int, max: int, options: list<ProfileOption>}
+ * @phpstan-type ProfileDish array{name: string, description: string|null, price: int, sold_out_until: string|null, groups: list<ProfileOptionGroup>}
  * @phpstan-type ProfileSection array{name: string, dishes: list<ProfileDish>}
  * @phpstan-type Profile array{
  *     slug: string,
@@ -167,9 +172,54 @@ class RestaurantProfile extends JsonResource
                         // «abierto ahora»: la ficha puede quedar abierta de
                         // un día para otro.
                         'sold_out_until' => $dish->sold_out_until?->toDateString(),
+                        'groups' => $this->groups($dish),
                     ])
                     ->all()),
             ])
             ->all());
+    }
+
+    /**
+     * Los grupos de opciones de un plato (#14, ADR 0023), en el orden del
+     * restaurante: lo que hay que elegir, las adiciones con su recargo y los
+     * ingredientes que se pueden quitar. Una opción que el dueño desactivó
+     * no sale, y un grupo que se queda sin opciones tampoco.
+     *
+     * `max` nunca pasa de las opciones publicadas. `min` no se toca: si un
+     * grupo obligatorio pide más de las que quedan, el plato no se puede
+     * pedir y lo dice el dispositivo (resources/js/order/selection.ts).
+     *
+     * @return list<ProfileOptionGroup>
+     */
+    private function groups(Dish $dish): array
+    {
+        $groups = [];
+
+        foreach ($dish->optionGroups as $group) {
+            $removal = $group->kind === OptionGroupKind::Removal;
+            $options = array_values($group->options
+                ->filter(fn (Option $option): bool => $option->available)
+                ->map(fn (Option $option): array => [
+                    'name' => (string) $option->translated('name', $this->locale),
+                    // Quitar un ingrediente no cambia el precio.
+                    'price' => $removal ? 0 : $option->price_delta,
+                ])
+                ->all());
+
+            if ($options === []) {
+                continue;
+            }
+
+            $groups[] = [
+                'name' => (string) $group->translated('name', $this->locale),
+                'kind' => $group->kind->value,
+                'min' => $removal ? 0 : $group->min_choices,
+                // Quitar no tiene tope: cualquier ingrediente de la lista.
+                'max' => $removal ? count($options) : min($group->max_choices, count($options)),
+                'options' => $options,
+            ];
+        }
+
+        return $groups;
     }
 }

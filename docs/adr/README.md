@@ -26,3 +26,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0020](0020-como-llegar-en-el-dispositivo.md) | «Cómo llegar»: el router de veni-mapa copiado del tag v0.2.0, el grafo bajado con la primera ruta y la posición solo dentro del motor | Aceptada |
 | [0021](0021-locales-de-openstreetmap.md) | Locales de OpenStreetMap: borradores ocultos con su procedencia, bajo ODbL | Aceptada |
 | [0022](0022-panel-de-abajo-en-el-celular.md) | El panel de abajo del celular: tres alturas, una manija propia y el resumen y la lista fuera del arranque | Aceptada |
+| [0023](0023-opciones-y-quitar-ingredientes.md) | Opciones, adiciones y quitar ingredientes: un tipo de grupo, publicados por lista blanca y armados en el dispositivo | Aceptada |

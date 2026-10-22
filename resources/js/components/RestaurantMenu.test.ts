@@ -1,8 +1,9 @@
-import { enableAutoUnmount, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import type { MenuSection } from '@/restaurants/profile';
 import type * as FakeInertia from '@/testing/inertia';
+import { nth } from '@/testing/present';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 
@@ -11,28 +12,28 @@ const MENU: MenuSection[] = [
     {
         name: 'Platos fuertes (prueba)',
         dishes: [
-            { name: 'Sancocho de prueba', description: 'Con arroz y aguacate.', price: 18500, sold_out_until: null },
-            { name: 'Bandeja de prueba', description: null, price: 22000, sold_out_until: '2026-10-07' },
+            { name: 'Sancocho de prueba', description: 'Con arroz y aguacate.', price: 18500, sold_out_until: null, groups: [] },
+            { name: 'Bandeja de prueba', description: null, price: 22000, sold_out_until: '2026-10-07', groups: [] },
         ],
     },
     {
         name: 'Bebidas (prueba)',
-        dishes: [{ name: 'Jugo de prueba', description: 'En agua o en leche.', price: 4000, sold_out_until: null }],
+        dishes: [{ name: 'Jugo de prueba', description: 'En agua o en leche.', price: 4000, sold_out_until: null, groups: [] }],
     },
 ];
 
 /** Un menú con un solo plato, agotado hasta esa fecha. */
 function soldOutUntil(date: string | null): MenuSection[] {
-    return [{ name: 'Platos fuertes (prueba)', dishes: [{ name: 'Bandeja de prueba', description: null, price: 22000, sold_out_until: date }] }];
+    return [{ name: 'Platos fuertes (prueba)', dishes: [{ name: 'Bandeja de prueba', description: null, price: 22000, sold_out_until: date, groups: [] }] }];
 }
 
-async function mountMenu(sections: MenuSection[] = MENU, locale: 'es' | 'en' = 'es') {
+async function mountMenu(sections: MenuSection[] = MENU, locale: 'es' | 'en' = 'es', slug: string | null = null) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     inertia.reset();
     inertia.receiveFromServer(locale, { replace: true });
 
     const { default: RestaurantMenu } = await import('./RestaurantMenu.vue');
-    const wrapper = mount(RestaurantMenu, { props: { sections } });
+    const wrapper = mount(RestaurantMenu, { props: { sections, slug }, attachTo: document.body });
 
     return {
         wrapper,
@@ -180,5 +181,141 @@ describe('RestaurantMenu', () => {
             expect(new Set(ids).size).toBe(2);
             expect(sections().map((section) => section.get('ul').attributes('aria-labelledby'))).toEqual(ids);
         });
+    });
+});
+
+/** El menú del contrato, con opciones: el sancocho pide proteína; la bandeja está agotada hoy. */
+const WITH_OPTIONS: MenuSection[] = [
+    {
+        name: 'Platos fuertes (prueba)',
+        dishes: [
+            {
+                name: 'Sancocho de prueba',
+                description: null,
+                price: 18500,
+                sold_out_until: null,
+                groups: [{ name: 'Proteína (prueba)', kind: 'choice', min: 1, max: 1, options: [{ name: 'Res (prueba)', price: 0 }, { name: 'Cerdo (prueba)', price: 1000 }] }],
+            },
+            { name: 'Bandeja de prueba', description: null, price: 22000, sold_out_until: '2026-10-07', groups: [] },
+            {
+                name: 'Plato sin opciones suficientes',
+                description: null,
+                price: 15000,
+                sold_out_until: null,
+                groups: [{ name: 'Dos sopas', kind: 'choice', min: 2, max: 1, options: [{ name: 'Una sola', price: 0 }] }],
+            },
+            { name: 'Gaseosa de prueba', description: null, price: 3500, sold_out_until: null, groups: [] },
+        ],
+    },
+];
+
+describe('RestaurantMenu: armar el pedido (#14)', () => {
+    afterEach(async () => {
+        const { resetOrders } = await import('@/order/useOrder');
+        resetOrders();
+    });
+
+    it('sin restaurante (slug) el menú solo se lee: ningún plato es un botón', async () => {
+        const { wrapper } = await mountMenu(WITH_OPTIONS);
+
+        expect(wrapper.findAll('button')).toHaveLength(0);
+    });
+
+    it('cada plato que se puede pedir hoy es un botón que abre un diálogo; el agotado y el imposible, no', async () => {
+        const { wrapper, dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+
+        expect(dishes().map((dish) => dish.find('[data-choose]').exists())).toEqual([true, false, false, true]);
+        expect(nth(dishes(), 0).get('button').attributes('aria-haspopup')).toBe('dialog');
+        expect(nth(dishes(), 1).find('[data-sold-out]').exists()).toBe(true);
+        expect(nth(dishes(), 2).get('[data-unavailable]').text()).toBe('No disponible hoy');
+        expect(wrapper.find('dialog').exists()).toBe(false);
+    });
+
+    it('el botón del plato tiene un área táctil de 44 px', async () => {
+        const { dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+
+        expect(nth(dishes(), 0).get('button').classes()).toContain('min-h-touch');
+    });
+
+    it('al agregar, cierra, devuelve el foco al plato, lo anuncia y muestra el pedido', async () => {
+        const { wrapper, dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+        const opener = nth(dishes(), 0).get('button');
+
+        opener.element.focus();
+        await opener.trigger('click');
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+
+        const dialog = wrapper.get('dialog');
+        expect(dialog.get('h2').text()).toBe('Sancocho de prueba');
+
+        await nth(dialog.findAll('[data-option]'), 1).setValue(true);
+        await dialog.get('form').trigger('submit');
+        await flushPromises();
+
+        expect(wrapper.find('dialog').exists()).toBe(false);
+        expect(document.activeElement).toBe(opener.element);
+        expect(wrapper.get('[data-order-announcement]').text()).toBe('Sancocho de prueba quedó en tu pedido.');
+        expect(wrapper.get('[data-order-summary]').text().replace(/[\u00a0\u202f]/g, ' ')).toBe('Tu pedido: 1 plato · total estimado $ 19.500');
+    });
+
+    it('si no cabe todo, agrega hasta 20 y anuncia cuántas entraron', async () => {
+        const { wrapper, dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+        const { useOrder } = await import('@/order/useOrder');
+        useOrder('la-ceiba').add({ dish: 'Gaseosa de prueba', unitPrice: 3500, quantity: 15, choices: [], removed: [], note: null });
+
+        await nth(dishes(), 3).get('button').trigger('click');
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+
+        for (let i = 1; i < 10; i++) {
+            await wrapper.get('[data-increase]').trigger('click');
+        }
+
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+
+        expect(wrapper.get('[data-order-announcement]').text()).toBe('Solo caben 20 de Gaseosa de prueba en el pedido: se agregaron 5.');
+        expect(useOrder('la-ceiba').count.value).toBe(20);
+    });
+
+    it('si el selector no se puede cargar, lo anuncia y no abre nada', async () => {
+        vi.doMock('@/components/DishPicker.vue', () => {
+            throw new Error('Sin conexión');
+        });
+        onTestFinished(() => {
+            vi.doUnmock('@/components/DishPicker.vue');
+        });
+
+        const { wrapper, dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+        const opener = nth(dishes(), 3).get('button');
+
+        opener.element.focus();
+        await opener.trigger('click');
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+
+        expect(wrapper.find('dialog').exists()).toBe(false);
+        expect(wrapper.get('[data-order-announcement]').text()).toBe('No se pudo abrir el plato. Revisá la conexión e intentá de nuevo.');
+        expect(document.activeElement).toBe(opener.element);
+    });
+
+    it('cerrar sin agregar no cambia el pedido y devuelve el foco', async () => {
+        const { wrapper, dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+        const opener = nth(dishes(), 3).get('button');
+
+        await opener.trigger('click');
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        await wrapper.get('[data-close]').trigger('click');
+        await flushPromises();
+
+        expect(wrapper.find('dialog').exists()).toBe(false);
+        expect(wrapper.find('[data-order-summary]').exists()).toBe(false);
+        expect(document.activeElement).toBe(opener.element);
     });
 });

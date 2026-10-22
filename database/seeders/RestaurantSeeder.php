@@ -4,12 +4,13 @@ namespace Database\Seeders;
 
 use App\Enums\RestaurantRole;
 use App\Models\Category;
+use App\Models\Dish;
 use App\Models\Neighborhood;
-use App\Models\Option;
 use App\Models\OptionGroup;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Support\GeoPoint;
+use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
@@ -195,6 +196,13 @@ class RestaurantSeeder extends FictitiousSeeder
      * El menú de ejemplo, por secciones y en orden, con los mismos platos
      * inventados en todos los restaurantes; el precio cambia un poco con el
      * índice. En los restaurantes de índice par, un plato queda agotado hoy.
+     *
+     * Opciones (#14, ADR 0023), inventadas y rotuladas «(prueba)» como los
+     * platos; viven en restaurantes con is_fictitious, que la ficha marca
+     * «Datos de ejemplo». Los platos fuertes llevan proteína obligatoria,
+     * adiciones con recargo e ingredientes para quitar; el jugo, la
+     * preparación obligatoria; lo demás, ninguna. Una adición queda
+     * desactivada, para ver que no sale.
      */
     private function seedMenu(Restaurant $restaurant, int $i): void
     {
@@ -214,19 +222,56 @@ class RestaurantSeeder extends FictitiousSeeder
                     'position' => $order,
                 ]);
 
-                if ($position !== 0) {
-                    continue;
+                if ($position === 0) {
+                    $this->seedMainOptions($dish);
+                } elseif ($position === 1 && $order === 0) {
+                    $this->seedOptions($dish, OptionGroup::factory()->required(), ['Preparación (prueba)', 'Preparation (test)'], [
+                        ['En agua (prueba)', 'With water (test)', 0],
+                        ['En leche (prueba)', 'With milk (test)', 500],
+                    ]);
                 }
-
-                // Platos fuertes: proteína obligatoria y adiciones con recargo.
-                $protein = OptionGroup::factory()->required()->for($dish)->create();
-                Option::factory()->count(3)->for($protein)
-                    ->sequence(['name_es' => 'Res (prueba)'], ['name_es' => 'Pollo (prueba)'], ['name_es' => 'Cerdo (prueba)'])
-                    ->create(['price_delta' => 0]);
-
-                $extras = OptionGroup::factory()->for($dish)->create();
-                Option::factory()->count(2)->for($extras)->create();
             }
         }
+    }
+
+    /** Proteína obligatoria, adiciones con recargo e ingredientes para quitar. */
+    private function seedMainOptions(Dish $dish): void
+    {
+        $this->seedOptions($dish, OptionGroup::factory()->required(), ['Proteína (prueba)', 'Protein (test)'], [
+            ['Res (prueba)', 'Beef (test)', 0],
+            ['Pollo (prueba)', 'Chicken (test)', 0],
+            ['Cerdo (prueba)', 'Pork (test)', 1000],
+        ]);
+
+        $extras = $this->seedOptions($dish, OptionGroup::factory()->state(['max_choices' => 2, 'position' => 1]), ['Adiciones (prueba)', 'Extras (test)'], [
+            ['Huevo (prueba)', 'Egg (test)', 1500],
+            ['Aguacate (prueba)', 'Avocado (test)', 2000],
+            ['Maduro (prueba)', 'Sweet plantain (test)', 1500],
+        ]);
+        // Desactivada por el dueño: la ficha no la publica.
+        $extras->options()->create(['name_es' => 'Queso (prueba)', 'name_en' => 'Cheese (test)', 'price_delta' => 2500, 'available' => false, 'position' => 3]);
+
+        $this->seedOptions($dish, OptionGroup::factory()->removal(), ['Quitar (prueba)', 'Remove (test)'], [
+            ['Cebolla (prueba)', 'Onion (test)', 0],
+            ['Cilantro (prueba)', 'Coriander (test)', 0],
+        ]);
+    }
+
+    /**
+     * Un grupo de opciones con sus opciones, en el orden de la lista.
+     *
+     * @param  Factory<OptionGroup>  $group
+     * @param  array{string, string}  $name
+     * @param  list<array{string, string, int}>  $options
+     */
+    private function seedOptions(Dish $dish, Factory $group, array $name, array $options): OptionGroup
+    {
+        $created = $group->for($dish)->createOne(['name_es' => $name[0], 'name_en' => $name[1]]);
+
+        foreach ($options as $position => [$optionEs, $optionEn, $price]) {
+            $created->options()->create(['name_es' => $optionEs, 'name_en' => $optionEn, 'price_delta' => $price, 'position' => $position]);
+        }
+
+        return $created;
     }
 }

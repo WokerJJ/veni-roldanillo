@@ -41,7 +41,7 @@ class RestaurantController extends Controller
             abort(404);
         }
 
-        // Siete consultas más, tenga el menú tres platos o trescientos: una
+        // Nueve consultas más, tenga el menú tres platos o trescientos: una
         // por tabla. Es lo que hace $restaurant->load(), con las categorías y
         // el horario cargados igual que en el mapa (ver Restaurant).
         Restaurant::query()
@@ -60,6 +60,17 @@ class RestaurantController extends Controller
                             'id', 'restaurant_id', 'menu_section_id', 'name_es', 'name_en',
                             'description_es', 'description_en', 'price', 'available', 'sold_out_until', 'position',
                         ])
+                        ->where('available', true);
+                },
+                // Los grupos de opciones de cada plato y sus opciones (#14),
+                // en el orden del restaurante. Las opciones desactivadas no
+                // hacen falta: RestaurantProfile tampoco las publica.
+                'menuSections.dishes.optionGroups' => function (Relation $groups): void {
+                    $groups->select(['id', 'dish_id', 'kind', 'name_es', 'name_en', 'min_choices', 'max_choices', 'position']);
+                },
+                'menuSections.dishes.optionGroups.options' => function (Relation $options): void {
+                    $options
+                        ->select(['id', 'option_group_id', 'name_es', 'name_en', 'price_delta', 'available', 'position'])
                         ->where('available', true);
                 },
                 // Las zonas de domicilio con su costo, por orden alfabético del
