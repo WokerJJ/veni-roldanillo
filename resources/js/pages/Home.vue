@@ -3,12 +3,11 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import type { Component, FunctionalComponent } from 'vue';
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
 
+import BottomSheet from '@/components/BottomSheet.vue';
 import Icon from '@/components/Icon.vue';
 import MapView from '@/components/MapView.vue';
-import RestaurantList from '@/components/RestaurantList.vue';
-import RestaurantsLayer from '@/components/RestaurantsLayer.vue';
-import RestaurantSummary from '@/components/RestaurantSummary.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
+import type { SheetSnap } from '@/components/sheet';
 import { useI18n } from '@/composables/useI18n';
 import { SELECTED_PARAM, selectedFromUrl } from '@/restaurants/links';
 import { useRestaurants } from '@/restaurants/useRestaurants';
@@ -27,6 +26,76 @@ const routeParts = shallowRef<{ layer: Component; panel: Component } | null>(nul
 /** Lo que bajó de «Cómo llegar», con los atributos que le da la plantilla; hasta que baja, nada. */
 const RouteLayer: FunctionalComponent = (_props, { attrs }) => (routeParts.value ? h(routeParts.value.layer, attrs) : null);
 const RouteDirections: FunctionalComponent = (_props, { attrs }) => (routeParts.value ? h(routeParts.value.panel, attrs) : null);
+
+/*
+| El resumen y la lista (con lo que necesitan: el estado de cada horario y
+| «Cómo llegar») no se ven al abrir el inicio: bajan apenas monta, sin
+| esperar a que alguien los pida, pero fuera del arranque (ADR 0022). Mientras
+| tanto el panel sigue con la bienvenida; si no bajan, lo dice y deja
+| volver a pedirlos.
+*/
+const panelParts = shallowRef<{ summary: Component; list: Component; distances: Component } | null>(null);
+let loadingPanelParts = false;
+const panelPartsFailed = ref(false);
+
+const RestaurantSummary: FunctionalComponent = (_props, { attrs, slots }) => (panelParts.value ? h(panelParts.value.summary, attrs, slots) : null);
+/** La lista que bajó: al volver de un resumen, le devuelve el foco al botón de ese restaurante. */
+const list = shallowRef<{ focusItem: (slug: string) => void } | null>(null);
+const RestaurantList: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.list, { ...attrs, ref: list }) : null);
+const RestaurantDistances: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.distances, attrs) : null);
+
+/*
+| Los restaurantes sobre el mapa no se ven hasta que llega MapLibre, que baja
+| aparte y pesa mucho más: su capa baja apenas monta el inicio, junto con el
+| motor, y no con el arranque (ADR 0022). Si no bajó, se vuelve a pedir
+| cuando se pide el panel.
+*/
+const restaurantsLayer = shallowRef<Component | null>(null);
+let requestedRestaurantsLayer = false;
+/** La capa que bajó: la cámara deja a la vista al elegido cuando el panel termina de moverse. */
+const layer = shallowRef<{ reveal: () => void } | null>(null);
+const RestaurantsOnMap: FunctionalComponent = (_props, { attrs }) =>
+    restaurantsLayer.value ? h(restaurantsLayer.value, { ...attrs, ref: layer }) : null;
+
+function loadRestaurantsLayer(): void {
+    // Pedida o ya aquí: no se vuelve a pedir.
+    if (requestedRestaurantsLayer) {
+        return;
+    }
+
+    requestedRestaurantsLayer = true;
+    import('@/components/RestaurantsLayer.vue')
+        .then((module) => {
+            restaurantsLayer.value = module.default;
+        })
+        .catch((error: unknown) => {
+            console.error('[inicio] No se pudieron cargar los restaurantes del mapa.', error);
+            requestedRestaurantsLayer = false;
+        });
+}
+
+function loadPanelParts(): void {
+    loadRestaurantsLayer();
+
+    if (panelParts.value !== null || loadingPanelParts) {
+        return;
+    }
+
+    loadingPanelParts = true;
+    panelPartsFailed.value = false;
+    Promise.all([import('@/components/RestaurantSummary.vue'), import('@/components/RestaurantList.vue'), import('@/components/RestaurantDistances.vue')])
+        .then(([summary, list, distances]) => {
+            panelParts.value = { summary: summary.default, list: list.default, distances: distances.default };
+        })
+        .catch((error: unknown) => {
+            // Sin señal y sin la PWA guardada: se vuelve a pedir con «Reintentar», al tocar un restaurante o con «Ver la lista».
+            console.error('[inicio] No se pudo cargar el resumen ni la lista.', error);
+            panelPartsFailed.value = true;
+        })
+        .finally(() => {
+            loadingPanelParts = false;
+        });
+}
 
 function loadRouteParts(): void {
     if (routeParts.value !== null) {
@@ -53,6 +122,8 @@ const { status, restaurants, retry } = useRestaurants();
 /** Slug del restaurante con el resumen abierto. */
 const selectedSlug = ref<string | null>(null);
 const listOpen = ref(false);
+/** Metros hasta cada restaurante con «¿Dónde estoy?» encendido y la lista abierta; si no, null. */
+const distances = ref<Record<string, number> | null>(null);
 /** El mapa no cargó: su aviso lo ocupa entero y el panel, con la lista, deja de ir encima. */
 const mapFailed = ref(false);
 /** De dónde se abrió el resumen: al cerrarlo, el foco vuelve ahí. */
@@ -101,17 +172,49 @@ const statusMessage = computed(() => {
 });
 
 const mapView = useTemplateRef<{ focus: () => void }>('mapView');
-const list = useTemplateRef<{ focusItem: (slug: string) => Promise<void> }>('list');
 const listButton = useTemplateRef<HTMLButtonElement>('listButton');
 const statusRegion = useTemplateRef<HTMLElement>('statusRegion');
-const panel = useTemplateRef<HTMLElement>('panel');
+const sheet = useTemplateRef<{ root: HTMLElement | null; settled: () => Promise<void> }>('sheet');
+/** El panel encima del mapa: el motor mide cuánto lo tapa (ADR 0019). */
+const panel = computed(() => sheet.value?.root ?? null);
+
+/**
+ * La altura del panel de abajo en el celular (ADR 0022). Cada vez que cambia
+ * lo que muestra, toma la suya: asomado para la bienvenida con restaurantes
+ * (el mapa a la vista), a media altura para la lista, el resumen y la ruta, y
+ * para los avisos que piden leerse (sin restaurantes o sin conexión). Desde
+ * ahí, quien usa la app la cambia con la manija.
+ */
+const sheetSnap = ref<SheetSnap>('peek');
+const panelView = computed(() => {
+    if (selected.value) {
+        return directionsOpen.value ? 'route' : 'summary';
+    }
+
+    if (listOpen.value) {
+        return 'list';
+    }
+
+    return status.value === 'error' || (status.value === 'ready' && !hasRestaurants.value) || panelPartsFailed.value ? 'notice' : 'welcome';
+});
+
+watch(panelView, (view) => {
+    sheetSnap.value = view === 'welcome' ? 'peek' : 'half';
+});
+
+function openList(): void {
+    loadPanelParts();
+    listOpen.value = true;
+}
 
 function selectFromMap(slug: string): void {
+    loadPanelParts();
     openedFromList = false;
     selectedSlug.value = slug;
 }
 
 function selectFromList(slug: string): void {
+    loadPanelParts();
     openedFromList = true;
     selectedSlug.value = slug;
 }
@@ -131,8 +234,9 @@ async function closeSummary(): Promise<void> {
     selectedSlug.value = null;
     await nextTick();
 
-    if (openedFromList && listOpen.value) {
-        await list.value?.focusItem(slug);
+    if (openedFromList && listOpen.value && list.value) {
+        // Al botón de ese restaurante en la lista; si ya no está, a su título.
+        list.value.focusItem(slug);
     } else {
         mapView.value?.focus();
     }
@@ -247,10 +351,33 @@ watch(selectedSlug, (slug) => {
     }
 });
 
+// Otro elegido: el panel cambia de alto después de que la cámara fue hasta
+// él, y tarda lo que su transición. Cuando ya lo tiene, la cámara lo deja a
+// la vista de lo que queda (RestaurantsLayer).
+watch(selectedSlug, async (slug) => {
+    if (slug === null) {
+        return;
+    }
+
+    await nextTick();
+    await sheet.value?.settled();
+
+    if (selectedSlug.value === slug) {
+        layer.value?.reveal();
+    }
+});
+
 // La lista se volvió a pedir (otro idioma) y el elegido ya no está: se cierra su resumen.
 watch(selected, (restaurant) => {
     if (restaurant === null && selectedSlug.value !== null) {
         void closeSummary();
+    }
+});
+
+// Cerrada la lista, sus distancias se olvidan: la próxima vez se calculan de nuevo.
+watch(listOpen, (open) => {
+    if (!open) {
+        distances.value = null;
     }
 });
 
@@ -263,6 +390,7 @@ watch(restaurants, (current) => {
 
 onMounted(() => {
     document.addEventListener('keydown', onKeydown);
+    loadPanelParts();
 });
 
 onBeforeUnmount(() => {
@@ -278,43 +406,41 @@ onBeforeUnmount(() => {
             Panel sobre el mapa (va antes en el documento: el título se lee
             primero). Muestra la bienvenida con el estado de los restaurantes,
             la lista o el resumen del restaurante elegido. En un celular
-            vertical queda abajo, a lo ancho, y deja libre la franja de la
-            atribución de OpenStreetMap (la misma holgura que el aviso de
-            versión nueva) y, si ese aviso se ve, se corre encima de él
-            (UpdatePrompt.vue); desde 480 px de ancho (también un celular
-            acostado, que es bajo) queda arriba a la izquierda, sin tocar los
-            botones de zoom. Nunca pasa del alto del mapa: la lista se desplaza
-            por dentro. En el celular vertical tampoco llega a los botones del
-            mapa (arriba a la derecha: 10 px de margen, los dos de zoom de
-            44 px, otros 10 y el de «¿Dónde estoy?», 152 px): deja 10rem
-            libres arriba.
+            vertical (`sheet:`) es un panel de abajo con tres alturas (BottomSheet.vue,
+            ADR 0022) que deja libre la franja de la atribución de
+            OpenStreetMap (la misma holgura que el aviso de versión nueva) y,
+            si ese aviso se ve, se corre encima de él (UpdatePrompt.vue).
+            Al costado (`side:`: desde 768 px, o desde 480 con poco alto) queda arriba a la izquierda, sin tocar los botones
+            de zoom, con el mismo margen que la cabecera, y nunca pasa del
+            alto del mapa: lo de adentro se desplaza.
 
             Si el mapa no carga, su aviso lo ocupa entero y taparía el panel,
             que tiene la lista: la alternativa al mapa. Ahí el panel deja de
             flotar y va antes del mapa, en una columna que se desplaza si no
             entran los dos.
         -->
-        <section
-            ref="panel"
-            class="z-10 flex flex-col rounded-veni-md border border-line bg-canvas/95 p-4 shadow-lg"
-            :class="[
+        <BottomSheet
+            ref="sheet"
+            v-model:snap="sheetSnap"
+            :docked="mapFailed"
+            class="z-10 rounded-veni-md border border-line bg-canvas/95 shadow-lg"
+            :class="
                 mapFailed
-                    ? 'mx-3 mt-3 shrink-0 min-[480px]:mx-4 min-[480px]:mt-4 min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm'
-                    : 'absolute inset-x-3 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_10rem)] min-[480px]:inset-x-auto min-[480px]:top-4 min-[480px]:bottom-auto min-[480px]:left-4 min-[480px]:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] min-[480px]:w-[calc(100%_-_2rem)] min-[480px]:max-w-sm',
-                // Con la ruta abierta el panel crece: se desplaza por dentro, sin pasar de su alto.
-                { 'overflow-y-auto': directionsOpen },
-            ]"
+                    ? 'mx-3 mt-3 shrink-0 md:mx-4 md:mt-4 md:w-[calc(100%_-_2rem)] md:max-w-sm'
+                    : 'absolute inset-x-2 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-(--sheet-height) side:inset-x-auto side:top-4 side:bottom-auto side:left-4 side:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] side:w-[calc(100%_-_2rem)] side:max-w-sm'
+            "
         >
             <!-- El título de la página sigue en el documento aunque el panel muestre otra cosa. -->
-            <h1 :class="selected || listOpen ? 'sr-only' : 'text-xl min-[480px]:text-2xl'">{{ t('home.heading') }}</h1>
+            <h1 :class="panelParts && (selected || listOpen) ? 'sr-only' : 'text-lg md:text-2xl'">{{ t('home.heading') }}</h1>
 
             <RestaurantSummary
-                v-if="selected"
+                v-if="selected && panelParts"
                 :key="selected.slug"
                 :restaurant="selected"
                 :directions-open="directionsOpen"
                 @close="closeSummary"
                 @directions="openDirections"
+                @close-directions="closeDirections"
             >
                 <RouteDirections
                     :state="shownRouteState"
@@ -322,10 +448,9 @@ onBeforeUnmount(() => {
                     :destination="selected.coordinates"
                     @profile="profile = $event"
                     @retry="retryDirections"
-                    @close="closeDirections"
                 />
                 <!-- Si su panel no bajó (sin señal), queda cómo pedirlo de nuevo. -->
-                <div v-if="routeParts === null && routeState.status === 'offline'" class="mt-3 border-t border-line pt-3" data-directions>
+                <div v-if="routeParts === null && routeState.status === 'offline'" class="mt-1" data-directions>
                     <p role="status" class="text-sm" data-route-status>{{ t('directions.offline') }}</p>
                     <button
                         type="button"
@@ -337,20 +462,24 @@ onBeforeUnmount(() => {
                 </div>
             </RestaurantSummary>
 
-            <RestaurantList v-else-if="listOpen" ref="list" :restaurants="restaurants" @select="selectFromList" @close="closeList" />
+            <RestaurantList v-else-if="listOpen && panelParts" :restaurants="restaurants" :distances="distances" @select="selectFromList" @close="closeList" />
 
             <template v-else>
-                <!-- En un celular vertical, con restaurantes en el mapa, la presentación les deja el lugar: el panel tapa menos. -->
-                <p class="mt-1 text-sm text-ink-muted" :class="{ 'max-[479px]:hidden': hasRestaurants }">{{ t('home.intro') }}</p>
+                <!--
+                    En el celular, con restaurantes en el mapa, la bienvenida
+                    entra en el panel asomado: el título y «Ver la lista». La
+                    presentación y cuántos hay quedan para el lector de pantalla.
+                -->
+                <p class="mt-1 text-sm text-ink-muted" :class="{ 'sheet:hidden': hasRestaurants }">{{ t('home.intro') }}</p>
 
-                <div class="mt-3 border-t border-line pt-3 text-sm">
+                <div class="mt-3 border-t border-line pt-3 text-sm" :class="{ 'sheet:mt-0 sheet:border-0 sheet:pt-0': hasRestaurants }">
                     <!-- Siempre en la página: el lector de pantalla anuncia cuando cambia. -->
                     <p
                         ref="statusRegion"
                         role="status"
                         tabindex="-1"
                         class="focus:outline-none"
-                        :class="{ 'sr-only': status === 'error', 'motion-safe:animate-pulse': status === 'loading' }"
+                        :class="{ 'sr-only': status === 'error', 'sheet:sr-only': hasRestaurants, 'motion-safe:animate-pulse': status === 'loading' }"
                         :aria-busy="status === 'loading'"
                     >
                         {{ statusMessage }}
@@ -372,12 +501,23 @@ onBeforeUnmount(() => {
                             ref="listButton"
                             type="button"
                             class="inline-flex min-h-touch items-center gap-2 rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
-                            @click="listOpen = true"
+                            @click="openList"
                         >
                             <Icon name="menu-hamburguesa" :size="20" />
                             {{ t('restaurants.show_list') }}
                         </button>
                         <SampleDataBadge v-if="hasSampleData" />
+                    </div>
+
+                    <div v-if="panelPartsFailed" role="alert" class="mt-3 flex flex-wrap items-center justify-end gap-x-3 gap-y-2" data-panel-offline>
+                        <p class="grow basis-48">{{ t('home.panel_offline') }}</p>
+                        <button
+                            type="button"
+                            class="inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
+                            @click="loadPanelParts"
+                        >
+                            {{ t('restaurants.retry') }}
+                        </button>
                     </div>
                 </div>
 
@@ -386,7 +526,7 @@ onBeforeUnmount(() => {
                     {{ t('credits.link') }}
                 </Link>
             </template>
-        </section>
+        </BottomSheet>
 
         <!--
             Sin mapa, su aviso se queda con el alto que deja el panel, y nunca
@@ -394,7 +534,9 @@ onBeforeUnmount(() => {
             ubicarse, la cámara deja la ubicación fuera de él.
         -->
         <MapView ref="mapView" :overlay="mapFailed ? null : panel" :class="{ 'min-h-56': mapFailed }" @status="mapFailed = $event === 'error'">
-            <RestaurantsLayer :restaurants="restaurants" :selected="selectedSlug" @select="selectFromMap" />
+            <RestaurantsOnMap :restaurants="restaurants" :selected="selectedSlug" @select="selectFromMap" />
+            <!-- Las distancias de la lista: la ubicación queda dentro, solo salen los metros. -->
+            <RestaurantDistances v-if="listOpen" :restaurants="restaurants" @distances="distances = $event" />
             <RouteLayer
                 v-if="directionsOpen && selected"
                 :key="selected.slug"

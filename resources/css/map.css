@@ -198,4 +198,8 @@
 
 .maplibregl-ctrl-attrib a {
     color: inherit;
+    /* Área táctil de al menos 24 px de alto (WCAG 2.5.8): cabe en la franja que nada tapa (--veni-attribution-clearance). */
+    display: inline-block;
+    min-height: 24px;
+    line-height: 24px;
 }

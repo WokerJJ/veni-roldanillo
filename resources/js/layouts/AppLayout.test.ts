@@ -46,6 +46,16 @@ describe('AppLayout', () => {
         expect(wrapper.get('main').classes()).toEqual(expect.arrayContaining(['relative', 'min-h-0', 'flex-1']));
     });
 
+    it('la cabecera es baja en el celular y, con el mapa, va a lo ancho con el margen del panel', async () => {
+        const immersive = (await mountLayout({ immersive: true })).get('header > div');
+        // 46 px del selector de idioma y 2 arriba y abajo; desde 768 px, 8.
+        expect(immersive.classes()).toEqual(expect.arrayContaining(['px-4', 'py-0.5', 'md:py-2']));
+        expect(immersive.classes()).not.toContain('max-w-5xl');
+
+        // Las demás páginas siguen centradas.
+        expect((await mountLayout()).get('header > div').classes()).toEqual(expect.arrayContaining(['mx-auto', 'max-w-5xl']));
+    });
+
     it.each([false, true])('con immersive=%s conserva la cabecera y el destino de «Saltar al contenido»', async (immersive) => {
         const wrapper = await mountLayout({ immersive });
 

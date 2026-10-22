@@ -92,6 +92,10 @@ async function mountLayer(initial: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL
             map.click(map.project(coordinates));
         },
         toggleTheme: () => wrapper.get('button[aria-pressed]').trigger('click'),
+        /** El panel de la página terminó de tomar su alto nuevo. */
+        reveal: () => {
+            (wrapper.getComponent({ name: 'RestaurantsLayer' }).vm as unknown as { reveal: () => void }).reveal();
+        },
     };
 }
 
@@ -133,11 +137,13 @@ describe('RestaurantsLayer', () => {
         expect(layerIds()).toEqual([
             'background',
             'places',
-            'restaurants-selected',
             'restaurants-clusters',
             'restaurants-cluster-count',
             'restaurants-points',
             'restaurants-points-icon',
+            'restaurants-selected',
+            'restaurants-selected-point',
+            'restaurants-selected-icon',
         ]);
         expect(source('restaurants')).toMatchObject({ type: 'geojson', cluster: true });
         expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba', 'prueba-el-guadual']);
@@ -182,7 +188,7 @@ describe('RestaurantsLayer', () => {
         iconImage.mockReset().mockRejectedValue(new Error('El navegador no decodificó la imagen.'));
         const { layerIds, map } = await mountLayer();
 
-        expect(layerIds()).toEqual(['background', 'places', 'restaurants-selected', 'restaurants-clusters', 'restaurants-cluster-count', 'restaurants-points']);
+        expect(layerIds()).toEqual(['background', 'places', 'restaurants-clusters', 'restaurants-cluster-count', 'restaurants-points', 'restaurants-selected', 'restaurants-selected-point']);
         expect(map.imageIds()).toEqual([]);
     });
 
@@ -205,6 +211,20 @@ describe('RestaurantsLayer', () => {
 
             expect(onSelect).toHaveBeenCalledExactlyOnceWith('prueba-el-guadual');
             expect(map.easeTo).not.toHaveBeenCalled();
+        });
+
+        it('el elegido nunca entra en un grupo: sale de la fuente agrupada y se dibuja encima, y al soltarlo vuelve', async () => {
+            const { selected, slugsIn } = await mountLayer();
+
+            selected.value = 'prueba-el-guadual';
+            await flushPromises();
+            expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba']);
+            expect(slugsIn('restaurants-selected')).toEqual(['prueba-el-guadual']);
+
+            selected.value = null;
+            await flushPromises();
+            expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba', 'prueba-el-guadual']);
+            expect(slugsIn('restaurants-selected')).toEqual([]);
         });
 
         it('el tocado, ya elegido, lleva su halo y la cámara sigue quieta: ya estaba a la vista', async () => {
@@ -239,7 +259,7 @@ describe('RestaurantsLayer', () => {
             map.click({ x: x + 20, y: y - 20 });
 
             expect(onSelect).toHaveBeenCalledExactlyOnceWith('prueba-la-ceiba');
-            expect(map.queryRenderedFeatures.mock.calls.at(-1)?.[1]).toEqual({ layers: ['restaurants-clusters', 'restaurants-points'] });
+            expect(map.queryRenderedFeatures.mock.calls.at(-1)?.[1]).toEqual({ layers: ['restaurants-clusters', 'restaurants-points', 'restaurants-selected-point'] });
         });
     });
 
@@ -317,6 +337,41 @@ describe('RestaurantsLayer', () => {
             expect(map.easeTo).toHaveBeenCalledOnce();
         });
 
+        it('tocado en el mapa, cuando el panel termina de moverse y lo tapa, la cámara lo deja a la vista, sin acercarse', async () => {
+            const { map, selected, tap, reveal } = await mountLayer();
+            tap(EL_GUADUAL);
+            selected.value = 'prueba-el-guadual';
+            await flushPromises();
+            expect(map.easeTo).not.toHaveBeenCalled();
+
+            // El mapa de prueba no mide nada: cualquier punto queda fuera de lo que se ve.
+            reveal();
+
+            expect(map.easeTo).toHaveBeenCalledExactlyOnceWith({ center: EL_GUADUAL.coordinates, zoom: 13.5 });
+        });
+
+        it('elegido desde la lista, cuando el panel termina de moverse la cámara lo vuelve a centrar con el alto nuevo', async () => {
+            const { map, selected, reveal } = await mountLayer();
+            selected.value = 'prueba-el-guadual';
+            await flushPromises();
+
+            reveal();
+
+            expect(map.easeTo).toHaveBeenCalledTimes(2);
+            expect(map.easeTo).toHaveBeenLastCalledWith({ center: EL_GUADUAL.coordinates, zoom: 16 });
+        });
+
+        it('si el panel se mueve después (con la manija), la cámara ya no lo sigue', async () => {
+            const { map, selected, reveal } = await mountLayer();
+            selected.value = 'prueba-el-guadual';
+            await flushPromises();
+            reveal();
+
+            reveal();
+
+            expect(map.easeTo).toHaveBeenCalledTimes(2);
+        });
+
         it('un elegido que no está en la lista no deja halo ni mueve la cámara', async () => {
             const { map, selected, slugsIn } = await mountLayer();
 
@@ -340,13 +395,16 @@ describe('RestaurantsLayer', () => {
             });
 
             expect(layerIds().slice(2)).toEqual([
-                'restaurants-selected',
                 'restaurants-clusters',
                 'restaurants-cluster-count',
                 'restaurants-points',
                 'restaurants-points-icon',
+                'restaurants-selected',
+                'restaurants-selected-point',
+                'restaurants-selected-icon',
             ]);
-            expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba', 'prueba-el-guadual']);
+            // El elegido va aparte, también en el estilo nuevo.
+            expect(slugsIn('restaurants')).toEqual(['prueba-el-guadual']);
             expect(slugsIn('restaurants-selected')).toEqual(['prueba-la-ceiba']);
             expect(map.imageIds()).toEqual(['restaurants-marker']);
         });

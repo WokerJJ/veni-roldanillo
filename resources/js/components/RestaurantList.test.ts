@@ -7,7 +7,11 @@ import { EL_GUADUAL, LA_CEIBA, restaurant } from '@/testing/restaurants';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 
-async function mountList(locale: 'es' | 'en' = 'es', restaurants: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL]) {
+async function mountList(
+    locale: 'es' | 'en' = 'es',
+    restaurants: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL],
+    distances: Record<string, number> | null = null,
+) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     inertia.reset();
     inertia.receiveFromServer(locale, { replace: true });
@@ -15,7 +19,7 @@ async function mountList(locale: 'es' | 'en' = 'es', restaurants: readonly Resta
     const { default: RestaurantList } = await import('./RestaurantList.vue');
     const host = document.createElement('div');
     document.body.append(host);
-    const wrapper = mount(RestaurantList, { props: { restaurants }, attachTo: host });
+    const wrapper = mount(RestaurantList, { props: { restaurants, distances }, attachTo: host });
 
     return {
         wrapper,
@@ -125,6 +129,17 @@ describe('RestaurantList', () => {
         expect(document.activeElement).toBe(heading.element);
     });
 
+    it('deja devolverle el foco al botón de un restaurante y, si ya no está, a su título', async () => {
+        const { wrapper } = await mountList();
+        const list = wrapper.vm as unknown as { focusItem: (slug: string) => void };
+
+        list.focusItem('prueba-el-guadual');
+        expect(document.activeElement).toBe(wrapper.get('button[data-slug="prueba-el-guadual"]').element);
+
+        list.focusItem('no-existe');
+        expect(document.activeElement).toBe(wrapper.get('h2').element);
+    });
+
     it('se cierra con un botón con nombre', async () => {
         const { wrapper } = await mountList();
         const close = wrapper.get('button[aria-label="Cerrar la lista"]');
@@ -144,20 +159,63 @@ describe('RestaurantList', () => {
         expect(statuses()[0]).toBe('Open now · closes at 3:00 PM');
     });
 
-    it('deja devolver el foco al botón de un restaurante', async () => {
-        const { wrapper, items } = await mountList();
+    describe('compacta (#81)', () => {
+        const LA_PLAZA = restaurant({ slug: 'prueba-la-plaza', name: 'La Plaza de prueba' });
 
-        await (wrapper.vm as unknown as { focusItem: (slug: string) => Promise<void> }).focusItem('prueba-el-guadual');
+        it('primero los abiertos ahora, y entre ellos el orden de siempre si no hay ubicación', async () => {
+            const { names, wrapper } = await mountList('es', [EL_GUADUAL, LA_CEIBA, LA_PLAZA]);
 
-        expect(document.activeElement).toBe(items()[1]?.element);
-    });
+            expect(names()).toEqual([LA_CEIBA.name, LA_PLAZA.name, EL_GUADUAL.name]);
+            expect(wrapper.find('[data-distance]').exists()).toBe(false);
+        });
 
-    it('si ese restaurante ya no está en la lista, el foco va al título', async () => {
-        const { wrapper } = await mountList();
-        wrapper.get<HTMLButtonElement>('button[aria-label="Cerrar la lista"]').element.focus();
+        it('con ubicación, entre los abiertos va primero el más cerca, con su distancia junto al estado', async () => {
+            const { names, wrapper } = await mountList('es', [EL_GUADUAL, LA_CEIBA, LA_PLAZA], {
+                'prueba-la-ceiba': 1250,
+                'prueba-la-plaza': 320,
+                'prueba-el-guadual': 40,
+            });
 
-        await (wrapper.vm as unknown as { focusItem: (slug: string) => Promise<void> }).focusItem('ya-no-esta');
+            // El Guadual está más cerca, pero cerrado: va después.
+            expect(names()).toEqual([LA_PLAZA.name, LA_CEIBA.name, EL_GUADUAL.name]);
+            expect(wrapper.findAll('[data-distance]').map((distance) => distance.text().replaceAll(' ', ' '))).toEqual(['320 m', '1,3 km', '40 m']);
+        });
 
-        expect(document.activeElement).toBe(wrapper.get('h2').element);
+        it('abierta, el orden se fija con la primera ubicación: después solo cambia el texto de la distancia', async () => {
+            const { names, wrapper } = await mountList('es', [EL_GUADUAL, LA_CEIBA, LA_PLAZA]);
+            const distances = () => wrapper.findAll('[data-distance]').map((distance) => distance.text().replaceAll(' ', ' '));
+
+            // Llega la primera posición: se ordena por cercanía una vez.
+            await wrapper.setProps({ distances: { 'prueba-la-ceiba': 1250, 'prueba-la-plaza': 320, 'prueba-el-guadual': 40 } });
+            expect(names()).toEqual([LA_PLAZA.name, LA_CEIBA.name, EL_GUADUAL.name]);
+
+            // Quien la usa camina: La Ceiba queda más cerca, pero nada salta bajo el dedo.
+            await wrapper.setProps({ distances: { 'prueba-la-ceiba': 90, 'prueba-la-plaza': 600, 'prueba-el-guadual': 40 } });
+            expect(names()).toEqual([LA_PLAZA.name, LA_CEIBA.name, EL_GUADUAL.name]);
+            expect(distances()).toEqual(['600 m', '90 m', '40 m']);
+        });
+
+        it('abierta, si uno abre o cierra mientras se mira, no cambia de lugar', async () => {
+            const { names } = await mountList('es', [EL_GUADUAL, LA_CEIBA, LA_PLAZA]);
+
+            // 15:30: La Ceiba ya cerró.
+            vi.setSystemTime(new Date('2026-10-07T15:30:00-05:00'));
+            await vi.advanceTimersByTimeAsync(60_000);
+
+            expect(names()).toEqual([LA_CEIBA.name, LA_PLAZA.name, EL_GUADUAL.name]);
+        });
+
+        it('si todos son de ejemplo, lo dice una sola vez, arriba', async () => {
+            const { wrapper } = await mountList();
+
+            expect(wrapper.findAll('[data-sample]')).toHaveLength(1);
+            expect(wrapper.find('li [data-sample]').exists()).toBe(false);
+        });
+
+        it('si solo algunos lo son, lo lleva cada uno de ellos', async () => {
+            const { wrapper } = await mountList('es', [LA_CEIBA, restaurant({ slug: 'real', name: 'Uno de verdad', fictitious: false })]);
+
+            expect(wrapper.findAll('li [data-sample]')).toHaveLength(1);
+        });
     });
 });

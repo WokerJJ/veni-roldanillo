@@ -37,6 +37,8 @@ async function mountHome({ locale = 'es', answer, url = '/' }: { locale?: 'es' |
     const host = document.createElement('div');
     document.body.append(host);
     const wrapper = mount(Home, { attachTo: host });
+    // El resumen y la lista bajan aparte, apenas monta (ADR 0022).
+    await vi.dynamicImportSettled();
     await flushPromises();
 
     /** El panel sobre el mapa: va primero en el documento. */
@@ -78,6 +80,32 @@ async function mountWithList() {
     return home;
 }
 
+/**
+ * El panel con su transición de alto (happy-dom no aplica las clases) y lo
+ * que la capa de los restaurantes hace cuando el panel termina de moverse.
+ */
+function watchSheetMoves(home: Awaited<ReturnType<typeof mountHome>>) {
+    const element = home.panel().element;
+    const computed = window.getComputedStyle.bind(window);
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((target) =>
+        target === element ? ({ transitionDuration: '0.2s' } as CSSStyleDeclaration) : computed(target),
+    );
+    const reveal = vi.fn();
+    // La capa baja aparte (ADR 0022): la página la guarda en `layer` cuando llega.
+    Object.assign((home.wrapper.vm as unknown as { layer: object }).layer, { reveal });
+
+    return {
+        reveal,
+        /** Termina la transición del alto máximo del panel. */
+        finish: async () => {
+            const end = new Event('transitionend');
+            Object.defineProperty(end, 'propertyName', { value: 'max-height' });
+            element.dispatchEvent(end);
+            await flushPromises();
+        },
+    };
+}
+
 enableAutoUnmount(afterEach);
 
 beforeEach(() => {
@@ -94,6 +122,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
     vi.unstubAllEnvs();
     document.body.replaceChildren();
@@ -140,13 +169,32 @@ describe('Home', () => {
         expect(panel().classes()).toContain('bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))]');
     });
 
-    it('en un celular vertical el panel no llega a los botones del mapa, por larga que sea la lista', async () => {
+    it('en el celular el panel va abajo, sin pasar del alto de su altura; desde 768 px (o acostado), a la izquierda, sin pasar del mapa', async () => {
         const { panel } = await mountHome();
 
-        // Los botones ocupan 10 + 88 + 10 + 44 px desde arriba: el panel deja 10rem (160 px).
-        expect(panel().classes()).toContain(
-            'max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_var(--veni-update-prompt-space,0px)_-_10rem)]',
-        );
+        expect(panel().classes()).toEqual(expect.arrayContaining(['max-h-(--sheet-height)', 'side:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)]', 'side:top-4']));
+        expect(panel().attributes('style')).toContain('--sheet-height: 7.5rem');
+    });
+
+    it('el panel toma la altura de lo que muestra: asomado con la bienvenida, a media altura con la lista o un resumen', async () => {
+        const { panel, listButton, items } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        expect(panel().attributes('data-sheet')).toBe('peek');
+
+        await listButton()?.trigger('click');
+        expect(panel().attributes('data-sheet')).toBe('half');
+
+        // Quien la cambia con la manija manda, hasta que el panel muestra otra cosa.
+        await panel().get('[data-sheet-handle]').trigger('keydown', { key: 'ArrowUp' });
+        expect(panel().attributes('data-sheet')).toBe('full');
+
+        await items()[0]?.trigger('click');
+        expect(panel().attributes('data-sheet')).toBe('half');
+    });
+
+    it('si no hay restaurantes, el aviso abre el panel a media altura para leerse', async () => {
+        const { panel } = await mountHome({ answer: [] });
+
+        expect(panel().attributes('data-sheet')).toBe('half');
     });
 
     it('le pasa al mapa su panel: al ubicarse, la cámara deja la ubicación fuera de él', async () => {
@@ -158,7 +206,8 @@ describe('Home', () => {
     it('no pone botones de tema ni de idioma sobre el mapa: son de la cabecera', async () => {
         const { wrapper } = await mountHome({ answer: [LA_CEIBA] });
 
-        expect(wrapper.findAll('button').map((button) => button.text())).toEqual(['Ver la lista']);
+        // La manija del panel no es un botón del mapa: cambia el alto del panel.
+        expect(wrapper.findAll('button:not([data-sheet-handle])').map((button) => button.text())).toEqual(['Ver la lista']);
     });
 
     describe('los restaurantes', () => {
@@ -206,11 +255,11 @@ describe('Home', () => {
 
         it('con restaurantes en el mapa, en un celular vertical la presentación les deja el lugar', async () => {
             const loading = await mountHome();
-            expect(loading.panel().get('h1 + p').classes()).not.toContain('max-[479px]:hidden');
+            expect(loading.panel().get('h1 + p').classes()).not.toContain('sheet:hidden');
             loading.wrapper.unmount();
 
             const ready = await mountHome({ answer: [LA_CEIBA] });
-            expect(ready.panel().get('h1 + p').classes()).toContain('max-[479px]:hidden');
+            expect(ready.panel().get('h1 + p').classes()).toContain('sheet:hidden');
         });
     });
 
@@ -401,6 +450,87 @@ describe('Home', () => {
         });
     });
 
+    describe('si el resumen y la lista no bajan (sin señal)', () => {
+        /** Lo que puede tardar en bajar un componente con import() la primera vez. */
+        const IMPORT_TIMEOUT = 10_000;
+
+        /** La lista llega con import(): los primeros `failures` pedidos fallan, como sin señal. */
+        function failListImport(failures: number) {
+            const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const listImport = { failures, calls: 0 };
+            vi.doMock('@/components/RestaurantList.vue', async (importOriginal) => {
+                listImport.calls += 1;
+
+                if (listImport.failures > 0) {
+                    listImport.failures -= 1;
+                    throw new TypeError('Failed to fetch dynamically imported module');
+                }
+
+                return await importOriginal();
+            });
+            onTestFinished(() => {
+                vi.doUnmock('@/components/RestaurantList.vue');
+                errors.mockRestore();
+            });
+
+            return listImport;
+        }
+
+        it('lo dice, y «Reintentar» los vuelve a pedir', async () => {
+            const listImport = failListImport(1);
+            const { panel, listButton } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+
+            // El pedido que falla tarda lo que tardan los otros dos en bajar.
+            await vi.waitFor(
+                () => {
+                    expect(panel().find('[data-panel-offline]').exists()).toBe(true);
+                },
+                { timeout: IMPORT_TIMEOUT },
+            );
+            const notice = panel().get('[data-panel-offline]');
+            expect(notice.attributes('role')).toBe('alert');
+            expect(notice.text()).toContain('Sin señal');
+
+            await notice.get('button').trigger('click');
+            await vi.waitFor(
+                () => {
+                    expect(listImport.calls).toBe(2);
+                    expect(panel().find('[data-panel-offline]').exists()).toBe(false);
+                },
+                { timeout: IMPORT_TIMEOUT },
+            );
+
+            await listButton()?.trigger('click');
+            await vi.waitFor(
+                () => {
+                    expect(panel().find('h2').text()).toBe('Restaurantes');
+                },
+                { timeout: IMPORT_TIMEOUT },
+            );
+        });
+
+        it('«Ver la lista» también los vuelve a pedir y abre la lista cuando llegan', async () => {
+            const listImport = failListImport(1);
+            const { panel, listButton } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+            await vi.waitFor(
+                () => {
+                    expect(panel().find('[data-panel-offline]').exists()).toBe(true);
+                },
+                { timeout: IMPORT_TIMEOUT },
+            );
+
+            await listButton()?.trigger('click');
+            await vi.waitFor(
+                () => {
+                    expect(panel().find('h2').text()).toBe('Restaurantes');
+                },
+                { timeout: IMPORT_TIMEOUT },
+            );
+
+            expect(listImport.calls).toBe(2);
+        });
+    });
+
     describe('abierto con un restaurante en la dirección (?r=slug)', () => {
         it('cuando llega la lista, ese restaurante abre elegido: su resumen, su marca en el mapa y el foco en su nombre', async () => {
             const { layer, network, panel } = await mountHome({ url: '/?r=prueba-el-guadual' });
@@ -412,6 +542,18 @@ describe('Home', () => {
             expect(panel().get('[role="dialog"] h2').text()).toBe('Restaurante de Prueba El Guadual (ficticio)');
             expect(layer().props('selected')).toBe('prueba-el-guadual');
             expect(document.activeElement).toBe(panel().get('h2').element);
+        });
+
+        it('la cámara va hasta él cuando el panel asomado termina de crecer', async () => {
+            const home = await mountHome({ url: '/?r=prueba-el-guadual' });
+            const { reveal, finish } = watchSheetMoves(home);
+
+            home.network.last()?.respond([LA_CEIBA, EL_GUADUAL]);
+            await flushPromises();
+            expect(reveal).not.toHaveBeenCalled();
+
+            await finish();
+            expect(reveal).toHaveBeenCalledOnce();
         });
 
         it('al cerrarlo, el foco va al mapa: no se abrió desde la lista', async () => {
@@ -545,7 +687,7 @@ describe('Home', () => {
             expect(panel().find('button[data-directions]').exists()).toBe(false);
             expect(document.activeElement).toBe(panel().get('[data-directions] h3').element);
             // Con la ruta el panel crece: se desplaza por dentro, sin pasar de su alto.
-            expect(panel().classes()).toContain('overflow-y-auto');
+            expect(panel().get('[data-sheet-body]').classes()).toContain('overflow-y-auto');
             expect(panel().get('[data-google-maps]').attributes('href')).toBe('https://www.google.com/maps/dir/?api=1&destination=4.4128%2C-76.1547&travelmode=walking');
         });
 
@@ -596,7 +738,8 @@ describe('Home', () => {
             await vi.dynamicImportSettled();
             await flushPromises();
 
-            await panel().get('[data-directions] button').trigger('click');
+            // El único botón de cerrar, en la línea del restaurante.
+            await panel().get('button[data-close-directions]').trigger('click');
             await flushPromises();
 
             expect(document.activeElement).toBe(panel().get('button[data-directions]').element);
@@ -699,6 +842,41 @@ describe('Home', () => {
 
             expect(panel().findAll('[role="dialog"]')).toHaveLength(1);
             expect(panel().get('[role="dialog"] h2').text()).toBe('Restaurante de Prueba El Guadual (ficticio)');
+        });
+
+        it('tocado en el mapa, cuando el panel termina de subir, la cámara lo saca de debajo del panel', async () => {
+            const home = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+            const { reveal, finish } = watchSheetMoves(home);
+
+            await home.tapOnMap('prueba-el-guadual');
+            // El panel recién empieza a subir: medirlo ahora sería medir el asomado.
+            expect(reveal).not.toHaveBeenCalled();
+
+            await finish();
+            expect(reveal).toHaveBeenCalledOnce();
+        });
+
+        it('elegido en la lista abierta completa, la cámara espera a que el panel baje a media altura', async () => {
+            const home = await mountWithList();
+            await home.wrapper.get('[data-sheet-handle]').trigger('keydown', { key: 'End' });
+            const { reveal, finish } = watchSheetMoves(home);
+
+            await home.items()[1]?.trigger('click');
+            await flushPromises();
+            expect(reveal).not.toHaveBeenCalled();
+
+            await finish();
+            expect(reveal).toHaveBeenCalledOnce();
+        });
+
+        it('tocar otro sin que el panel cambie de alto lo deja a la vista enseguida', async () => {
+            const home = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+            await home.tapOnMap('prueba-la-ceiba');
+            const { reveal } = watchSheetMoves(home);
+
+            await home.tapOnMap('prueba-el-guadual');
+
+            expect(reveal).toHaveBeenCalledOnce();
         });
 
         it('enlaza a la ficha del restaurante elegido', async () => {

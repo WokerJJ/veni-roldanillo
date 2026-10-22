@@ -148,13 +148,36 @@ describe('RouteDirections', () => {
         expect(wrapper.get('[data-waze]').text()).toBe('Waze');
     });
 
-    it('su botón de cerrar tiene nombre y 44 px', async () => {
+    it('no lleva botón de cerrar propio: lo cierra el del resumen, en la línea de arriba', async () => {
         const { wrapper } = await mountDirections(READY);
-        const close = wrapper.get('button[aria-label="Ocultar la ruta"]');
 
-        await close.trigger('click');
+        expect(wrapper.find('button[aria-label="Ocultar la ruta"]').exists()).toBe(false);
+    });
 
-        expect(close.classes()).toContain('size-touch');
-        expect(wrapper.emitted('close')).toHaveLength(1);
+    it('con la ruta lista, la duración se ve una sola vez (en el botón) y el estado solo se anuncia', async () => {
+        const { wrapper } = await mountDirections(READY);
+        const status = wrapper.get('[data-route-status]');
+
+        expect(status.classes()).toContain('sr-only');
+        expect(status.attributes('role')).toBe('status');
+    });
+
+    it('lo que no hace falta para seguir va en «Más opciones», cerrado: la estimación, las otras apps y la atribución', async () => {
+        const { wrapper } = await mountDirections(READY);
+        const more = wrapper.get<HTMLDetailsElement>('details[data-more]');
+
+        expect(more.get('summary').text()).toBe('Más opciones');
+        expect(more.element.open).toBe(false);
+        for (const part of ['[data-estimate]', '[data-google-maps]', '[data-waze]', '[data-attribution]']) {
+            expect(more.find(part).exists()).toBe(true);
+        }
+        // El enlace de la licencia, con un área táctil de al menos 24 px (WCAG 2.5.8).
+        expect(more.get('[data-attribution] a').classes()).toContain('min-h-6');
+    });
+
+    it('si la ruta no sale y lo que queda es otra app, «Más opciones» se abre solo', async () => {
+        const { wrapper } = await mountDirections({ status: 'no-route' });
+
+        expect(wrapper.get<HTMLDetailsElement>('details[data-more]').element.open).toBe(true);
     });
 });

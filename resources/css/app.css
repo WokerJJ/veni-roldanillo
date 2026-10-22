@@ -14,6 +14,22 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /*
+ * El panel del inicio (ADR 0022): abajo (`sheet:`) en un celular vertical, y
+ * al costado (`side:`) desde 768 px o, desde 480, con poco alto (un celular
+ * acostado o una tableta chica): ahí el panel de abajo casi no deja mapa.
+ */
+@custom-variant sheet {
+    @media (width < 30rem), (width < 48rem) and (height >= 32rem) {
+        @slot;
+    }
+}
+@custom-variant side {
+    @media (width >= 48rem), (width >= 30rem) and (height < 32rem) {
+        @slot;
+    }
+}
+
+/*
  * Colores por rol, derivados de los tokens de la marca. Contraste de texto
  * (WCAG) medido sobre canvas y surface: todos ≥ 4.5:1. El acento (arrebol en
  * claro) solo se usa en formas y en el contorno de foco, nunca en texto pequeño.

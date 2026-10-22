@@ -189,7 +189,7 @@ describe('RestaurantSummary', () => {
             expect(wrapper.get('button[data-directions]').text()).toBe('Directions');
         });
 
-        it('con la ruta pedida, en lugar del botón va lo que la página pone, y sigue el enlace a la ficha', async () => {
+        it('con la ruta pedida, se reduce a una línea: el nombre, un solo botón que oculta la ruta y lo que la página pone', async () => {
             const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
             inertia.reset();
             inertia.receiveFromServer('es', { replace: true });
@@ -199,7 +199,20 @@ describe('RestaurantSummary', () => {
 
             expect(wrapper.find('button[data-directions]').exists()).toBe(false);
             expect(wrapper.get('[data-panel]').text()).toBe('La ruta');
-            expect(wrapper.get('a').text()).toBe('Ver la ficha');
+            expect(wrapper.get('h2').classes()).toContain('truncate');
+            // Ni el estado, ni los tipos de comida, ni el rótulo, ni la ficha: el mapa queda a la vista.
+            expect(wrapper.find('[data-status]').exists()).toBe(false);
+            expect(wrapper.find('ul').exists()).toBe(false);
+            expect(wrapper.find('a').exists()).toBe(false);
+
+            const buttons = wrapper.findAll('button');
+            expect(buttons).toHaveLength(1);
+            expect(buttons[0]?.attributes('aria-label')).toBe('Ocultar la ruta');
+            expect(buttons[0]?.classes()).toContain('size-touch');
+
+            await buttons[0]?.trigger('click');
+            expect(wrapper.emitted('closeDirections')).toHaveLength(1);
+            expect(wrapper.emitted('close')).toBeUndefined();
         });
     });
 });

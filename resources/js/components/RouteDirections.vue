@@ -14,6 +14,13 @@ import { formatDistance, formatDuration, googleMapsUrl, PROFILES, wazeUrl } from
  * ruta la calcula y la dibuja RouteLayer.vue, en el mapa; aquí solo llega
  * `state`, sin la posición de nadie.
  *
+ * Compacto (#81): a la vista quedan a pie y en carro, con su duración y
+ * distancia, y lo que haga falta para seguir (en qué va el cálculo, qué pasó
+ * y «Volver a intentar»). Lo demás (que es una estimación, Google Maps y
+ * Waze, y la atribución de los datos) va en «Más opciones», que se abre solo
+ * cuando la ruta no sale y lo que queda es otra app. Lo cierra el botón del
+ * resumen, que queda en una línea encima.
+ *
  * Llega con import() al pedir la primera ruta: no pesa en el arranque.
  */
 const props = defineProps<{
@@ -26,7 +33,6 @@ const props = defineProps<{
 defineEmits<{
     profile: [profile: RouteProfile];
     retry: [];
-    close: [];
 }>();
 
 const { t, locale } = useI18n();
@@ -85,25 +91,19 @@ const message = computed(() => {
         : t(READY[profile], { duration: formatDuration(route.duration, locale.value), distance: formatDistance(route.distance, locale.value) });
 });
 
+/** Sin ruta, y con otra app como salida: «Más opciones» se abre solo. */
+const needsOtherApps = computed(() => ['no-route', 'far', 'destination-far', 'outside', 'error', 'unsupported', 'unavailable'].includes(props.state.status));
+
 /** Desde estos estados vale la pena volver a intentar. */
 const canRetry = computed(() => ['no-route', 'far', 'outside', 'offline', 'denied', 'signal', 'off'].includes(props.state.status));
 </script>
 
 <template>
-    <div class="mt-3 border-t border-line pt-3" data-directions>
-        <div class="flex items-center justify-between gap-2">
-            <h3 ref="heading" tabindex="-1" class="font-display text-base font-semibold focus:outline-none">{{ t('directions.title') }}</h3>
-            <button
-                type="button"
-                class="-mr-2 inline-flex size-touch shrink-0 items-center justify-center rounded-full hover:bg-surface"
-                :aria-label="t('directions.close')"
-                @click="$emit('close')"
-            >
-                <Icon name="cerrar" :size="20" />
-            </button>
-        </div>
+    <div class="mt-1" data-directions>
+        <!-- El foco llega aquí al abrir la ruta: se anuncia sin ocupar una línea. -->
+        <h3 ref="heading" tabindex="-1" class="sr-only">{{ t('directions.title') }}</h3>
 
-        <div role="group" :aria-label="t('directions.profile')" class="mt-1 grid grid-cols-2 gap-2">
+        <div role="group" :aria-label="t('directions.profile')" class="grid grid-cols-2 gap-2">
             <button
                 v-for="option in PROFILES"
                 :key="option"
@@ -119,10 +119,15 @@ const canRetry = computed(() => ['no-route', 'far', 'outside', 'offline', 'denie
             </button>
         </div>
 
-        <p role="status" class="mt-2 text-sm" :class="{ 'motion-safe:animate-pulse': state.status === 'locating' || state.status === 'calculating' }" data-route-status>
+        <!-- Con la ruta lista, la duración ya está en el botón: el estado solo se anuncia. -->
+        <p
+            role="status"
+            class="mt-2 text-sm"
+            :class="{ 'sr-only': state.status === 'ready', 'motion-safe:animate-pulse': state.status === 'locating' || state.status === 'calculating' }"
+            data-route-status
+        >
             {{ message }}
         </p>
-        <p v-if="routes" class="mt-1 text-xs text-ink-muted" data-estimate>{{ t('directions.estimate') }}</p>
 
         <button
             v-if="canRetry"
@@ -133,35 +138,45 @@ const canRetry = computed(() => ['no-route', 'far', 'outside', 'offline', 'denie
             {{ t('directions.retry') }}
         </button>
 
-        <p class="mt-3 text-sm">{{ t('directions.navigate') }}</p>
-        <!-- En una fila: con la ruta, el panel no tapa más mapa del necesario. -->
-        <div class="mt-1 grid grid-cols-2 gap-2">
-            <a
-                :href="googleMapsUrl(destination, profile)"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full border border-line px-3 font-semibold transition-colors hover:bg-surface"
-                data-google-maps
-            >
-                {{ t('directions.google_maps') }}
-                <Icon name="enlace-externo" :size="16" />
-            </a>
-            <a
-                :href="wazeUrl(destination)"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full border border-line px-3 font-semibold transition-colors hover:bg-surface"
-                data-waze
-            >
-                {{ t('directions.waze') }}
-                <Icon name="enlace-externo" :size="16" />
-            </a>
-        </div>
+        <details class="mt-1" :open="needsOtherApps" data-more>
+            <summary class="flex min-h-touch cursor-pointer items-center rounded-veni-sm text-sm font-semibold">{{ t('directions.more') }}</summary>
 
-        <!-- La licencia de los datos (ODbL) pide nombrarla y enlazar a ella. -->
-        <p class="mt-2 text-xs text-ink-muted" data-attribution>
-            {{ t('directions.attribution') }}
-            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" class="underline">{{ t('directions.attribution_link') }}</a>.
-        </p>
+            <p v-if="routes" class="text-xs text-ink-muted" data-estimate>{{ t('directions.estimate') }}</p>
+
+            <p class="mt-2 text-sm">{{ t('directions.navigate') }}</p>
+            <div class="mt-1 grid grid-cols-2 gap-2">
+                <a
+                    :href="googleMapsUrl(destination, profile)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full border border-line px-3 font-semibold transition-colors hover:bg-surface"
+                    data-google-maps
+                >
+                    {{ t('directions.google_maps') }}
+                    <Icon name="enlace-externo" :size="16" />
+                </a>
+                <a
+                    :href="wazeUrl(destination)"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full border border-line px-3 font-semibold transition-colors hover:bg-surface"
+                    data-waze
+                >
+                    {{ t('directions.waze') }}
+                    <Icon name="enlace-externo" :size="16" />
+                </a>
+            </div>
+
+            <!-- La licencia de los datos (ODbL) pide nombrarla y enlazar a ella. -->
+            <p class="mt-2 text-xs text-ink-muted" data-attribution>
+                {{ t('directions.attribution') }}
+                <a
+                    href="https://www.openstreetmap.org/copyright"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex min-h-6 items-center underline"
+                >{{ t('directions.attribution_link') }}</a>.
+            </p>
+        </details>
     </div>
 </template>
