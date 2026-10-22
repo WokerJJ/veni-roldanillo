@@ -17,7 +17,7 @@ Cerrada: versión 0.1.0.
 
 - [ ] Inicio: búsqueda, filtros (abierto ahora, domicilio, precio, categoría), "Almuerzos de hoy", "Sugiéreme algo"
 - [x] Ficha del restaurante: datos, horarios con estado abierto/cerrado, menú por secciones (ADR 0018)
-- [ ] Menú con opciones obligatorias, adiciones, quitar ingredientes y nota
+- [x] Menú con opciones obligatorias, adiciones, quitar ingredientes y nota (ADR 0023)
 - [ ] Carrito y mensaje de WhatsApp (barrio, dirección, referencia, ubicación opcional, pago, "¿con cuánto pagás?")
 - [ ] Direcciones y favoritos guardados en el dispositivo
 - [x] Mapa de veni-mapa en el inicio (ADR 0007)
