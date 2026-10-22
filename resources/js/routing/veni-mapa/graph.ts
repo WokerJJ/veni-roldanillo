@@ -1,4 +1,4 @@
-// Copia fija de scripts/routing/graph.ts del tag v0.2.0 de veni-mapa
+// Copia fija de scripts/routing/graph.ts del tag v0.2.2 de veni-mapa
 // (https://github.com/WokerJJ/veni-mapa, blob 7cb5dd340e40936e68fbf496ec03efa84d34b0f3), sin cambios.
 // Se actualiza copiando el archivo de otro tag, nunca a mano (ADR 0020).
 // Formato "veni-rutas" v1: la red de calles de la región para calcular rutas en
