@@ -6,7 +6,7 @@ import type { RouteProfile, RouteState } from '@/routing/directions';
 import { stubGeolocation } from '@/testing/geolocation';
 import type * as FakeInertia from '@/testing/inertia';
 import type * as FakeMapLibre from '@/testing/maplibre';
-import { MAIN_STREET } from '@/testing/routes';
+import { BOTH_WAYS, graphOf, MAIN_STREET, RESIDENTIAL } from '@/testing/routes';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 vi.mock('maplibre-gl', () => import('@/testing/maplibre'));
@@ -30,6 +30,19 @@ const RESTAURANT: [number, number] = [-76.1502, 4.4127];
 /** Al principio de la calle, con cifras que no aparecen en ningún otro lado. */
 const SECRET = { longitude: -76.1598137, latitude: 4.4129371 };
 const SECRET_TRACE = /76\.15981|4\.41293|4,41293|76,15981/;
+/**
+ * Una vía de 3,3 km sin cruces (#86): un punto a mitad de camino queda a
+ * más de 1 km de sus dos extremos, aunque esté cerca de la calle.
+ */
+const LONG_STREET = graphOf(
+    [
+        [-76.175, 4.4128],
+        [-76.145, 4.4128],
+    ],
+    [{ from: 0, to: 1, flags: BOTH_WAYS, cls: RESIDENTIAL }],
+);
+/** A unos 900 m al norte de la mitad de la vía larga. */
+const NEAR_LONG_STREET: [number, number] = [-76.16, 4.4209];
 
 function style(url: string) {
     return {
@@ -315,6 +328,32 @@ describe('RouteLayer', () => {
         await settle();
 
         expect(last()).toEqual({ status: 'far' });
+    });
+
+    it('con el restaurante a 900 m de una vía larga sin cruces, hay ruta: está cerca de la calle aunque lejos de sus extremos (#86)', async () => {
+        network.graph = LONG_STREET;
+        const device = stubGeolocation();
+        const { last } = await mountRoute(NEAR_LONG_STREET);
+        await flushPromises();
+
+        device.move(SECRET);
+        await settle();
+
+        const state = last();
+        expect(state?.status).toBe('ready');
+        expect(state?.status === 'ready' && state.routes.foot).toBeTruthy();
+    });
+
+    it('a 900 m de una vía larga sin cruces, la posición no está lejos: hay ruta (#86)', async () => {
+        network.graph = LONG_STREET;
+        const device = stubGeolocation();
+        const { last } = await mountRoute([-76.15, 4.4128]);
+        await flushPromises();
+
+        device.move({ longitude: NEAR_LONG_STREET[0], latitude: NEAR_LONG_STREET[1] });
+        await settle();
+
+        expect(last()?.status).toBe('ready');
     });
 
     it('fuera de la región del mapa, lo dice y no calcula', async () => {
