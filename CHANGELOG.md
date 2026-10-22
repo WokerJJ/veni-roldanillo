@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.2.0...v0.3.0) (2026-10-22)
+
+
+### Funcionalidades
+
+* ¿Dónde estoy? en el mapa, sin que la posición salga del dispositivo ([#74](https://github.com/WokerJJ/veni-roldanillo/issues/74)) ([bd530d4](https://github.com/WokerJJ/veni-roldanillo/commit/bd530d41651c06b85078d6a1e17186a7e71b0f6d)), closes [#10](https://github.com/WokerJJ/veni-roldanillo/issues/10)
+* cómo llegar, con la ruta calculada en el dispositivo ([#76](https://github.com/WokerJJ/veni-roldanillo/issues/76)) ([0328913](https://github.com/WokerJJ/veni-roldanillo/commit/0328913ab07322df38cc5961f511e2c5befca861)), closes [#11](https://github.com/WokerJJ/veni-roldanillo/issues/11)
+* locales de OpenStreetMap como borradores ocultos, con créditos y procedencia ([#80](https://github.com/WokerJJ/veni-roldanillo/issues/80)) ([be1a6e8](https://github.com/WokerJJ/veni-roldanillo/commit/be1a6e80cf5d5bdf09ff2ef61d40f3998b9ec2f8)), closes [#58](https://github.com/WokerJJ/veni-roldanillo/issues/58)
+* panel de abajo con tres alturas en el celular y ruta compacta ([#81](https://github.com/WokerJJ/veni-roldanillo/issues/81)) ([#84](https://github.com/WokerJJ/veni-roldanillo/issues/84)) ([66f8459](https://github.com/WokerJJ/veni-roldanillo/commit/66f8459f6bb1ef397874dd02ce5eeb0fad7c5944))
+
+
+### Correcciones
+
+* **deps:** bump node ([#71](https://github.com/WokerJJ/veni-roldanillo/issues/71)) ([19bf1cb](https://github.com/WokerJJ/veni-roldanillo/commit/19bf1cbcd53eada9186a196a91db51cb1ae3b941))
+* **deps:** vite 8.3.4, sin el aviso de seguridad que frenaba la auditoría ([#78](https://github.com/WokerJJ/veni-roldanillo/issues/78)) ([#79](https://github.com/WokerJJ/veni-roldanillo/issues/79)) ([ad0c017](https://github.com/WokerJJ/veni-roldanillo/commit/ad0c017b115b382ede1175322cc75682d6c865db))
+
 ## [0.2.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.1.0...v0.2.0) (2026-10-19)
 
 
