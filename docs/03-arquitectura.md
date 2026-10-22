@@ -80,7 +80,7 @@ La ruta hasta el restaurante elegido, a pie y en carro, calculada en el teléfon
 
 | Pieza | Dónde | Qué hace |
 | --- | --- | --- |
-| Router | `resources/js/routing/veni-mapa/` | Copia fija de `router.ts` y `graph.ts` del tag v0.2.0 de veni-mapa; se reemplaza entera, no se corrige |
+| Router | `resources/js/routing/veni-mapa/` | Copia fija de `router.ts` y `graph.ts` del tag v0.2.2 de veni-mapa (ADR 0020, nota del 2026-10-22); se reemplaza entera, no se corrige |
 | Grafo | `resources/js/routing/loadRouter.ts` | Baja `VITE_MAP_ROUTES_URL` con la primera ruta, una vez por página; si falla, se reintenta. Queda en `veni-map-routes` |
 | Posición | `MapHandle.watchPosition` y `requestPosition` (`engine.ts`, `locate.ts`) | La de «¿Dónde estoy?», en memoria y solo dentro del dispositivo; `requestPosition` lo enciende como un toque |
 | Capa | `resources/js/components/RouteLayer.vue` | Dentro de `MapView`: calcula a pie y en carro, dibuja la elegida debajo de las etiquetas (`belowLabels`) y la encuadra con el margen del panel (`showBounds`). Solo devuelve distancia, duración y estado |
