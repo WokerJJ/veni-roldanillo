@@ -11,19 +11,19 @@ const MENU: MenuSection[] = [
     {
         name: 'Platos fuertes (prueba)',
         dishes: [
-            { name: 'Sancocho de prueba', description: 'Con arroz y aguacate.', price: 18500, sold_out_until: null },
-            { name: 'Bandeja de prueba', description: null, price: 22000, sold_out_until: '2026-10-07' },
+            { name: 'Sancocho de prueba', description: 'Con arroz y aguacate.', price: 18500, sold_out_until: null, groups: [] },
+            { name: 'Bandeja de prueba', description: null, price: 22000, sold_out_until: '2026-10-07', groups: [] },
         ],
     },
     {
         name: 'Bebidas (prueba)',
-        dishes: [{ name: 'Jugo de prueba', description: 'En agua o en leche.', price: 4000, sold_out_until: null }],
+        dishes: [{ name: 'Jugo de prueba', description: 'En agua o en leche.', price: 4000, sold_out_until: null, groups: [] }],
     },
 ];
 
 /** Un menú con un solo plato, agotado hasta esa fecha. */
 function soldOutUntil(date: string | null): MenuSection[] {
-    return [{ name: 'Platos fuertes (prueba)', dishes: [{ name: 'Bandeja de prueba', description: null, price: 22000, sold_out_until: date }] }];
+    return [{ name: 'Platos fuertes (prueba)', dishes: [{ name: 'Bandeja de prueba', description: null, price: 22000, sold_out_until: date, groups: [] }] }];
 }
 
 async function mountMenu(sections: MenuSection[] = MENU, locale: 'es' | 'en' = 'es') {

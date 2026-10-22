@@ -6,7 +6,7 @@
 import { vi } from 'vitest';
 
 import type { Restaurant } from '@/restaurants/api';
-import type { PaymentMethod, RestaurantProfile } from '@/restaurants/profile';
+import type { MenuOptionGroup, PaymentMethod, RestaurantProfile } from '@/restaurants/profile';
 
 // Una ficha de ejemplo del servidor: tests/Feature/RestaurantPageTest.php la compara con la de verdad.
 import contract from '../../../tests/contracts/restaurant.profile.json';
@@ -131,6 +131,14 @@ export function profile(overrides: Partial<RestaurantProfile> = {}): RestaurantP
         ...structuredClone(contract),
         // Para JSON son textos sueltos; los valores los fija App\Enums\PaymentMethod.
         payment_methods: contract.payment_methods as PaymentMethod[],
+        // Igual con el tipo de cada grupo de opciones (App\Enums\OptionGroupKind).
+        menu: structuredClone(contract.menu).map((section) => ({
+            ...section,
+            dishes: section.dishes.map((dish) => ({
+                ...dish,
+                groups: dish.groups.map((group) => ({ ...group, kind: group.kind as MenuOptionGroup['kind'] })),
+            })),
+        })),
     };
 
     return { ...example, ...overrides };

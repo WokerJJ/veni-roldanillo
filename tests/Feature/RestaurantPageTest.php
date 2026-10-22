@@ -15,6 +15,7 @@ use App\Models\OptionGroup;
 use App\Models\Restaurant;
 use App\Models\SpecialHour;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -91,11 +92,13 @@ function restaurantPageComplete(): Restaurant
     ]);
 
     $section = MenuSection::factory()->for($restaurant)->create(['name_es' => 'Platos fuertes (prueba)', 'name_en' => 'Main dishes (test)', 'position' => 0]);
-    Dish::factory()->for($section)->create([
+    $dish = Dish::factory()->for($section)->create([
         'name_es' => 'Sancocho de prueba', 'name_en' => 'Test sancocho',
         'description_es' => 'Con arroz y aguacate.', 'description_en' => 'With rice and avocado.',
         'price' => 18000, 'position' => 0,
     ]);
+    $protein = OptionGroup::factory()->required()->for($dish)->create(['name_es' => 'Proteína (prueba)', 'name_en' => 'Protein (test)']);
+    Option::factory()->for($protein)->create(['name_es' => 'Pollo (prueba)', 'name_en' => 'Chicken (test)', 'price_delta' => 0]);
 
     return $restaurant;
 }
@@ -192,7 +195,9 @@ describe('lista blanca', function () {
             ->and(array_keys($profile['hours'][0]))->toBe(['weekday', 'opens', 'closes'])
             ->and(array_keys($profile['special_hours'][0]))->toBe(['date', 'closed', 'opens', 'closes', 'note'])
             ->and(array_keys($profile['menu'][0]))->toBe(['name', 'dishes'])
-            ->and(array_keys($profile['menu'][0]['dishes'][0]))->toBe(['name', 'description', 'price', 'sold_out_until']);
+            ->and(array_keys($profile['menu'][0]['dishes'][0]))->toBe(['name', 'description', 'price', 'sold_out_until', 'groups'])
+            ->and(array_keys($profile['menu'][0]['dishes'][0]['groups'][0]))->toBe(['name', 'kind', 'min', 'max', 'options'])
+            ->and(array_keys($profile['menu'][0]['dishes'][0]['groups'][0]['options'][0]))->toBe(['name', 'price']);
     });
 
     test('manda la ficha que dice el contrato del que parten las pruebas de la página', function () {
@@ -231,9 +236,24 @@ describe('lista blanca', function () {
 
         $mains = MenuSection::factory()->for($restaurant)->create(['name_es' => 'Platos fuertes (prueba)', 'position' => 0]);
         $drinks = MenuSection::factory()->for($restaurant)->create(['name_es' => 'Bebidas (prueba)', 'position' => 1]);
-        Dish::factory()->for($mains)->create(['name_es' => 'Sancocho de prueba', 'description_es' => 'Con arroz y aguacate.', 'price' => 18500, 'position' => 0]);
+        $sancocho = Dish::factory()->for($mains)->create(['name_es' => 'Sancocho de prueba', 'description_es' => 'Con arroz y aguacate.', 'price' => 18500, 'position' => 0]);
         Dish::factory()->for($mains)->create(['name_es' => 'Bandeja de prueba', 'description_es' => null, 'description_en' => null, 'price' => 22000, 'sold_out_until' => '2026-10-07', 'position' => 1]);
-        Dish::factory()->for($drinks)->create(['name_es' => 'Jugo de prueba', 'description_es' => 'En agua o en leche.', 'price' => 4000, 'position' => 0]);
+        $juice = Dish::factory()->for($drinks)->create(['name_es' => 'Jugo de prueba', 'description_es' => 'En agua o en leche.', 'price' => 4000, 'position' => 0]);
+
+        $protein = OptionGroup::factory()->required()->for($sancocho)->create(['name_es' => 'Proteína (prueba)', 'position' => 0]);
+        Option::factory()->for($protein)->create(['name_es' => 'Res (prueba)', 'price_delta' => 0, 'position' => 0]);
+        Option::factory()->for($protein)->create(['name_es' => 'Pollo (prueba)', 'price_delta' => 0, 'position' => 1]);
+        $extras = OptionGroup::factory()->for($sancocho)->create(['name_es' => 'Adiciones (prueba)', 'max_choices' => 2, 'position' => 1]);
+        Option::factory()->for($extras)->create(['name_es' => 'Huevo (prueba)', 'price_delta' => 1500, 'position' => 0]);
+        Option::factory()->for($extras)->create(['name_es' => 'Aguacate (prueba)', 'price_delta' => 2000, 'position' => 1]);
+        $removal = OptionGroup::factory()->removal()->for($sancocho)->create(['name_es' => 'Quitar (prueba)', 'position' => 2]);
+        Option::factory()->for($removal)->create(['name_es' => 'Cebolla (prueba)', 'price_delta' => 0, 'position' => 0]);
+        Option::factory()->for($removal)->create(['name_es' => 'Cilantro (prueba)', 'price_delta' => 0, 'position' => 1]);
+        // Una opción desactivada no sale en el contrato.
+        Option::factory()->for($removal)->create(['name_es' => 'Tomate (prueba)', 'available' => false, 'position' => 2]);
+        $preparation = OptionGroup::factory()->required()->for($juice)->create(['name_es' => 'Preparación (prueba)']);
+        Option::factory()->for($preparation)->create(['name_es' => 'En agua (prueba)', 'price_delta' => 0, 'position' => 0]);
+        Option::factory()->for($preparation)->create(['name_es' => 'En leche (prueba)', 'price_delta' => 500, 'position' => 1]);
 
         // Miércoles 7: los horarios especiales del contrato caen en la ventana.
         $this->travelTo('2026-10-07 12:30:00');
@@ -410,12 +430,12 @@ describe('menú', function () {
 
         expect(restaurantPageProfile($this->get('/restaurants/la-ceiba'))['menu'])->toBe([
             ['name' => 'Platos fuertes (prueba)', 'dishes' => [
-                ['name' => 'Primero', 'description' => 'Descripción de ejemplo.', 'price' => 18500, 'sold_out_until' => null],
-                ['name' => 'Segundo', 'description' => 'Descripción de ejemplo.', 'price' => 22000, 'sold_out_until' => null],
+                ['name' => 'Primero', 'description' => 'Descripción de ejemplo.', 'price' => 18500, 'sold_out_until' => null, 'groups' => []],
+                ['name' => 'Segundo', 'description' => 'Descripción de ejemplo.', 'price' => 22000, 'sold_out_until' => null, 'groups' => []],
             ]],
             ['name' => 'Bebidas (prueba)', 'dishes' => [
-                ['name' => 'Jugo', 'description' => null, 'price' => 4000, 'sold_out_until' => null],
-                ['name' => 'Gaseosa', 'description' => null, 'price' => 3500, 'sold_out_until' => null],
+                ['name' => 'Jugo', 'description' => null, 'price' => 4000, 'sold_out_until' => null, 'groups' => []],
+                ['name' => 'Gaseosa', 'description' => null, 'price' => 3500, 'sold_out_until' => null, 'groups' => []],
             ]],
         ]);
     });
@@ -481,14 +501,100 @@ describe('menú', function () {
             ->and($dishesAt('2026-10-08 08:00:00'))->toBe($tonight);
     });
 
-    test('las opciones y adiciones de un plato no viajan: son del pedido', function () {
+    test('lleva los grupos de opciones de cada plato en el orden del restaurante', function () {
         $restaurant = Restaurant::factory()->create(['slug' => 'la-ceiba']);
         $dish = Dish::factory()->for(MenuSection::factory()->for($restaurant))->create();
-        Option::factory()->for(OptionGroup::factory()->for($dish)->create(['name_es' => 'Proteína interna']))->create(['name_es' => 'Opción interna']);
+        $extras = OptionGroup::factory()->for($dish)->create(['name_es' => 'Adiciones', 'max_choices' => 2, 'position' => 1]);
+        $protein = OptionGroup::factory()->required()->for($dish)->create(['name_es' => 'Proteína', 'position' => 0]);
+        Option::factory()->for($protein)->create(['name_es' => 'Pollo', 'price_delta' => 0, 'position' => 1]);
+        Option::factory()->for($protein)->create(['name_es' => 'Res', 'price_delta' => 0, 'position' => 0]);
+        // Con la misma posición desempata el id.
+        Option::factory()->for($extras)->create(['name_es' => 'Huevo', 'price_delta' => 1500, 'position' => 2]);
+        Option::factory()->for($extras)->create(['name_es' => 'Queso', 'price_delta' => 2000, 'position' => 2]);
 
-        expect(json_encode($this->get('/restaurants/la-ceiba')->inertiaProps('restaurant'), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE))
-            ->not->toContain('Proteína interna')
-            ->not->toContain('Opción interna');
+        expect(restaurantPageProfile($this->get('/restaurants/la-ceiba'))['menu'][0]['dishes'][0]['groups'])->toBe([
+            ['name' => 'Proteína', 'kind' => 'choice', 'min' => 1, 'max' => 1, 'options' => [
+                ['name' => 'Res', 'price' => 0],
+                ['name' => 'Pollo', 'price' => 0],
+            ]],
+            ['name' => 'Adiciones', 'kind' => 'choice', 'min' => 0, 'max' => 2, 'options' => [
+                ['name' => 'Huevo', 'price' => 1500],
+                ['name' => 'Queso', 'price' => 2000],
+            ]],
+        ]);
+    });
+
+    test('una opción desactivada no sale, y un grupo que se queda sin opciones tampoco', function () {
+        $restaurant = Restaurant::factory()->create(['slug' => 'la-ceiba']);
+        $dish = Dish::factory()->for(MenuSection::factory()->for($restaurant))->create();
+        $extras = OptionGroup::factory()->for($dish)->create(['name_es' => 'Adiciones', 'max_choices' => 3]);
+        Option::factory()->for($extras)->create(['name_es' => 'Huevo', 'price_delta' => 1500]);
+        Option::factory()->for($extras)->create(['name_es' => 'Opción desactivada', 'available' => false]);
+        $empty = OptionGroup::factory()->for($dish)->create(['name_es' => 'Grupo vacío']);
+        Option::factory()->for($empty)->create(['name_es' => 'También desactivada', 'available' => false]);
+
+        $response = $this->get('/restaurants/la-ceiba');
+        $groups = restaurantPageProfile($response)['menu'][0]['dishes'][0]['groups'];
+
+        // El tope no pasa de las opciones que quedan.
+        expect($groups)->toBe([
+            ['name' => 'Adiciones', 'kind' => 'choice', 'min' => 0, 'max' => 1, 'options' => [['name' => 'Huevo', 'price' => 1500]]],
+        ])
+            ->and(json_encode($response->inertiaProps('restaurant'), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE))
+            ->not->toContain('desactivada')->not->toContain('Grupo vacío');
+    });
+
+    test('la lista blanca no publica una opción desactivada aunque llegue cargada', function () {
+        $restaurant = Restaurant::factory()->create(['slug' => 'la-ceiba']);
+        $dish = Dish::factory()->for(MenuSection::factory()->for($restaurant))->create();
+        $extras = OptionGroup::factory()->for($dish)->create();
+        Option::factory()->for($extras)->create(['name_es' => 'A la vista']);
+        Option::factory()->for($extras)->create(['name_es' => 'Desactivada', 'available' => false]);
+
+        // Todo cargado, sin el filtro de quien arma la consulta.
+        $restaurant->load(['categories', 'openingHours', 'specialHours', 'menuSections.dishes.optionGroups.options', 'deliveryZones.neighborhood']);
+
+        $groups = (new RestaurantProfile($restaurant, Locale::Es))->toArray(request())['menu'][0]['dishes'][0]['groups'];
+
+        expect(array_column($groups[0]['options'], 'name'))->toBe(['A la vista']);
+    });
+
+    test('quitar ingredientes no es obligatorio, no cobra y no tiene tope', function () {
+        $restaurant = Restaurant::factory()->create(['slug' => 'la-ceiba']);
+        $dish = Dish::factory()->for(MenuSection::factory()->for($restaurant))->create();
+        $removal = OptionGroup::factory()->removal()->for($dish)->create(['name_es' => 'Quitar', 'max_choices' => 1]);
+        // Aunque el dato traiga un recargo, quitar no cambia el precio.
+        Option::factory()->for($removal)->create(['name_es' => 'Cebolla', 'price_delta' => 500, 'position' => 0]);
+        Option::factory()->for($removal)->create(['name_es' => 'Cilantro', 'price_delta' => 0, 'position' => 1]);
+        Option::factory()->for($removal)->create(['name_es' => 'Tomate', 'price_delta' => 0, 'position' => 2]);
+
+        expect(restaurantPageProfile($this->get('/restaurants/la-ceiba'))['menu'][0]['dishes'][0]['groups'])->toBe([
+            ['name' => 'Quitar', 'kind' => 'removal', 'min' => 0, 'max' => 3, 'options' => [
+                ['name' => 'Cebolla', 'price' => 0],
+                ['name' => 'Cilantro', 'price' => 0],
+                ['name' => 'Tomate', 'price' => 0],
+            ]],
+        ]);
+    });
+
+    test('un grupo de quitar nunca es obligatorio: lo impide la base', function () {
+        $dish = Dish::factory()->create();
+
+        expect(fn () => OptionGroup::factory()->removal()->for($dish)->create(['required' => true, 'min_choices' => 1]))
+            ->toThrow(QueryException::class, 'option_groups_kind_valid');
+    });
+
+    test('las opciones salen en el idioma de la petición, con el español si falta el inglés', function () {
+        $restaurant = Restaurant::factory()->create(['slug' => 'la-ceiba']);
+        $dish = Dish::factory()->for(MenuSection::factory()->for($restaurant))->create();
+        $protein = OptionGroup::factory()->required()->for($dish)->create(['name_es' => 'Proteína', 'name_en' => 'Protein']);
+        Option::factory()->for($protein)->create(['name_es' => 'Pollo', 'name_en' => 'Chicken', 'position' => 0]);
+        Option::factory()->for($protein)->create(['name_es' => 'Sobrebarriga', 'name_en' => null, 'position' => 1]);
+
+        $groups = restaurantPageProfile($this->get('/restaurants/la-ceiba?lang=en'))['menu'][0]['dishes'][0]['groups'];
+
+        expect($groups[0]['name'])->toBe('Protein')
+            ->and(array_column($groups[0]['options'], 'name'))->toBe(['Chicken', 'Sobrebarriga']);
     });
 
     test('el menú de otro restaurante no se cuela', function () {
@@ -540,7 +646,12 @@ test('hace las mismas consultas con un menú corto que con uno largo', function 
         foreach (range(1, $size) as $i) {
             OpeningHour::factory()->for($restaurant)->create(['weekday' => $i % 7, 'opens_at' => sprintf('%02d:00', $i), 'closes_at' => sprintf('%02d:30', $i)]);
             DeliveryZone::factory()->for($restaurant)->create();
-            Dish::factory()->count($size)->for(MenuSection::factory()->for($restaurant))->create();
+            $dishes = Dish::factory()->count($size)->for(MenuSection::factory()->for($restaurant))->create();
+
+            foreach ($dishes as $dish) {
+                Option::factory()->count($size)->for(OptionGroup::factory()->for($dish))->create();
+                Option::factory()->count($size)->for(OptionGroup::factory()->removal()->for($dish))->create();
+            }
         }
     };
     $queries = function (string $slug): int {
@@ -556,9 +667,10 @@ test('hace las mismas consultas con un menú corto que con uno largo', function 
     $seed('largo', 6);
 
     // El restaurante y una por tabla: categorías, horario semanal, horarios
-    // especiales, secciones, platos, zonas de domicilio y sus barrios.
-    expect($queries('corto'))->toBe(8)
-        ->and($queries('largo'))->toBe(8)
+    // especiales, secciones, platos, grupos de opciones, opciones, zonas de
+    // domicilio y sus barrios.
+    expect($queries('corto'))->toBe(10)
+        ->and($queries('largo'))->toBe(10)
         ->and(restaurantPageProfile($this->get('/restaurants/largo'))['menu'])->toHaveCount(6);
 });
 
