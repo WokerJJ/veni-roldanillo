@@ -43,6 +43,25 @@ const LONG_STREET = graphOf(
 );
 /** A unos 900 m al norte de la mitad de la vía larga. */
 const NEAR_LONG_STREET: [number, number] = [-76.16, 4.4209];
+/** A unos 1112 m al norte de la mitad de la vía larga: más allá de los 1000 m del ajuste. */
+const BEYOND_LONG_STREET: [number, number] = [-76.16, 4.4228];
+/**
+ * Dos vías largas sin cruces y sin conexión, a 2,2 km una de otra (#86): la
+ * de abajo solo de a pie, la de arriba solo en carro. Un punto en la mitad de
+ * cada una queda a más de 1 km de cualquier vértice.
+ */
+const SPLIT_STREETS = graphOf(
+    [
+        [-76.175, 4.4128],
+        [-76.145, 4.4128],
+        [-76.175, 4.4328],
+        [-76.145, 4.4328],
+    ],
+    [
+        { from: 0, to: 1, flags: 4 | 8, cls: RESIDENTIAL },
+        { from: 2, to: 3, flags: 1 | 2, cls: RESIDENTIAL },
+    ],
+);
 
 function style(url: string) {
     return {
@@ -344,7 +363,7 @@ describe('RouteLayer', () => {
         expect(state?.status === 'ready' && state.routes.foot).toBeTruthy();
     });
 
-    it('a 900 m de una vía larga sin cruces, la posición no está lejos: hay ruta (#86)', async () => {
+    it('desde 900 m de una vía larga sin cruces, lejos de sus extremos, hay ruta: se ajusta a la calle y no al vértice (#86)', async () => {
         network.graph = LONG_STREET;
         const device = stubGeolocation();
         const { last } = await mountRoute([-76.15, 4.4128]);
@@ -354,6 +373,44 @@ describe('RouteLayer', () => {
         await settle();
 
         expect(last()?.status).toBe('ready');
+    });
+
+    it('con el restaurante a 1,1 km de una vía larga sin cruces, está lejos de las calles (#86)', async () => {
+        network.graph = LONG_STREET;
+        const device = stubGeolocation();
+        const { last } = await mountRoute(BEYOND_LONG_STREET);
+        await flushPromises();
+
+        device.move(SECRET);
+        await settle();
+
+        expect(last()).toEqual({ status: 'destination-far' });
+    });
+
+    it('a 1,1 km de una vía larga sin cruces, la posición está lejos de las calles (#86)', async () => {
+        network.graph = LONG_STREET;
+        const device = stubGeolocation();
+        const { last } = await mountRoute([-76.15, 4.4128]);
+        await flushPromises();
+
+        device.move({ longitude: BEYOND_LONG_STREET[0], latitude: BEYOND_LONG_STREET[1] });
+        await settle();
+
+        expect(last()).toEqual({ status: 'far' });
+    });
+
+    it('sin ruta en ningún perfil pero junto a una calle lejos de sus extremos, no hay ruta: no está lejos (#86)', async () => {
+        network.graph = SPLIT_STREETS;
+        const device = stubGeolocation();
+        // Junto a la vía de carro; a pie, la única vía queda a 2,2 km.
+        const { last } = await mountRoute([-76.16, 4.4326]);
+        await flushPromises();
+
+        // Junto a la vía de a pie, a más de 1 km de sus extremos; en carro, la única vía queda a 2,2 km.
+        device.move({ longitude: -76.16, latitude: 4.413 });
+        await settle();
+
+        expect(last()).toEqual({ status: 'no-route' });
     });
 
     it('fuera de la región del mapa, lo dice y no calcula', async () => {
