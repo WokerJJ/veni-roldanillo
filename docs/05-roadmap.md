@@ -24,6 +24,7 @@ Cerrada: versión 0.1.0.
 - [x] Restaurantes sobre el mapa, con su resumen y el estado «abierto ahora» (ADR 0016 y 0017)
 - [x] Locales de OpenStreetMap como fichas ocultas para verificar en la calle, con su atribución en `/credits` (#58, ADR 0021)
 - [x] Ubicación del usuario y ruta en el dispositivo (ADR 0008, 0019 y 0020)
+- [x] Panel de abajo en el celular, con tres alturas y panel lateral con poco alto (#81, ADR 0022)
 - [ ] Búsqueda por plato con Meilisearch
 - [ ] Panel de dueño (Filament): ficha, menú, agotado hoy, promociones, horarios especiales, aviso de demora
 - [ ] Panel de administración: alta de restaurantes, reclamación de fichas, moderación

@@ -95,3 +95,15 @@ Diario de avance del proyecto: qué se hizo en cada bloque, decisiones y aprendi
 - **Dependencias:** las versiones mayores de Node ya no llegan solas (regla en `dependabot.yml`). MapLibre 6.14 cambió cómo empaqueta su worker y se sube a propósito en #70.
 - Aprendizajes: una prueba contra una imitación de MapLibre no ve lo que la librería real hace mal; para la ubicación se sumó una prueba de contrato con el control real. Y el peso del arranque ya está al límite: la regla para la próxima vez quedó escrita.
 - Sigue el directorio inicial desde OpenStreetMap (#58).
+
+## 2026-10-22 · Parte 9 · Locales de OpenStreetMap y el panel de abajo
+
+- **#58 integrado:** los locales de comida que ya están en OpenStreetMap entran como fichas **ocultas** (ADR 0021), con nombre, tipo y punto, nunca teléfonos, correos ni redes, y con su procedencia guardada en `restaurant_sources`. `veni:osm-import` no duplica ni pisa lo que se editó o verificó; `veni:publish` publica solo lo verificado en la calle y `veni:osm-dismiss` descarta. La atribución y cómo pedir esos datos (ODbL) están en `/credits`.
+- La revisión del #58 encontró que el respaldo por recuadro traía locales de los municipios vecinos, que un local descartado volvía en cada corrida y que una respuesta vacía de Overpass marcaba todo como desaparecido. Ahora el recuadro solo actualiza, lo descartado queda descartado y una respuesta vacía se rechaza sin escribir. También se evitó que dos corridas a la vez chocaran.
+- **Auditoría de responsive:** con heurísticas de Nielsen, WCAG 2.2 y el patrón de panel inferior se midió cuánto mapa tapaba cada estado. En un celular de 390 px la lista tapaba el 74 % del mapa. Salieron #81, #82 (orden de la ficha) y #83 (lista en escritorio).
+- **#81 integrado:** en el celular, la lista, el resumen y la ruta van en un panel de abajo con tres alturas y una manija propia, que se mueve con el dedo y con el teclado (ADR 0022). Con el celular acostado pasa a un panel lateral. La lista ahora tapa el 51 % del mapa y la ruta el 25 %.
+- La revisión del #81 encontró que tras arrastrar la manija se perdía el siguiente toque, que el restaurante elegido quedaba tapado por el panel y que la lista abierta se reordenaba bajo el dedo. Las tres quedaron corregidas, y el encuadre ahora espera a que el panel termine de moverse.
+- **Peso del arranque:** al sumar el #58, el arranque pasó del límite (83,2 kB de 83). Se aplicó la regla de la parte 8: la capa de restaurantes baja con el mapa y no con el arranque, que quedó en 81,7 kB.
+- **Dependencias:** vite 8.3.4 por un aviso de seguridad que frenaba la auditoría de npm en todos los PR.
+- Aprendizajes: medir cuánto mapa queda a la vista convirtió una impresión («se ve mal en el celular») en un número que se puede comparar antes y después. Y al probar la ruta en la calle apareció un giro innecesario: el router ajusta el origen y el destino al vértice más cercano, no a la calle (veni-mapa#75).
+- Sigue la versión 0.3.0 y el arreglo del router en veni-mapa.
