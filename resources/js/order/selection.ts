@@ -62,9 +62,13 @@ export function emptySelection(dish: MenuDish): DishSelection {
     return { chosen: dish.groups.map(() => []), note: '', quantity: MIN_QUANTITY };
 }
 
-/** Si el grupo se elige con una sola opción (botones de radio). */
+/**
+ * Si el grupo se elige con una sola opción (botones de radio): solo el
+ * obligatorio de exactamente una. Uno opcional de tope 1 va con casilla,
+ * porque un radio no se puede desmarcar.
+ */
 export function isSingleChoice(group: MenuOptionGroup): boolean {
-    return group.kind === 'choice' && group.max === 1;
+    return group.kind === 'choice' && group.min === 1 && group.max === 1;
 }
 
 /** «Agotado hoy» vale hasta su fecha, incluida (`today` es `YYYY-MM-DD` de Colombia). */

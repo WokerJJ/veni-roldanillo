@@ -84,6 +84,16 @@ describe('toggleOption', () => {
         expect(isSingleChoice({ name: 'Quitar', kind: 'removal', min: 0, max: 1, options: [{ name: 'Cebolla', price: 0 }] })).toBe(false);
     });
 
+    it('un grupo opcional de una sola opción no es de radio: tocar dos veces la misma la suelta', () => {
+        const optional = sancocho({
+            groups: [{ name: 'Adición', kind: 'choice', min: 0, max: 1, options: [{ name: 'Huevo', price: 1500 }, { name: 'Maduro', price: 1500 }] }],
+        });
+
+        expect(isSingleChoice(nth(optional.groups, 0))).toBe(false);
+        expect(choose(optional, [[0, 0]]).chosen[0]).toEqual([0]);
+        expect(choose(optional, [[0, 0], [0, 0]]).chosen[0]).toEqual([]);
+    });
+
     it('no cambia la selección de entrada', () => {
         const before = emptySelection(dish);
 
