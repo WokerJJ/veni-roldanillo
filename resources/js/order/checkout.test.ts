@@ -64,6 +64,23 @@ describe('parseCash', () => {
         expect(parseCash('-2000')).toBeNull();
         expect(parseCash('20000000')).toBeNull();
     });
+
+    it('acepta coma, punto o espacio como separador de miles y el prefijo COP o $', () => {
+        expect(parseCash('50,000')).toBe(50000);
+        expect(parseCash('COP 50,000')).toBe(50000);
+        expect(parseCash('cop50.000')).toBe(50000);
+        expect(parseCash('$ 50.000')).toBe(50000);
+        expect(parseCash('1.000.000')).toBe(1000000);
+    });
+
+    it('un separador que no agrupa de a tres es un decimal: null, no un valor cien veces menor', () => {
+        expect(parseCash('50.5')).toBeNull();
+        expect(parseCash('1.5')).toBeNull();
+        expect(parseCash('5,00')).toBeNull();
+        expect(parseCash('50.000,00')).toBeNull();
+        expect(parseCash('50..000')).toBeNull();
+        expect(parseCash('.500')).toBeNull();
+    });
 });
 
 describe('cleanText', () => {

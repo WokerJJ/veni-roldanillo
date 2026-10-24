@@ -115,17 +115,23 @@ export function estimatedTotal(items: readonly OrderItem[], details: OrderDetail
 }
 
 /**
- * «¿Con cuánto pagás?» como lo escribe la persona («50.000», «$ 50 000»):
- * pesos enteros. null si está vacío o no es un número (incluye decimales).
+ * «¿Con cuánto pagás?» como lo escribe la persona («50.000», «50,000»,
+ * «$ 50 000», «COP 50.000»): pesos enteros. El punto, la coma y el espacio
+ * solo valen como separador de miles, en grupos de tres y siempre el mismo;
+ * otra cosa es un decimal («50.5», «5,00») o un error, y da null en lugar de
+ * un valor cien veces menor. null también si está vacío o no es un número.
  */
 export function parseCash(value: string): number | null {
-    const digits = value.replace(/[\s.$]/g, '');
+    const written = value
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/^(?:cop\s*)?\$?\s*/i, '');
 
-    if (!/^\d{1,8}$/.test(digits)) {
+    if (!/^(?:\d{1,8}|\d{1,3}(?:([., ])\d{3})(?:\1\d{3})*)$/.test(written)) {
         return null;
     }
 
-    const amount = Number(digits);
+    const amount = Number(written.replace(/[., ]/g, ''));
 
     return amount > 0 && amount <= CASH_MAX ? amount : null;
 }
