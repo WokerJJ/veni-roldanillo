@@ -1,6 +1,6 @@
 import type { TranslationKey } from '@/composables/useI18n';
 import type { Replacements } from '@/i18n/translate';
-import type { PaymentMethod } from '@/restaurants/profile';
+import { PAYMENT_METHOD_KEYS } from '@/restaurants/profile';
 
 import type { OrderContext, OrderDetails, SharedLocation } from './checkout';
 import { ADDRESS_MAX_LENGTH, cleanText, estimatedTotal, isDelivery, NAME_MAX_LENGTH, NEIGHBORHOOD_MAX_LENGTH, REFERENCE_MAX_LENGTH } from './checkout';
@@ -18,13 +18,6 @@ import type { OrderItem } from './selection';
 
 export type Translate = (key: TranslationKey, replacements?: Replacements) => string;
 export type FormatMoney = (amount: number) => string;
-
-const PAYMENT_KEYS: Readonly<Record<PaymentMethod, TranslationKey>> = {
-    cash: 'restaurant.payment.cash',
-    nequi: 'restaurant.payment.nequi',
-    daviplata: 'restaurant.payment.daviplata',
-    card: 'restaurant.payment.card',
-};
 
 /**
  * El número para wa.me: `57` y diez dígitos. La ficha ya lo manda así; si
@@ -112,7 +105,7 @@ export function orderMessage(items: readonly OrderItem[], details: OrderDetails,
     optional('order.message.name', cleanText(details.name, NAME_MAX_LENGTH));
 
     if (details.payment !== null) {
-        const method = t(PAYMENT_KEYS[details.payment]);
+        const method = t(PAYMENT_METHOD_KEYS[details.payment]);
 
         handoff.push(
             details.payment === 'cash' && details.cashAmount !== null

@@ -1,3 +1,5 @@
+import type { TranslationKey } from '@/composables/useI18n';
+
 import type { RestaurantCategory } from './api';
 import type { SpecialHours, WeeklyHours } from './openStatus';
 
@@ -14,6 +16,18 @@ import type { SpecialHours, WeeklyHours } from './openStatus';
 
 /** Los valores de App\Enums\PaymentMethod. */
 export type PaymentMethod = 'cash' | 'nequi' | 'daviplata' | 'card';
+
+/**
+ * El nombre de cada medio de pago en los archivos de idioma: una sola lista
+ * para la ficha, el carrito y el mensaje del pedido. Un medio que no está acá
+ * (de una versión nueva del servidor) no se muestra como una clave suelta.
+ */
+export const PAYMENT_METHOD_KEYS: Readonly<Record<PaymentMethod, TranslationKey>> = {
+    cash: 'restaurant.payment.cash',
+    nequi: 'restaurant.payment.nequi',
+    daviplata: 'restaurant.payment.daviplata',
+    card: 'restaurant.payment.card',
+};
 
 /** Un horario especial con la nota del restaurante («Festivo»), en el idioma de la página. */
 export interface ProfileSpecialHours extends SpecialHours {
