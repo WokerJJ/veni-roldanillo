@@ -42,6 +42,7 @@ Había que decidir dónde se arma el mensaje, qué se guarda en el teléfono y p
 - El pedido sobrevive a recargar y a cerrar la app durante un día. Si el dueño cambia el menú en ese tiempo, la línea conserva lo que la persona vio (nombre y precio): es un total estimado y el restaurante lo confirma por WhatsApp. Marcar las líneas que ya no están en el menú queda pendiente.
 - Vení no sabe si alguien pidió: no hay registro del clic hasta #22. Cuando llegue, el registro será mínimo (restaurante y el hash del dispositivo, sin contenido ni dirección, como ya exige la tabla), con límite de peticiones, y el carrito lo disparará al tocar «Enviar», sin esperar la respuesta.
 - La ubicación compartida queda en el chat de WhatsApp de la persona con el restaurante: es la persona quien la envía, sabiendo qué manda (el texto se ve antes de enviarlo).
+- El texto del mensaje (el pedido, el barrio, la dirección, la referencia, el nombre y la ubicación si se agrega) va en la URL de `wa.me`: pasa por los servidores de WhatsApp (Meta) y puede quedar en el historial del navegador del teléfono. No pasa por Vení y lo envía la persona, después de verlo en WhatsApp.
 - La dirección recordada es por restaurante. Una libreta global («Casa», «Trabajo») la reemplazaría con su propia decisión.
 - El mensaje sale en el idioma de la interfaz: un turista que usa la app en inglés le escribe al restaurante en inglés.
 - Los restaurantes de ejemplo ya traen WhatsApp ficticio (`57` seguido de `0000…`, que no es un número real), zonas con costo y medios de pago.

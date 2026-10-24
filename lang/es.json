@@ -180,7 +180,7 @@
     "order.form.location_denied": "No diste permiso para usar tu ubicación. Podés pedir sin ella.",
     "order.form.location_error": "No se pudo saber tu ubicación. Podés pedir sin ella.",
     "order.form.remember": "Recordar barrio, dirección, referencia y nombre en este teléfono",
-    "order.form.remember_hint": "Quedan solo en este teléfono, por 90 días desde el último pedido. Nunca se mandan a Vení.",
+    "order.form.remember_hint": "Quedan solo en este teléfono, por 90 días desde la última vez que los usaste. Nunca se mandan a Vení.",
     "order.form.forget": "Borrar datos guardados",
     "order.form.forgotten": "Se borraron los datos guardados en este teléfono.",
     "order.form.error_neighborhood": "Elegí tu barrio.",

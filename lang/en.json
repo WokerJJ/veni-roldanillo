@@ -180,7 +180,7 @@
     "order.form.location_denied": "You didn't allow access to your location. You can order without it.",
     "order.form.location_error": "Your location couldn't be found. You can order without it.",
     "order.form.remember": "Remember neighborhood, address, landmark and name on this phone",
-    "order.form.remember_hint": "They stay only on this phone, for 90 days after your last order. They are never sent to Vení.",
+    "order.form.remember_hint": "They stay only on this phone, for 90 days after you last used them. They are never sent to Vení.",
     "order.form.forget": "Delete saved details",
     "order.form.forgotten": "The details saved on this phone were deleted.",
     "order.form.error_neighborhood": "Choose your neighborhood.",
