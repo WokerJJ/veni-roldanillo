@@ -42,6 +42,12 @@ export interface RememberedDelivery {
     name: string;
 }
 
+/** Un carrito leído del dispositivo y cuándo cambió por última vez. */
+export interface SavedCart {
+    items: OrderItem[];
+    savedAt: number;
+}
+
 interface Stored {
     v: 1;
     savedAt: number;
@@ -89,7 +95,7 @@ function price(value: unknown): number | null {
 }
 
 /** El sobre con versión y fecha, si sigue vigente. */
-function unwrap(raw: string | null, now: number, ttl: number): unknown {
+function unwrap(raw: string | null, now: number, ttl: number): Stored | null {
     if (raw === null) {
         return null;
     }
@@ -106,7 +112,7 @@ function unwrap(raw: string | null, now: number, ttl: number): unknown {
         return null;
     }
 
-    return parsed.data;
+    return { v: 1, savedAt: parsed.savedAt, data: parsed.data };
 }
 
 function wrap(data: unknown, now: number): string {
@@ -161,7 +167,13 @@ function parseItem(value: unknown): OrderItem | null {
 
 /** El carrito guardado, si sigue vigente y tiene forma de carrito; si no, null. Una línea dañada lo descarta entero. */
 export function parseCart(raw: string | null, now: number): OrderItem[] | null {
-    const data = unwrap(raw, now, CART_TTL_MS);
+    return parseSavedCart(raw, now)?.items ?? null;
+}
+
+/** Como parseCart, con la fecha del último cambio (para que venza también en la memoria). */
+function parseSavedCart(raw: string | null, now: number): SavedCart | null {
+    const stored = unwrap(raw, now, CART_TTL_MS);
+    const data = stored?.data;
 
     if (!Array.isArray(data) || data.length === 0 || data.length > MAX_LINES) {
         return null;
@@ -169,12 +181,12 @@ export function parseCart(raw: string | null, now: number): OrderItem[] | null {
 
     const items = data.map(parseItem);
 
-    return items.every((item) => item !== null) ? items : null;
+    return stored !== null && items.every((item) => item !== null) ? { items, savedAt: stored.savedAt } : null;
 }
 
 /** Los datos de entrega guardados, si siguen vigentes; si no, null. */
 export function parseDelivery(raw: string | null, now: number): RememberedDelivery | null {
-    const data = unwrap(raw, now, DELIVERY_TTL_MS);
+    const data = unwrap(raw, now, DELIVERY_TTL_MS)?.data;
 
     if (!isRecord(data) || (data.mode !== 'delivery' && data.mode !== 'pickup')) {
         return null;
@@ -194,15 +206,20 @@ export function parseDelivery(raw: string | null, now: number): RememberedDelive
 
 /** El carrito del restaurante; si venció o está dañado, se borra. */
 export function loadCart(slug: string, now: number = Date.now()): OrderItem[] {
+    return loadSavedCart(slug, now)?.items ?? [];
+}
+
+/** Como loadCart, con la fecha del último cambio; null si no hay carrito vigente. */
+export function loadSavedCart(slug: string, now: number = Date.now()): SavedCart | null {
     const key = CART_PREFIX + slug;
     const raw = read(key);
-    const items = parseCart(raw, now);
+    const saved = parseSavedCart(raw, now);
 
-    if (items === null && raw !== null) {
+    if (saved === null && raw !== null) {
         write(key, null);
     }
 
-    return items ?? [];
+    return saved;
 }
 
 /** Guarda el carrito (o lo borra si quedó vacío). */

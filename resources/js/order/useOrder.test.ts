@@ -1,13 +1,18 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { OrderItem } from './selection';
+import { CART_TTL_MS } from './storage';
 import { resetOrders, useOrder } from './useOrder';
 
 const juice: OrderItem = { dish: 'Jugo de prueba', unitPrice: 4500, quantity: 1, choices: [{ group: 'Preparación', name: 'En leche', price: 500 }], removed: [], note: null };
 
 afterEach(() => {
     resetOrders();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
 });
+
+const HOUR_MS = 60 * 60 * 1000;
 
 describe('useOrder', () => {
     it('empieza vacío', () => {
@@ -85,5 +90,76 @@ describe('useOrder', () => {
         order.clear();
         expect(order.count.value).toBe(0);
         expect(localStorage.getItem('veni:cart:la-ceiba')).toBeNull();
+    });
+
+    it('el carrito vence a las 24 h también en la memoria de la pestaña abierta', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-10-24T12:00:00-05:00'));
+        useOrder('la-ceiba').add(juice);
+
+        vi.setSystemTime(Date.now() + 25 * HOUR_MS);
+
+        expect(useOrder('la-ceiba').items.value).toEqual([]);
+        expect(localStorage.getItem('veni:cart:la-ceiba')).toBeNull();
+    });
+
+    it('vence también lo leído del dispositivo, contando desde que se guardó', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-10-24T12:00:00-05:00'));
+        useOrder('la-ceiba').add(juice);
+
+        // Otra pestaña lo lee 23 h después: le queda una hora, no 24 más.
+        const saved = localStorage.getItem('veni:cart:la-ceiba') ?? '';
+        resetOrders();
+        localStorage.setItem('veni:cart:la-ceiba', saved);
+        vi.setSystemTime(Date.now() + 23 * HOUR_MS);
+        expect(useOrder('la-ceiba').items.value).toEqual([juice]);
+
+        vi.setSystemTime(Date.now() + 2 * HOUR_MS);
+        expect(useOrder('la-ceiba').items.value).toEqual([]);
+    });
+
+    it('al volver a la pestaña después de un día, el pedido ya vencido se vacía', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-10-24T12:00:00-05:00'));
+        const order = useOrder('la-ceiba');
+        order.add(juice);
+
+        vi.setSystemTime(Date.now() + CART_TTL_MS - HOUR_MS);
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        document.dispatchEvent(new Event('visibilitychange'));
+        expect(order.items.value).toEqual([juice]);
+
+        vi.setSystemTime(Date.now() + 2 * HOUR_MS);
+        document.dispatchEvent(new Event('visibilitychange'));
+        expect(order.items.value).toEqual([]);
+        expect(localStorage.getItem('veni:cart:la-ceiba')).toBeNull();
+    });
+
+    it('sigue lo que otra pestaña hace con el carrito del mismo restaurante', () => {
+        const order = useOrder('la-ceiba');
+        const other = useOrder('el-guadual');
+
+        // La otra pestaña agrega: lo escribe en el dispositivo y avisa con `storage`.
+        order.add(juice);
+        const written = localStorage.getItem('veni:cart:la-ceiba');
+        order.clear();
+        window.dispatchEvent(new StorageEvent('storage', { key: 'veni:cart:la-ceiba', newValue: written }));
+        expect(order.items.value).toEqual([juice]);
+
+        // Lo dañado o vencido cuenta como vacío; lo que no es un carrito, no toca nada.
+        window.dispatchEvent(new StorageEvent('storage', { key: 'veni:cart:la-ceiba', newValue: 'no es json' }));
+        expect(order.items.value).toEqual([]);
+        window.dispatchEvent(new StorageEvent('storage', { key: 'veni:cart:la-ceiba', newValue: written }));
+        window.dispatchEvent(new StorageEvent('storage', { key: 'veni:delivery:la-ceiba', newValue: null }));
+        expect(order.items.value).toEqual([juice]);
+
+        // Un restaurante que esta pestaña no abrió no se carga por el aviso.
+        window.dispatchEvent(new StorageEvent('storage', { key: 'veni:cart:otro', newValue: written }));
+        expect(other.items.value).toEqual([]);
+
+        // La otra pestaña vació el carrito.
+        window.dispatchEvent(new StorageEvent('storage', { key: 'veni:cart:la-ceiba', newValue: null }));
+        expect(order.items.value).toEqual([]);
     });
 });
