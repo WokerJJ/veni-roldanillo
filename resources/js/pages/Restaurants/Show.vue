@@ -3,6 +3,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 
 import Icon from '@/components/Icon.vue';
+import OrderBar from '@/components/OrderBar.vue';
 import RestaurantContact from '@/components/RestaurantContact.vue';
 import RestaurantDelivery from '@/components/RestaurantDelivery.vue';
 import RestaurantHours from '@/components/RestaurantHours.vue';
@@ -112,7 +113,7 @@ onBeforeUnmount(() => {
                     <span>{{ t('restaurant.hidden') }}</span>
                 </p>
 
-                <h1 class="text-2xl leading-tight wrap-anywhere min-[480px]:text-3xl">{{ restaurant.name }}</h1>
+                <h1 tabindex="-1" class="text-2xl leading-tight wrap-anywhere min-[480px]:text-3xl">{{ restaurant.name }}</h1>
 
                 <p v-if="restaurant.fictitious" class="mt-2"><SampleDataBadge /></p>
 
@@ -174,5 +175,8 @@ onBeforeUnmount(() => {
 
             <RestaurantContact class="mt-8 border-t border-line pt-6" :restaurant="restaurant" />
         </article>
+
+        <!-- El pedido (#15): la barra aparece con el primer plato y abre el carrito. -->
+        <OrderBar :restaurant="restaurant" />
     </div>
 </template>

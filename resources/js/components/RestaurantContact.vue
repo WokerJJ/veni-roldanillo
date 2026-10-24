@@ -12,8 +12,8 @@ import type { PaymentMethod, RestaurantProfile } from '@/restaurants/profile';
  * precios. Son los datos del negocio, los que el restaurante publica; de lo
  * que no cargó no queda ni el rótulo, y sin ninguno la sección no sale.
  *
- * El WhatsApp es un enlace para escribirle, sin mensaje armado: el pedido con
- * el carrito es del #15.
+ * El WhatsApp es un enlace para escribirle, sin mensaje armado: el pedido
+ * armado sale del carrito (OrderBar y OrderCart, #15).
  */
 const { restaurant } = defineProps<{
     restaurant: Pick<RestaurantProfile, 'address' | 'reference' | 'phone' | 'whatsapp' | 'payment_methods' | 'price_level'>;
