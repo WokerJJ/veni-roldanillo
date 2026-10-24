@@ -55,10 +55,35 @@ describe('useOrder', () => {
         expect(order.items.value).toEqual([]);
     });
 
-    it('no guarda nada en el dispositivo', () => {
+    it('guarda el carrito en el dispositivo y lo recupera al recargar (ADR 0024)', () => {
         useOrder('la-ceiba').add(juice);
 
-        expect(localStorage.length).toBe(0);
+        expect(localStorage.getItem('veni:cart:la-ceiba')).toContain('Jugo de prueba');
         expect(sessionStorage.length).toBe(0);
+
+        // Recargar: la memoria se pierde, el dispositivo no.
+        const saved = localStorage.getItem('veni:cart:la-ceiba') ?? '';
+        resetOrders();
+        localStorage.setItem('veni:cart:la-ceiba', saved);
+
+        expect(useOrder('la-ceiba').items.value).toEqual([juice]);
+    });
+
+    it('cambia la cantidad (entre 1 y 20), quita líneas y vacía, y lo guarda', () => {
+        const order = useOrder('la-ceiba');
+        order.add(juice);
+        order.add({ ...juice, choices: [], unitPrice: 4000 });
+
+        order.setQuantity(0, 50);
+        expect(order.items.value[0]?.quantity).toBe(20);
+        order.setQuantity(0, 0);
+        expect(order.items.value[0]?.quantity).toBe(1);
+
+        order.remove(0);
+        expect(order.items.value).toEqual([{ ...juice, choices: [], unitPrice: 4000 }]);
+
+        order.clear();
+        expect(order.count.value).toBe(0);
+        expect(localStorage.getItem('veni:cart:la-ceiba')).toBeNull();
     });
 });
