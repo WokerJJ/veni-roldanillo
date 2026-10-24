@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, shallowRef } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 
 import type OrderCartComponent from '@/components/OrderCart.vue';
 import { useI18n } from '@/composables/useI18n';
@@ -26,6 +26,20 @@ const OrderCart = shallowRef<typeof OrderCartComponent | null>(null);
 const open = ref(false);
 const announcement = ref('');
 let opener: HTMLElement | null = null;
+
+// Mientras la barra está, el navegador deja su alto libre abajo al llevar a
+// la vista lo que recibe el foco: la barra fija no lo tapa (WCAG 2.4.11).
+watch(
+    () => count.value > 0,
+    (visible) => {
+        document.documentElement.classList.toggle('has-order-bar', visible);
+    },
+    { immediate: true },
+);
+
+onBeforeUnmount(() => {
+    document.documentElement.classList.remove('has-order-bar');
+});
 
 const summary = computed(() =>
     count.value === 0
@@ -105,5 +119,10 @@ async function close(): Promise<void> {
 
 .order-bar-spacer {
     height: calc(4.5rem + env(safe-area-inset-bottom));
+}
+
+/* El alto de la barra y un poco de aire: lo enfocado queda por encima de ella. */
+:global(html.has-order-bar) {
+    scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom));
 }
 </style>

@@ -76,4 +76,23 @@ describe('OrderBar', () => {
 
         expect(wrapper.get('[data-bar-summary]').text()).toContain('1 plato');
     });
+
+    it('mientras está, deja lugar abajo para que no tape lo enfocado (WCAG 2.4.11)', async () => {
+        const html = document.documentElement;
+        const wrapper = await mountBar();
+        expect(html.classList.contains('has-order-bar')).toBe(false);
+
+        useOrder(RESTAURANT.slug).add(JUICE);
+        await flushPromises();
+        expect(html.classList.contains('has-order-bar')).toBe(true);
+
+        useOrder(RESTAURANT.slug).clear();
+        await flushPromises();
+        expect(html.classList.contains('has-order-bar')).toBe(false);
+
+        useOrder(RESTAURANT.slug).add(JUICE);
+        await flushPromises();
+        wrapper.unmount();
+        expect(html.classList.contains('has-order-bar')).toBe(false);
+    });
 });
