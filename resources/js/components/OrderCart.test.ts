@@ -150,6 +150,17 @@ describe('OrderCart', () => {
         expect(wrapper.find('[data-send]').exists()).toBe(false);
     });
 
+    it('cada línea conserva su elemento al quitar otra: la cantidad no se anuncia de más', async () => {
+        const { lines } = await mountCart();
+        const juiceQuantity = nth(lines(), 1).get('[data-quantity]').element;
+
+        await nth(lines(), 0).get('[data-remove]').trigger('click');
+        await flushPromises();
+
+        expect(lines()).toHaveLength(1);
+        expect(nth(lines(), 0).get('[data-quantity]').element).toBe(juiceQuantity);
+    });
+
     it('el total estimado suma el domicilio del barrio elegido', async () => {
         const { wrapper, total } = await mountCart();
 
@@ -177,7 +188,13 @@ describe('OrderCart', () => {
     it('si falta algo, «Enviar» no abre WhatsApp: marca cada campo, lo anuncia y lleva el foco al primero', async () => {
         const { wrapper } = await mountCart();
 
-        const prevented = await clickSend(wrapper.get('[data-send]').element as HTMLElement);
+        // Mientras falta algo no es un enlace: no se puede abrir, copiar ni mantener presionado.
+        const send = wrapper.get('[data-send]');
+        expect(send.element.tagName).toBe('BUTTON');
+        expect(send.attributes('href')).toBeUndefined();
+        expect(send.attributes('type')).toBe('button');
+
+        const prevented = await clickSend(send.element as HTMLElement);
 
         expect(prevented).toBe(true);
         expect(wrapper.findAll('[data-error]').map((error) => error.text())).toEqual(['Elegí tu barrio.', 'Escribí la dirección.', 'Elegí cómo pagás.']);
@@ -219,6 +236,7 @@ describe('OrderCart', () => {
         );
 
         const link = wrapper.get('[data-send]');
+        expect(link.element.tagName).toBe('A');
         expect(link.attributes('target')).toBe('_blank');
         expect(link.attributes('rel')).toBe('noopener noreferrer');
         expect(await clickSend(link.element as HTMLElement)).toBe(false);
@@ -244,6 +262,9 @@ describe('OrderCart', () => {
         const fetchSpy = vi.spyOn(globalThis, 'fetch');
         const getCurrentPosition = stubCurrentPosition({ latitude: 4.412812, longitude: -76.154734, accuracy: 18.4 });
         const { wrapper, message } = await mountCart();
+        await wrapper.get('[data-neighborhood]').setValue('El Mirador (ficticio)');
+        await wrapper.get('[data-address]').setValue('Cra 5 #8-20');
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
 
         expect(getCurrentPosition).not.toHaveBeenCalled();
         expect(message()).not.toContain('📍');
@@ -279,6 +300,8 @@ describe('OrderCart', () => {
 
         await wrapper.get('[data-address]').setValue('Cra 5 #8-20');
         await wrapper.get('[data-location-add]').trigger('click');
+        await wrapper.get('[data-payment="cash"]').setValue(true);
+        await wrapper.get('[data-cash]').setValue('50000');
         expect(window.localStorage.getItem('veni:delivery:prueba-la-ceiba')).toBeNull();
 
         await wrapper.get('[data-remember]').setValue(true);
@@ -290,6 +313,8 @@ describe('OrderCart', () => {
         expect(saved).toContain('casa azul');
         expect(saved).not.toContain('4.41');
         expect(saved).not.toContain('cash');
+        expect(saved).not.toContain('50000');
+        expect(saved).not.toContain('50.000');
 
         await wrapper.get('[data-forget]').trigger('click');
         await flushPromises();
@@ -331,6 +356,8 @@ describe('OrderCart', () => {
 
     it('en inglés, la interfaz y el mensaje van en inglés', async () => {
         const { wrapper, message } = await mountCart(RESTAURANT, [JUICE], 'en');
+        await wrapper.get('[data-mode="pickup"]').setValue(true);
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
 
         expect(wrapper.get('h2').text()).toBe('Your order');
         expect(message()).toContain("Hi, I'd like to place an order from Vení Roldanillo:");

@@ -2,7 +2,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from 'vue';
 
 import Icon from '@/components/Icon.vue';
-import type { TranslationKey } from '@/composables/useI18n';
 import { useI18n } from '@/composables/useI18n';
 import { formatPesos } from '@/i18n/intl';
 import type { DeliveryMode, DetailsField, OrderContext, OrderDetails } from '@/order/checkout';
@@ -23,6 +22,7 @@ import { MAX_QUANTITY, MIN_QUANTITY } from '@/order/selection';
 import { forgetDelivery, loadDelivery, saveDelivery } from '@/order/storage';
 import { useOrder } from '@/order/useOrder';
 import type { PaymentMethod, RestaurantProfile } from '@/restaurants/profile';
+import { PAYMENT_METHOD_KEYS } from '@/restaurants/profile';
 
 /**
  * El carrito de un restaurante (#15, ADR 0024): las líneas del pedido (con sus
@@ -57,18 +57,11 @@ const items = order.items;
 
 const MODES: readonly DeliveryMode[] = ['delivery', 'pickup'];
 
-const PAYMENT_KEYS: Readonly<Record<PaymentMethod, TranslationKey>> = {
-    cash: 'restaurant.payment.cash',
-    nequi: 'restaurant.payment.nequi',
-    daviplata: 'restaurant.payment.daviplata',
-    card: 'restaurant.payment.card',
-};
-
 const context = computed<OrderContext>(() => ({
     deliveryAvailable: restaurant.delivery.available,
     zones: restaurant.delivery.zones,
     // Un medio que esta versión no conoce no se ofrece como una clave suelta.
-    paymentMethods: restaurant.payment_methods.filter((method) => method in PAYMENT_KEYS),
+    paymentMethods: restaurant.payment_methods.filter((method) => method in PAYMENT_METHOD_KEYS),
 }));
 
 const number = computed(() => whatsappNumber(restaurant.whatsapp));
@@ -143,6 +136,24 @@ function describedBy(field: DetailsField, hint: boolean): string | undefined {
 
 const message = computed(() => orderMessage(items.value, details.value, context.value, t, money));
 const href = computed(() => (number.value === null ? null : whatsappUrl(number.value, message.value)));
+
+/**
+ * Una clave estable por línea, su firma sin la cantidad (lo que la hace
+ * única, ver sameLine): al quitar una, las demás conservan su elemento y el
+ * <output> de cantidad no anuncia un cambio que no hubo. Si una firma se
+ * repite (un carrito guardado a mano), se numera.
+ */
+const lineKeys = computed(() => {
+    const seen = new Map<string, number>();
+
+    return items.value.map((item) => {
+        const signature = JSON.stringify([item.dish, item.unitPrice, item.note, item.removed, item.choices.map((choice) => [choice.group, choice.name, choice.price])]);
+        const repeated = seen.get(signature) ?? 0;
+        seen.set(signature, repeated + 1);
+
+        return repeated === 0 ? signature : `${signature}#${String(repeated)}`;
+    });
+});
 
 /** Lo que va debajo del nombre de una línea: opciones, lo quitado. */
 function lineDetails(item: OrderItem): string {
@@ -267,8 +278,9 @@ async function forgetLocation(): Promise<void> {
 
 /**
  * «Enviar» es un enlace real a wa.me (se puede abrir, copiar o mantener
- * presionado). Si falta algo no navega: marca cada campo, lo anuncia y lleva
- * el foco al primero.
+ * presionado) solo con el pedido completo. Mientras falta algo es un botón,
+ * sin la dirección de wa.me que se podría abrir igual desde el menú del
+ * enlace: marca cada campo, lo anuncia y lleva el foco al primero.
  */
 async function onSend(event: MouseEvent): Promise<void> {
     if (problems.value.size > 0) {
@@ -351,7 +363,7 @@ onBeforeUnmount(() => {
 
             <template v-else>
                 <ul class="mt-2 divide-y divide-line" :aria-label="t('order.cart.lines')">
-                    <li v-for="(item, index) in items" :key="index" class="py-3" data-line>
+                    <li v-for="(item, index) in items" :key="lineKeys[index]" class="py-3" data-line>
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
                                 <p class="font-semibold wrap-anywhere">{{ item.dish }}</p>
@@ -571,7 +583,7 @@ onBeforeUnmount(() => {
                                 :data-payment="method"
                                 @change="onPayment(method)"
                             >
-                            <span>{{ t(PAYMENT_KEYS[method]) }}</span>
+                            <span>{{ t(PAYMENT_METHOD_KEYS[method]) }}</span>
                         </label>
                     </fieldset>
 
@@ -637,6 +649,7 @@ onBeforeUnmount(() => {
             <p class="mt-1 text-sm text-ink-muted">{{ t('order.cart.total_hint') }}</p>
             <template v-if="href !== null">
                 <a
+                    v-if="problems.size === 0"
                     :href="href"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -648,6 +661,17 @@ onBeforeUnmount(() => {
                     <Icon name="enlace-externo" :size="20" />
                     {{ t('order.form.send') }}
                 </a>
+                <button
+                    v-else
+                    type="button"
+                    class="mt-2 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                    :aria-describedby="`${id}-send-hint`"
+                    data-send
+                    @click="onSend"
+                >
+                    <Icon name="enlace-externo" :size="20" />
+                    {{ t('order.form.send') }}
+                </button>
                 <p :id="`${id}-send-hint`" class="mt-1 text-center text-sm text-ink-muted">{{ t('order.form.send_hint') }}</p>
             </template>
         </footer>
