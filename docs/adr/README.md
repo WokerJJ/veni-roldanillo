@@ -27,3 +27,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0021](0021-locales-de-openstreetmap.md) | Locales de OpenStreetMap: borradores ocultos con su procedencia, bajo ODbL | Aceptada |
 | [0022](0022-panel-de-abajo-en-el-celular.md) | El panel de abajo del celular: tres alturas, una manija propia y el resumen y la lista fuera del arranque | Aceptada |
 | [0023](0023-opciones-y-quitar-ingredientes.md) | Opciones, adiciones y quitar ingredientes: un tipo de grupo, publicados por lista blanca y armados en el dispositivo | Aceptada |
+| [0024](0024-carrito-y-pedido-por-whatsapp.md) | Carrito y pedido por WhatsApp: el mensaje se arma en el dispositivo, el carrito se guarda un día y la ubicación solo viaja en el texto que envía la persona | Aceptada |
