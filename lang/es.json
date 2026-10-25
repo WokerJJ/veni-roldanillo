@@ -85,6 +85,8 @@
     "restaurant.hidden": "Esta ficha está oculta: solo la ven la gente del restaurante y la administración.",
     "restaurant.unverified": "Información sin verificar.",
     "restaurant.unverified_since": "Información sin verificar · actualizada el :date.",
+    "restaurant.delay": "Demora de :minutes min.",
+    "restaurant.owner_updated": "Actualizada por el restaurante el :date.",
     "restaurant.hours.title": "Horario",
     "restaurant.hours.today": "Hoy",
     "restaurant.hours.closed": "Cerrado",

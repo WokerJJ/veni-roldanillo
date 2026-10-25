@@ -30,7 +30,8 @@ class RestaurantController extends Controller
             ->select([
                 'id', 'slug', 'name', 'description_es', 'description_en', 'address', 'reference',
                 'phone', 'whatsapp', 'price_level', 'delivery', 'delivery_notes_es', 'delivery_notes_en',
-                'payment_methods', 'status', 'is_fictitious', 'updated_at',
+                'payment_methods', 'status', 'is_fictitious', 'updated_at', 'updated_by_owner_at',
+                'delay_minutes', 'delay_until',
             ])
             ->where('slug', $slug)
             ->first();

@@ -10,6 +10,7 @@ use App\Enums\RestaurantStatus;
 use App\Models\Concerns\HasTranslatableFields;
 use App\Support\BusinessDay;
 use App\Support\GeoPoint;
+use Carbon\CarbonInterface;
 use Database\Factories\RestaurantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -41,6 +42,9 @@ use Illuminate\Support\Collection;
  * @property RestaurantPlan $plan
  * @property GeoPoint $location
  * @property Collection<int, PaymentMethod> $payment_methods
+ * @property CarbonInterface|null $updated_by_owner_at
+ * @property int|null $delay_minutes
+ * @property CarbonInterface|null $delay_until
  */
 #[Fillable([
     'name', 'description_es', 'description_en',
@@ -51,6 +55,12 @@ class Restaurant extends Model
 {
     /** @use HasFactory<RestaurantFactory> */
     use HasFactory, HasTranslatableFields;
+
+    /** Cuánto dura un aviso de demora si el dueño no lo quita antes. */
+    public const DELAY_NOTICE_HOURS = 3;
+
+    /** Los minutos que se pueden anunciar (el CHECK de la base va de 5 a 180). */
+    public const DELAY_NOTICE_OPTIONS = [15, 20, 30, 40, 60, 90];
 
     /** @var array<string, mixed> */
     protected $attributes = [
@@ -75,6 +85,8 @@ class Restaurant extends Model
             'plan' => RestaurantPlan::class,
             'verified_at' => 'datetime',
             'updated_by_owner_at' => 'datetime',
+            'delay_minutes' => 'integer',
+            'delay_until' => 'datetime',
             'is_fictitious' => 'boolean',
         ];
     }
@@ -291,5 +303,44 @@ class Restaurant extends Model
     public function orderIntents(): HasMany
     {
         return $this->hasMany(OrderIntent::class);
+    }
+
+    /**
+     * Minutos del aviso de demora que se publican (#18, ADR 0025), o null si
+     * no hay aviso o ya venció: el aviso se va solo, sin tarea programada.
+     */
+    public function activeDelayMinutes(): ?int
+    {
+        if ($this->delay_minutes === null || $this->delay_until === null || $this->delay_until->isPast()) {
+            return null;
+        }
+
+        return $this->delay_minutes;
+    }
+
+    /**
+     * Anuncia «Demora de N min» por DELAY_NOTICE_HOURS horas. Lo llama el
+     * panel del dueño; no es asignable en masa.
+     */
+    public function announceDelay(int $minutes): void
+    {
+        $this->forceFill([
+            'delay_minutes' => $minutes,
+            'delay_until' => now()->addHours(self::DELAY_NOTICE_HOURS),
+        ])->save();
+    }
+
+    public function clearDelay(): void
+    {
+        $this->forceFill(['delay_minutes' => null, 'delay_until' => null])->save();
+    }
+
+    /**
+     * «Actualizada el…» de la ficha: el dueño cambió algo desde su panel.
+     * updated_by_owner_at no es asignable en masa; solo lo escribe esto.
+     */
+    public function touchOwnerUpdate(): void
+    {
+        $this->forceFill(['updated_by_owner_at' => now()])->save();
     }
 }

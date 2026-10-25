@@ -85,6 +85,8 @@
     "restaurant.hidden": "This listing is hidden: only the restaurant's staff and the site admins can see it.",
     "restaurant.unverified": "Unverified information.",
     "restaurant.unverified_since": "Unverified information · updated on :date.",
+    "restaurant.delay": ":minutes min delay.",
+    "restaurant.owner_updated": "Updated by the restaurant on :date.",
     "restaurant.hours.title": "Opening hours",
     "restaurant.hours.today": "Today",
     "restaurant.hours.closed": "Closed",

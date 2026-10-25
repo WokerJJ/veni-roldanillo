@@ -13,6 +13,7 @@ use App\Models\MenuSection;
 use App\Models\Option;
 use App\Models\Restaurant;
 use App\Models\SpecialHour;
+use App\Support\BusinessDay;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -53,6 +54,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *     hidden: bool,
  *     unverified: bool,
  *     updated_on: string|null,
+ *     owner_updated_on: string|null,
+ *     delay_minutes: int|null,
  *     price_level: int|null,
  *     address: string|null,
  *     reference: string|null,
@@ -100,6 +103,10 @@ class RestaurantProfile extends JsonResource
             // Sin reclamar: nadie del restaurante confirmó estos datos.
             'unverified' => $restaurant->status === RestaurantStatus::Unclaimed,
             'updated_on' => $restaurant->updated_at?->toDateString(),
+            // «Actualizada el…»: el último cambio del dueño desde su panel (ADR 0025).
+            'owner_updated_on' => $restaurant->updated_by_owner_at?->timezone(BusinessDay::TIME_ZONE)->toDateString(),
+            // «Demora de N min», mientras el aviso del panel no venza.
+            'delay_minutes' => $restaurant->activeDelayMinutes(),
             'price_level' => $restaurant->price_level,
             'address' => $restaurant->address,
             'reference' => $restaurant->reference,

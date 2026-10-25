@@ -154,6 +154,17 @@ onBeforeUnmount(() => {
 
                 <p v-if="restaurant.description" class="mt-4 max-w-prose whitespace-pre-line" data-description>{{ restaurant.description }}</p>
 
+                <!-- Aviso de demora del panel del dueño (ADR 0025): se va solo cuando vence. -->
+                <p v-if="restaurant.delay_minutes" class="mt-3 flex items-start gap-2 font-semibold" role="status" data-delay>
+                    <Icon name="reloj" :size="20" class="shrink-0" />
+                    <span>{{ t('restaurant.delay', { minutes: String(restaurant.delay_minutes) }) }}</span>
+                </p>
+
+                <!-- Reclamada: el último cambio que hizo el restaurante desde su panel. -->
+                <p v-if="!restaurant.unverified && restaurant.owner_updated_on" class="mt-3 text-sm text-ink-muted" data-owner-updated>
+                    {{ t('restaurant.owner_updated', { date: formatDate(restaurant.owner_updated_on, locale) }) }}
+                </p>
+
                 <!-- Sin reclamar: nadie del restaurante confirmó estos datos. -->
                 <p v-if="restaurant.unverified" class="mt-3 flex items-start gap-2 text-sm text-ink-muted" data-unverified>
                     <Icon name="informacion" :size="20" class="shrink-0" />

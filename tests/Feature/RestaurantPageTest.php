@@ -186,7 +186,7 @@ describe('lista blanca', function () {
         expect(array_values(array_diff(array_keys($response->inertiaProps()), array_keys($this->get('/')->inertiaProps()))))->toBe(['restaurant', 'meta'])
             ->and(array_keys($profile))->toBe([
                 'slug', 'name', 'description', 'categories', 'fictitious', 'hidden', 'unverified', 'updated_on',
-                'price_level', 'address', 'reference', 'phone', 'whatsapp', 'payment_methods', 'delivery',
+                'owner_updated_on', 'delay_minutes', 'price_level', 'address', 'reference', 'phone', 'whatsapp', 'payment_methods', 'delivery',
                 'hours', 'special_hours', 'menu',
             ])
             ->and(array_keys($profile['categories'][0]))->toBe(['slug', 'name'])
@@ -216,6 +216,10 @@ describe('lista blanca', function () {
             'delivery' => true,
             'delivery_notes_es' => 'Domicilios hasta las 9 de la noche.',
             'payment_methods' => [PaymentMethod::Cash, PaymentMethod::Nequi],
+            'updated_by_owner_at' => '2026-10-05 09:30:00',
+            'delay_minutes' => 40,
+            // Vigente cuando se pide la ficha (abajo, el 7 a las 12:30).
+            'delay_until' => '2026-10-07 14:00:00',
         ]);
         $restaurant->categories()->attach(Category::factory()->create(['slug' => 'comida-tipica', 'name_es' => 'Comida típica']));
 

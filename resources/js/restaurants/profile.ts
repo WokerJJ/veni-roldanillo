@@ -96,6 +96,10 @@ export interface RestaurantProfile {
     unverified: boolean;
     /** Día de la última actualización (`YYYY-MM-DD`). */
     updated_on: string | null;
+    /** Día del último cambio del restaurante desde su panel (`YYYY-MM-DD`), o null. */
+    owner_updated_on: string | null;
+    /** «Demora de N min» del panel del dueño mientras está vigente, o null. */
+    delay_minutes: number | null;
     /** De 1 a 4. */
     price_level: number | null;
     address: string | null;

@@ -9,6 +9,8 @@
     "hidden": false,
     "unverified": false,
     "updated_on": "2026-10-05",
+    "owner_updated_on": "2026-10-05",
+    "delay_minutes": 40,
     "price_level": 2,
     "address": "Calle de Prueba # 1-23",
     "reference": "Dirección inventada",
