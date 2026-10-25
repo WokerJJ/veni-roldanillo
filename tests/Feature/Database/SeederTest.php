@@ -12,6 +12,7 @@ use App\Models\User;
 use Database\Seeders\CategorySeeder;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\NeighborhoodSeeder;
+use Database\Seeders\PanelOwnerSeeder;
 use Database\Seeders\RestaurantSeeder;
 use Database\Seeders\UserSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -96,7 +97,8 @@ test('el seeder arma menús con opciones obligatorias y adiciones', function () 
     $dish = Dish::query()->whereHas('optionGroups', fn ($q) => $q->where('required', true))->firstOrFail();
 
     expect($dish->optionGroups()->where('required', false)->exists())->toBeTrue()
-        ->and(Restaurant::query()->whereHas('owners')->count())->toBe(1);
+        // La dueña de UserSeeder y, desde #18, el otro dueño de PanelOwnerSeeder.
+        ->and(Restaurant::query()->whereHas('owners')->count())->toBe(2);
 });
 
 test('el seeder deja ingredientes para quitar y opciones rotuladas de prueba, solo en restaurantes ficticios', function () {
@@ -210,4 +212,20 @@ test('las zonas de domicilio sembradas son siempre las mismas', function () {
     expect($first)->not->toBeEmpty()
         ->and(DeliveryZone::query()->count())->toBe(count($first))
         ->and($zones())->toBe($first);
+});
+
+test('las cuentas de ejemplo del panel: dos dueños de restaurantes distintos y un empleado, y volver a sembrar no duplica', function () {
+    $this->seed(DatabaseSeeder::class);
+    $this->seed(PanelOwnerSeeder::class);
+
+    $owner = User::query()->where('email', PanelOwnerSeeder::OWNER_EMAIL)->sole();
+    $other = User::query()->where('email', PanelOwnerSeeder::OTHER_OWNER_EMAIL)->sole();
+    $staff = User::query()->where('email', PanelOwnerSeeder::STAFF_EMAIL)->sole();
+
+    expect($owner->ownedRestaurants()->pluck('restaurants.id')->all())->not->toBe($other->ownedRestaurants()->pluck('restaurants.id')->all())
+        ->and($owner->ownedRestaurants()->where('is_fictitious', true)->count())->toBe(1)
+        ->and($staff->ownedRestaurants()->count())->toBe(0)
+        ->and($staff->restaurants()->count())->toBe(1)
+        ->and(Hash::check(PanelOwnerSeeder::PASSWORD, $owner->password))->toBeTrue()
+        ->and(User::query()->where('email', 'like', 'panel.%')->count())->toBe(3);
 });
