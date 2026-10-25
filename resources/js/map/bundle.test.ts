@@ -160,6 +160,14 @@ describe('reparto del bundle', () => {
         expect(loadedWith(engine).some((chunk) => has(chunk, /\/node_modules\/pmtiles\//))).toBe(true);
     });
 
+    it('el carrito es un chunk que la ficha pide con import() al tocar la barra del pedido (ADR 0024)', () => {
+        const cart = chunkOf('/resources/js/components/OrderCart.vue');
+        const show = loadedWith(chunkOf('/resources/js/pages/Restaurants/Show.vue'));
+
+        expect(show.filter((chunk) => has(chunk, /\/resources\/js\/components\/OrderCart\.vue/)).map((chunk) => chunk.fileName)).toEqual([]);
+        expect(show.some((chunk) => chunk.dynamicImports.includes(cart.fileName))).toBe(true);
+    });
+
     it('el worker de MapLibre no repite el código que comparte con el hilo principal', () => {
         const shared = chunks.filter((chunk) => has(chunk, /\/maplibre-gl-shared\.mjs$/));
         const worker = chunkOf('/node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs');

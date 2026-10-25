@@ -2,9 +2,9 @@
 import { computed, useId } from 'vue';
 
 import Icon from '@/components/Icon.vue';
-import type { TranslationKey } from '@/composables/useI18n';
 import { useI18n } from '@/composables/useI18n';
-import type { PaymentMethod, RestaurantProfile } from '@/restaurants/profile';
+import type { RestaurantProfile } from '@/restaurants/profile';
+import { PAYMENT_METHOD_KEYS } from '@/restaurants/profile';
 
 /**
  * Dónde queda un restaurante y cómo hablarle (#13): la dirección con su
@@ -12,8 +12,8 @@ import type { PaymentMethod, RestaurantProfile } from '@/restaurants/profile';
  * precios. Son los datos del negocio, los que el restaurante publica; de lo
  * que no cargó no queda ni el rótulo, y sin ninguno la sección no sale.
  *
- * El WhatsApp es un enlace para escribirle, sin mensaje armado: el pedido con
- * el carrito es del #15.
+ * El WhatsApp es un enlace para escribirle, sin mensaje armado: el pedido
+ * armado sale del carrito (OrderBar y OrderCart, #15).
  */
 const { restaurant } = defineProps<{
     restaurant: Pick<RestaurantProfile, 'address' | 'reference' | 'phone' | 'whatsapp' | 'payment_methods' | 'price_level'>;
@@ -25,15 +25,8 @@ const headingId = useId();
 /** Hasta cuánto llega el nivel de precios (CHECK price_level BETWEEN 1 AND 4). */
 const PRICE_LEVELS = 4;
 
-const PAYMENT_METHODS: Readonly<Record<PaymentMethod, TranslationKey>> = {
-    cash: 'restaurant.payment.cash',
-    nequi: 'restaurant.payment.nequi',
-    daviplata: 'restaurant.payment.daviplata',
-    card: 'restaurant.payment.card',
-};
-
 /** Un medio de pago que esta versión de la app todavía no conoce no se muestra como una clave suelta. */
-const payments = computed(() => restaurant.payment_methods.filter((method) => method in PAYMENT_METHODS));
+const payments = computed(() => restaurant.payment_methods.filter((method) => method in PAYMENT_METHOD_KEYS));
 
 const hasAny = computed(
     () =>
@@ -124,7 +117,7 @@ const whatsappText = computed(() => {
                 <dd>
                     <ul class="mt-1 flex flex-wrap gap-1.5" :aria-labelledby="`${headingId}-payments`">
                         <li v-for="method in payments" :key="method" class="rounded-full bg-surface px-2.5 py-0.5 text-sm">
-                            {{ t(PAYMENT_METHODS[method]) }}
+                            {{ t(PAYMENT_METHOD_KEYS[method]) }}
                         </li>
                     </ul>
                 </dd>
