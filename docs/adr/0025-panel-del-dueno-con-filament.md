@@ -1,0 +1,45 @@
+# ADR 0025 · Panel del dueño con Filament: login propio sin registro, tenancy por restaurante y un perfil de CSP solo para `/panel`
+
+- Estado: aceptada
+- Fecha: 2026-10-25
+- Precisa: ADR 0009 (modelo de datos y Policies), ADR 0010 (textos en JSON compartidos con Vue), ADR 0014 (CSP con nonce y perfiles por ruta), ADR 0018 (la ficha pública) y ADR 0023 (grupos de opciones).
+- Afecta a: `app/Providers/Filament/OwnerPanelProvider.php`, `app/Filament/Owner/`, `app/Http/Middleware/UseContentSecurityPolicyProfile.php` y `SetContentSecurityPolicy.php`, `app/Models/User.php` y `Restaurant.php`, `resources/views/vendor/`, `config/livewire.php`, `lang/{es,en}/panel.php`, la migración `2026_10_25_100000_add_delay_notice_to_restaurants_table`, `database/seeders/PanelOwnerSeeder.php`, `Dockerfile` y `composer.json`.
+
+## Contexto
+
+El stack ya decía «Filament para paneles de admin y dueños», pero la app no tenía autenticación. #18 pide el panel del dueño: ficha, menú, «agotado hoy», promociones, horarios, zonas de domicilio y aviso de demora, con la regla 5 de producto (un dueño solo edita su restaurante, autorizado en el servidor con Policies) y sin romper la CSP con nonce del ADR 0014, cuyo perfil público no se relaja.
+
+Había que decidir: versión de Filament, cómo se entra (no hay registro abierto ni correo saliente), cómo se aísla un restaurante de otro, qué necesita Filament de la CSP, dónde van sus textos y cómo se modela el aviso de demora, que no tenía columna.
+
+## Alternativas
+
+- **Filament 5 (Livewire 4) o Filament 4 (Livewire 3).** Los dos son MIT y aceptan Laravel 13. Se elige 5, la estable actual: misma API de recursos y esquemas, y Livewire 4.
+- **Panel propio en Inertia + Vue.** Sin dependencia nueva y con la CSP pública intacta, pero son semanas de formularios, tablas y validación que Filament trae hechos, y el stack ya elegía Filament.
+- **Aislamiento solo con Policies y consultas filtradas a mano en cada recurso.** Funciona, pero un recurso que se olvide del filtro lista lo ajeno. **Tenancy de Filament** pone el restaurante en la dirección (`/panel/{slug}/…`), comprueba en cada petición que la persona sea su dueña, filtra todas las tablas por él y cuelga de él lo que se crea; las Policies siguen autorizando cada registro. Se usan las dos.
+- **CSP: la versión sin eval de Livewire (`csp_safe`).** Se probó: el analizador de expresiones de Alpine no entiende las de Filament (`CSP Parser Error` en la consola y el panel sin funcionar). **La versión normal con `'unsafe-eval'` solo en `/panel`** es la que queda.
+- **Textos del panel en `lang/{es,en}.json`.** Ese archivo viaja entero al navegador en cada página pública (ADR 0010); sumarle unas ochenta líneas que solo usa el servidor engorda todas las respuestas. Van en `lang/{es,en}/panel.php`, con su prueba de paridad.
+- **Aviso de demora: dejarlo para otro issue o un diseño mínimo.** El mínimo cabe: dos columnas y una acción.
+
+## Decisión
+
+1. **Filament 5.10 (MIT), panel `owner` en `/panel`.** Login de Filament para cuentas que ya existen: sin registro ni recuperación de contraseña (no hay correo saliente; las cuentas las crea administración o el reclamo de #20). El login trae su límite de intentos (cinco por minuto); la sesión, el CSRF y las cookies son los de la app (`HttpOnly`, `SameSite=Lax`, `Secure` en producción, ADR 0014).
+2. **Quién entra.** `User::canAccessPanel`: quien es dueño (`restaurant_user.role = owner`) de algún restaurante. Los empleados todavía no tienen panel (editar es del dueño, `RestaurantPolicy::update`) y la administración tendrá el suyo (#19). `User::canAccessTenant` consulta la base con el restaurante del slug: otro dueño recibe 404, como si no existiera.
+3. **Autorización.** Los recursos heredan de `App\Filament\Owner\OwnerResource`: ver la lista y crear se preguntan con el restaurante de la dirección (`RestaurantPolicy::update` y `RestaurantContentPolicy::create`, que recibe el restaurante, nunca un `restaurant_id` del cliente); editar y borrar, con el registro (`RestaurantContentPolicy`, que sigue las FK guardadas). Sin acciones en bloque. Los grupos de opciones van dentro del plato, con su autorización por grupo.
+4. **Lo que el dueño no toca.** `slug`, `status`, `plan`, `verified_at`, `is_fictitious` y `updated_by_owner_at` no están en el formulario ni en `$fillable`; la ficha guarda solo `EditRestaurantProfile::FIELDS`.
+5. **Validación.** Textos sin espacios a los lados y obligatorios que no pueden ser solo espacios (tampoco los de Unicode); descripción de la ficha hasta 1000 caracteres y de un plato hasta 500; precios en pesos enteros de 0 a dos millones. Grupos de opciones (auditoría del #14): `kind` con `Rule::enum`, un grupo de quitar con mínimo 0, «obligatorio» derivado del mínimo (como el CHECK), máximo ≥ mínimo, hasta 10 grupos por plato y 30 opciones por grupo, al menos una opción. Lo que igual rechace la base (el `EXCLUDE` de los horarios, un barrio repetido) se avisa en el formulario, no como 500 (`TranslatesConstraintViolations`).
+6. **«Actualizada el…».** Cada cambio guardado desde el panel (ficha, horarios, secciones, platos, «agotado hoy», opciones, promociones y zonas) mueve `restaurants.updated_by_owner_at`. La ficha pública lo muestra en las reclamadas: «Actualizada por el restaurante el …» (`owner_updated_on`).
+7. **Aviso de demora.** `restaurants.delay_minutes` (5 a 180) y `delay_until`, juntas o nulas (CHECK); migración solo hacia adelante, sin reescribir la tabla. El dueño elige 15, 20, 30, 40, 60 o 90 minutos y el aviso vence solo a las tres horas, sin tarea programada (`Restaurant::activeDelayMinutes`). La ficha pública lo anuncia con `role="status"` (`delay_minutes`).
+8. **CSP: perfil `panel`.** Las rutas de Filament declaran el perfil con `UseContentSecurityPolicyProfile` en su lista de middleware (no se puede escribir `['csp' => …]` en rutas de un paquete). El perfil parte de la política pública y le suma solo:
+   - `script-src 'unsafe-eval'`: Alpine evalúa los atributos `x-data`, `x-on`… con `new Function`. Los scripts siguen necesitando el nonce.
+   - `style-src-attr 'unsafe-inline'`: los atributos `style="…"` del HTML de Filament. Los `<style>` siguen necesitando el nonce: dos vistas de Filament que no lo ponían están copiadas en `resources/views/vendor/` con el nonce agregado, y una prueba avisa si al actualizar Filament dejan de coincidir con las del paquete.
+   - El avatar por defecto de Filament se pedía a `ui-avatars.com` (mandaba el nombre a un tercero); lo reemplaza un SVG con las iniciales en una URL `data:`.
+9. **Assets.** Filament trae su CSS, JS y la fuente Inter compilados; `php artisan filament:assets` los publica en `public/{css,js,fonts}/filament` (al instalar con composer y al construir la imagen) y no se versionan. El bundle de la app pública no cambia.
+10. **Cuentas de ejemplo.** `PanelOwnerSeeder` (solo `local`/`testing`, solo agrega) crea `panel.duena@example.test` y `panel.otro@example.test` (dueños de los dos primeros restaurantes ficticios) y `panel.empleado@example.test`, con la contraseña de ejemplo `veni-panel-dev`, documentada en el README solo para desarrollo.
+
+## Consecuencias
+
+- El riesgo que deja `'unsafe-eval'` en `/panel`: un atributo `x-data` o `x-on` que se colara en el HTML del panel se ejecutaría. Todo lo que escribe el panel pasa por el escape de Blade y de Filament, y solo entran dueños autenticados. Si Livewire o Filament llegan a funcionar con `csp_safe`, se quita (`config/livewire.php`). El sitio público no cambia: lo comprueba una prueba.
+- Las dos vistas copiadas son deuda: al actualizar Filament hay que volver a copiarlas si cambian (la prueba lo avisa).
+- La suite de Pest necesita más memoria con Filament cargado: `phpunit.xml` sube `memory_limit` a 512 MB.
+- Pendiente: ubicación de la ficha (arrastrar el pin) y fotos de platos (necesitan el mapa en el panel y la subida a WebP del documento de seguridad); categorías; 2FA para dueños (documento de seguridad) y el acceso por código de WhatsApp, que reemplazará la contraseña; el registro de cambios con activitylog.
+- La tabla de platos en el celular se desplaza de lado (columnas de Filament); se puede ajustar ocultando columnas en pantallas angostas.

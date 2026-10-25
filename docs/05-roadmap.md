@@ -26,7 +26,7 @@ Cerrada: versión 0.1.0.
 - [x] Ubicación del usuario y ruta en el dispositivo (ADR 0008, 0019 y 0020)
 - [x] Panel de abajo en el celular, con tres alturas y panel lateral con poco alto (#81, ADR 0022)
 - [ ] Búsqueda por plato con Meilisearch
-- [ ] Panel de dueño (Filament): ficha, menú, agotado hoy, promociones, horarios especiales, aviso de demora
+- [x] Panel de dueño (Filament): ficha, menú, agotado hoy, promociones, horarios especiales, aviso de demora (#18, ADR 0025). Pendiente: pin de ubicación, fotos de platos, categorías, 2FA
 - [ ] Panel de administración: alta de restaurantes, reclamación de fichas, moderación
 - [ ] "¿Es tu negocio? Reclámalo" y retiro de ficha
 - [ ] Guía de platos típicos (ES/EN)

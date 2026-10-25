@@ -140,7 +140,7 @@ Decidida en el [ADR 0018](adr/0018-ficha-del-restaurante.md).
 
 | Prop | Qué trae |
 | --- | --- |
-| `restaurant` | La lista blanca de `App\Http\Resources\RestaurantProfile`: `slug`, `name`, `description`, `categories`, `fictitious`, `hidden`, `unverified`, `updated_on`, `price_level`, `address`, `reference`, `phone`, `whatsapp`, `payment_methods`, `delivery` (`available`, `notes`, `zones` con barrio y costo), `hours`, `special_hours` (con `note`) y `menu` (secciones con sus platos: `name`, `description`, `price`, `sold_out_until` y `groups`, sus grupos de opciones: `name`, `kind`, `min`, `max` y `options` con `name` y `price`) |
+| `restaurant` | La lista blanca de `App\Http\Resources\RestaurantProfile`: `slug`, `name`, `description`, `categories`, `fictitious`, `hidden`, `unverified`, `updated_on`, `owner_updated_on` y `delay_minutes` (del panel del dueño, ADR 0025), `price_level`, `address`, `reference`, `phone`, `whatsapp`, `payment_methods`, `delivery` (`available`, `notes`, `zones` con barrio y costo), `hours`, `special_hours` (con `note`) y `menu` (secciones con sus platos: `name`, `description`, `price`, `sold_out_until` y `groups`, sus grupos de opciones: `name`, `kind`, `min`, `max` y `options` con `name` y `price`) |
 | `meta` | `title` y `description` del documento, en el idioma de la petición. La vista raíz los escribe en el HTML (quien arma la vista previa de un enlace no ejecuta JavaScript); al navegar sin recargar los mantienen `<Head>` y `useI18n` |
 
 No viajan el id, los dueños, el plan, la ubicación exacta, los platos ni las opciones que el dueño sacó del menú (`available`), ni los grupos que se quedan sin opciones. Las opciones, las adiciones y los ingredientes para quitar viajan desde #14 ([ADR 0023](adr/0023-opciones-y-quitar-ingredientes.md)). Los textos traducibles salen en el idioma de la petición y, si falta el inglés, en español (`HasTranslatableFields`).
@@ -163,6 +163,23 @@ No viajan el id, los dueños, el plan, la ubicación exacta, los platos ni las o
 **Las props se vuelven a pedir** cuando la pestaña regresa del fondo y tienen más de un minuto, como la lista del mapa: solo `restaurant` y `meta`. Si la ficha se ocultó, la página se pide entera y se ve el 404 del servidor; con otro error, o sin señal, se queda la que había.
 
 La ficha no pide el modo inmersivo: va en el layout común, con su pie de página. Su código es un chunk aparte, que baja al abrirla; sus estilos van en el CSS único de la app.
+
+### Panel del dueño
+
+Decidido en el [ADR 0025](adr/0025-panel-del-dueno-con-filament.md). Filament 5 (Livewire 4), panel `owner` en `/panel` (`app/Providers/Filament/OwnerPanelProvider.php`), con su propio login para cuentas existentes: sin registro ni recuperación de contraseña, cinco intentos por minuto.
+
+| Pieza | Dónde | Qué hace |
+| --- | --- | --- |
+| Acceso | `User::canAccessPanel`, `getTenants`, `canAccessTenant` | Entra quien es dueño de algún restaurante; los empleados no. La dirección lleva el restaurante (`/panel/{slug}/…`, tenancy de Filament) y en cada petición se comprueba en la base que la persona sea su dueña; si no, 404 |
+| Recursos | `app/Filament/Owner/Resources` sobre `OwnerResource` | Secciones, platos (con «agotado hoy» y sus grupos de opciones), promociones, horario semanal, horarios especiales y zonas de domicilio. Las tablas se filtran por el restaurante de la dirección; lo nuevo se cuelga de él por la relación. Ver y crear se autorizan con `RestaurantPolicy::update` y `RestaurantContentPolicy::create` (con el restaurante); editar y borrar, con el registro |
+| Ficha y demora | `app/Filament/Owner/Pages/EditRestaurantProfile.php` | Lo que el dueño edita de su ficha (`FIELDS`; nunca slug, estado, plan, verificación ni «ficticio») y el aviso de demora, que vence solo a las `Restaurant::DELAY_NOTICE_HOURS` horas |
+| «Actualizada el…» | `TouchesOwnerUpdate`, `Restaurant::touchOwnerUpdate` | Todo cambio guardado desde el panel mueve `updated_by_owner_at`; la ficha pública lo muestra en las reclamadas (`owner_updated_on`) |
+| Errores de la base | `TranslatesConstraintViolations` | Lo que la validación deja pasar y la base rechaza (franjas que se pisan, un barrio repetido) se avisa en el campo, en su propia transacción, sin 500 |
+| CSP | `UseContentSecurityPolicyProfile`, `OwnerPanelProvider::cspProfile`, `resources/views/vendor` | Perfil `panel`: la política pública más `'unsafe-eval'` en `script-src` y `style-src-attr 'unsafe-inline'`. Dos vistas de Filament copiadas con el nonce en sus `<style>` |
+| Textos | `lang/{es,en}/panel.php` | Solo del servidor: no viajan con `lang/{es,en}.json` a la app pública |
+| Assets | `php artisan filament:assets` | CSS, JS y la fuente de Filament en `public/{css,js,fonts}/filament`, publicados al instalar con composer y al construir la imagen; no se versionan ni pasan por Vite |
+
+Cuentas de ejemplo para desarrollo: `PanelOwnerSeeder` (README, «Desarrollo local»).
 
 ## App instalable y caché (PWA)
 
@@ -228,7 +245,7 @@ Implementado en la Fase 0 (#6); decisiones en el ADR 0009. Convenciones: precios
 | `categories` | slug, name_es/en, position | slug único con formato |
 | `category_restaurant` | category_id, restaurant_id | un restaurante puede tener varias categorías; PK (category_id, restaurant_id) e índice en restaurant_id; categoría en uso con `RESTRICT`, restaurante en cascada |
 | `neighborhoods` | name, slug, area (geography MultiPolygon, opcional), is_fictitious | name y slug únicos; GiST en area |
-| `restaurants` | name, slug, description_es/en, address, reference, location (geography Point 4326), phone, whatsapp, price_level, delivery, delivery_notes_es/en, payment_methods (jsonb, lista del enum `PaymentMethod`: cash/nequi/daviplata/card), status (unclaimed/claimed/hidden), plan (free/featured), verified_at, updated_by_owner_at, is_fictitious | slug único con formato; GiST en location, que no puede ser un punto vacío; sin índice en status (el filtro de las publicadas, `status IN ('unclaimed', 'claimed')`, no lo usa); whatsapp celular colombiano `57` + diez dígitos (el modelo normaliza «+57 300 …»); price_level 1-4; payment_methods solo con valores del enum |
+| `restaurants` | name, slug, description_es/en, address, reference, location (geography Point 4326), phone, whatsapp, price_level, delivery, delivery_notes_es/en, payment_methods (jsonb, lista del enum `PaymentMethod`: cash/nequi/daviplata/card), status (unclaimed/claimed/hidden), plan (free/featured), verified_at, updated_by_owner_at, delay_minutes, delay_until, is_fictitious | slug único con formato; GiST en location, que no puede ser un punto vacío; sin índice en status (el filtro de las publicadas, `status IN ('unclaimed', 'claimed')`, no lo usa); whatsapp celular colombiano `57` + diez dígitos (el modelo normaliza «+57 300 …»); price_level 1-4; payment_methods solo con valores del enum; aviso de demora: delay_minutes de 5 a 180 y delay_until, juntas o nulas (ADR 0025) |
 | `restaurant_user` | restaurant_id, user_id, role (owner/staff) | PK compuesta; cascada |
 | `opening_hours` | restaurant_id, weekday (0 = domingo), opens_at, closes_at | varias franjas por día sin solaparse (`EXCLUDE` con GiST); una franja puede pasar la medianoche; ninguna hora es las 24:00 (cerrar a medianoche es 00:00); índice B-tree en (restaurant_id, weekday, opens_at), que es como se piden |
 | `special_hours` | restaurant_id, on_date, closed, opens_at, closes_at, note_es/en | cerrado sin horas o abierto con ambas; por fecha, o un solo «cerrado» o franjas que no se solapan (`EXCLUDE`); ninguna hora es las 24:00; índice B-tree en (restaurant_id, on_date) |
