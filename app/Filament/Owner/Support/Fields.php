@@ -61,14 +61,18 @@ final class Fields
             ->required();
     }
 
-    /** Sin espacios a los lados; vacío queda nulo. */
+    /**
+     * Sin espacios a los lados, tampoco los de Unicode (trim() solo quita los
+     * de ASCII: un espacio duro pegado de otra app quedaba); vacío queda nulo.
+     */
     public static function clean(?string $value): ?string
     {
         if ($value === null) {
             return null;
         }
 
-        $value = trim($value);
+        // Con UTF-8 inválido preg_replace da null: queda el trim() de siempre.
+        $value = preg_replace('/^[\s\p{Z}]+|[\s\p{Z}]+$/u', '', $value) ?? trim($value);
 
         return $value === '' ? null : $value;
     }

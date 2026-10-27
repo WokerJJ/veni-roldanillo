@@ -9,7 +9,6 @@ use App\Filament\Owner\Resources\Dishes\Pages\ListDishes;
 use App\Filament\Owner\Resources\Dishes\RelationManagers\OptionGroupsRelationManager;
 use App\Filament\Owner\Resources\MenuSections\Pages\CreateMenuSection;
 use App\Filament\Owner\Resources\OpeningHours\Pages\CreateOpeningHour;
-use App\Models\Dish;
 use App\Models\MenuSection;
 use App\Models\OptionGroup;
 use App\Models\Restaurant;
@@ -24,33 +23,10 @@ use Livewire\Livewire;
 uses(RefreshDatabase::class);
 
 /**
- * Panel del dueño (#18, ADR 0025): quién entra, qué ve, qué guarda.
+ * Panel del dueño (#18, ADR 0025): quién entra, qué ve, qué guarda. Las
+ * ayudas (panelMember, actInPanel, panelDish, groupManager) están en
+ * tests/Pest.php.
  */
-function panelMember(Restaurant $restaurant, RestaurantRole $role = RestaurantRole::Owner): User
-{
-    $user = User::factory()->create();
-    $restaurant->members()->attach($user, ['role' => $role->value]);
-
-    return $user;
-}
-
-/** Entra al panel como $user, con $restaurant como el de la dirección. */
-function actInPanel(User $user, Restaurant $restaurant): void
-{
-    test()->actingAs($user);
-    Filament::setCurrentPanel(Filament::getPanel('owner'));
-    Filament::setTenant($restaurant);
-    Filament::bootCurrentPanel();
-}
-
-/** Un plato con su sección, del restaurante dado. */
-function panelDish(Restaurant $restaurant, array $attributes = []): Dish
-{
-    $section = MenuSection::factory()->for($restaurant)->create();
-
-    return Dish::factory()->for($restaurant)->create(['menu_section_id' => $section->id, ...$attributes]);
-}
-
 describe('acceso', function () {
     test('sin sesión, el panel manda al login', function () {
         $restaurant = Restaurant::factory()->claimed()->create();
@@ -72,7 +48,7 @@ describe('acceso', function () {
         $owner = panelMember($restaurant);
 
         $this->actingAs($owner)->get("/panel/{$restaurant->slug}/dishes")->assertOk();
-        $this->actingAs($owner)->get("/panel/{$restaurant->slug}/ficha")->assertOk();
+        $this->actingAs($owner)->get("/panel/{$restaurant->slug}/profile")->assertOk();
     });
 
     test('otro dueño no entra al restaurante ajeno: 404, como si no existiera', function () {
@@ -81,7 +57,7 @@ describe('acceso', function () {
         $other = panelMember(Restaurant::factory()->claimed()->create());
 
         $this->actingAs($other)->get("/panel/{$restaurant->slug}/dishes")->assertNotFound();
-        $this->actingAs($other)->get("/panel/{$restaurant->slug}/ficha")->assertNotFound();
+        $this->actingAs($other)->get("/panel/{$restaurant->slug}/profile")->assertNotFound();
         $this->actingAs($other)->get("/panel/{$restaurant->slug}/dishes/{$dish->id}/edit")->assertNotFound();
     });
 
@@ -166,6 +142,20 @@ describe('la ficha', function () {
 
         expect($restaurant->refresh()->name)->toBe('Original');
     })->with(['espacios' => '   ', 'espacio duro' => "\u{00A0}\u{00A0}", 'tabulador' => "\t"]);
+
+    test('los espacios de Unicode a los lados también se recortan al guardar', function () {
+        $restaurant = Restaurant::factory()->claimed()->create();
+        actInPanel(panelMember($restaurant), $restaurant);
+
+        Livewire::test(EditRestaurantProfile::class)
+            ->fillForm(['name' => "\u{00A0}Fonda de Prueba\u{2003}", 'description_es' => "\u{3000}Sancocho\u{00A0}\n"])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $restaurant->refresh();
+        expect($restaurant->name)->toBe('Fonda de Prueba')
+            ->and($restaurant->description_es)->toBe('Sancocho');
+    });
 
     test('la descripción tiene tope', function () {
         $restaurant = Restaurant::factory()->claimed()->create();
@@ -311,11 +301,6 @@ describe('el menú', function () {
 });
 
 describe('los grupos de opciones (auditoría del #14)', function () {
-    function groupManager(Dish $dish): mixed
-    {
-        return Livewire::test(OptionGroupsRelationManager::class, ['ownerRecord' => $dish, 'pageClass' => EditDish::class]);
-    }
-
     test('se crea un grupo de elegir con sus opciones; obligatorio si el mínimo es 1', function () {
         $restaurant = Restaurant::factory()->claimed()->create();
         $dish = panelDish($restaurant);
