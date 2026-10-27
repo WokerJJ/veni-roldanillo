@@ -469,7 +469,24 @@ describe('Restaurants/Show', () => {
         });
 
         it('sin aviso, nada', async () => {
-            const { wrapper } = await mountShow(profile({ delay_minutes: null }));
+            const { wrapper } = await mountShow(profile({ delay_minutes: null, delay_until: null }));
+
+            expect(wrapper.find('[data-delay]').exists()).toBe(false);
+        });
+
+        it('el aviso se va solo al vencer, sin volver a pedir la ficha', async () => {
+            // Son las 12:30 (beforeEach); el aviso vale hasta las 12:40.
+            const { wrapper } = await mountShow(profile({ delay_minutes: 40, delay_until: '2026-10-07T12:40:00-05:00' }));
+            expect(wrapper.find('[data-delay]').exists()).toBe(true);
+
+            vi.setSystemTime(new Date('2026-10-07T12:41:00-05:00'));
+            await vi.advanceTimersByTimeAsync(30_000);
+
+            expect(wrapper.find('[data-delay]').exists()).toBe(false);
+        });
+
+        it('un aviso que ya venció al llegar no se muestra', async () => {
+            const { wrapper } = await mountShow(profile({ delay_minutes: 40, delay_until: '2026-10-07T12:00:00-05:00' }));
 
             expect(wrapper.find('[data-delay]').exists()).toBe(false);
         });

@@ -56,6 +56,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *     updated_on: string|null,
  *     owner_updated_on: string|null,
  *     delay_minutes: int|null,
+ *     delay_until: string|null,
  *     price_level: int|null,
  *     address: string|null,
  *     reference: string|null,
@@ -107,6 +108,9 @@ class RestaurantProfile extends JsonResource
             'owner_updated_on' => $restaurant->updated_by_owner_at?->timezone(BusinessDay::TIME_ZONE)->toDateString(),
             // «Demora de N min», mientras el aviso del panel no venza.
             'delay_minutes' => $restaurant->activeDelayMinutes(),
+            // Hasta cuándo vale (ISO-8601, hora de Colombia): el dispositivo lo quita
+            // al vencer aunque la ficha siga abierta.
+            'delay_until' => $restaurant->activeDelayMinutes() === null ? null : $restaurant->delay_until?->timezone(BusinessDay::TIME_ZONE)->toIso8601String(),
             'price_level' => $restaurant->price_level,
             'address' => $restaurant->address,
             'reference' => $restaurant->reference,

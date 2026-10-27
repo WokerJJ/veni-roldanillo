@@ -11,6 +11,7 @@
     "updated_on": "2026-10-05",
     "owner_updated_on": "2026-10-05",
     "delay_minutes": 40,
+    "delay_until": "2026-10-07T14:00:00-05:00",
     "price_level": 2,
     "address": "Calle de Prueba # 1-23",
     "reference": "Dirección inventada",

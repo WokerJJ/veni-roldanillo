@@ -186,7 +186,7 @@ describe('lista blanca', function () {
         expect(array_values(array_diff(array_keys($response->inertiaProps()), array_keys($this->get('/')->inertiaProps()))))->toBe(['restaurant', 'meta'])
             ->and(array_keys($profile))->toBe([
                 'slug', 'name', 'description', 'categories', 'fictitious', 'hidden', 'unverified', 'updated_on',
-                'owner_updated_on', 'delay_minutes', 'price_level', 'address', 'reference', 'phone', 'whatsapp', 'payment_methods', 'delivery',
+                'owner_updated_on', 'delay_minutes', 'delay_until', 'price_level', 'address', 'reference', 'phone', 'whatsapp', 'payment_methods', 'delivery',
                 'hours', 'special_hours', 'menu',
             ])
             ->and(array_keys($profile['categories'][0]))->toBe(['slug', 'name'])

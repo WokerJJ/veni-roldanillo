@@ -47,6 +47,13 @@ const now = useNow();
 
 const status = computed(() => openStatus(restaurant, now.value));
 const statusText = computed(() => openStatusText(status.value, t, locale.value));
+// El aviso de demora (#18) se va solo al vencer, con el mismo reloj.
+const delayActive = computed(
+    () =>
+        restaurant.delay_minutes !== null &&
+        restaurant.delay_until !== null &&
+        Date.parse(restaurant.delay_until) > now.value.getTime(),
+);
 
 /** Cuándo llegaron las props que se ven, por el reloj del dispositivo. */
 let loadedAt = Date.now();
@@ -155,7 +162,7 @@ onBeforeUnmount(() => {
                 <p v-if="restaurant.description" class="mt-4 max-w-prose whitespace-pre-line" data-description>{{ restaurant.description }}</p>
 
                 <!-- Aviso de demora del panel del dueño (ADR 0025): se va solo cuando vence. -->
-                <p v-if="restaurant.delay_minutes" class="mt-3 flex items-start gap-2 font-semibold" role="status" data-delay>
+                <p v-if="delayActive" class="mt-3 flex items-start gap-2 font-semibold" role="status" data-delay>
                     <Icon name="reloj" :size="20" class="shrink-0" />
                     <span>{{ t('restaurant.delay', { minutes: String(restaurant.delay_minutes) }) }}</span>
                 </p>
