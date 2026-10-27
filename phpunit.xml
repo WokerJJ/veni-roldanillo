@@ -18,6 +18,9 @@
         </include>
     </source>
     <php>
+        <!-- Filament y Livewire (panel del dueño, ADR 0025) suben la memoria de la
+             suite entera por encima de los 128 MB de PHP por defecto. -->
+        <ini name="memory_limit" value="512M"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>

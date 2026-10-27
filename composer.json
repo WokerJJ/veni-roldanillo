@@ -11,6 +11,7 @@
     "license": "proprietary",
     "require": {
         "php": "^8.4",
+        "filament/filament": "^5.10",
         "inertiajs/inertia-laravel": "^3.4",
         "laravel/framework": "^13.17",
         "laravel/octane": "^2.20",
@@ -61,7 +62,8 @@
         "format": "@php vendor/bin/pint",
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
-            "@php artisan package:discover --ansi"
+            "@php artisan package:discover --ansi",
+            "@php artisan filament:assets --ansi"
         ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force"

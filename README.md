@@ -179,7 +179,9 @@ docker compose exec db sh /docker-entrypoint-initdb.d/20-veni-test.sh
 
 La primera migración crea las extensiones `postgis` y `btree_gist` (`CREATE EXTENSION IF NOT EXISTS`), así que el usuario de la base necesita permiso para crear extensiones: en Docker lo tiene (es el superusuario de la imagen); en un servidor administrado, o se le da ese permiso o un administrador crea las dos extensiones antes de migrar. Al revertir, las extensiones se quedan: son de toda la base y pueden usarlas otros.
 
-`php artisan db:seed` carga datos ficticios y solo corre con `APP_ENV` en `local` o `testing`; las cuentas sembradas (`@example.test`) tienen contraseñas aleatorias que no se muestran. Todavía no se puede repetir sobre una base ya sembrada: para volver a sembrar, `php artisan migrate:fresh --seed`.
+`php artisan db:seed` carga datos ficticios y solo corre con `APP_ENV` en `local` o `testing`; las cuentas de `UserSeeder` (`@example.test`) tienen contraseñas aleatorias que no se muestran. Todavía no se puede repetir sobre una base ya sembrada: para volver a sembrar, `php artisan migrate:fresh --seed`.
+
+Panel del dueño (`/panel`, ADR 0025): `PanelOwnerSeeder` crea, **solo en desarrollo**, `panel.duena@example.test` (dueña del primer restaurante de ejemplo), `panel.otro@example.test` (dueño del segundo) y `panel.empleado@example.test` (empleado, que no entra al panel), todas con la contraseña de ejemplo `veni-panel-dev`. No es una contraseña real ni sirve fuera de `local` o `testing`. En una base ya sembrada se agregan sin borrar nada con `php artisan db:seed --class=PanelOwnerSeeder`.
 
 ## Calidad
 
@@ -223,6 +225,7 @@ Cómo se numeran las versiones, qué necesita el servidor, qué secrets hacen fa
 ## Créditos
 
 - **Íconos:** [colombia-icons](https://github.com/Mteheran/colombia-icons), licencia MIT, © Miguel Teheran. Los que usa la app están copiados en [`resources/icons/colombia`](resources/icons/colombia) desde una versión fija, con su licencia ([ADR 0011](docs/adr/0011-iconos-colombia-icons.md)).
+- **Panel del dueño:** [Filament](https://filamentphp.com) y [Livewire](https://livewire.laravel.com), licencia MIT ([ADR 0025](docs/adr/0025-panel-del-dueno-con-filament.md)).
 - **Mapa:** datos © colaboradores de [OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL), publicados como PMTiles por [veni-mapa](https://github.com/WokerJJ/veni-mapa). Se pinta con [MapLibre GL JS](https://maplibre.org/) y [PMTiles](https://github.com/protomaps/PMTiles), los dos con licencia BSD de 3 cláusulas.
 
 ## Autor

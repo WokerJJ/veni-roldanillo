@@ -48,8 +48,11 @@ class SetContentSecurityPolicy
             return $response;
         }
 
-        // La ruta ya está resuelta: este middleware envuelve al router.
-        $profile = $request->route()?->getAction('csp');
+        // La ruta ya está resuelta: este middleware envuelve al router. El
+        // perfil lo declara la acción de la ruta o, en las rutas de un
+        // paquete, UseContentSecurityPolicyProfile.
+        $profile = $request->attributes->get(UseContentSecurityPolicyProfile::ATTRIBUTE)
+            ?? $request->route()?->getAction('csp');
         $profile = is_string($profile) ? $profile : ContentSecurityPolicy::PUBLIC_PROFILE;
         $reportOnly = config('security.csp.report_only') === true;
 

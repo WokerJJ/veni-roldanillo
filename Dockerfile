@@ -92,7 +92,8 @@ COPY . .
 # .dockerignore porque las etapas dev y prod copian de ahí.
 RUN rm -rf docker \
     && composer dump-autoload --no-dev --optimize \
-    && php artisan package:discover --ansi
+    && php artisan package:discover --ansi \
+    && php artisan filament:assets --ansi
 
 # ---------------------------------------------------------------------------
 # assets: compilación de Vite

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\OwnedByRestaurant;
 use App\Models\Contracts\BelongsToRestaurant;
 use App\Policies\RestaurantContentPolicy;
 use Database\Factories\DeliveryZoneFactory;
@@ -20,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
 class DeliveryZone extends Pivot implements BelongsToRestaurant
 {
     /** @use HasFactory<DeliveryZoneFactory> */
-    use HasFactory;
+    use HasFactory, OwnedByRestaurant;
 
     protected $table = 'delivery_zones';
 
@@ -40,11 +41,6 @@ class DeliveryZone extends Pivot implements BelongsToRestaurant
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);
-    }
-
-    public function owningRestaurant(): Restaurant
-    {
-        return $this->restaurant()->firstOrFail();
     }
 
     /** @return BelongsTo<Neighborhood, $this> */

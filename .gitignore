@@ -7,6 +7,11 @@
 /public/hot
 /public/storage
 /public/fonts-manifest.dev.json
+# Assets de Filament (panel del dueño, ADR 0025): los publica `php artisan
+# filament:assets` desde vendor (composer y la imagen), no se versionan.
+/public/css/filament/
+/public/js/filament/
+/public/fonts/filament/
 
 # Entorno y secretos
 .env

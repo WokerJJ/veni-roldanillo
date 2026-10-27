@@ -457,6 +457,52 @@ describe('Restaurants/Show', () => {
         });
     });
 
+    describe('lo que publica el dueño desde su panel (#18)', () => {
+        it.each([
+            ['es', 'Demora de 40 min.'],
+            ['en', '40 min delay.'],
+        ] as const)('en %s, el aviso de demora vigente se anuncia', async (locale, text) => {
+            const { wrapper } = await mountShow(profile({ delay_minutes: 40 }), locale);
+
+            expect(wrapper.get('[data-delay]').text()).toBe(text);
+            expect(wrapper.get('[data-delay]').attributes('role')).toBe('status');
+        });
+
+        it('sin aviso, nada', async () => {
+            const { wrapper } = await mountShow(profile({ delay_minutes: null, delay_until: null }));
+
+            expect(wrapper.find('[data-delay]').exists()).toBe(false);
+        });
+
+        it('el aviso se va solo al vencer, sin volver a pedir la ficha', async () => {
+            // Son las 12:30 (beforeEach); el aviso vale hasta las 12:40.
+            const { wrapper } = await mountShow(profile({ delay_minutes: 40, delay_until: '2026-10-07T12:40:00-05:00' }));
+            expect(wrapper.find('[data-delay]').exists()).toBe(true);
+
+            vi.setSystemTime(new Date('2026-10-07T12:41:00-05:00'));
+            await vi.advanceTimersByTimeAsync(30_000);
+
+            expect(wrapper.find('[data-delay]').exists()).toBe(false);
+        });
+
+        it('un aviso que ya venció al llegar no se muestra', async () => {
+            const { wrapper } = await mountShow(profile({ delay_minutes: 40, delay_until: '2026-10-07T12:00:00-05:00' }));
+
+            expect(wrapper.find('[data-delay]').exists()).toBe(false);
+        });
+
+        it('una ficha reclamada dice cuándo la actualizó el restaurante; una sin reclamar, no', async () => {
+            const claimed = await mountShow(profile({ unverified: false, owner_updated_on: '2026-10-05' }));
+            expect(claimed.wrapper.get('[data-owner-updated]').text()).toBe('Actualizada por el restaurante el 5 de octubre de 2026.');
+
+            const unclaimed = await mountShow(profile({ unverified: true, owner_updated_on: '2026-10-05' }));
+            expect(unclaimed.wrapper.find('[data-owner-updated]').exists()).toBe(false);
+
+            const never = await mountShow(profile({ unverified: false, owner_updated_on: null }));
+            expect(never.wrapper.find('[data-owner-updated]').exists()).toBe(false);
+        });
+    });
+
     describe('ficha oculta', () => {
         it('a quien puede verla le avisa que el público no la ve', async () => {
             const { wrapper } = await mountShow(profile({ hidden: true }));

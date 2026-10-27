@@ -1,6 +1,9 @@
 <?php
 
 use App\Enums\Locale;
+use App\Enums\OptionGroupKind;
+use App\Enums\PaymentMethod;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Finder\Finder;
 
@@ -81,7 +84,11 @@ function langFilesKeysUsedInCode(): array
         array_push($keys, ...langFilesKeysIn($file->getContents()));
     }
 
-    $keys = array_values(array_unique($keys));
+    // Los textos del panel del dueño van en lang/{idioma}/panel.php, solo del
+    // servidor (ADR 0025); los revisa su propia prueba, abajo. Las claves con
+    // «::» son de un paquete (las vistas de Filament copiadas en
+    // resources/views/vendor) y las trae el paquete.
+    $keys = array_values(array_unique(array_filter($keys, fn (string $key): bool => ! str_starts_with($key, 'panel.') && ! str_contains($key, '::'))));
     sort($keys);
 
     return $keys;
@@ -141,4 +148,36 @@ test('toda clave usada en el código existe en los archivos de idioma', function
     // Basta el idioma de origen: la prueba de paridad obliga a que estén en todos.
     expect(array_values(array_diff($used, array_keys(langFilesLines(Locale::DEFAULT->value)))))
         ->toBe([], 'Claves usadas en el código que no están en los archivos de idioma');
+});
+
+test('los textos del panel del dueño tienen las mismas claves en los dos idiomas y existen las que usa el código', function () {
+    $flatten = fn (string $locale): array => array_keys(Arr::dot(require lang_path("{$locale}/panel.php")));
+    $keys = $flatten(Locale::DEFAULT->value);
+
+    foreach (langFilesLocales() as $locale) {
+        expect($flatten($locale))->toBe($keys, "lang/{$locale}/panel.php no tiene las mismas claves");
+    }
+
+    $used = [];
+    foreach (Finder::create()->files()->in(app_path())->name('*.php') as $file) {
+        preg_match_all("/__\(['\"]panel\.([a-z_.]+[a-z])['\"]/", $file->getContents(), $matches);
+        array_push($used, ...$matches[1]);
+    }
+
+    expect($used)->not->toBeEmpty()
+        ->and(array_values(array_diff(array_unique($used), $keys)))->toBe([]);
+});
+
+test('existen las claves del panel que el código arma con un valor (medios de pago, tipos de grupo, días)', function () {
+    $dynamic = [
+        ...array_map(fn (PaymentMethod $method): string => "payment.{$method->value}", PaymentMethod::cases()),
+        ...array_map(fn (OptionGroupKind $kind): string => "groups.kind_{$kind->value}", OptionGroupKind::cases()),
+        ...array_map(fn (int $weekday): string => "weekdays.{$weekday}", range(0, 6)),
+    ];
+
+    foreach (langFilesLocales() as $locale) {
+        $keys = array_keys(Arr::dot(require lang_path("{$locale}/panel.php")));
+
+        expect(array_values(array_diff($dynamic, $keys)))->toBe([], "lang/{$locale}/panel.php no tiene todas las claves armadas con un valor");
+    }
 });

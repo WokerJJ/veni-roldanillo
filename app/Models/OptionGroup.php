@@ -63,6 +63,13 @@ class OptionGroup extends Model implements BelongsToRestaurant
 
     public function owningRestaurant(): Restaurant
     {
+        // El plato ya cargado, solo si es el de la FK guardada (OwnedByRestaurant).
+        $dish = $this->relationLoaded('dish') ? $this->getRelation('dish') : null;
+
+        if ($dish instanceof Dish && $dish->exists && $dish->getKey() === $this->getOriginal('dish_id')) {
+            return $dish->owningRestaurant();
+        }
+
         return $this->dish()->firstOrFail()->owningRestaurant();
     }
 
