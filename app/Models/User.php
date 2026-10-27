@@ -98,11 +98,16 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     /**
      * Panel del dueño (ADR 0025): entra quien es dueño de algún restaurante.
      * Los empleados todavía no tienen panel (editar es del dueño,
-     * RestaurantPolicy::update), y la administración tendrá el suyo (#19).
+     * RestaurantPolicy::update). Panel de administración (ADR 0027): solo
+     * users.role = admin. Cualquier otro panel, nadie.
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return $panel->getId() === 'owner' && $this->ownedRestaurants()->exists();
+        return match ($panel->getId()) {
+            'owner' => $this->ownedRestaurants()->exists(),
+            'admin' => $this->isAdmin(),
+            default => false,
+        };
     }
 
     /**

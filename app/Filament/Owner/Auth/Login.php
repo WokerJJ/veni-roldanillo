@@ -17,6 +17,8 @@ use Illuminate\Validation\ValidationException;
  * espacios), exista o no la cuenta: la respuesta es la misma y no revela qué
  * correos tienen cuenta. Entrar bien borra la cuenta de intentos.
  *
+ * El login de administración (#19) es esta misma clase con otro prefijo.
+ *
  * Está fuera de app/Filament/Owner/Pages para que discoverPages no la
  * registre como una página más del panel.
  */
@@ -25,6 +27,9 @@ class Login extends FilamentLogin
     public const MAX_ATTEMPTS_PER_ACCOUNT = 10;
 
     public const ACCOUNT_DECAY_SECONDS = 15 * 60;
+
+    /** Prefijo de la clave del límite por cuenta: cada panel cuenta aparte. */
+    protected const string RATE_LIMIT_PREFIX = 'owner-panel-login';
 
     public function authenticate(): ?LoginResponse
     {
@@ -57,6 +62,6 @@ class Login extends FilamentLogin
     {
         $email = $this->data['email'] ?? '';
 
-        return 'owner-panel-login:'.hash('sha256', mb_strtolower(trim(is_string($email) ? $email : '')));
+        return static::RATE_LIMIT_PREFIX.':'.hash('sha256', mb_strtolower(trim(is_string($email) ? $email : '')));
     }
 }
