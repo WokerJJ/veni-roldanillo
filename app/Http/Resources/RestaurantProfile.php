@@ -53,6 +53,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *     fictitious: bool,
  *     hidden: bool,
  *     unverified: bool,
+ *     claimable: bool,
  *     updated_on: string|null,
  *     owner_updated_on: string|null,
  *     delay_minutes: int|null,
@@ -103,6 +104,8 @@ class RestaurantProfile extends JsonResource
             'hidden' => $restaurant->status === RestaurantStatus::Hidden,
             // Sin reclamar: nadie del restaurante confirmó estos datos.
             'unverified' => $restaurant->status === RestaurantStatus::Unclaimed,
+            // Muestra «Reclámalo»: la misma regla que acepta el formulario (#20).
+            'claimable' => $restaurant->isClaimable(),
             'updated_on' => $restaurant->updated_at?->toDateString(),
             // «Actualizada el…»: el último cambio del dueño desde su panel (ADR 0025).
             'owner_updated_on' => $restaurant->updated_by_owner_at?->timezone(BusinessDay::TIME_ZONE)->toDateString(),

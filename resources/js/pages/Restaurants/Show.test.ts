@@ -457,6 +457,44 @@ describe('Restaurants/Show', () => {
         });
     });
 
+    describe('reclamar y pedir el retiro (#20)', () => {
+        it('una ficha sin reclamar lleva «¿Es tu negocio? Reclámalo» a su formulario', async () => {
+            const { wrapper } = await mountShow(profile({ claimable: true }));
+            const link = wrapper.get('[data-claim]');
+
+            expect(link.text()).toBe('¿Es tu negocio? Reclámalo');
+            expect(link.attributes('href')).toBe('/restaurants/prueba-la-ceiba/claim');
+        });
+
+        it('una ficha reclamada no ofrece reclamarla', async () => {
+            const { wrapper } = await mountShow(profile({ unverified: true, claimable: false }));
+
+            expect(wrapper.find('[data-claim]').exists()).toBe(false);
+        });
+
+        it.each([true, false])('toda ficha publicada ofrece pedir su retiro (sin reclamar: %s)', async (unverified) => {
+            const { wrapper } = await mountShow(profile({ unverified }));
+            const link = wrapper.get('[data-removal]');
+
+            expect(link.text()).toBe('Pedir que retiren esta ficha');
+            expect(link.attributes('href')).toBe('/restaurants/prueba-la-ceiba/removal');
+        });
+
+        it('una ficha oculta no ofrece ninguno de los dos', async () => {
+            const { wrapper } = await mountShow(profile({ hidden: true, unverified: false }));
+
+            expect(wrapper.find('[data-claim]').exists()).toBe(false);
+            expect(wrapper.find('[data-removal]').exists()).toBe(false);
+        });
+
+        it('en inglés', async () => {
+            const { wrapper } = await mountShow(profile({ unverified: true, claimable: true }), 'en');
+
+            expect(wrapper.get('[data-claim]').text()).toBe('Is this your business? Claim it');
+            expect(wrapper.get('[data-removal]').text()).toBe('Ask to remove this listing');
+        });
+    });
+
     describe('lo que publica el dueño desde su panel (#18)', () => {
         it.each([
             ['es', 'Demora de 40 min.'],

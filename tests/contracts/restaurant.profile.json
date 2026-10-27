@@ -8,6 +8,7 @@
     "fictitious": true,
     "hidden": false,
     "unverified": false,
+    "claimable": false,
     "updated_on": "2026-10-05",
     "owner_updated_on": "2026-10-05",
     "delay_minutes": 40,

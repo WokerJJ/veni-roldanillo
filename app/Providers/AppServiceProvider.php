@@ -27,6 +27,22 @@ class AppServiceProvider extends ServiceProvider
     public const RESTAURANT_MAP_REQUESTS_PER_MINUTE = 60;
 
     /**
+     * Solicitudes de reclamo y de retiro de ficha (#20) por hora desde una
+     * misma IP (también cuentan los envíos con errores). Una persona manda una
+     * o dos; el margen es para corregir y para la NAT del
+     * operador móvil.
+     */
+    public const RESTAURANT_REQUESTS_PER_HOUR_PER_IP = 20;
+
+    /**
+     * Las mismas, por día con un mismo celular, sumando todas las fichas:
+     * frena a quien cambia de IP para insistir con el mismo número. Solo
+     * cuentan los envíos válidos (RestaurantContactRequest::passedValidation),
+     * así los errores de otro no bloquean al dueño real del número.
+     */
+    public const RESTAURANT_REQUESTS_PER_DAY_PER_PHONE = 5;
+
+    /**
      * Register any application services.
      */
     public function register(): void
@@ -54,6 +70,17 @@ class AppServiceProvider extends ServiceProvider
         // Pasado el límite, el 429 de siempre, que bajo /api sale como JSON.
         RateLimiter::for('restaurant-map', fn (Request $request) => Limit::perMinute(self::RESTAURANT_MAP_REQUESTS_PER_MINUTE)
             ->by((string) $request->ip()));
+
+        // Reclamos y retiros (#20): por IP aquí, con todos los envíos. El tope
+        // por celular va en RestaurantContactRequest, después de validar. Pasado
+        // el límite, 429 con el aviso en el idioma de la petición.
+        RateLimiter::for('restaurant-requests', fn (Request $request) => Limit::perHour(self::RESTAURANT_REQUESTS_PER_HOUR_PER_IP)
+            ->by('ip:'.$request->ip())
+            ->response(fn (Request $request, array $headers) => response(
+                __('requests.error.too_many'),
+                429,
+                [...$headers, 'Content-Type' => 'text/plain; charset=UTF-8'],
+            )));
 
         // La política que solo informa no bloquea nada: en producción es para
         // probar un cambio un rato, nunca el estado normal (ADR 0014).

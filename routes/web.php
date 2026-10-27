@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\RestaurantController;
+use App\Http\Controllers\RestaurantRequestController;
 use App\Http\Controllers\WebManifestController;
 use Illuminate\Support\Facades\Route;
 
@@ -13,6 +14,19 @@ Route::inertia('/', 'Home')->name('home');
 Route::get('/restaurants/{slug}', [RestaurantController::class, 'show'])
     ->where('slug', '[a-z0-9]+(?:-[a-z0-9]+)*')
     ->name('restaurants.show');
+
+// «¿Es tu negocio? Reclámalo» y «Pedir que retiren esta ficha» (#20, ADR
+// 0026): un formulario y su envío, que deja la solicitud pendiente para
+// administración. El envío tiene límite por IP y por celular (AppServiceProvider).
+Route::controller(RestaurantRequestController::class)
+    ->prefix('/restaurants/{slug}')
+    ->where(['slug' => '[a-z0-9]+(?:-[a-z0-9]+)*'])
+    ->group(function (): void {
+        Route::get('/claim', 'claim')->name('restaurants.claim');
+        Route::post('/claim', 'storeClaim')->middleware('throttle:restaurant-requests')->name('restaurants.claim.store');
+        Route::get('/removal', 'removal')->name('restaurants.removal');
+        Route::post('/removal', 'storeRemoval')->middleware('throttle:restaurant-requests')->name('restaurants.removal.store');
+    });
 
 // Créditos (#58, ADR 0021): la atribución a OpenStreetMap (ODbL) y cómo pedir
 // la parte de la base que viene de allí.
