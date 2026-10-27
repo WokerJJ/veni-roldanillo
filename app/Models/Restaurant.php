@@ -299,6 +299,12 @@ class Restaurant extends Model
         return $this->hasMany(RestaurantClaim::class);
     }
 
+    /** @return HasMany<RestaurantRemovalRequest, $this> */
+    public function removalRequests(): HasMany
+    {
+        return $this->hasMany(RestaurantRemovalRequest::class);
+    }
+
     /** @return HasMany<OrderIntent, $this> */
     public function orderIntents(): HasMany
     {

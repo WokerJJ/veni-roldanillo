@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\ClaimantRole;
 use App\Enums\ClaimStatus;
 use App\Models\Restaurant;
 use App\Models\RestaurantClaim;
@@ -26,6 +27,22 @@ class RestaurantClaimFactory extends Factory
             'reviewed_by' => null,
             'reviewed_at' => null,
         ];
+    }
+
+    /**
+     * Como llega del formulario público (#20): sin cuenta, con un contacto
+     * ficticio y la autorización de datos.
+     */
+    public function withoutAccount(): static
+    {
+        return $this->state(fn () => [
+            'user_id' => null,
+            'contact_name' => 'Persona de Prueba',
+            'contact_phone' => '57300000'.fake()->unique()->numerify('####'),
+            'contact_email' => null,
+            'claimant_role' => ClaimantRole::Owner,
+            'privacy_accepted_at' => now(),
+        ]);
     }
 
     public function approved(?User $reviewer = null): static
