@@ -90,7 +90,7 @@ class OwnerPanelProvider extends PanelProvider
             ->id('owner')
             ->path('panel')
             ->login(Login::class)
-            ->profile(isSimple: false)
+            ->profile()
             ->brandName('Vení · Panel')
             ->favicon(asset('favicon.ico'))
             ->defaultAvatarProvider(InitialsAvatarProvider::class)

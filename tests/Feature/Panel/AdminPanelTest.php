@@ -283,8 +283,12 @@ describe('reclamos y retiros', function () {
             ->and(Hash::check($match[1], $owner->password))->toBeTrue();
 
         $this->actingAs($owner)->get("/panel/{$restaurant->slug}")->assertOk();
-        // Y puede cambiar la contraseña temporal en su perfil.
-        $this->actingAs($owner)->get('/panel/profile')->assertOk();
+    });
+
+    test('el dueño nuevo abre su perfil para cambiar la contraseña temporal, sin pasar antes por su restaurante', function () {
+        $restaurant = Restaurant::factory()->claimed()->create();
+
+        $this->actingAs(panelMember($restaurant))->get('/panel/profile')->assertOk()->assertSee('type="password"', false);
     });
 
     test('rechazar un reclamo pide el motivo', function () {
