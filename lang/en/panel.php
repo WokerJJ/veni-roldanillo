@@ -18,6 +18,8 @@ return [
     'errors' => [
         'constraint' => 'It could not be saved: it clashes with other data or is not valid (for example, a time slot that overlaps another one on the same day, or a repeated neighborhood). Check it and try again.',
         'delete_blocked' => 'It cannot be deleted: other data still depends on it (for example, dishes in this section). Move or delete them first.',
+        'conflict' => 'Not saved: someone changed this while you had it open',
+        'conflict_body' => 'So that change is not overwritten, reload the page, check what is new and make your change again.',
     ],
     'profile' => [
         'label' => 'Restaurant profile',

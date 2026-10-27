@@ -3,6 +3,7 @@
 namespace App\Filament\Owner\Pages;
 
 use App\Enums\PaymentMethod;
+use App\Filament\Concerns\DetectsConcurrentEdits;
 use App\Filament\Owner\Concerns\TouchesOwnerUpdate;
 use App\Filament\Owner\Concerns\TranslatesConstraintViolations;
 use App\Filament\Owner\Support\Fields;
@@ -32,7 +33,7 @@ use Illuminate\Support\Facades\Gate;
  */
 class EditRestaurantProfile extends EditTenantProfile
 {
-    use TouchesOwnerUpdate, TranslatesConstraintViolations;
+    use DetectsConcurrentEdits, TouchesOwnerUpdate, TranslatesConstraintViolations;
 
     /** Topes de los textos largos de la ficha. */
     public const DESCRIPTION_MAX = 1000;
@@ -118,6 +119,7 @@ class EditRestaurantProfile extends EditTenantProfile
                     $minutes = $data['minutes'] ?? null;
                     abort_unless(is_numeric($minutes), 422);
                     $restaurant->announceDelay((int) $minutes);
+                    $this->rememberVersion();
                     Notification::make()->success()->title(__('panel.delay.announced'))->send();
                 }),
             Action::make('clearDelay')
@@ -126,6 +128,7 @@ class EditRestaurantProfile extends EditTenantProfile
                 ->visible(fn (): bool => $this->restaurant()->activeDelayMinutes() !== null)
                 ->action(function (): void {
                     $this->restaurant()->clearDelay();
+                    $this->rememberVersion();
                     Notification::make()->success()->title(__('panel.delay.cleared'))->send();
                 }),
         ];
@@ -177,12 +180,23 @@ class EditRestaurantProfile extends EditTenantProfile
      */
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        return $this->writeRespectingConstraints(fn (): Model => parent::handleRecordUpdate($record, $data));
+        return $this->writeRespectingConstraints(function () use ($record, $data): Model {
+            $this->guardAgainstConcurrentEdit();
+
+            return parent::handleRecordUpdate($record, $data);
+        });
     }
 
     protected function afterSave(): void
     {
         $this->touchOwnerUpdate();
+        $this->rememberVersion();
+    }
+
+    /** La ficha: si administración u otra pestaña la guardó, no se pisa. */
+    protected function versionedRecord(): Model
+    {
+        return $this->restaurant();
     }
 
     /**

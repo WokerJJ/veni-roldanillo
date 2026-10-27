@@ -20,6 +20,8 @@ return [
     'errors' => [
         'constraint' => 'No se pudo guardar: choca con otro dato o no es válido (por ejemplo, una franja que se pisa con otra del mismo día o un barrio repetido). Revisá y volvé a intentar.',
         'delete_blocked' => 'No se puede borrar: todavía hay datos que dependen de esto (por ejemplo, platos en esta sección). Movelos o borralos primero.',
+        'conflict' => 'No se guardó: alguien cambió esto mientras lo tenías abierto',
+        'conflict_body' => 'Para no pisar ese cambio, recargá la página, revisá lo nuevo y volvé a hacer el tuyo.',
     ],
     'profile' => [
         'label' => 'Ficha del restaurante',
