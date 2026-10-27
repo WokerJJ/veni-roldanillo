@@ -2,22 +2,22 @@
 
 namespace App\Filament\Owner\Support;
 
+use App\Filament\Owner\Concerns\ResolvesOwnerResource;
 use App\Filament\Owner\Concerns\TouchesOwnerUpdate;
 use App\Filament\Owner\Concerns\TranslatesConstraintViolations;
-use App\Filament\Owner\OwnerResource;
 use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
-use LogicException;
 
 /**
  * Editar desde el panel del dueño: el registro llega filtrado por el
  * restaurante de la dirección y autorizado por RestaurantContentPolicy;
- * guardar o borrar mueve «Actualizada el…».
+ * guardar o borrar mueve «Actualizada el…». Si la base no deja borrar (una
+ * sección con platos), el dueño ve un aviso y el registro sigue.
  */
 abstract class EditOwnerRecord extends EditRecord
 {
-    use TouchesOwnerUpdate, TranslatesConstraintViolations;
+    use ResolvesOwnerResource, TouchesOwnerUpdate, TranslatesConstraintViolations;
 
     /**
      * @param  array<string, mixed>  $data
@@ -44,11 +44,21 @@ abstract class EditOwnerRecord extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            DeleteAction::make()->after(fn () => $this->touchOwnerUpdate()),
+            DeleteAction::make()
+                ->using(function (Model $record): bool {
+                    $deleted = $this->deleteRespectingConstraints($record);
+
+                    if ($deleted) {
+                        $this->touchOwnerUpdate();
+                    }
+
+                    return $deleted;
+                })
+                ->failureNotificationTitle(__('panel.errors.delete_blocked')),
         ];
     }
 
-    protected function constraintErrorField(): string
+    protected function constraintErrorField(?string $constraint): ?string
     {
         return $this->ownerResource()::constraintErrorField();
     }
@@ -56,21 +66,5 @@ abstract class EditOwnerRecord extends EditRecord
     protected function getRedirectUrl(): string
     {
         return $this->ownerResource()::getUrl('index');
-    }
-
-    /**
-     * El recurso del panel del dueño de esta página, con su tipo.
-     *
-     * @return class-string<OwnerResource>
-     */
-    private function ownerResource(): string
-    {
-        $resource = static::getResource();
-
-        if (! is_subclass_of($resource, OwnerResource::class)) {
-            throw new LogicException("{$resource} no es un recurso del panel del dueño.");
-        }
-
-        return $resource;
     }
 }

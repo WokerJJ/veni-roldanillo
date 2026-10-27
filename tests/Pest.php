@@ -1,7 +1,17 @@
 <?php
 
+use App\Enums\RestaurantRole;
+use App\Filament\Owner\Resources\Dishes\Pages\EditDish;
+use App\Filament\Owner\Resources\Dishes\RelationManagers\OptionGroupsRelationManager;
+use App\Models\Dish;
+use App\Models\MenuSection;
+use App\Models\Restaurant;
+use App\Models\User;
+use Filament\Facades\Filament;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Livewire\Features\SupportTesting\Testable;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 /*
@@ -91,4 +101,43 @@ function fakeViteManifest(): string
     app()->usePublicPath($publicPath);
 
     return $publicPath;
+}
+
+/*
+| Panel del dueño (#18, ADR 0025): ayudas de las pruebas de tests/Feature/Panel.
+*/
+
+function panelMember(Restaurant $restaurant, RestaurantRole $role = RestaurantRole::Owner): User
+{
+    $user = User::factory()->create();
+    $restaurant->members()->attach($user, ['role' => $role->value]);
+
+    return $user;
+}
+
+/** Entra al panel como $user, con $restaurant como el de la dirección. */
+function actInPanel(User $user, Restaurant $restaurant): void
+{
+    test()->actingAs($user);
+    Filament::setCurrentPanel(Filament::getPanel('owner'));
+    Filament::setTenant($restaurant);
+    Filament::bootCurrentPanel();
+}
+
+/**
+ * Un plato con su sección, del restaurante dado.
+ *
+ * @param  array<string, mixed>  $attributes
+ */
+function panelDish(Restaurant $restaurant, array $attributes = []): Dish
+{
+    $section = MenuSection::factory()->for($restaurant)->create();
+
+    return Dish::factory()->for($restaurant)->create(['menu_section_id' => $section->id, ...$attributes]);
+}
+
+/** Los grupos de opciones de un plato, como se ven al editarlo. */
+function groupManager(Dish $dish): Testable
+{
+    return Livewire::test(OptionGroupsRelationManager::class, ['ownerRecord' => $dish, 'pageClass' => EditDish::class]);
 }

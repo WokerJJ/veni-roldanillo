@@ -46,7 +46,7 @@ class EditRestaurantProfile extends EditTenantProfile
         'delivery', 'delivery_notes_es', 'delivery_notes_en',
     ];
 
-    protected static ?string $slug = 'ficha';
+    protected static ?string $slug = 'profile';
 
     public static function getLabel(): string
     {
@@ -185,9 +185,18 @@ class EditRestaurantProfile extends EditTenantProfile
         $this->touchOwnerUpdate();
     }
 
-    protected function constraintErrorField(): string
+    /**
+     * El campo de cada restricción de restaurants que el formulario toca; las
+     * demás (el slug, el aviso de demora) no son de un campo: aviso general.
+     */
+    protected function constraintErrorField(?string $constraint): ?string
     {
-        return 'data.whatsapp';
+        return match ($constraint) {
+            'restaurants_whatsapp_format' => 'data.whatsapp',
+            'restaurants_price_level_range' => 'data.price_level',
+            'restaurants_payment_methods_array', 'restaurants_payment_methods_known' => 'data.payment_methods',
+            default => null,
+        };
     }
 
     private function restaurant(): Restaurant

@@ -2,12 +2,11 @@
 
 namespace App\Filament\Owner\Support;
 
+use App\Filament\Owner\Concerns\ResolvesOwnerResource;
 use App\Filament\Owner\Concerns\TouchesOwnerUpdate;
 use App\Filament\Owner\Concerns\TranslatesConstraintViolations;
-use App\Filament\Owner\OwnerResource;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
-use LogicException;
 
 /**
  * Crear desde el panel del dueño: el registro queda colgado del restaurante
@@ -16,7 +15,7 @@ use LogicException;
  */
 abstract class CreateOwnerRecord extends CreateRecord
 {
-    use TouchesOwnerUpdate, TranslatesConstraintViolations;
+    use ResolvesOwnerResource, TouchesOwnerUpdate, TranslatesConstraintViolations;
 
     protected static bool $canCreateAnother = false;
 
@@ -42,7 +41,7 @@ abstract class CreateOwnerRecord extends CreateRecord
         $this->touchOwnerUpdate();
     }
 
-    protected function constraintErrorField(): string
+    protected function constraintErrorField(?string $constraint): ?string
     {
         return $this->ownerResource()::constraintErrorField();
     }
@@ -50,21 +49,5 @@ abstract class CreateOwnerRecord extends CreateRecord
     protected function getRedirectUrl(): string
     {
         return $this->ownerResource()::getUrl('index');
-    }
-
-    /**
-     * El recurso del panel del dueño de esta página, con su tipo.
-     *
-     * @return class-string<OwnerResource>
-     */
-    private function ownerResource(): string
-    {
-        $resource = static::getResource();
-
-        if (! is_subclass_of($resource, OwnerResource::class)) {
-            throw new LogicException("{$resource} no es un recurso del panel del dueño.");
-        }
-
-        return $resource;
     }
 }

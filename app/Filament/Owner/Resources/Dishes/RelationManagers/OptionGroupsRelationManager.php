@@ -3,7 +3,8 @@
 namespace App\Filament\Owner\Resources\Dishes\RelationManagers;
 
 use App\Enums\OptionGroupKind;
-use App\Filament\Owner\OwnerResource;
+use App\Filament\Owner\Concerns\TouchesOwnerUpdate;
+use App\Filament\Owner\Concerns\TranslatesConstraintViolations;
 use App\Filament\Owner\Support\Fields;
 use App\Models\Dish;
 use App\Models\OptionGroup;
@@ -19,6 +20,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -32,9 +34,19 @@ use Illuminate\Validation\Rule;
  * si el mínimo es 1 o más, como el CHECK de la base, así que `required` no se
  * pide: se deriva del mínimo. Topes: MAX_GROUPS grupos por plato y
  * MAX_OPTIONS opciones por grupo, porque todo viaja en las props de la ficha.
+ * El mínimo y el máximo no pasan de la cantidad de opciones del grupo; cuentan
+ * todas, también las que hoy no están disponibles (la disponibilidad cambia
+ * en el día): si con las disponibles no alcanza, la ficha marca el plato «No
+ * disponible hoy».
+ *
+ * Un grupo y sus opciones se guardan juntos o no se guardan: cada acción
+ * corre en una transacción y, si la base rechaza algo, el dueño ve el aviso
+ * en el formulario (callMountedAction).
  */
 class OptionGroupsRelationManager extends RelationManager
 {
+    use TouchesOwnerUpdate, TranslatesConstraintViolations;
+
     public const MAX_GROUPS = 10;
 
     public const MAX_OPTIONS = 30;
@@ -75,14 +87,14 @@ class OptionGroupsRelationManager extends RelationManager
                 ->default(0)
                 ->minValue(0)
                 // Un grupo de quitar nunca es obligatorio.
-                ->maxValue(fn (Get $get): int => $get('kind') === OptionGroupKind::Removal->value ? 0 : self::MAX_OPTIONS),
+                ->maxValue(fn (Get $get): int => $get('kind') === OptionGroupKind::Removal->value ? 0 : self::optionsCount($get)),
             TextInput::make('max_choices')
                 ->label(__('panel.groups.max'))
                 ->integer()
                 ->required()
                 ->default(1)
                 ->minValue(1)
-                ->maxValue(self::MAX_OPTIONS)
+                ->maxValue(fn (Get $get): int => max(1, self::optionsCount($get)))
                 ->gte('min_choices'),
             Fields::position(),
             Repeater::make('options')
@@ -106,6 +118,9 @@ class OptionGroupsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
+            // La autorización de cada fila sigue grupo → plato → restaurante
+            // sin consultar por fila (owningRestaurant usa lo cargado aquí).
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('dish.restaurant'))
             ->defaultSort('position')
             ->columns([
                 TextColumn::make('name_es')->label(__('panel.fields.name')),
@@ -120,18 +135,58 @@ class OptionGroupsRelationManager extends RelationManager
                 CreateAction::make()
                     ->authorize(fn (): bool => $this->dish()->optionGroups()->count() < self::MAX_GROUPS
                         && Gate::allows('update', $this->dish()))
+                    ->databaseTransaction()
                     ->mutateDataUsing(fn (array $data): array => self::withRequired($data))
                     ->after(fn () => $this->touchOwnerUpdate()),
             ])
             ->recordActions([
                 EditAction::make()
                     ->authorize(fn (OptionGroup $record): bool => Gate::allows('update', $record))
+                    ->databaseTransaction()
                     ->mutateDataUsing(fn (array $data): array => self::withRequired($data))
                     ->after(fn () => $this->touchOwnerUpdate()),
                 DeleteAction::make()
                     ->authorize(fn (OptionGroup $record): bool => Gate::allows('delete', $record))
-                    ->after(fn () => $this->touchOwnerUpdate()),
+                    ->using(function (OptionGroup $record): bool {
+                        $deleted = $this->deleteRespectingConstraints($record);
+
+                        if ($deleted) {
+                            $this->touchOwnerUpdate();
+                        }
+
+                        return $deleted;
+                    })
+                    ->failureNotificationTitle(__('panel.errors.delete_blocked')),
             ]);
+    }
+
+    /**
+     * Toda acción del gestor (crear, editar, borrar) corre dentro de
+     * writeRespectingConstraints: el grupo y sus opciones (el repetidor se
+     * guarda después del grupo) van en una sola transacción, y lo que la
+     * base rechace se avisa en el formulario, no como error 500.
+     *
+     * @param  array<string, mixed>  $arguments
+     */
+    public function callMountedAction(array $arguments = []): mixed
+    {
+        return $this->writeRespectingConstraints(fn (): mixed => parent::callMountedAction($arguments));
+    }
+
+    /** El aviso va en el nombre del grupo, en el formulario abierto. */
+    protected function constraintErrorField(?string $constraint): ?string
+    {
+        $statePath = $this->getMountedActionSchema()?->getStatePath();
+
+        return $statePath === null ? null : "{$statePath}.name_es";
+    }
+
+    /** Cuántas opciones tiene el repetidor del formulario. */
+    private static function optionsCount(Get $get): int
+    {
+        $options = $get('options');
+
+        return min(self::MAX_OPTIONS, is_array($options) ? count($options) : 0);
     }
 
     /**
@@ -159,10 +214,5 @@ class OptionGroupsRelationManager extends RelationManager
         abort_unless($dish instanceof Dish, 404);
 
         return $dish;
-    }
-
-    private function touchOwnerUpdate(): void
-    {
-        OwnerResource::currentRestaurant()?->touchOwnerUpdate();
     }
 }
