@@ -59,7 +59,7 @@ class RestaurantClaim extends Model
     /** @return list<string> */
     protected function personalDataColumns(): array
     {
-        return ['contact_name', 'contact_phone', 'contact_email', 'message'];
+        return ['contact_name', 'contact_phone', 'contact_email', 'message', 'review_note'];
     }
 
     /** @return BelongsTo<Restaurant, $this> */

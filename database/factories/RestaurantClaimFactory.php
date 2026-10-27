@@ -61,6 +61,7 @@ class RestaurantClaimFactory extends Factory
             'status' => $status,
             'reviewed_by' => $reviewer ?? User::factory()->admin(),
             'reviewed_at' => now(),
+            'review_note' => $status === ClaimStatus::Rejected ? 'Motivo de prueba.' : null,
         ]);
     }
 }

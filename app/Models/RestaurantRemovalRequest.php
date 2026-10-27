@@ -55,7 +55,7 @@ class RestaurantRemovalRequest extends Model
     /** @return list<string> */
     protected function personalDataColumns(): array
     {
-        return ['contact_name', 'contact_phone', 'contact_email', 'reason'];
+        return ['contact_name', 'contact_phone', 'contact_email', 'reason', 'review_note'];
     }
 
     /** @return BelongsTo<Restaurant, $this> */
