@@ -5,16 +5,19 @@ use App\Enums\ClaimStatus;
 use App\Enums\RemovalRelationship;
 use App\Enums\RestaurantStatus;
 use App\Http\Controllers\RestaurantRequestController;
+use App\Http\Requests\RestaurantContactRequest;
 use App\Models\Restaurant;
 use App\Models\RestaurantClaim;
 use App\Models\RestaurantRemovalRequest;
 use App\Models\User;
 use App\Providers\AppServiceProvider;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
 use Symfony\Component\HttpFoundation\Response;
@@ -189,6 +192,101 @@ describe('reclamar una ficha', function () {
         'sin aceptar los datos' => [['accepts_privacy' => false], 'accepts_privacy', 'requests.error.privacy'],
     ]);
 
+    test('rechaza texto que no es UTF-8 válido o trae caracteres de control', function (string $field, string $value, string $key) {
+        Restaurant::factory()->create(['slug' => 'la-ceiba']);
+        $max = $field === 'contact_name' ? 100 : 1000;
+
+        restaurantRequestsPost('/restaurants/la-ceiba/claim', restaurantRequestsClaim([$field => $value]))
+            ->assertStatus(302)
+            ->assertSessionHasErrors([$field => trans($key, ['max' => $max], 'es')]);
+        // En JSON solo viaja UTF-8 válido (lo inválido ni se puede codificar).
+        if (mb_check_encoding($value, 'UTF-8')) {
+            $this->postJson('/restaurants/la-ceiba/claim', restaurantRequestsClaim([$field => $value]))
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors([$field]);
+        }
+
+        expect(RestaurantClaim::query()->count())->toBe(0);
+    })->with([
+        'nombre con UTF-8 inválido' => ['contact_name', "Persona \xC3\x28", 'requests.error.name'],
+        'nombre con NUL' => ['contact_name', "Persona\0de Prueba", 'requests.error.name'],
+        'nombre con salto de línea' => ['contact_name', "Persona\nde Prueba", 'requests.error.name'],
+        'correo con UTF-8 inválido' => ['contact_email', "prueba\xFF@example.test", 'requests.error.email'],
+        'correo con NUL' => ['contact_email', "prueba\0@example.test", 'requests.error.email'],
+        'mensaje con UTF-8 inválido' => ['message', "Mensaje \xC3\x28 ficticio", 'requests.error.message'],
+        'mensaje con NUL' => ['message', "Mensaje\0ficticio", 'requests.error.message'],
+        'mensaje con escape' => ['message', "Mensaje \x1B[31m ficticio", 'requests.error.message'],
+        'mensaje con un control C1' => ['message', "Mensaje \u{0085} ficticio", 'requests.error.message'],
+        'campo trampa con UTF-8 inválido' => ['website', "\xC3\x28", 'requests.error.failed'],
+        'campo trampa con NUL' => ['website', "a\0b", 'requests.error.failed'],
+    ]);
+
+    test('el mensaje acepta saltos de línea y tabulaciones', function () {
+        Restaurant::factory()->create(['slug' => 'la-ceiba']);
+
+        restaurantRequestsPost('/restaurants/la-ceiba/claim', restaurantRequestsClaim(['message' => "Línea uno.\r\nLínea dos.\tFin."]))
+            ->assertSessionHasNoErrors();
+
+        expect(RestaurantClaim::query()->sole()->message)->toBe("Línea uno.\r\nLínea dos.\tFin.");
+    });
+
+    test('guarda la versión del aviso de privacidad aceptada', function () {
+        Restaurant::factory()->create(['slug' => 'la-ceiba']);
+
+        restaurantRequestsPost('/restaurants/la-ceiba/claim', restaurantRequestsClaim())->assertSessionHasNoErrors();
+
+        expect(RestaurantClaim::query()->sole()->privacy_notice_version)->toBe(RestaurantContactRequest::PRIVACY_NOTICE_VERSION);
+    });
+
+    test('la página dice quién responde por los datos y a qué correo escribir', function () {
+        Restaurant::factory()->create(['slug' => 'la-ceiba']);
+        config(['privacy.contact_email' => 'privacidad@example.test']);
+
+        $this->get('/restaurants/la-ceiba/claim')
+            ->assertInertia(fn (Assert $page) => $page->where('privacy', [
+                'controller' => 'Vení Roldanillo',
+                'contact_email' => 'privacidad@example.test',
+                'version' => RestaurantContactRequest::PRIVACY_NOTICE_VERSION,
+            ]));
+    });
+
+    test('la base no deja un mensaje de más de 1000 caracteres', function () {
+        RestaurantClaim::factory()->withoutAccount()->create(['message' => str_repeat('a', 1001)]);
+    })->throws(QueryException::class, 'restaurant_claims_message_length');
+
+    test('si otro envío igual gana la carrera, responde lo mismo y queda una sola', function () {
+        $restaurant = Restaurant::factory()->create(['slug' => 'la-ceiba']);
+
+        // Justo después de comprobar que no hay pendiente, llega la rival.
+        $inserted = false;
+        DB::listen(function ($query) use (&$inserted, $restaurant) {
+            if ($inserted || ! str_contains($query->sql, 'exists') || ! str_contains($query->sql, 'restaurant_claims')) {
+                return;
+            }
+            $inserted = true;
+            RestaurantClaim::factory()->withoutAccount()->for($restaurant)->create(['contact_phone' => '573000001234', 'message' => 'La rival.']);
+        });
+
+        restaurantRequestsPost('/restaurants/la-ceiba/claim', restaurantRequestsClaim())
+            ->assertStatus(303)
+            ->assertSessionHas(RestaurantRequestController::SENT_FLASH, 'claim');
+
+        expect($inserted)->toBeTrue()
+            ->and(RestaurantClaim::query()->sole()->message)->toBe('La rival.');
+    });
+
+    test('otra violación de unicidad no se traga en silencio', function () {
+        $restaurant = Restaurant::factory()->create(['slug' => 'la-ceiba']);
+        // Un índice que solo existe dentro de esta prueba (se revierte con ella).
+        DB::statement('CREATE UNIQUE INDEX restaurant_claims_test_only_email ON restaurant_claims (contact_email)');
+        RestaurantClaim::factory()->withoutAccount()->rejected()->for($restaurant)->create(['contact_email' => 'prueba@example.test']);
+
+        $this->withoutExceptionHandling();
+
+        expect(fn () => restaurantRequestsPost('/restaurants/la-ceiba/claim', restaurantRequestsClaim()))
+            ->toThrow(UniqueConstraintViolationException::class, 'restaurant_claims_test_only_email');
+    });
+
     test('pedida como JSON, la validación responde 422 con los avisos', function () {
         Restaurant::factory()->create(['slug' => 'la-ceiba']);
 
@@ -287,7 +385,7 @@ describe('pedir que retiren una ficha', function () {
         Restaurant::factory()->create(['slug' => 'la-ceiba']);
 
         restaurantRequestsPost('/restaurants/la-ceiba/removal', restaurantRequestsRemoval($overrides))
-            ->assertSessionHasErrors([$field => trans($key, ['max' => 1000], 'es')]);
+            ->assertSessionHasErrors([$field => trans($key, ['max' => $field === 'contact_name' ? 100 : 1000], 'es')]);
 
         expect(RestaurantRemovalRequest::query()->count())->toBe(0);
     })->with([
@@ -296,7 +394,31 @@ describe('pedir que retiren una ficha', function () {
         'motivo muy largo' => [['reason' => str_repeat('a', 1001)], 'reason', 'requests.error.reason'],
         'relación que no existe' => [['relationship' => 'vecino'], 'relationship', 'requests.error.relationship'],
         'sin aceptar los datos' => [['accepts_privacy' => '0'], 'accepts_privacy', 'requests.error.privacy'],
+        'motivo con UTF-8 inválido' => [['reason' => "Cerró \xC3\x28"], 'reason', 'requests.error.reason'],
+        'motivo con NUL' => [['reason' => "Cerró\0el local"], 'reason', 'requests.error.reason'],
+        'motivo con escape' => [['reason' => "Cerró \x1B el local"], 'reason', 'requests.error.reason'],
+        'nombre con UTF-8 inválido' => [['contact_name' => "Persona \xC3\x28"], 'contact_name', 'requests.error.name'],
+        'correo con NUL' => [['contact_email' => "prueba\0@example.test"], 'contact_email', 'requests.error.email'],
     ]);
+
+    test('el motivo acepta saltos de línea y guarda la versión del aviso', function () {
+        Restaurant::factory()->create(['slug' => 'la-ceiba']);
+
+        restaurantRequestsPost('/restaurants/la-ceiba/removal', restaurantRequestsRemoval(['reason' => "Cerró.\n\tYa no abre."]))
+            ->assertSessionHasNoErrors();
+
+        $removal = RestaurantRemovalRequest::query()->sole();
+        expect($removal->reason)->toBe("Cerró.\n\tYa no abre.")
+            ->and($removal->privacy_notice_version)->toBe(RestaurantContactRequest::PRIVACY_NOTICE_VERSION);
+    });
+
+    test('revertir la tabla se niega si hay pedidos guardados', function () {
+        RestaurantRemovalRequest::factory()->create();
+        $migration = require database_path('migrations/2026_10_26_100100_create_restaurant_removal_requests_table.php');
+
+        expect(fn () => $migration->down())->toThrow(RuntimeException::class);
+        expect(RestaurantRemovalRequest::query()->count())->toBe(1);
+    });
 });
 
 describe('límites de peticiones', function () {
@@ -333,6 +455,30 @@ describe('límites de peticiones', function () {
             ->assertStatus(429);
 
         expect(RestaurantClaim::query()->count())->toBe($last);
+    });
+
+    test('por celular: los envíos con errores no agotan el tope del dueño real', function () {
+        Restaurant::factory()->create(['slug' => 'la-ceiba']);
+
+        for ($i = 0; $i < AppServiceProvider::RESTAURANT_REQUESTS_PER_DAY_PER_PHONE; $i++) {
+            restaurantRequestsPost('/restaurants/la-ceiba/claim', restaurantRequestsClaim(['contact_name' => '']), "198.51.100.{$i}")
+                ->assertSessionHasErrors('contact_name');
+        }
+
+        restaurantRequestsPost('/restaurants/la-ceiba/claim', restaurantRequestsClaim(), '198.51.100.200')
+            ->assertSessionHasNoErrors()
+            ->assertStatus(303);
+
+        expect(RestaurantClaim::query()->count())->toBe(1);
+    });
+
+    test('por celular: la clave de la caché no es un hash sin secreto del número', function () {
+        Restaurant::factory()->create(['slug' => 'la-ceiba']);
+
+        restaurantRequestsPost('/restaurants/la-ceiba/claim', restaurantRequestsClaim())->assertStatus(303);
+
+        expect(RateLimiter::attempts(RestaurantContactRequest::phoneThrottleKey('573000001234')))->toBe(1)
+            ->and(RestaurantContactRequest::phoneThrottleKey('573000001234'))->not->toContain(hash('sha256', '573000001234'));
     });
 });
 
@@ -384,6 +530,47 @@ describe('privacidad', function () {
             ->and(RestaurantRemovalRequest::query()->pluck('id')->all())->toBe([$pendingRemoval->id]);
     });
 
+    test('las aprobadas viejas se anonimizan y conservan la resolución; las rechazadas se borran', function () {
+        $old = now()->subMonths(RestaurantClaim::RETENTION_MONTHS)->subDay();
+        $reviewer = User::factory()->admin()->create();
+
+        $approvedClaim = RestaurantClaim::factory()->withoutAccount()->approved($reviewer)->create(['contact_email' => 'prueba@example.test']);
+        $approvedRemoval = RestaurantRemovalRequest::factory()->approved($reviewer)->create(['contact_email' => 'prueba@example.test']);
+        $rejectedRemoval = RestaurantRemovalRequest::factory()->rejected($reviewer)->create();
+        DB::table('restaurant_claims')->where('id', $approvedClaim->id)->update(['reviewed_at' => $old]);
+        DB::table('restaurant_removal_requests')->whereIn('id', [$approvedRemoval->id, $rejectedRemoval->id])->update(['reviewed_at' => $old]);
+
+        Artisan::call('model:prune', ['--model' => [RestaurantClaim::class, RestaurantRemovalRequest::class]]);
+
+        $claim = RestaurantClaim::query()->findOrFail($approvedClaim->id);
+        expect($claim->only(['contact_name', 'contact_phone', 'contact_email', 'message']))->toBe([
+            'contact_name' => null, 'contact_phone' => null, 'contact_email' => null, 'message' => null,
+        ])
+            ->and($claim->status)->toBe(ClaimStatus::Approved)
+            ->and($claim->reviewed_by)->toBe($reviewer->id)
+            ->and($claim->reviewed_at?->toDateString())->toBe($old->toDateString())
+            ->and($claim->restaurant_id)->toBe($approvedClaim->restaurant_id);
+
+        $removal = RestaurantRemovalRequest::query()->findOrFail($approvedRemoval->id);
+        expect($removal->only(['contact_name', 'contact_phone', 'contact_email', 'reason']))->toBe([
+            'contact_name' => null, 'contact_phone' => null, 'contact_email' => null, 'reason' => null,
+        ])
+            ->and($removal->status)->toBe(ClaimStatus::Approved)
+            ->and($removal->reviewed_by)->toBe($reviewer->id)
+            ->and($removal->restaurant_id)->toBe($approvedRemoval->restaurant_id)
+            ->and(RestaurantRemovalRequest::query()->find($rejectedRemoval->id))->toBeNull();
+    });
+
+    test('una pendiente sigue necesitando el contacto completo', function (string $table, array $attributes) {
+        expect(fn () => $table === 'claims'
+            ? RestaurantClaim::factory()->withoutAccount()->create($attributes)
+            : RestaurantRemovalRequest::factory()->create($attributes))->toThrow(QueryException::class);
+    })->with([
+        'reclamo sin nombre' => ['claims', ['contact_name' => null]],
+        'retiro sin celular' => ['removals', ['contact_phone' => null]],
+        'retiro sin motivo' => ['removals', ['reason' => null]],
+    ]);
+
     test('la limpieza está programada todos los días', function () {
         Artisan::call('schedule:list');
 
@@ -398,5 +585,15 @@ describe('la ficha pública', function () {
 
         $this->get('/restaurants/sin-reclamar')->assertInertia(fn (Assert $page) => $page->where('restaurant.unverified', true));
         $this->get('/restaurants/reclamada')->assertInertia(fn (Assert $page) => $page->where('restaurant.unverified', false));
+    });
+
+    test('la ficha dice si se puede reclamar, con la misma regla que el formulario', function () {
+        Restaurant::factory()->create(['slug' => 'sin-reclamar']);
+        Restaurant::factory()->claimed()->create(['slug' => 'reclamada']);
+
+        $this->get('/restaurants/sin-reclamar')->assertInertia(fn (Assert $page) => $page->where('restaurant.claimable', true));
+        $this->get('/restaurants/sin-reclamar/claim')->assertOk();
+        $this->get('/restaurants/reclamada')->assertInertia(fn (Assert $page) => $page->where('restaurant.claimable', false));
+        $this->get('/restaurants/reclamada/claim')->assertNotFound();
     });
 });
