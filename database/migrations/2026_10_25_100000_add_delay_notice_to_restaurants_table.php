@@ -11,9 +11,12 @@ use Illuminate\Support\Facades\Schema;
  *
  * Dos columnas que van juntas: los minutos que se anuncian y hasta cuándo
  * vale el aviso. Sin aviso, las dos son nulas. Columnas nulas sin valor por
- * defecto: en PostgreSQL agregarlas no reescribe la tabla. Las restricciones
- * entran NOT VALID (no recorren la tabla con el bloqueo tomado) y se validan
- * aparte; con las columnas recién creadas y vacías, validar no cuesta nada.
+ * defecto: en PostgreSQL agregarlas no reescribe la tabla. El CHECK entra
+ * directo: recorre la tabla con el bloqueo ACCESS EXCLUSIVE que ya tomó el
+ * ALTER TABLE de las columnas, pero las columnas recién creadas están vacías
+ * en todas las filas y la tabla es chica (un restaurante por fila). NOT VALID
+ * más VALIDATE aparte no evitaría ese bloqueo aquí: la migración corre en una
+ * sola transacción y el bloqueo de las columnas dura hasta el final.
  */
 return new class extends Migration
 {
@@ -27,8 +30,7 @@ return new class extends Migration
         DB::statement('ALTER TABLE restaurants ADD CONSTRAINT restaurants_delay_notice_valid CHECK (
             (delay_minutes IS NULL AND delay_until IS NULL)
             OR (delay_minutes BETWEEN 5 AND 180 AND delay_until IS NOT NULL)
-        ) NOT VALID');
-        DB::statement('ALTER TABLE restaurants VALIDATE CONSTRAINT restaurants_delay_notice_valid');
+        )');
     }
 
     public function down(): void

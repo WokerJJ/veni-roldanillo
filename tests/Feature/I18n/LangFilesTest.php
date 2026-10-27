@@ -1,6 +1,8 @@
 <?php
 
 use App\Enums\Locale;
+use App\Enums\OptionGroupKind;
+use App\Enums\PaymentMethod;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Finder\Finder;
@@ -164,4 +166,18 @@ test('los textos del panel del dueño tienen las mismas claves en los dos idioma
 
     expect($used)->not->toBeEmpty()
         ->and(array_values(array_diff(array_unique($used), $keys)))->toBe([]);
+});
+
+test('existen las claves del panel que el código arma con un valor (medios de pago, tipos de grupo, días)', function () {
+    $dynamic = [
+        ...array_map(fn (PaymentMethod $method): string => "payment.{$method->value}", PaymentMethod::cases()),
+        ...array_map(fn (OptionGroupKind $kind): string => "groups.kind_{$kind->value}", OptionGroupKind::cases()),
+        ...array_map(fn (int $weekday): string => "weekdays.{$weekday}", range(0, 6)),
+    ];
+
+    foreach (langFilesLocales() as $locale) {
+        $keys = array_keys(Arr::dot(require lang_path("{$locale}/panel.php")));
+
+        expect(array_values(array_diff($dynamic, $keys)))->toBe([], "lang/{$locale}/panel.php no tiene todas las claves armadas con un valor");
+    }
 });
