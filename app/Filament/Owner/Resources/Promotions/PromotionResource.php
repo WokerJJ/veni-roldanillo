@@ -18,6 +18,9 @@ use Filament\Tables\Table;
 /** Promociones por fechas: valen de starts_at a ends_at. */
 class PromotionResource extends OwnerResource
 {
+    /** Tope por restaurante (OwnerResource::canCreate, ADR 0025). */
+    public const int MAX_PER_RESTAURANT = 20;
+
     protected static ?string $model = Promotion::class;
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedMegaphone;

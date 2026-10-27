@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasTranslatableFields;
+use App\Models\Concerns\OwnedByRestaurant;
 use App\Models\Contracts\BelongsToRestaurant;
 use App\Policies\RestaurantContentPolicy;
 use Database\Factories\SpecialHourFactory;
@@ -26,7 +27,7 @@ use Illuminate\Support\Carbon;
 class SpecialHour extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<SpecialHourFactory> */
-    use HasFactory, HasTranslatableFields;
+    use HasFactory, HasTranslatableFields, OwnedByRestaurant;
 
     /**
      * @return array<string, string>
@@ -53,10 +54,5 @@ class SpecialHour extends Model implements BelongsToRestaurant
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);
-    }
-
-    public function owningRestaurant(): Restaurant
-    {
-        return $this->restaurant()->firstOrFail();
     }
 }

@@ -12,8 +12,9 @@ use App\Models\Restaurant;
 interface BelongsToRestaurant
 {
     /**
-     * Consulta la base siguiendo las FK guardadas; no usa relaciones ya
-     * cargadas en memoria, que podrían haberse manipulado.
+     * Sigue las FK guardadas en la base (getOriginal): usa una relación ya
+     * cargada solo si apunta a esa FK y, si no, consulta la base. Un cambio
+     * en memoria de la FK o de la relación no cambia la respuesta.
      */
     public function owningRestaurant(): Restaurant;
 }

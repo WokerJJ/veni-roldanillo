@@ -44,6 +44,14 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     ];
 
     /**
+     * Rol en cada restaurante ya consultado (hasRestaurantRole), por id;
+     * null si no es miembro.
+     *
+     * @var array<int, string|null>
+     */
+    private array $restaurantRoles = [];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -139,16 +147,22 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Consulta la base de datos (no confía en relaciones ya cargadas).
+     * Consulta la base de datos (no confía en relaciones ya cargadas), una
+     * vez por restaurante y por instancia: la persona autenticada se arma de
+     * nuevo en cada petición (también bajo Octane), así que es una consulta
+     * por restaurante y petición, no una por fila de una tabla del panel.
      */
     private function hasRestaurantRole(Restaurant $restaurant, ?RestaurantRole $role): bool
     {
-        $query = $this->restaurants()->whereKey($restaurant->getKey());
+        $key = $restaurant->id;
 
-        if ($role !== null) {
-            $query->wherePivot('role', $role->value);
+        if (! array_key_exists($key, $this->restaurantRoles)) {
+            $stored = $this->restaurants()->whereKey($key)->value('restaurant_user.role');
+            $this->restaurantRoles[$key] = is_string($stored) ? $stored : null;
         }
 
-        return $query->exists();
+        $stored = $this->restaurantRoles[$key];
+
+        return $stored !== null && ($role === null || $stored === $role->value);
     }
 }

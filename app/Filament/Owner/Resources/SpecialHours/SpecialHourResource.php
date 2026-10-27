@@ -25,6 +25,9 @@ use Filament\Tables\Table;
  */
 class SpecialHourResource extends OwnerResource
 {
+    /** Tope por restaurante (OwnerResource::canCreate, ADR 0025). */
+    public const int MAX_PER_RESTAURANT = 60;
+
     protected static ?string $model = SpecialHour::class;
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;

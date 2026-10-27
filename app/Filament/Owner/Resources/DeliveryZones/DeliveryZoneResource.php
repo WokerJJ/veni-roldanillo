@@ -29,6 +29,9 @@ class DeliveryZoneResource extends OwnerResource
     /** Tope del costo de un domicilio, en pesos. */
     public const MAX_FEE = 100_000;
 
+    /** Tope por restaurante (OwnerResource::canCreate, ADR 0025). */
+    public const int MAX_PER_RESTAURANT = 100;
+
     protected static ?string $model = DeliveryZone::class;
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedTruck;

@@ -33,6 +33,9 @@ class DishResource extends OwnerResource
 {
     public const DESCRIPTION_MAX = 500;
 
+    /** Tope por restaurante (OwnerResource::canCreate, ADR 0025). */
+    public const int MAX_PER_RESTAURANT = 200;
+
     protected static ?string $model = Dish::class;
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedBookOpen;

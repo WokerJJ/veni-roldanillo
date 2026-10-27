@@ -5,6 +5,8 @@ namespace App\Filament\Owner;
 use App\Models\Restaurant;
 use Filament\Facades\Filament;
 use Filament\Resources\Resource;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -27,6 +29,17 @@ abstract class OwnerResource extends Resource
         return $tenant instanceof Restaurant ? $tenant : null;
     }
 
+    /**
+     * Con el restaurante cargado: la autorización de cada fila
+     * (owningRestaurant) no consulta la base por fila.
+     *
+     * @return Builder<Model>
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with('restaurant');
+    }
+
     public static function canViewAny(): bool
     {
         $restaurant = static::currentRestaurant();
@@ -34,11 +47,30 @@ abstract class OwnerResource extends Resource
         return $restaurant !== null && Gate::allows('update', $restaurant);
     }
 
+    /**
+     * Tope de registros de este recurso por restaurante (ADR 0025): todo lo
+     * que crea el dueño viaja en las props de la ficha. null, sin tope.
+     */
+    public const ?int MAX_PER_RESTAURANT = null;
+
     public static function canCreate(): bool
     {
         $restaurant = static::currentRestaurant();
 
-        return $restaurant !== null && Gate::allows('create', [static::getModel(), $restaurant]);
+        return $restaurant !== null
+            && Gate::allows('create', [static::getModel(), $restaurant])
+            && ! static::reachedLimit($restaurant);
+    }
+
+    protected static function reachedLimit(Restaurant $restaurant): bool
+    {
+        if (static::MAX_PER_RESTAURANT === null) {
+            return false;
+        }
+
+        return static::getModel()::query()
+            ->where('restaurant_id', $restaurant->getKey())
+            ->count() >= static::MAX_PER_RESTAURANT;
     }
 
     public static function canDeleteAny(): bool

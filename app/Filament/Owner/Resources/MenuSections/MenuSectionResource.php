@@ -17,6 +17,9 @@ use Filament\Tables\Table;
 /** Secciones del menú («Almuerzos», «Bebidas»), en el orden de position. */
 class MenuSectionResource extends OwnerResource
 {
+    /** Tope por restaurante (OwnerResource::canCreate, ADR 0025). */
+    public const int MAX_PER_RESTAURANT = 30;
+
     protected static ?string $model = MenuSection::class;
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedQueueList;

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\OwnedByRestaurant;
 use App\Models\Contracts\BelongsToRestaurant;
 use App\Policies\RestaurantContentPolicy;
 use Database\Factories\OpeningHourFactory;
@@ -20,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class OpeningHour extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<OpeningHourFactory> */
-    use HasFactory;
+    use HasFactory, OwnedByRestaurant;
 
     /**
      * @return array<string, string>
@@ -36,10 +37,5 @@ class OpeningHour extends Model implements BelongsToRestaurant
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);
-    }
-
-    public function owningRestaurant(): Restaurant
-    {
-        return $this->restaurant()->firstOrFail();
     }
 }
