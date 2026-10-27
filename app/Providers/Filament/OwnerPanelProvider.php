@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Owner\Auth\Login;
 use App\Filament\Owner\Pages\EditRestaurantProfile;
 use App\Filament\Owner\Support\InitialsAvatarProvider;
 use App\Http\Middleware\SetLocale;
@@ -28,9 +29,11 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * Panel del dueño (#18, ADR 0025) en /panel.
  *
  * - Entra solo quien ya tiene cuenta: sin registro, sin «olvidé mi
- *   contraseña» (no hay correo saliente) y con el límite de intentos del
- *   login de Filament (5 por minuto). Las cuentas las crea administración o
- *   el reclamo de una ficha (#20).
+ *   contraseña» (no hay correo saliente), con el límite de intentos de
+ *   Filament por IP (5 por minuto) y otro por cuenta (Auth\Login). Las
+ *   cuentas las crea administración o el reclamo de una ficha (#20).
+ * - Autorización estricta: si a una Policy le falta un método que Filament
+ *   pregunta, el panel falla en vez de permitir.
  * - Tenancy por restaurante: la dirección lleva el slug
  *   (/panel/{slug}/dishes) y Filament comprueba en cada petición que la
  *   persona sea dueña de ese restaurante (User::canAccessTenant). Las tablas
@@ -86,7 +89,7 @@ class OwnerPanelProvider extends PanelProvider
             ->default()
             ->id('owner')
             ->path('panel')
-            ->login()
+            ->login(Login::class)
             ->brandName('Vení · Panel')
             ->favicon(asset('favicon.ico'))
             ->defaultAvatarProvider(InitialsAvatarProvider::class)
@@ -96,6 +99,7 @@ class OwnerPanelProvider extends PanelProvider
             ])
             ->tenant(Restaurant::class, slugAttribute: 'slug', ownershipRelationship: 'restaurant')
             ->tenantProfile(EditRestaurantProfile::class)
+            ->strictAuthorization()
             ->discoverResources(in: app_path('Filament/Owner/Resources'), for: 'App\Filament\Owner\Resources')
             ->discoverPages(in: app_path('Filament/Owner/Pages'), for: 'App\Filament\Owner\Pages')
             ->pages([
