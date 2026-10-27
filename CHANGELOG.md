@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.3.0...v0.4.0) (2026-10-25)
+
+
+### Funcionalidades
+
+* carrito y pedido por WhatsApp ([#15](https://github.com/WokerJJ/veni-roldanillo/issues/15)) ([#91](https://github.com/WokerJJ/veni-roldanillo/issues/91)) ([7f9bf0b](https://github.com/WokerJJ/veni-roldanillo/commit/7f9bf0bb89b7ff7c4f32aced828ffb3b757291dc))
+* menú con opciones obligatorias, adiciones, quitar ingredientes y nota ([#14](https://github.com/WokerJJ/veni-roldanillo/issues/14)) ([#89](https://github.com/WokerJJ/veni-roldanillo/issues/89)) ([c752f10](https://github.com/WokerJJ/veni-roldanillo/commit/c752f10927bc470d2f3b64c73bc35abde092cb95))
+
+
+### Correcciones
+
+* router de veni-mapa v0.2.2, que ajusta la ruta a la calle ([#86](https://github.com/WokerJJ/veni-roldanillo/issues/86)) ([#87](https://github.com/WokerJJ/veni-roldanillo/issues/87)) ([2f7cc20](https://github.com/WokerJJ/veni-roldanillo/commit/2f7cc201237681172c5ec3751765b6c27a6d84c1))
+
 ## [0.3.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.2.0...v0.3.0) (2026-10-22)
 
 
