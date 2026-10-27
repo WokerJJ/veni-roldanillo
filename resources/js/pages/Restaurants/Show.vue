@@ -13,7 +13,7 @@ import type { PageMeta } from '@/composables/useI18n';
 import { useI18n } from '@/composables/useI18n';
 import { useNow } from '@/composables/useNow';
 import { formatDate } from '@/i18n/intl';
-import { mapUrl } from '@/restaurants/links';
+import { mapUrl, restaurantUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
 import type { RestaurantProfile } from '@/restaurants/profile';
 import { openStatusText } from '@/restaurants/statusText';
@@ -183,6 +183,16 @@ onBeforeUnmount(() => {
                         }}
                     </span>
                 </p>
+
+                <!-- «Reclámalo» (#20): solo en una ficha publicada que nadie reclamó. -->
+                <Link
+                    v-if="restaurant.unverified"
+                    :href="`${restaurantUrl(restaurant.slug)}/claim`"
+                    class="mt-1 inline-flex min-h-touch items-center font-semibold underline underline-offset-4"
+                    data-claim
+                >
+                    {{ t('claim.link') }}
+                </Link>
             </header>
 
             <RestaurantHours class="mt-8 border-t border-line pt-6" :hours="restaurant.hours" :special-hours="restaurant.special_hours" />
@@ -193,6 +203,13 @@ onBeforeUnmount(() => {
 
             <RestaurantContact class="mt-8 border-t border-line pt-6" :restaurant="restaurant" />
         </article>
+
+        <!-- Retiro de ficha (#20): en toda ficha publicada; lo revisa administración. -->
+        <p v-if="!restaurant.hidden" class="mt-8 border-t border-line pt-4 text-sm">
+            <Link :href="`${restaurantUrl(restaurant.slug)}/removal`" class="inline-flex min-h-touch items-center text-ink-muted underline underline-offset-4" data-removal>
+                {{ t('removal.link') }}
+            </Link>
+        </p>
 
         <!-- El pedido (#15): la barra aparece con el primer plato y abre el carrito. -->
         <OrderBar :restaurant="restaurant" />

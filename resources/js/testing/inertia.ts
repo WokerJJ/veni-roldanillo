@@ -46,6 +46,7 @@ let listeners: { type: FakeEventName; callback: FakeListener }[] = [];
 
 export const router = {
     put: vi.fn(),
+    post: vi.fn(),
     reload: vi.fn(),
     on(type: FakeEventName, callback: FakeListener): () => void {
         const listener = { type, callback };
@@ -119,5 +120,6 @@ export function reset(): void {
     page = createPage();
     listeners = [];
     router.put.mockReset();
+    router.post.mockReset();
     router.reload.mockReset();
 }
