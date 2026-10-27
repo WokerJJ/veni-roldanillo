@@ -29,13 +29,13 @@ final class ApproveRemovalRequest
         }
 
         DB::transaction(function () use ($removal, $reviewer): void {
-            $locked = RestaurantRemovalRequest::query()->lockForUpdate()->findOrFail($removal->getKey());
+            $locked = RestaurantRemovalRequest::query()->lockForUpdate()->whereKey($removal->getKey())->firstOrFail();
 
             if ($locked->status !== ClaimStatus::Pending) {
                 throw new ActionRefused(ActionRefused::NOT_PENDING);
             }
 
-            $this->hide->handle(Restaurant::query()->findOrFail($locked->restaurant_id));
+            $this->hide->handle(Restaurant::query()->whereKey($locked->restaurant_id)->firstOrFail());
 
             $locked->forceFill([
                 'status' => ClaimStatus::Approved,

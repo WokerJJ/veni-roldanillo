@@ -24,7 +24,7 @@ final class PublishRestaurant
     public function handle(Restaurant $restaurant, bool $verifiedNow = false): RestaurantStatus
     {
         return DB::transaction(function () use ($restaurant, $verifiedNow): RestaurantStatus {
-            $locked = Restaurant::query()->lockForUpdate()->findOrFail($restaurant->getKey());
+            $locked = Restaurant::query()->lockForUpdate()->whereKey($restaurant->getKey())->firstOrFail();
             $locked->load('source');
 
             if ($locked->status->isPublished()) {

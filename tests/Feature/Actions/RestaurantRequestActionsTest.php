@@ -12,6 +12,7 @@ use App\Models\RestaurantClaim;
 use App\Models\RestaurantRemovalRequest;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 
@@ -149,7 +150,7 @@ test('la base exige el motivo en una rechazada', function () {
     $claim = pendingClaim();
 
     expect(fn () => $claim->forceFill(['status' => ClaimStatus::Rejected, 'reviewed_at' => now()])->save())
-        ->toThrow(Illuminate\Database\QueryException::class, 'restaurant_claims_rejection_has_note');
+        ->toThrow(QueryException::class, 'restaurant_claims_rejection_has_note');
 });
 
 test('aprobar un retiro oculta la ficha y marca la revisión, en una transacción', function () {

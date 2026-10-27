@@ -23,7 +23,7 @@ final class DismissOsmDraft
     public function handle(Restaurant $restaurant): void
     {
         DB::transaction(function () use ($restaurant): void {
-            $locked = Restaurant::query()->lockForUpdate()->findOrFail($restaurant->getKey());
+            $locked = Restaurant::query()->lockForUpdate()->whereKey($restaurant->getKey())->firstOrFail();
             $source = $locked->source()->first();
 
             if ($source === null || $source->source !== RestaurantSource::OPENSTREETMAP) {

@@ -4,6 +4,7 @@ use App\Filament\Owner\Pages\EditRestaurantProfile;
 use App\Filament\Owner\Resources\Dishes\Pages\EditDish;
 use App\Models\Restaurant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -69,5 +70,5 @@ test('la versión del formulario no la puede cambiar el navegador', function () 
     actInPanel(panelMember($restaurant), $restaurant);
 
     expect(fn () => Livewire::test(EditRestaurantProfile::class)->set('loadedVersion', 'otra'))
-        ->toThrow(\Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException::class);
+        ->toThrow(CannotUpdateLockedPropertyException::class);
 });

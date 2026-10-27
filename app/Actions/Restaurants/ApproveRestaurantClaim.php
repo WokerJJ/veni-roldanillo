@@ -50,13 +50,13 @@ final class ApproveRestaurantClaim
         }
 
         return DB::transaction(function () use ($claim, $reviewer, $email): ApprovedClaim {
-            $locked = RestaurantClaim::query()->lockForUpdate()->findOrFail($claim->getKey());
+            $locked = RestaurantClaim::query()->lockForUpdate()->whereKey($claim->getKey())->firstOrFail();
 
             if ($locked->status !== ClaimStatus::Pending) {
                 throw new ActionRefused(ActionRefused::NOT_PENDING);
             }
 
-            $restaurant = Restaurant::query()->lockForUpdate()->findOrFail($locked->restaurant_id);
+            $restaurant = Restaurant::query()->lockForUpdate()->whereKey($locked->restaurant_id)->firstOrFail();
 
             if (! $restaurant->isClaimable() || $restaurant->owners()->exists()) {
                 throw new ActionRefused(ActionRefused::NOT_CLAIMABLE);
@@ -73,7 +73,7 @@ final class ApproveRestaurantClaim
 
             $restaurant->forceFill(['status' => RestaurantStatus::Claimed])->save();
             $restaurant->members()->syncWithoutDetaching([
-                $owner->getKey() => ['role' => RestaurantRole::Owner->value],
+                $owner->id => ['role' => RestaurantRole::Owner->value],
             ]);
 
             $claim->setRawAttributes($locked->getAttributes(), sync: true);

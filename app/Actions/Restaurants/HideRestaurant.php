@@ -17,7 +17,7 @@ final class HideRestaurant
     public function handle(Restaurant $restaurant): void
     {
         DB::transaction(function () use ($restaurant): void {
-            $locked = Restaurant::query()->lockForUpdate()->findOrFail($restaurant->getKey());
+            $locked = Restaurant::query()->lockForUpdate()->whereKey($restaurant->getKey())->firstOrFail();
 
             if ($locked->status !== RestaurantStatus::Hidden) {
                 $locked->forceFill(['status' => RestaurantStatus::Hidden])->save();

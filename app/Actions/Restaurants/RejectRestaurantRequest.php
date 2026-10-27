@@ -36,7 +36,7 @@ final class RejectRestaurantRequest
         }
 
         DB::transaction(function () use ($request, $reviewer, $note): void {
-            $locked = $request->newQuery()->lockForUpdate()->findOrFail($request->getKey());
+            $locked = $request->newQuery()->lockForUpdate()->whereKey($request->getKey())->firstOrFail();
 
             if ($locked->getAttribute('status') !== ClaimStatus::Pending) {
                 throw new ActionRefused(ActionRefused::NOT_PENDING);
