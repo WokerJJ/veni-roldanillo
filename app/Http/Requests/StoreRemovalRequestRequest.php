@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\RemovalRelationship;
+use App\Rules\PlainText;
 use Illuminate\Validation\Rule;
 
 /** POST /restaurants/{slug}/removal (#20): «Pedir que retiren esta ficha». */
@@ -16,7 +17,7 @@ class StoreRemovalRequestRequest extends RestaurantContactRequest
         return [
             ...$this->contactRules(),
             'relationship' => ['required', Rule::enum(RemovalRelationship::class)],
-            'reason' => ['required', 'string', 'max:'.self::TEXT_MAX, self::NOT_BLANK],
+            'reason' => ['required', 'string', PlainText::multiline(), 'max:'.self::TEXT_MAX, self::NOT_BLANK],
         ];
     }
 
