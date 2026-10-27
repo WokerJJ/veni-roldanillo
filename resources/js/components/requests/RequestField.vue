@@ -10,6 +10,8 @@ const props = withDefaults(
     defineProps<{
         label: string;
         modelValue: string;
+        /** Id del control; sin él, uno propio. El resumen de errores enlaza a este id. */
+        id?: string | undefined;
         hint?: string | undefined;
         error?: string | undefined;
         multiline?: boolean;
@@ -19,7 +21,7 @@ const props = withDefaults(
         maxlength?: number;
         required?: boolean;
     }>(),
-    { hint: '', error: '', type: 'text', autocomplete: 'on', inputmode: 'text', maxlength: 1000 },
+    { id: undefined, hint: '', error: '', type: 'text', autocomplete: 'on', inputmode: 'text', maxlength: 1000 },
 );
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
@@ -32,7 +34,8 @@ function onInput(event: Event): void {
     emit('update:modelValue', (event.target as HTMLInputElement | HTMLTextAreaElement).value);
 }
 
-const id = useId();
+const generatedId = useId();
+const id = props.id ?? generatedId;
 const hintId = `${id}-hint`;
 const errorId = `${id}-error`;
 const describedBy = computed(() => [props.hint ? hintId : null, props.error ? errorId : null].filter(Boolean).join(' ') || undefined);

@@ -12,6 +12,7 @@ vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
  */
 
 const RESTAURANT = { slug: 'la-ceiba', name: 'La Ceiba (ficticio)', fictitious: true };
+const PRIVACY = { controller: 'Vení Roldanillo', contact_email: 'privacidad@example.test', version: '2026-10-26' };
 
 type Kind = 'Claim' | 'Removal';
 
@@ -33,7 +34,7 @@ async function mountForm(kind: Kind, { sent = false, locale = 'es' }: { sent?: b
     const { default: Page } = kind === 'Claim' ? await import('./Claim.vue') : await import('./Removal.vue');
     const host = document.createElement('div');
     document.body.append(host);
-    const wrapper = mount(Page, { props: { restaurant: RESTAURANT, sent }, attachTo: host });
+    const wrapper = mount(Page, { props: { restaurant: RESTAURANT, sent, privacy: PRIVACY }, attachTo: host });
     await flushPromises();
 
     /** Lo último que se mandó con router.post: la URL, los datos y las opciones. */
@@ -146,6 +147,65 @@ describe.each(['Claim', 'Removal'] as const)('Restaurants/%s', (kind) => {
         expect(phone.attributes('aria-invalid')).toBe('true');
         const describedBy = String(phone.attributes('aria-describedby')).split(' ');
         expect(describedBy.map((id) => wrapper.get(`[id="${id}"]`).text())).toContain('Escribí un celular colombiano de diez dígitos, por ejemplo 300 123 4567.');
+    });
+
+    it('el aviso de privacidad dice quién responde por los datos y a qué correo escribir', async () => {
+        const { wrapper } = await mountForm(kind);
+        const privacy = wrapper.get('[data-privacy]').text();
+
+        expect(privacy).toContain('Vení Roldanillo');
+        expect(privacy).toContain('privacidad@example.test');
+        expect(wrapper.get('[data-privacy] a[href="mailto:privacidad@example.test"]').text()).toBe('privacidad@example.test');
+    });
+
+    it('el error de la autorización queda enlazado a la casilla', async () => {
+        const { wrapper, lastPost } = await mountForm(kind);
+        await wrapper.get('form').trigger('submit');
+
+        lastPost().options.onError?.({ accepts_privacy: 'Para enviarla, aceptá el tratamiento de tus datos.' });
+        await flushPromises();
+
+        const consent = wrapper.get('[data-field="accepts_privacy"]');
+        expect(consent.attributes('id')).toBeTruthy();
+        expect(consent.attributes('aria-invalid')).toBe('true');
+        const describedBy = String(consent.attributes('aria-describedby')).split(' ');
+        expect(describedBy.map((id) => wrapper.get(`[id="${id}"]`).text())).toContain('Para enviarla, aceptá el tratamiento de tus datos.');
+    });
+
+    it('con error en el grupo de opciones, cada opción lo anuncia', async () => {
+        const group = kind === 'Claim' ? 'claimant_role' : 'relationship';
+        const message = kind === 'Claim' ? 'Elegí tu rol en el local.' : 'Elegí tu relación con el negocio.';
+        const { wrapper, lastPost } = await mountForm(kind);
+        await wrapper.get('form').trigger('submit');
+
+        lastPost().options.onError?.({ [group]: message });
+        await flushPromises();
+
+        const radios = wrapper.findAll(`fieldset[data-field="${group}"] input[type="radio"]`);
+        expect(radios.length).toBeGreaterThan(1);
+        for (const radio of radios) {
+            expect(radio.attributes('aria-invalid')).toBe('true');
+            const describedBy = String(radio.attributes('aria-describedby')).split(' ');
+            expect(describedBy.map((id) => wrapper.get(`[id="${id}"]`).text())).toContain(message);
+        }
+    });
+
+    it('cada aviso del resumen enlaza a su campo', async () => {
+        const group = kind === 'Claim' ? 'claimant_role' : 'relationship';
+        const text = kind === 'Claim' ? 'message' : 'reason';
+        const { wrapper, lastPost } = await mountForm(kind);
+        await wrapper.get('form').trigger('submit');
+
+        lastPost().options.onError?.({ contact_name: 'A', contact_phone: 'B', contact_email: 'C', [group]: 'D', [text]: 'E', accepts_privacy: 'F' });
+        await flushPromises();
+
+        const links = wrapper.findAll('[data-errors] li a');
+        expect(links.map((link) => link.text())).toEqual(['A', 'B', 'C', 'D', 'E', 'F']);
+        const targets = links.map((link) => wrapper.get(`[id="${String(link.attributes('href')).slice(1)}"]`));
+        expect(targets.map((target) => target.element.tagName)).toEqual(['INPUT', 'INPUT', 'INPUT', 'INPUT', 'TEXTAREA', 'INPUT']);
+        expect(targets[3]?.attributes('type')).toBe('radio');
+        expect(targets[5]?.attributes('data-field')).toBe('accepts_privacy');
+        expect(wrapper.get(`[data-field="${text}"] textarea`).attributes('id')).toBe(String(links[4]?.attributes('href')).slice(1));
     });
 
     it.each([

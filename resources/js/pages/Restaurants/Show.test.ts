@@ -459,7 +459,7 @@ describe('Restaurants/Show', () => {
 
     describe('reclamar y pedir el retiro (#20)', () => {
         it('una ficha sin reclamar lleva «¿Es tu negocio? Reclámalo» a su formulario', async () => {
-            const { wrapper } = await mountShow(profile({ unverified: true }));
+            const { wrapper } = await mountShow(profile({ claimable: true }));
             const link = wrapper.get('[data-claim]');
 
             expect(link.text()).toBe('¿Es tu negocio? Reclámalo');
@@ -467,7 +467,7 @@ describe('Restaurants/Show', () => {
         });
 
         it('una ficha reclamada no ofrece reclamarla', async () => {
-            const { wrapper } = await mountShow(profile({ unverified: false }));
+            const { wrapper } = await mountShow(profile({ unverified: true, claimable: false }));
 
             expect(wrapper.find('[data-claim]').exists()).toBe(false);
         });
@@ -488,7 +488,7 @@ describe('Restaurants/Show', () => {
         });
 
         it('en inglés', async () => {
-            const { wrapper } = await mountShow(profile({ unverified: true }), 'en');
+            const { wrapper } = await mountShow(profile({ unverified: true, claimable: true }), 'en');
 
             expect(wrapper.get('[data-claim]').text()).toBe('Is this your business? Claim it');
             expect(wrapper.get('[data-removal]').text()).toBe('Ask to remove this listing');

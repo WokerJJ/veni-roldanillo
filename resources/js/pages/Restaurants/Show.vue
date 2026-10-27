@@ -184,9 +184,9 @@ onBeforeUnmount(() => {
                     </span>
                 </p>
 
-                <!-- «Reclámalo» (#20): solo en una ficha publicada que nadie reclamó. -->
+                <!-- «Reclámalo» (#20): lo decide el servidor con la regla del formulario. -->
                 <Link
-                    v-if="restaurant.unverified"
+                    v-if="restaurant.claimable"
                     :href="`${restaurantUrl(restaurant.slug)}/claim`"
                     class="mt-1 inline-flex min-h-touch items-center font-semibold underline underline-offset-4"
                     data-claim

@@ -94,6 +94,8 @@ export interface RestaurantProfile {
     hidden: boolean;
     /** Sin reclamar: nadie del restaurante confirmó estos datos. */
     unverified: boolean;
+    /** Se puede reclamar (#20): muestra «¿Es tu negocio? Reclámalo». */
+    claimable: boolean;
     /** Día de la última actualización (`YYYY-MM-DD`). */
     updated_on: string | null;
     /** Día del último cambio del restaurante desde su panel (`YYYY-MM-DD`), o null. */

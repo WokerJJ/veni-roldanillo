@@ -299,6 +299,15 @@ class Restaurant extends Model
         return $this->hasMany(RestaurantClaim::class);
     }
 
+    /**
+     * Se puede reclamar (#20, ADR 0026): publicada y sin dueño todavía. La
+     * misma regla decide el formulario y el enlace «Reclámalo» de la ficha.
+     */
+    public function isClaimable(): bool
+    {
+        return $this->status === RestaurantStatus::Unclaimed;
+    }
+
     /** @return HasMany<RestaurantRemovalRequest, $this> */
     public function removalRequests(): HasMany
     {

@@ -35,6 +35,13 @@ export interface ContactFields extends RequestFields {
     website: string;
 }
 
+/** Lo que nombra el aviso de privacidad (Ley 1581): lo manda el servidor. */
+export interface PrivacyNotice {
+    controller: string;
+    contact_email: string;
+    version: string;
+}
+
 /** Los campos de contacto vacíos, para empezar un formulario. */
 export function emptyContact(): ContactFields {
     return { contact_name: '', contact_phone: '', contact_email: '', accepts_privacy: false, website: '' };
