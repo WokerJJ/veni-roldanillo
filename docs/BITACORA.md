@@ -107,3 +107,16 @@ Diario de avance del proyecto: qué se hizo en cada bloque, decisiones y aprendi
 - **Dependencias:** vite 8.3.4 por un aviso de seguridad que frenaba la auditoría de npm en todos los PR.
 - Aprendizajes: medir cuánto mapa queda a la vista convirtió una impresión («se ve mal en el celular») en un número que se puede comparar antes y después. Y al probar la ruta en la calle apareció un giro innecesario: el router ajusta el origen y el destino al vértice más cercano, no a la calle (veni-mapa#75).
 - Sigue la versión 0.3.0 y el arreglo del router en veni-mapa.
+
+## 2026-10-25 · Parte 10 · La ruta a la calle, el menú y el pedido por WhatsApp
+
+- **Versión 0.3.0 publicada**, con el panel de abajo en el celular.
+- **Ruta a la calle (veni-mapa#75 y #86):** el router ajustaba el origen y el destino al vértice más cercano del grafo, y por eso la ruta a El Fogón Azul daba la vuelta a la manzana. Ahora se ajusta al punto más cercano sobre la calle. Salió en la versión 0.2.2 del mapa y la app copió el router desde ese tag. El caso de la Calle 14 con Carrera 5A bajó de 1708 m a 1412 m y termina a 8 m del restaurante.
+- La revisión del router lo comparó con una búsqueda por fuerza bruta en unas mil rutas del grafo real: la duración coincide en todas. También encontró que la app decidía «estás lejos» con un criterio que ya no coincidía con el del router, y que el router no terminaba con un punto cerca de un polo (veni-mapa#77, corregido).
+- **#14 integrado:** el menú tiene opciones obligatorias, adiciones con precio, ingredientes para quitar y nota (ADR 0023). «Quitar» reutiliza los grupos de opciones con un tipo nuevo, y la base impide que sea obligatorio. Al tocar un plato se abre un selector que valida antes de agregar y recalcula el precio. La revisión encontró que una adición opcional de una sola opción salía como botón de radio y no se podía desmarcar.
+- **#15 integrado:** carrito en la ficha y pedido por WhatsApp (ADR 0024). El mensaje se arma en el teléfono, con el total estimado, la entrega, el pago y «¿con cuánto pagás?», y abre `wa.me`. La ubicación solo va si la persona la agrega, dentro del texto que envía. El carrito se guarda un día en el dispositivo y los datos de entrega solo con «Recordar»; nunca la ubicación ni el pago.
+- La revisión del #15 encontró que «50,000» se rechazaba en «¿con cuánto pagás?» y trababa el envío, que el carrito no vencía en una pestaña abierta y que la barra fija tapaba el elemento con el foco del teclado (WCAG 2.4.11). Las tres quedaron corregidas.
+- **Incidente:** una corrida de pruebas en otra copia del repositorio, sin `.env.testing`, vació la base de desarrollo. Se recuperó con los datos de la demo. Ahora las copias de trabajo apuntan a la base de pruebas y ninguna corrida puede borrar la de desarrollo.
+- **Dependencias:** happy-dom, fast-uri y serialize-javascript por avisos de seguridad.
+- Aprendizajes: las pruebas de dibujo del mapa que no corrían en local encontraron en CI un punto de prueba que había dejado de estar «lejos»: cambiar el criterio de cercanía cambió qué es lejos. Y un número en otro idioma («50,000») es una entrada válida, no un error de la persona.
+- Sigue el panel del dueño (#18).
