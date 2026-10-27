@@ -198,6 +198,8 @@ describe('la ficha', function () {
             ->assertHasNoActionErrors();
 
         expect($restaurant->refresh()->activeDelayMinutes())->toBe(40);
+        // Como en RestaurantPageTest: sin depender de los assets compilados.
+        $this->withoutVite();
         $this->get("/restaurants/{$restaurant->slug}")
             ->assertInertia(fn ($page) => $page->where('restaurant.delay_minutes', 40));
 
