@@ -29,3 +29,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0023](0023-opciones-y-quitar-ingredientes.md) | Opciones, adiciones y quitar ingredientes: un tipo de grupo, publicados por lista blanca y armados en el dispositivo | Aceptada |
 | [0024](0024-carrito-y-pedido-por-whatsapp.md) | Carrito y pedido por WhatsApp: el mensaje se arma en el dispositivo, el carrito se guarda un día y la ubicación solo viaja en el texto que envía la persona | Aceptada |
 | [0025](0025-panel-del-dueno-con-filament.md) | Panel del dueño con Filament: login propio sin registro, tenancy por restaurante y un perfil de CSP solo para `/panel` | Aceptada |
+| [0026](0026-reclamar-y-retirar-una-ficha-sin-cuenta.md) | Reclamar y pedir el retiro de una ficha sin cuenta: contacto mínimo en la solicitud, revisión a mano y borrado a los seis meses | Aceptada |

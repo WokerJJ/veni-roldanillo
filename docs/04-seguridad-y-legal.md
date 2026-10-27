@@ -5,7 +5,7 @@
 - Roles: visitante, usuario verificado, dueño, empleado, moderador, administrador. Hoy: rol global en `users.role` y dueño/empleado por restaurante, con Policies (ADR 0009); spatie/laravel-permission cuando lleguen moderadores y paneles.
 - Autorización en el servidor para todo; prevenir IDOR (un dueño no puede editar otro restaurante cambiando un ID).
 - Acceso sin contraseñas: código por WhatsApp (OTP) y passkeys; 2FA obligatorio para dueños y administradores.
-- Límites de tasa en login, envío de códigos, reseñas y reportes. Hoy: el cambio de idioma (`PUT /locale`), 30 por minuto por IP, y el login del panel del dueño, 5 intentos por minuto (Filament, ADR 0025).
+- Límites de tasa en login, envío de códigos, reseñas y reportes. Hoy: el cambio de idioma (`PUT /locale`), 30 por minuto por IP, y el login del panel del dueño, 5 intentos por minuto (Filament, ADR 0025); los reclamos y pedidos de retiro de una ficha, 20 por hora por IP y 5 por día por celular, con un campo trampa en vez de CAPTCHA (ADR 0026).
 - Validación de toda entrada, Eloquent (sin SQL crudo con datos del usuario), escape en vistas, CSRF, `$fillable`.
 - Subida de imágenes: validar tipo y tamaño, re-procesar (elimina EXIF/GPS), nombre aleatorio, WebP. Regla para #18: se aceptan solo imágenes ráster (JPEG, PNG, WebP), que se convierten a WebP antes de guardarlas; nunca SVG, HTML ni el archivo tal como llegó. Lo que se sirve de `storage` lleva además una política que lo encierra en un sandbox (abajo).
 - Historial de cambios de fichas con opción de revertir (activitylog).
@@ -30,6 +30,7 @@ Un origen nuevo que la página necesite (otro host del mapa, un servicio externo
 ## Marco legal (Colombia)
 
 - **Ley 1581 de 2012 (Habeas Data):** política de tratamiento de datos, autorización explícita al registrarse, derechos de consulta, actualización y supresión. Datos mínimos (celular, alias). Direcciones solo en el dispositivo; ubicación: solo el resultado de la verificación.
+- **Reclamos y retiros de fichas (ADR 0026):** nombre, celular, correo opcional y lo que pide cada formulario, con la autorización expresa y su fecha (`privacy_accepted_at`); no se publican ni se mandan a terceros; resueltos, se borran a los seis meses (`model:prune` diario). Hasta que exista la política (#23), el formulario trae un resumen del tratamiento.
 - **Ley 1480 de 2011 (Estatuto del Consumidor):** publicidad veraz; lo pagado se marca "Patrocinado".
 - **Derechos de autor:** solo información pública de los negocios; fotos y logos con autorización escrita; no copiar datos ni fotos de Google, TripAdvisor u otros. Única excepción: OpenStreetMap (ADR 0021).
 - **OpenStreetMap (ODbL):** atribución visible en el mapa y en la página de créditos (`/credits`). De OpenStreetMap se importan solo nombre, tipo y punto de los locales de comida, como fichas ocultas hasta verificarlas en la calle y con su procedencia guardada; nunca teléfonos, correos, sitios web ni redes. La parte de la base que viene de allí queda bajo ODbL y se entrega a quien la pida.
