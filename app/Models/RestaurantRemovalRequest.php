@@ -28,6 +28,12 @@ class RestaurantRemovalRequest extends Model
 
     use PrunedAfterReview;
 
+    /**
+     * Índice único parcial «una pendiente por restaurante y celular»: el
+     * controlador solo absorbe la violación de este (ADR 0026).
+     */
+    public const string PENDING_UNIQUE_INDEX = 'restaurant_removal_requests_one_pending';
+
     /** @var array<string, mixed> */
     protected $attributes = [
         'status' => 'pending',
@@ -44,6 +50,12 @@ class RestaurantRemovalRequest extends Model
             'privacy_accepted_at' => 'datetime',
             'reviewed_at' => 'datetime',
         ];
+    }
+
+    /** @return list<string> */
+    protected function personalDataColumns(): array
+    {
+        return ['contact_name', 'contact_phone', 'contact_email', 'reason'];
     }
 
     /** @return BelongsTo<Restaurant, $this> */

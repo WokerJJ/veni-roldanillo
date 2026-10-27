@@ -32,6 +32,12 @@ class RestaurantClaim extends Model
 
     use PrunedAfterReview;
 
+    /**
+     * Índice único parcial «una pendiente por restaurante y celular»: el
+     * controlador solo absorbe la violación de este (ADR 0026).
+     */
+    public const string PENDING_UNIQUE_INDEX = 'restaurant_claims_one_pending_contact';
+
     /** @var array<string, mixed> */
     protected $attributes = [
         'status' => 'pending',
@@ -48,6 +54,12 @@ class RestaurantClaim extends Model
             'privacy_accepted_at' => 'datetime',
             'reviewed_at' => 'datetime',
         ];
+    }
+
+    /** @return list<string> */
+    protected function personalDataColumns(): array
+    {
+        return ['contact_name', 'contact_phone', 'contact_email', 'message'];
     }
 
     /** @return BelongsTo<Restaurant, $this> */

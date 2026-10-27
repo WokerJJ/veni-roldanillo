@@ -43,6 +43,12 @@ return new class extends Migration
 
     public function down(): void
     {
+        // Son pedidos de personas que esperan respuesta: antes de borrarlos a
+        // ciegas, que lo decida una persona (como el reclamo sin cuenta).
+        if (Schema::hasTable('restaurant_removal_requests') && DB::table('restaurant_removal_requests')->exists()) {
+            throw new RuntimeException('Hay pedidos de retiro en restaurant_removal_requests: resolvelos o borralos antes de revertir esta migración.');
+        }
+
         Schema::dropIfExists('restaurant_removal_requests');
     }
 };

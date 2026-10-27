@@ -35,10 +35,20 @@ class RestaurantRemovalRequestFactory extends Factory
         ];
     }
 
+    public function approved(?User $reviewer = null): static
+    {
+        return $this->resolved(ClaimStatus::Approved, $reviewer);
+    }
+
     public function rejected(?User $reviewer = null): static
     {
+        return $this->resolved(ClaimStatus::Rejected, $reviewer);
+    }
+
+    private function resolved(ClaimStatus $status, ?User $reviewer): static
+    {
         return $this->state(fn () => [
-            'status' => ClaimStatus::Rejected,
+            'status' => $status,
             'reviewed_by' => $reviewer ?? User::factory()->admin(),
             'reviewed_at' => now(),
         ]);

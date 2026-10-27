@@ -2,7 +2,6 @@
 
 namespace App\Providers;
 
-use App\Support\ColombianMobile;
 use App\Support\ContentSecurityPolicyProfiles;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -37,7 +36,9 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * Las mismas, por día con un mismo celular, sumando todas las fichas:
-     * frena a quien cambia de IP para insistir con el mismo número.
+     * frena a quien cambia de IP para insistir con el mismo número. Solo
+     * cuentan los envíos válidos (RestaurantContactRequest::passedValidation),
+     * así los errores de otro no bloquean al dueño real del número.
      */
     public const RESTAURANT_REQUESTS_PER_DAY_PER_PHONE = 5;
 
@@ -70,24 +71,16 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('restaurant-map', fn (Request $request) => Limit::perMinute(self::RESTAURANT_MAP_REQUESTS_PER_MINUTE)
             ->by((string) $request->ip()));
 
-        // Reclamos y retiros (#20): por IP y por celular. El celular cuenta
-        // normalizado y con hash, así no queda en claro en la caché. Pasado el
-        // límite, 429 con el aviso en el idioma de la petición.
-        RateLimiter::for('restaurant-requests', function (Request $request): array {
-            $tooMany = fn (Request $request, array $headers) => response(
+        // Reclamos y retiros (#20): por IP aquí, con todos los envíos. El tope
+        // por celular va en RestaurantContactRequest, después de validar. Pasado
+        // el límite, 429 con el aviso en el idioma de la petición.
+        RateLimiter::for('restaurant-requests', fn (Request $request) => Limit::perHour(self::RESTAURANT_REQUESTS_PER_HOUR_PER_IP)
+            ->by('ip:'.$request->ip())
+            ->response(fn (Request $request, array $headers) => response(
                 __('requests.error.too_many'),
                 429,
                 [...$headers, 'Content-Type' => 'text/plain; charset=UTF-8'],
-            );
-            $phone = ColombianMobile::normalize($request->input('contact_phone'));
-
-            return [
-                Limit::perHour(self::RESTAURANT_REQUESTS_PER_HOUR_PER_IP)->by('ip:'.$request->ip())->response($tooMany),
-                ...($phone === null ? [] : [
-                    Limit::perDay(self::RESTAURANT_REQUESTS_PER_DAY_PER_PHONE)->by('phone:'.hash('sha256', $phone))->response($tooMany),
-                ]),
-            ];
-        });
+            )));
 
         // La política que solo informa no bloquea nada: en producción es para
         // probar un cambio un rato, nunca el estado normal (ADR 0014).

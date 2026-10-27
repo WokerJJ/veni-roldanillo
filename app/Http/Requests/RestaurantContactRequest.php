@@ -2,8 +2,12 @@
 
 namespace App\Http\Requests;
 
+use App\Providers\AppServiceProvider;
+use App\Rules\PlainText;
 use App\Support\ColombianMobile;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Support\Facades\RateLimiter;
 
 /**
  * Lo que comparten «Reclámalo» y «Pedir que retiren esta ficha» (#20, ADR
@@ -25,6 +29,16 @@ abstract class RestaurantContactRequest extends FormRequest
 
     public const TEXT_MAX = 1000;
 
+    /**
+     * Versión del aviso de privacidad que acepta quien envía (Ley 1581): se
+     * guarda en cada solicitud. Cambiar el texto de `requests.privacy_*` o el
+     * responsable exige subirla.
+     */
+    public const PRIVACY_NOTICE_VERSION = '2026-10-26';
+
+    /** Quién responde por los datos (el aviso lo nombra). */
+    public const PRIVACY_CONTROLLER = 'Vení Roldanillo';
+
     /** Algo que no sea solo espacios, tampoco los de Unicode. */
     protected const NOT_BLANK = 'regex:/[^\s\p{Z}]/u';
 
@@ -41,6 +55,34 @@ abstract class RestaurantContactRequest extends FormRequest
         $this->merge(['contact_phone' => ColombianMobile::normalize($phone) ?? $phone]);
     }
 
+    /**
+     * El tope por celular (ADR 0026) cuenta solo los envíos válidos: uno con
+     * errores no gasta el cupo del dueño real del número. El límite por IP
+     * (AppServiceProvider) sí cuenta todos.
+     */
+    protected function passedValidation(): void
+    {
+        $key = self::phoneThrottleKey($this->string('contact_phone')->toString());
+
+        if (RateLimiter::tooManyAttempts($key, AppServiceProvider::RESTAURANT_REQUESTS_PER_DAY_PER_PHONE)) {
+            throw new HttpResponseException(response(__('requests.error.too_many'), 429, [
+                'Retry-After' => RateLimiter::availableIn($key),
+                'Content-Type' => 'text/plain; charset=UTF-8',
+            ]));
+        }
+
+        RateLimiter::hit($key, 60 * 60 * 24);
+    }
+
+    /**
+     * Clave del tope por celular: un HMAC con la clave de la app, no el
+     * número ni un hash sin secreto (los celulares son pocos y se adivinan).
+     */
+    public static function phoneThrottleKey(string $phone): string
+    {
+        return 'restaurant-requests:phone:'.hash_hmac('sha256', $phone, config()->string('app.key'));
+    }
+
     /** Si llenó el campo trampa: se responde como siempre, sin guardar. */
     public function isLikelyBot(): bool
     {
@@ -53,11 +95,11 @@ abstract class RestaurantContactRequest extends FormRequest
     protected function contactRules(): array
     {
         return [
-            'contact_name' => ['required', 'string', 'max:'.self::NAME_MAX, self::NOT_BLANK],
+            'contact_name' => ['required', 'string', new PlainText, 'max:'.self::NAME_MAX, self::NOT_BLANK],
             'contact_phone' => ['required', 'string', 'regex:/^573\d{9}$/'],
-            'contact_email' => ['nullable', 'string', 'max:'.self::EMAIL_MAX, 'email:rfc'],
+            'contact_email' => ['nullable', 'string', new PlainText, 'max:'.self::EMAIL_MAX, 'email:rfc'],
             'accepts_privacy' => ['accepted'],
-            self::HONEYPOT => ['nullable', 'string', 'max:500'],
+            self::HONEYPOT => ['nullable', 'string', new PlainText, 'max:500'],
         ];
     }
 

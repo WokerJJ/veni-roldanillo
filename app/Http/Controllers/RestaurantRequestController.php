@@ -10,7 +10,6 @@ use App\Http\Requests\StoreRestaurantClaimRequest;
 use App\Models\Restaurant;
 use App\Models\RestaurantClaim;
 use App\Models\RestaurantRemovalRequest;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -51,6 +50,7 @@ class RestaurantRequestController extends Controller
             $attributes = $request->safe()->only(['contact_name', 'contact_phone', 'contact_email', 'claimant_role', 'message']);
             $claim = new RestaurantClaim($attributes);
             $claim->privacy_accepted_at = now();
+            $claim->privacy_notice_version = RestaurantContactRequest::PRIVACY_NOTICE_VERSION;
 
             $this->savePendingOnce($restaurant->claims(), $claim);
         }
@@ -74,6 +74,7 @@ class RestaurantRequestController extends Controller
             $attributes = $request->safe()->only(['contact_name', 'contact_phone', 'contact_email', 'relationship', 'reason']);
             $removal = new RestaurantRemovalRequest($attributes);
             $removal->privacy_accepted_at = now();
+            $removal->privacy_notice_version = RestaurantContactRequest::PRIVACY_NOTICE_VERSION;
 
             $this->savePendingOnce($restaurant->removalRequests(), $removal);
         }
@@ -104,7 +105,7 @@ class RestaurantRequestController extends Controller
     {
         $restaurant = $this->published($slug);
 
-        abort_unless($restaurant->status === RestaurantStatus::Unclaimed, 404);
+        abort_unless($restaurant->isClaimable(), 404);
 
         return $restaurant;
     }
@@ -118,6 +119,13 @@ class RestaurantRequestController extends Controller
                 'fictitious' => $restaurant->is_fictitious,
             ],
             'sent' => $request->session()->get(self::SENT_FLASH) === $kind,
+            // Lo que el aviso de privacidad nombra (Ley 1581): quién responde
+            // por los datos, a dónde escribir y qué versión se acepta.
+            'privacy' => [
+                'controller' => RestaurantContactRequest::PRIVACY_CONTROLLER,
+                'contact_email' => config()->string('privacy.contact_email'),
+                'version' => RestaurantContactRequest::PRIVACY_NOTICE_VERSION,
+            ],
         ]);
     }
 
@@ -130,16 +138,20 @@ class RestaurantRequestController extends Controller
 
     /**
      * Guarda la solicitud si no hay otra pendiente con ese celular. Si dos
-     * envíos llegan a la vez, el índice único parcial frena al segundo; la
-     * transacción anidada (un savepoint) evita que ese error tumbe la
-     * transacción de afuera, que en PostgreSQL quedaría inservible.
+     * envíos llegan a la vez, el índice único parcial frena al segundo y se
+     * responde igual. El guardado va en DB::transaction: sin una transacción
+     * abierta (lo normal en una petición) es una propia; dentro de otra (las
+     * pruebas, o quien llame a esto desde una) es un savepoint, y revertirlo
+     * deja usable la de afuera, que en PostgreSQL quedaría abortada.
+     *
+     * Solo se absorbe la violación de ese índice: cualquier otra se relanza.
      *
      * @template TModel of RestaurantClaim|RestaurantRemovalRequest
      *
      * @param  HasMany<TModel, Restaurant>  $relation
      * @param  TModel  $model
      */
-    private function savePendingOnce(HasMany $relation, Model $model): void
+    private function savePendingOnce(HasMany $relation, RestaurantClaim|RestaurantRemovalRequest $model): void
     {
         $alreadyPending = $relation->clone()
             ->where('status', ClaimStatus::Pending->value)
@@ -152,7 +164,11 @@ class RestaurantRequestController extends Controller
 
         try {
             DB::transaction(fn () => $relation->save($model));
-        } catch (UniqueConstraintViolationException) {
+        } catch (UniqueConstraintViolationException $exception) {
+            // PostgreSQL nombra el índice en el mensaje: «… unique constraint "<índice>"».
+            if (! str_contains($exception->getMessage(), '"'.$model::PENDING_UNIQUE_INDEX.'"')) {
+                throw $exception;
+            }
             // Otro envío igual ganó la carrera: ya está pendiente.
         }
     }
