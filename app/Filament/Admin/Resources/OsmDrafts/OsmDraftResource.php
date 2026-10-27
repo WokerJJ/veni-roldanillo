@@ -97,6 +97,7 @@ class OsmDraftResource extends AdminResource
                     ->label(__('panel.admin.drafts.publish'))
                     ->icon(Heroicon::OutlinedCheckCircle)
                     ->color('success')
+                    ->modalSubmitActionLabel(__('panel.admin.drafts.publish'))
                     ->authorize(fn (Restaurant $record): bool => Gate::allows('update', $record))
                     ->schema([
                         Toggle::make('verified_now')

@@ -78,6 +78,7 @@ class RemovalRequestResource extends AdminResource
                     ->color('danger')
                     ->requiresConfirmation()
                     ->modalDescription(__('panel.admin.removals.approve_help'))
+                    ->modalSubmitActionLabel(__('panel.admin.removals.approve'))
                     ->visible(fn (RestaurantRemovalRequest $record): bool => $record->status === ClaimStatus::Pending)
                     ->authorize(fn (RestaurantRemovalRequest $record): bool => Gate::allows('update', $record))
                     ->action(fn (RestaurantRemovalRequest $record) => self::runAction(

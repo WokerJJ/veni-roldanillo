@@ -74,6 +74,7 @@ trait ListsRestaurantRequests
             ->label(__('panel.admin.requests.reject'))
             ->icon(Heroicon::OutlinedXMark)
             ->color('danger')
+            ->modalSubmitActionLabel(__('panel.admin.requests.reject'))
             ->visible(fn (RestaurantClaim|RestaurantRemovalRequest $record): bool => $record->status === ClaimStatus::Pending)
             ->authorize(fn (RestaurantClaim|RestaurantRemovalRequest $record): bool => Gate::allows('update', $record))
             ->schema([

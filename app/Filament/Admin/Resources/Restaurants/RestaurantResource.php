@@ -260,6 +260,7 @@ class RestaurantResource extends AdminResource
                     ->label(__('panel.admin.restaurants.show'))
                     ->icon(Heroicon::OutlinedEye)
                     ->visible(fn (Restaurant $record): bool => $record->status === RestaurantStatus::Hidden)
+                    ->modalSubmitActionLabel(__('panel.admin.restaurants.show'))
                     ->authorize(fn (Restaurant $record): bool => Gate::allows('update', $record))
                     ->schema([
                         Toggle::make('verified_now')

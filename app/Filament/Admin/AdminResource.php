@@ -36,6 +36,12 @@ abstract class AdminResource extends Resource
         return static::admin() !== null && parent::canViewAny();
     }
 
+    /** El menú con el plural tal cual («Pedidos de retiro», no «Pedidos De Retiro»). */
+    public static function getNavigationLabel(): string
+    {
+        return static::getPluralModelLabel();
+    }
+
     public static function canDeleteAny(): bool
     {
         return false;

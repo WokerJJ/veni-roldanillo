@@ -84,6 +84,7 @@ class RestaurantClaimResource extends AdminResource
                     ->visible(fn (RestaurantClaim $record): bool => $record->status === ClaimStatus::Pending)
                     ->authorize(fn (RestaurantClaim $record): bool => Gate::allows('update', $record))
                     ->modalDescription(__('panel.admin.claims.approve_help'))
+                    ->modalSubmitActionLabel(__('panel.admin.requests.approve'))
                     ->fillForm(fn (RestaurantClaim $record): array => ['email' => $record->contact_email])
                     ->schema([
                         TextInput::make('email')
