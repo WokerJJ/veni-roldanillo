@@ -17,16 +17,18 @@ class RestaurantGeoJsonController extends Controller
 {
     public function __invoke(RestaurantsGeoJsonRequest $request): RestaurantFeatureCollection
     {
-        // Cuatro consultas, haya un restaurante o trescientos: la de
+        // Cinco consultas, haya un restaurante o trescientos: la de
         // restaurantes (con si tiene zonas de domicilio) y una por relación.
         // Las categorías y el horario con que el dispositivo calcula
-        // «abierto ahora» se cargan igual que en la ficha (ver Restaurant).
+        // «abierto ahora» se cargan igual que en la ficha (ver Restaurant);
+        // el almuerzo de hoy, para «Almuerzos de hoy» (ADR 0028).
         $restaurants = Restaurant::query()
             ->published()
-            ->select(['id', 'slug', 'name', 'location', 'delivery', 'is_fictitious'])
+            ->select(['id', 'slug', 'name', 'location', 'delivery', 'is_fictitious', 'price_level'])
             ->withExists('deliveryZones')
             ->withPublicCategories()
             ->withPublicSchedule()
+            ->withTodaysLunch()
             ->orderBy('id')
             ->get();
 

@@ -165,6 +165,28 @@ class Restaurant extends Model
     }
 
     /**
+     * Carga el almuerzo del día de hoy en Colombia («Almuerzos de hoy», #12):
+     * a lo sumo uno por restaurante (único por restaurante y fecha). Viaja en
+     * la capa del mapa (ADR 0028): la descripción en los dos idiomas porque
+     * la respuesta elige uno, y el precio.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function withTodaysLunch(Builder $query): void
+    {
+        $today = BusinessDay::today()->toDateString();
+
+        $query->with([
+            'dailyMenus' => function (Relation $menus) use ($today): void {
+                $menus
+                    ->select(['id', 'restaurant_id', 'served_on', 'description_es', 'description_en', 'price'])
+                    ->where('served_on', $today);
+            },
+        ]);
+    }
+
+    /**
      * WhatsApp para wa.me: quita espacios, «+», guiones, puntos y paréntesis,
      * y antepone 57 a un celular de diez dígitos (empieza por 3). Lo que no
      * quede como 57 + diez dígitos lo rechaza el CHECK de la base.

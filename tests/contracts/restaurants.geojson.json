@@ -22,7 +22,9 @@
                 "special_hours": [
                     { "date": "2026-10-07", "closed": true, "opens": null, "closes": null },
                     { "date": "2026-10-12", "closed": false, "opens": "12:00", "closes": "16:00" }
-                ]
+                ],
+                "price_level": 2,
+                "lunch": { "date": "2026-10-07", "description": "Almuerzo de prueba: sopa, arroz y jugo.", "price": 15000 }
             }
         },
         {
@@ -38,7 +40,9 @@
                 "delivery": false,
                 "fictitious": true,
                 "hours": [],
-                "special_hours": []
+                "special_hours": [],
+                "price_level": null,
+                "lunch": null
             }
         }
     ]
