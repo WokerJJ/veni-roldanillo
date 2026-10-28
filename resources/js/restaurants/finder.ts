@@ -2,6 +2,9 @@ import type { Lunch, Restaurant, RestaurantCategory } from './api';
 import type { Filters } from './filterParams';
 import { businessDay, openStatus } from './openStatus';
 
+// Leer y escribir los filtros de la dirección también baja con la lista: el inicio los pide de aquí.
+export { filtersFromUrl, hasFilters, NO_FILTERS, writeFilters } from './filterParams';
+
 /*
 | Búsqueda, filtros, «Almuerzos de hoy» y «Sugiéreme algo» del inicio (#12),
 | en el dispositivo y sobre los restaurantes que ya trajo el mapa (ADR 0028):

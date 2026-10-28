@@ -2,6 +2,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import type { Restaurant } from '@/restaurants/api';
+import { NO_FILTERS } from '@/restaurants/filterParams';
 import type * as FakeInertia from '@/testing/inertia';
 import { EL_GUADUAL, LA_CEIBA, restaurant, stubRestaurantsFetch } from '@/testing/restaurants';
 
@@ -207,7 +208,8 @@ describe('Home', () => {
         const { wrapper } = await mountHome({ answer: [LA_CEIBA] });
 
         // La manija del panel no es un botón del mapa: cambia el alto del panel.
-        expect(wrapper.findAll('button:not([data-sheet-handle])').map((button) => button.text())).toEqual(['Ver la lista']);
+        // «Sugerime algo» y «Almuerzos de hoy» son de la bienvenida (#12).
+        expect(wrapper.findAll('button:not([data-sheet-handle])').map((button) => button.text())).toEqual(['Ver la lista', 'Sugerime algo']);
     });
 
     describe('los restaurantes', () => {
@@ -215,7 +217,8 @@ describe('Home', () => {
             const { layer, network, wrapper } = await mountHome({ locale: 'en', answer: [LA_CEIBA, EL_GUADUAL] });
 
             expect(network.urls()).toEqual(['/api/restaurants.geojson?lang=en']);
-            expect(layer().props()).toEqual({ restaurants: [LA_CEIBA, EL_GUADUAL], selected: null });
+            // Sin filtros en la dirección (#12): los filtros están, vacíos.
+            expect(layer().props()).toEqual({ restaurants: [LA_CEIBA, EL_GUADUAL], selected: null, filters: NO_FILTERS });
             // La capa va dentro del mapa: recibe de él con qué pintar (ADR 0016).
             expect(wrapper.getComponent({ name: 'MapView' }).findComponent({ name: 'RestaurantsLayer' }).exists()).toBe(true);
         });
@@ -917,6 +920,96 @@ describe('Home', () => {
             expect(panel().find('[role="dialog"]').exists()).toBe(false);
             expect(status().text()).toBe('1 restaurant on the map');
             expect(layer().props('selected')).toBeNull();
+        });
+    });
+    describe('búsqueda, filtros, almuerzos y «Sugerime algo» (#12)', () => {
+        /** Lo que tarda la dirección en seguir a los filtros después de teclear. */
+        const settleUrl = async () => {
+            await new Promise((resolve) => setTimeout(resolve, 350));
+            await flushPromises();
+        };
+
+        it('los filtros de la dirección llegan a la capa y a la lista', async () => {
+            const { layer, listButton, items } = await mountHome({ url: '/?delivery=1&q=ceiba', answer: [LA_CEIBA, EL_GUADUAL] });
+
+            expect(layer().props('filters')).toEqual({ ...NO_FILTERS, delivery: true, query: 'ceiba' });
+
+            await listButton()?.trigger('click');
+            await flushPromises();
+
+            expect(items().map((item) => item.attributes('data-slug'))).toEqual(['prueba-la-ceiba']);
+        });
+
+        it('al filtrar en la lista, cambian la capa, el contador y la dirección, sin la ubicación', async () => {
+            const { layer, panel, replace, wrapper } = await mountWithList();
+
+            await panel().get('input[data-search]').setValue('guadual');
+            await flushPromises();
+
+            expect(layer().props('filters')).toMatchObject({ query: 'guadual' });
+            expect(wrapper.findAll('button[data-slug]').map((item) => item.attributes('data-slug'))).toEqual(['prueba-el-guadual']);
+            expect(panel().get('[data-count]').text()).toBe('1 de 2 restaurantes');
+
+            await settleUrl();
+
+            expect(replace).toHaveBeenLastCalledWith(expect.objectContaining({ url: '/?q=guadual' }));
+        });
+
+        it('sin resultados lo dice, y «Quitar filtros» los saca de la lista, del mapa y de la dirección', async () => {
+            const { layer, panel, replace } = await mountHome({ url: '/?r=x', answer: [LA_CEIBA, EL_GUADUAL] });
+            await panel().findAll('button').find((button) => button.text() === 'Ver la lista')?.trigger('click');
+            await flushPromises();
+
+            await panel().get('input[data-search]').setValue('no existe');
+            await flushPromises();
+
+            expect(panel().get('[data-count]').text()).toBe('Ningún restaurante cumple con lo que buscás. Probá con menos filtros.');
+
+            await panel().get('button[data-empty-clear]').trigger('click');
+            await flushPromises();
+            await settleUrl();
+
+            expect(layer().props('filters')).toEqual(NO_FILTERS);
+            expect(panel().findAll('button[data-slug]')).toHaveLength(2);
+            expect(replace).toHaveBeenLastCalledWith(expect.objectContaining({ url: '/' }));
+        });
+
+        it('«Sugerime algo» elige uno de los abiertos y abre su resumen', async () => {
+            // A las 12:30 La Ceiba (11–15) está abierta y El Guadual (18–02), cerrado.
+            const { panel, layer } = await mountHome({ answer: [EL_GUADUAL, LA_CEIBA] });
+
+            await panel().get('button[data-suggest]').trigger('click');
+            await flushPromises();
+
+            expect(layer().props('selected')).toBe('prueba-la-ceiba');
+            expect(panel().find('h2').text()).toBe(LA_CEIBA.name);
+        });
+
+        it('«Sugerime algo» sin abiertos lo dice y no elige ninguno', async () => {
+            const { panel, layer } = await mountHome({ answer: [EL_GUADUAL] });
+
+            await panel().get('button[data-suggest]').trigger('click');
+            await flushPromises();
+
+            expect(layer().props('selected')).toBeNull();
+            expect(panel().get('[data-welcome-status]').text()).toBe('Ahora no hay ningún restaurante abierto.');
+        });
+
+        it('«Almuerzos de hoy» abre la lista en esa sección, con el foco ahí', async () => {
+            const lunch = { date: '2026-10-07', description: 'Almuerzo de prueba: sopa y seco.', price: 14000 };
+            const { panel } = await mountHome({ answer: [restaurant({ lunch }), EL_GUADUAL] });
+
+            const button = panel().get('button[data-lunches]');
+            expect(button.text()).toBe('Almuerzos de hoy (1)');
+
+            await button.trigger('click');
+            await flushPromises();
+
+            const lunches = panel().get('details[data-lunches]');
+            expect(lunches.attributes('open')).toBeDefined();
+            expect(document.activeElement).toBe(lunches.get('summary').element);
+            expect(lunches.get('a[data-lunch]').attributes('href')).toBe('/restaurants/prueba-la-ceiba');
+            expect(lunches.get('[data-price]').text().replaceAll(' ', ' ')).toBe('$ 14.000');
         });
     });
 });

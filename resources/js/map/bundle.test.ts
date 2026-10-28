@@ -339,12 +339,19 @@ describe('presupuesto de descarga', () => {
         // lo demás de #81, 82,5. Con los créditos de OpenStreetMap (#58) llegó
         // a 83,2: la capa de los restaurantes sobre el mapa, que no se ve
         // hasta que llega MapLibre, pasó a bajar con él (81,7).
+        // Con la búsqueda y los filtros (#12, ADR 0028), medido así: 82,4 antes
+        // y 82,7 después. Se aplicó la regla antes de sumar: el aviso sin señal
+        // de «Cómo llegar» pasó de Home.vue al resumen, y filtrar, buscar,
+        // sortear, leer y escribir los filtros de la dirección, los almuerzos
+        // y los botones de la bienvenida bajan con la lista. Al arranque llegan
+        // el estado de los filtros, su paso a la dirección y lo que carga lo demás.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
-    it('el resumen y la lista (con sus distancias) no bajan con el arranque: el inicio los pide con import() apenas monta', () => {
+    it('el resumen y la lista (con sus distancias, la búsqueda, los filtros y los almuerzos) no bajan con el arranque: el inicio los pide con import() apenas monta', () => {
         const initial = initialChunks();
-        const panels = /\/resources\/js\/(?:components\/Restaurant(?:Summary|List|Distances)\.vue|restaurants\/(?:openStatus|statusText|distance)\.ts)$/;
+        const panels =
+            /\/resources\/js\/(?:components\/(?:Restaurant(?:Summary|List|Distances|Filters)|TodaysLunches|WelcomeActions)\.vue|restaurants\/(?:openStatus|statusText|distance|finder|filterParams)\.ts)$/;
 
         expect(initial.filter((chunk) => has(chunk, panels))).toEqual([]);
         expect(chunkOf('/resources/js/pages/Home.vue').dynamicImports).toEqual(

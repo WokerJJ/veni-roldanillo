@@ -9,6 +9,9 @@ import MapView from '@/components/MapView.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import type { SheetSnap } from '@/components/sheet';
 import { useI18n } from '@/composables/useI18n';
+// Solo los tipos: buscar, filtrar y sortear bajan con la lista (ADR 0028).
+import type { Filters } from '@/restaurants/filterParams';
+import type * as Finder from '@/restaurants/finder';
 import { SELECTED_PARAM, selectedFromUrl } from '@/restaurants/links';
 import { useRestaurants } from '@/restaurants/useRestaurants';
 // Solo los tipos: la ruta llega con import() al pedirla (ADR 0020).
@@ -34,7 +37,7 @@ const RouteDirections: FunctionalComponent = (_props, { attrs }) => (routeParts.
 | tanto el panel sigue con la bienvenida; si no bajan, lo dice y deja
 | volver a pedirlos.
 */
-const panelParts = shallowRef<{ summary: Component; list: Component; distances: Component } | null>(null);
+const panelParts = shallowRef<{ summary: Component; list: Component; distances: Component; welcome: Component } | null>(null);
 let loadingPanelParts = false;
 const panelPartsFailed = ref(false);
 
@@ -43,6 +46,16 @@ const RestaurantSummary: FunctionalComponent = (_props, { attrs, slots }) => (pa
 const list = shallowRef<{ focusItem: (slug: string) => void } | null>(null);
 const RestaurantList: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.list, { ...attrs, ref: list }) : null);
 const RestaurantDistances: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.distances, attrs) : null);
+const WelcomeActions: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.welcome, attrs) : null);
+
+/*
+| La búsqueda y los filtros (#12, ADR 0028) viven en la dirección, como el
+| elegido, y se aplican a la lista y al mapa a la vez: los aplican la lista y
+| la capa, que bajan aparte. Leerlos y escribirlos también baja aparte (con
+| la lista): hasta entonces `filters` es null y la dirección no se toca.
+*/
+const finder = shallowRef<typeof Finder | null>(null);
+const filters = shallowRef<Filters | null>(null);
 
 /*
 | Los restaurantes sobre el mapa no se ven hasta que llega MapLibre, que baja
@@ -83,9 +96,17 @@ function loadPanelParts(): void {
 
     loadingPanelParts = true;
     panelPartsFailed.value = false;
-    Promise.all([import('@/components/RestaurantSummary.vue'), import('@/components/RestaurantList.vue'), import('@/components/RestaurantDistances.vue')])
-        .then(([summary, list, distances]) => {
-            panelParts.value = { summary: summary.default, list: list.default, distances: distances.default };
+    Promise.all([
+        import('@/components/RestaurantSummary.vue'),
+        import('@/components/RestaurantList.vue'),
+        import('@/components/RestaurantDistances.vue'),
+        import('@/components/WelcomeActions.vue'),
+        import('@/restaurants/finder'),
+    ])
+        .then(([summary, list, distances, welcome, finderModule]) => {
+            finder.value = finderModule;
+            filters.value ??= finderModule.filtersFromUrl(page.url);
+            panelParts.value = { summary: summary.default, list: list.default, distances: distances.default, welcome: welcome.default };
         })
         .catch((error: unknown) => {
             // Sin señal y sin la PWA guardada: se vuelve a pedir con «Reintentar», al tocar un restaurante o con «Ver la lista».
@@ -122,6 +143,8 @@ const { status, restaurants, retry } = useRestaurants();
 /** Slug del restaurante con el resumen abierto. */
 const selectedSlug = ref<string | null>(null);
 const listOpen = ref(false);
+/** Dónde toma el foco la lista al abrirse: su título o «Almuerzos de hoy». */
+const listStart = ref<'heading' | 'lunches'>('heading');
 /** Metros hasta cada restaurante con «¿Dónde estoy?» encendido y la lista abierta; si no, null. */
 const distances = ref<Record<string, number> | null>(null);
 /** El mapa no cargó: su aviso lo ocupa entero y el panel, con la lista, deja de ir encima. */
@@ -202,8 +225,9 @@ watch(panelView, (view) => {
     sheetSnap.value = view === 'welcome' ? 'peek' : 'half';
 });
 
-function openList(): void {
+function openList(start: 'heading' | 'lunches' = 'heading'): void {
     loadPanelParts();
+    listStart.value = start;
     listOpen.value = true;
 }
 
@@ -287,6 +311,10 @@ function withSelected(url: string, slug: string | null): string {
         searchParams.set(SELECTED_PARAM, slug);
     }
 
+    if (filters.value !== null) {
+        finder.value?.writeFilters(searchParams, filters.value);
+    }
+
     const query = searchParams.toString();
 
     return `${pathname}${query === '' ? '' : `?${query}`}${hash}`;
@@ -311,10 +339,24 @@ function onKeydown(event: KeyboardEvent): void {
  * montar la página ni suma una entrada por cada restaurante que se toca.
  */
 function syncUrl(slug: string | null): void {
-    if (selectedFromUrl(page.url) !== slug) {
-        router.replace({ url: withSelected(page.url, slug), preserveScroll: true, preserveState: true });
+    const url = withSelected(page.url, slug);
+
+    if (url !== page.url) {
+        router.replace({ url, preserveScroll: true, preserveState: true });
     }
 }
+
+// Los filtros cambian la dirección igual que el elegido; al escribir en el
+// buscador, cuando se deja de teclear. Mientras espera la lista, el elegido
+// que pide la dirección se queda en ella.
+let filtersTimer: ReturnType<typeof setTimeout> | undefined;
+
+watch(filters, () => {
+    clearTimeout(filtersTimer);
+    filtersTimer = setTimeout(() => {
+        syncUrl(requestedSlug ?? selectedSlug.value);
+    }, 300);
+});
 
 // Llegó la lista: si la dirección pedía un restaurante y está en ella, abre
 // elegido, como si lo hubieran tocado en el mapa (la cámara va hasta él:
@@ -395,6 +437,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     document.removeEventListener('keydown', onKeydown);
+    clearTimeout(filtersTimer);
 });
 </script>
 
@@ -438,9 +481,11 @@ onBeforeUnmount(() => {
                 :key="selected.slug"
                 :restaurant="selected"
                 :directions-open="directionsOpen"
+                :route-offline="routeParts === null && routeState.status === 'offline'"
                 @close="closeSummary"
                 @directions="openDirections"
                 @close-directions="closeDirections"
+                @retry-directions="retryDirections"
             >
                 <RouteDirections
                     :state="shownRouteState"
@@ -449,20 +494,18 @@ onBeforeUnmount(() => {
                     @profile="profile = $event"
                     @retry="retryDirections"
                 />
-                <!-- Si su panel no bajó (sin señal), queda cómo pedirlo de nuevo. -->
-                <div v-if="routeParts === null && routeState.status === 'offline'" class="mt-1" data-directions>
-                    <p role="status" class="text-sm" data-route-status>{{ t('directions.offline') }}</p>
-                    <button
-                        type="button"
-                        class="mt-2 inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
-                        @click="retryDirections"
-                    >
-                        {{ t('directions.retry') }}
-                    </button>
-                </div>
             </RestaurantSummary>
 
-            <RestaurantList v-else-if="listOpen && panelParts" :restaurants="restaurants" :distances="distances" @select="selectFromList" @close="closeList" />
+            <RestaurantList
+                v-else-if="listOpen && panelParts"
+                :restaurants="restaurants"
+                :filters="filters"
+                :start="listStart"
+                :distances="distances"
+                @update:filters="filters = $event"
+                @select="selectFromList"
+                @close="closeList"
+            />
 
             <template v-else>
                 <!--
@@ -501,11 +544,19 @@ onBeforeUnmount(() => {
                             ref="listButton"
                             type="button"
                             class="inline-flex min-h-touch items-center gap-2 rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
-                            @click="openList"
+                            @click="openList('heading')"
                         >
-                            <Icon name="menu-hamburguesa" :size="20" />
+                            <Icon name="buscar" :size="20" />
                             {{ t('restaurants.show_list') }}
                         </button>
+                        <!-- «Sugerime algo», «Almuerzos de hoy» y «Quitar filtros»: bajan con la lista. -->
+                        <WelcomeActions
+                            :restaurants="restaurants"
+                            :filters="filters"
+                            @select="selectFromMap"
+                            @lunches="openList('lunches')"
+                            @update:filters="filters = $event"
+                        />
                         <SampleDataBadge v-if="hasSampleData" />
                     </div>
 
@@ -534,7 +585,7 @@ onBeforeUnmount(() => {
             ubicarse, la cámara deja la ubicación fuera de él.
         -->
         <MapView ref="mapView" :overlay="mapFailed ? null : panel" :class="{ 'min-h-56': mapFailed }" @status="mapFailed = $event === 'error'">
-            <RestaurantsOnMap :restaurants="restaurants" :selected="selectedSlug" @select="selectFromMap" />
+            <RestaurantsOnMap :restaurants="restaurants" :filters="filters" :selected="selectedSlug" @select="selectFromMap" />
             <!-- Las distancias de la lista: la ubicación queda dentro, solo salen los metros. -->
             <RestaurantDistances v-if="listOpen" :restaurants="restaurants" @distances="distances = $event" />
             <RouteLayer
