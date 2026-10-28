@@ -5,8 +5,10 @@ namespace App\Models;
 use App\Enums\ClaimStatus;
 use App\Enums\RemovalRelationship;
 use App\Models\Concerns\PrunedAfterReview;
+use App\Policies\RestaurantRequestPolicy;
 use Database\Factories\RestaurantRemovalRequestFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property ClaimStatus $status
  * @property RemovalRelationship $relationship
  */
+#[UsePolicy(RestaurantRequestPolicy::class)]
 #[Fillable(['contact_name', 'contact_phone', 'contact_email', 'relationship', 'reason'])]
 class RestaurantRemovalRequest extends Model
 {
@@ -55,7 +58,7 @@ class RestaurantRemovalRequest extends Model
     /** @return list<string> */
     protected function personalDataColumns(): array
     {
-        return ['contact_name', 'contact_phone', 'contact_email', 'reason'];
+        return ['contact_name', 'contact_phone', 'contact_email', 'reason', 'review_note'];
     }
 
     /** @return BelongsTo<Restaurant, $this> */

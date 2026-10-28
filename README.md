@@ -183,6 +183,8 @@ La primera migración crea las extensiones `postgis` y `btree_gist` (`CREATE EXT
 
 Panel del dueño (`/panel`, ADR 0025): `PanelOwnerSeeder` crea, **solo en desarrollo**, `panel.duena@example.test` (dueña del primer restaurante de ejemplo), `panel.otro@example.test` (dueño del segundo) y `panel.empleado@example.test` (empleado, que no entra al panel), todas con la contraseña de ejemplo `veni-panel-dev`. No es una contraseña real ni sirve fuera de `local` o `testing`. En una base ya sembrada se agregan sin borrar nada con `php artisan db:seed --class=PanelOwnerSeeder`.
 
+Panel de administración (`/admin`, ADR 0027): `PanelAdminSeeder` crea, **solo en desarrollo**, `panel.admin@example.test` con la contraseña de ejemplo `veni-admin-dev`. Tampoco es una contraseña real ni sirve fuera de `local` o `testing`. En una base ya sembrada: `php artisan db:seed --class=PanelAdminSeeder` (solo agrega; si la cuenta existe no la toca).
+
 ## Calidad
 
 Los mismos comandos corren en GitHub Actions (`ci.yml`); el check `ci-ok` resume todos los jobs.

@@ -21,6 +21,7 @@ class DatabaseSeeder extends FictitiousSeeder
             UserSeeder::class,
             RestaurantSeeder::class,
             PanelOwnerSeeder::class,
+            PanelAdminSeeder::class,
         ]);
     }
 }

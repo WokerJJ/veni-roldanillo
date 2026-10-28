@@ -2,7 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Actions\Restaurants\RestaurantStatusRules;
 use App\Enums\RestaurantRole;
+use App\Enums\RestaurantStatus;
 use App\Models\Restaurant;
 use App\Models\User;
 
@@ -14,8 +16,10 @@ use App\Models\User;
  * o testing. Nunca es una contraseña real.
  *
  * Solo agrega: crea las cuentas que falten y las vincula con los dos
- * primeros restaurantes ficticios; no borra ni cambia nada de lo que ya
- * existe. Se puede correr sola en una base ya sembrada:
+ * primeros restaurantes ficticios; no borra nada, y de lo que ya existe solo
+ * pasa a «reclamada» la ficha publicada que queda con dueño (una ficha con
+ * dueño no puede seguir «sin reclamar»). Se puede correr sola en una base ya
+ * sembrada:
  *
  *     php artisan db:seed --class=PanelOwnerSeeder
  *
@@ -60,6 +64,26 @@ class PanelOwnerSeeder extends FictitiousSeeder
             if (! $restaurant->members()->whereKey($user->getKey())->exists()) {
                 $restaurant->members()->attach($user, ['role' => $role->value]);
             }
+
+            if ($role === RestaurantRole::Owner) {
+                $this->markClaimed($restaurant);
+            }
         }
+    }
+
+    /**
+     * Con dueña, una ficha publicada «sin reclamar» pasa a «reclamada», con la
+     * misma regla del panel (RestaurantStatusRules); una oculta sigue oculta.
+     */
+    private function markClaimed(Restaurant $restaurant): void
+    {
+        $restaurant->refresh();
+
+        if ($restaurant->status !== RestaurantStatus::Unclaimed) {
+            return;
+        }
+
+        RestaurantStatusRules::assert($restaurant, RestaurantStatus::Claimed, verified: $restaurant->verified_at !== null);
+        $restaurant->forceFill(['status' => RestaurantStatus::Claimed])->save();
     }
 }

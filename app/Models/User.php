@@ -12,6 +12,7 @@ use Filament\Models\Contracts\HasTenants;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -28,8 +29,12 @@ use Illuminate\Support\Collection;
  *
  * locale nulo: la persona no ha elegido idioma y decide el dispositivo (ADR 0010).
  *
+ * must_change_password tampoco es asignable: lo enciende la aprobación de un
+ * reclamo (contraseña temporal) y lo apaga cambiarla en el perfil (#19).
+ *
  * @property UserRole $role
  * @property Locale|null $locale
+ * @property bool $must_change_password
  */
 #[Fillable(['name', 'email', 'password', 'locale'])]
 #[Hidden(['password', 'remember_token'])]
@@ -63,7 +68,20 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'password' => 'hashed',
             'role' => UserRole::class,
             'locale' => Locale::class,
+            'must_change_password' => 'boolean',
         ];
+    }
+
+    /**
+     * El correo se guarda en minúsculas y sin espacios a los lados: es la
+     * llave de la cuenta, y la base no deja dos que solo difieran en
+     * mayúsculas (índice único de lower(email), #19).
+     *
+     * @return Attribute<string, string>
+     */
+    protected function email(): Attribute
+    {
+        return Attribute::make(set: fn (string $value): string => mb_strtolower(trim($value)));
     }
 
     public function isAdmin(): bool
@@ -98,11 +116,16 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     /**
      * Panel del dueño (ADR 0025): entra quien es dueño de algún restaurante.
      * Los empleados todavía no tienen panel (editar es del dueño,
-     * RestaurantPolicy::update), y la administración tendrá el suyo (#19).
+     * RestaurantPolicy::update). Panel de administración (ADR 0027): solo
+     * users.role = admin. Cualquier otro panel, nadie.
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return $panel->getId() === 'owner' && $this->ownedRestaurants()->exists();
+        return match ($panel->getId()) {
+            'owner' => $this->ownedRestaurants()->exists(),
+            'admin' => $this->isAdmin(),
+            default => false,
+        };
     }
 
     /**

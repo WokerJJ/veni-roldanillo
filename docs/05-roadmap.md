@@ -26,9 +26,9 @@ Cerrada: versión 0.1.0.
 - [x] Ubicación del usuario y ruta en el dispositivo (ADR 0008, 0019 y 0020)
 - [x] Panel de abajo en el celular, con tres alturas y panel lateral con poco alto (#81, ADR 0022)
 - [ ] Búsqueda por plato con Meilisearch
-- [x] Panel de dueño (Filament): ficha, menú, agotado hoy, promociones, horarios especiales, aviso de demora (#18, ADR 0025). Pendiente: pin de ubicación, fotos de platos, categorías, 2FA
-- [ ] Panel de administración: alta de restaurantes, reclamación de fichas, moderación
-- [ ] "¿Es tu negocio? Reclámalo" y retiro de ficha
+- [x] Panel de dueño (Filament): ficha, menú, agotado hoy, promociones, horarios especiales, aviso de demora (#18, ADR 0025); sin pisar cambios de otra pestaña (ADR 0027). Pendiente: pin de ubicación, fotos de platos, categorías, 2FA
+- [x] Panel de administración: alta de restaurantes, borradores de OpenStreetMap, reclamos y retiros, ocultar y mostrar fichas (#19, ADR 0027). Pendiente: moderación de reseñas (con #21), registro de cambios, 2FA
+- [x] "¿Es tu negocio? Reclámalo" y retiro de ficha (#20, ADR 0026)
 - [ ] Guía de platos típicos (ES/EN)
 - [ ] Registro de clics en "Pedir por WhatsApp" (order_intents) y estadísticas básicas del dueño
 - [ ] Páginas legales: tratamiento de datos, términos, política de reseñas

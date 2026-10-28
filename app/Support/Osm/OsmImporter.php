@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Restaurant;
 use App\Models\RestaurantSource;
 use App\Support\GeoPoint;
+use App\Support\RestaurantSlug;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -332,22 +333,9 @@ class OsmImporter
         return $categories;
     }
 
-    /** Slug del nombre; si ya existe, con -2, -3… */
+    /** Slug del nombre; si ya existe, con -2, -3… (RestaurantSlug). */
     private function uniqueSlug(string $name): string
     {
-        $base = Str::limit(Str::slug($name), 120, '');
-        $base = trim($base, '-');
-
-        if ($base === '') {
-            $base = 'local';
-        }
-
-        $slug = $base;
-
-        for ($n = 2; Restaurant::query()->where('slug', $slug)->exists(); $n++) {
-            $slug = "{$base}-{$n}";
-        }
-
-        return $slug;
+        return RestaurantSlug::unique($name);
     }
 }
