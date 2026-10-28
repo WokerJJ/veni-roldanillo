@@ -266,6 +266,59 @@ describe('búsqueda y filtros (#12)', () => {
         expect(wrapper.get('[data-count]').text()).toBe('Ahora no hay ningún restaurante abierto con estos filtros.');
     });
 
+    it('una categoría que ninguno tiene (un enlace viejo) se descarta: no deja la lista vacía sin poder sacarla', async () => {
+        const { wrapper, items } = await mountList();
+
+        await wrapper.setProps({ filters: { ...NO_FILTERS, delivery: true, category: 'no-existe' } });
+
+        expect(wrapper.emitted('update:filters')).toEqual([[{ ...NO_FILTERS, delivery: true }]]);
+
+        // Con una que alguno tiene, no emite nada.
+        await wrapper.setProps({ filters: { ...NO_FILTERS, category: 'asados' } });
+
+        expect(wrapper.emitted('update:filters')).toHaveLength(1);
+        expect(items()).toHaveLength(1);
+    });
+
+    it('cada nivel de precio dice con palabras cuánto es, no solo con signos', async () => {
+        const options = async (locale: 'es' | 'en') =>
+            (await mountList(locale)).wrapper.findAll('select[data-filter="price"] option').map((option) => option.text());
+
+        expect(await options('es')).toEqual(['Cualquiera', 'Hasta $ · económico', 'Hasta $$ · moderado', 'Hasta $$$ · costoso', 'Hasta $$$$ · muy costoso']);
+        expect(await options('en')).toEqual(['Any', 'Up to $ · inexpensive', 'Up to $$ · moderate', 'Up to $$$ · expensive', 'Up to $$$$ · very expensive']);
+    });
+
+    it('«Sugerime algo» no repite el último sugerido si hay otro abierto', async () => {
+        const otro = restaurant({ slug: 'prueba-otro-abierto', name: 'Otro Abierto (ficticio)' });
+        const { wrapper } = await mountList('es', [LA_CEIBA, otro]);
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+
+        await wrapper.get('button[data-suggest]').trigger('click');
+        await wrapper.get('button[data-suggest]').trigger('click');
+        await wrapper.get('button[data-suggest]').trigger('click');
+
+        expect(wrapper.emitted('select')).toEqual([['prueba-la-ceiba'], ['prueba-otro-abierto'], ['prueba-la-ceiba']]);
+    });
+
+    it('Escape en el buscador con texto lo vacía, y no deja que cierre la lista', async () => {
+        const { wrapper } = await mountList();
+        await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'ceiba' } });
+
+        const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+        wrapper.get('input[data-search]').element.dispatchEvent(escape);
+
+        expect(escape.defaultPrevented).toBe(true);
+        expect(wrapper.emitted('update:filters')).toEqual([[NO_FILTERS]]);
+
+        // Vacío, Escape sigue de largo: quien muestra la lista la cierra.
+        await wrapper.setProps({ filters: NO_FILTERS });
+        const again = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+        wrapper.get('input[data-search]').element.dispatchEvent(again);
+
+        expect(again.defaultPrevented).toBe(false);
+        expect(wrapper.emitted('update:filters')).toHaveLength(1);
+    });
+
     it('en inglés', async () => {
         const { wrapper } = await mountList('en', [EL_GUADUAL, LA_CEIBA]);
         await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'nothing' } });

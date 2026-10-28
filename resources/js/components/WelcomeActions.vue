@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed } from 'vue';
 
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
-import { useNow } from '@/composables/useNow';
 import type { Restaurant } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
-import { filterRestaurants, hasFilters, NO_FILTERS, pickSuggestion, todaysLunches } from '@/restaurants/finder';
+import { NO_FILTERS } from '@/restaurants/filterParams';
+import { useFinderPanel } from '@/restaurants/useFinder';
 
 /**
  * Lo del inicio (#12) que va en la bienvenida, al lado de «Ver la lista»:
@@ -31,38 +31,23 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-const now = useNow();
-const filtered = computed(() => filters !== null && hasFilters(filters));
-const matching = computed(() => (filters !== null && filtered.value ? filterRestaurants(restaurants, filters, now.value) : restaurants));
-const lunchCount = computed(() => todaysLunches(matching.value, now.value).length);
-const missed = ref(false);
-
-watch(
-    () => filters,
-    () => {
-        missed.value = false;
+/** Cuáles cumplen los filtros, «Sugerime algo» y la región de estado: lo mismo que la lista (useFinder.ts). */
+const { filtered, lunches, announced, suggest: pick } = useFinderPanel(
+    { restaurants: () => restaurants, filters: () => filters },
+    {
+        unfiltered: 'silent',
+        onFilters: (fixed) => {
+            emit('update:filters', fixed);
+        },
     },
 );
-
-const message = computed(() => {
-    if (missed.value) {
-        return filtered.value ? t('finder.suggest_none_filtered') : t('finder.suggest_none');
-    }
-
-    if (!filtered.value) {
-        return '';
-    }
-
-    return matching.value.length === 0 ? t('finder.none') : t('finder.count_filtered', { count: matching.value.length, total: restaurants.length });
-});
+const lunchCount = computed(() => lunches.value.length);
 
 function suggest(): void {
-    const pick = pickSuggestion(matching.value, now.value);
+    const slug = pick();
 
-    missed.value = pick === null;
-
-    if (pick !== null) {
-        emit('select', pick.slug);
+    if (slug !== null) {
+        emit('select', slug);
     }
 }
 
@@ -83,5 +68,5 @@ const PILL = 'inline-flex min-h-touch items-center gap-2 rounded-full border bor
         {{ t('finder.clear') }}
     </button>
     <!-- Siempre en la página: el lector de pantalla anuncia cuando cambia. -->
-    <p role="status" class="basis-full text-sm" data-welcome-status>{{ message }}</p>
+    <p role="status" class="basis-full text-sm" data-welcome-status>{{ announced }}</p>
 </template>

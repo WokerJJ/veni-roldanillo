@@ -3,7 +3,7 @@ import type { Filters } from './filterParams';
 import { businessDay, openStatus } from './openStatus';
 
 // Leer y escribir los filtros de la dirección también baja con la lista: el inicio los pide de aquí.
-export { filtersFromUrl, hasFilters, NO_FILTERS, writeFilters } from './filterParams';
+export { filtersFromUrl, hasFilters, NO_FILTERS, sameAddress, writeFilters } from './filterParams';
 
 /*
 | Búsqueda, filtros, «Almuerzos de hoy» y «Sugiéreme algo» del inicio (#12),
@@ -16,9 +16,23 @@ export { filtersFromUrl, hasFilters, NO_FILTERS, writeFilters } from './filterPa
 | openStatus.ts (ADR 0022).
 */
 
-/** Sin tildes ni mayúsculas, con los espacios de más colapsados: «Comida Típica» → «comida tipica». */
+/**
+ * Sin tildes ni mayúsculas, con los espacios de más colapsados: «Comida
+ * Típica» → «comida tipica». Además, lo que el teclado del celular cambia sin
+ * avisar: los apóstrofos y comillas tipográficas (’ ‘ ʼ ` ´) cuentan como «'»
+ * («Juan’s» encuentra a «Juan's»), los caracteres invisibles (U+200B a
+ * U+200D, que deja pegar un texto) no cuentan, y NFKD lleva las formas de
+ * compatibilidad (ligaduras, letras de ancho completo) a las comunes.
+ */
 export function normalizeText(text: string): string {
-    return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    return text
+        .replace(/[\u2018\u2019\u02BC`\u00B4]/g, "'")
+        .replace(/[\u200B-\u200D]/g, '')
+        .normalize('NFKD')
+        .replace(/\p{M}/gu, '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 /**
@@ -59,6 +73,21 @@ export function filterRestaurants(restaurants: readonly Restaurant[], filters: R
     );
 }
 
+/**
+ * Los filtros sin la categoría si ninguno de `restaurants` la tiene (un enlace
+ * viejo o mal armado: el selector no la ofrece y no se podría sacar), o null
+ * si no hay nada que cambiar. Sin restaurantes todavía, null: no se sabe.
+ */
+export function withoutUnknownCategory(filters: Readonly<Filters>, restaurants: readonly Restaurant[]): Filters | null {
+    const { category } = filters;
+
+    if (category === null || restaurants.length === 0 || restaurants.some(({ categories }) => categories.some(({ slug }) => slug === category))) {
+        return null;
+    }
+
+    return { ...filters, category: null };
+}
+
 /** Las categorías de esos restaurantes, sin repetir, por nombre (con las reglas del idioma). */
 export function categoriesOf(restaurants: readonly Restaurant[], locale: string): RestaurantCategory[] {
     const bySlug = new Map<string, RestaurantCategory>();
@@ -94,9 +123,17 @@ export function todaysLunches(restaurants: readonly Restaurant[], now: Date): Lu
 /**
  * Uno al azar entre los que están abiertos ahora, o null si no hay ninguno.
  * `random` es como Math.random (un número en [0, 1)): las pruebas pasan uno fijo.
+ * `exclude` es el último sugerido: no se repite si hay otro abierto.
  */
-export function pickSuggestion(restaurants: readonly Restaurant[], now: Date, random: () => number = Math.random): Restaurant | null {
-    const open = restaurants.filter((restaurant) => isOpenNow(restaurant, now));
+export function pickSuggestion(
+    restaurants: readonly Restaurant[],
+    now: Date,
+    random: () => number = Math.random,
+    exclude: string | null = null,
+): Restaurant | null {
+    const allOpen = restaurants.filter((restaurant) => isOpenNow(restaurant, now));
+    const others = allOpen.filter(({ slug }) => slug !== exclude);
+    const open = others.length > 0 ? others : allOpen;
 
     if (open.length === 0) {
         return null;

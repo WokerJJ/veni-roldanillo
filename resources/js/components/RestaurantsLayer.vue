@@ -6,10 +6,9 @@ import { loadIcon } from '@/icons/icons';
 import { iconImage } from '@/map/iconImage';
 import type { MapGeoJson, MapHit, MapImage, MapLayerGroup } from '@/map/layers';
 import { useMap, useMapLayers } from '@/map/useMapLayers';
-import { useNow } from '@/composables/useNow';
 import type { Restaurant } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
-import { filterRestaurants } from '@/restaurants/finder';
+import { useFinder } from '@/restaurants/useFinder';
 import { color } from '@brand/tokens.json';
 
 /**
@@ -226,11 +225,8 @@ export default defineComponent({
 
         // El elegido se dibuja aunque no cumpla los filtros: el resumen abierto es de él.
         const selectedRestaurant = computed(() => props.restaurants.find(({ slug }) => slug === props.selected) ?? null);
-        const now = useNow();
-        // La hora solo cuenta con «abierto ahora» (calculado en el dispositivo, ADR 0017).
-        const shown = computed(() =>
-            props.filters === null ? props.restaurants : filterRestaurants(props.restaurants, props.filters, props.filters.open ? now.value : new Date()),
-        );
+        // Los mismos que la lista, con el mismo reloj (useFinder.ts). La hora solo cuenta con «abierto ahora» (ADR 0017).
+        const { matching: shown } = useFinder({ restaurants: () => props.restaurants, filters: () => props.filters });
         /** Lo último que se le dio a la fuente: con «abierto ahora», cada medio minuto se recalcula, y casi siempre da lo mismo. */
         let drawn: string | null = null;
 

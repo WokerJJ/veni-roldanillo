@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { filtersFromUrl, hasFilters, MAX_QUERY_LENGTH, NO_FILTERS, writeFilters } from './filterParams';
+import { filtersFromUrl, hasFilters, MAX_QUERY_LENGTH, NO_FILTERS, sameAddress, writeFilters } from './filterParams';
 
 function written(filters: Parameters<typeof writeFilters>[1], start = ''): string {
     const params = new URLSearchParams(start);
@@ -56,5 +56,14 @@ describe('hasFilters', () => {
         expect(hasFilters({ ...NO_FILTERS, query: 'x' })).toBe(true);
         expect(hasFilters({ ...NO_FILTERS, category: 'asados' })).toBe(true);
         expect(hasFilters({ ...NO_FILTERS, price: 1 })).toBe(true);
+    });
+});
+
+describe('sameAddress', () => {
+    it('compara los parámetros normalizados, no el texto', () => {
+        expect(sameAddress('/?q=la%20ceiba', '/?q=la+ceiba')).toBe(true);
+        expect(sameAddress('/?open=1&q=x', '/?q=x&open=1')).toBe(true);
+        expect(sameAddress('/?q=la%20ceiba', '/?q=la+ceiba&open=1')).toBe(false);
+        expect(sameAddress('/', '/?r=prueba-la-ceiba')).toBe(false);
     });
 });

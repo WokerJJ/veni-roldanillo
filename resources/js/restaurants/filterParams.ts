@@ -4,9 +4,8 @@
  * misma búsqueda, y un enlace la comparte. Solo lo que se eligió en la
  * pantalla: nunca la ubicación de quien usa el mapa (ADR 0008 y 0028).
  *
- * Este módulo viaja con el arranque (el inicio lee la dirección al abrir):
- * no importa nada. Filtrar, buscar y sortear están en finder.ts, que baja
- * con la lista.
+ * Este módulo baja con la lista (finder.ts lo reexporta); el inicio solo usa
+ * sus tipos. No importa nada.
  */
 
 export interface Filters {
@@ -75,4 +74,20 @@ export function writeFilters(params: URLSearchParams, filters: Readonly<Filters>
             params.set(name, value);
         }
     }
+}
+
+/**
+ * ¿Las dos direcciones son la misma? Con los parámetros normalizados, no el
+ * texto: «?q=la%20ceiba» y «?q=la+ceiba» son la misma búsqueda, y volver a
+ * escribirla sumaría una visita para nada.
+ */
+export function sameAddress(a: string, b: string): boolean {
+    const normalized = (url: string): string => {
+        const { pathname, searchParams, hash } = new URL(url, 'https://veni.invalid');
+        searchParams.sort();
+
+        return `${pathname}?${searchParams.toString()}${hash}`;
+    };
+
+    return normalized(a) === normalized(b);
 }

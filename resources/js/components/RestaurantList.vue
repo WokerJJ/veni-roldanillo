@@ -1,20 +1,20 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { computed, onMounted, ref, shallowRef, useId, useTemplateRef, watch } from 'vue';
+import { computed, onMounted, shallowRef, useId, useTemplateRef, watch } from 'vue';
 
 import Icon from '@/components/Icon.vue';
 import RestaurantFilters from '@/components/RestaurantFilters.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import TodaysLunches from '@/components/TodaysLunches.vue';
 import { useI18n } from '@/composables/useI18n';
-import { useNow } from '@/composables/useNow';
 import type { Restaurant } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
-import { hasFilters, NO_FILTERS } from '@/restaurants/filterParams';
-import { categoriesOf, filterRestaurants, pickSuggestion, todaysLunches } from '@/restaurants/finder';
+import { NO_FILTERS } from '@/restaurants/filterParams';
+import { categoriesOf } from '@/restaurants/finder';
 import { restaurantUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
 import { openStatusText } from '@/restaurants/statusText';
+import { useFinderPanel } from '@/restaurants/useFinder';
 import { formatDistance } from '@/routing/directions';
 
 /**
@@ -69,15 +69,21 @@ const emit = defineEmits<{
 }>();
 
 const { t, locale } = useI18n();
-const now = useNow();
 const headingId = useId();
 const heading = useTemplateRef<HTMLElement>('heading');
 const list = useTemplateRef<HTMLElement>('list');
 
 const filters = computed(() => given ?? NO_FILTERS);
-const filtered = computed(() => hasFilters(filters.value));
-/** Los que cumplen los filtros. La hora solo cuenta con «abierto ahora». */
-const matching = computed(() => (filtered.value ? filterRestaurants(all, filters.value, now.value) : all));
+/** Cuáles cumplen los filtros, «Sugerime algo» y la región de estado: lo mismo que la bienvenida (useFinder.ts). */
+const { now, filtered, matching, lunches, message, announced, suggest: pick } = useFinderPanel(
+    { restaurants: () => all, filters: () => given },
+    {
+        unfiltered: 'count',
+        onFilters: (fixed) => {
+            emit('update:filters', fixed);
+        },
+    },
+);
 
 const details = computed(() =>
     all.map((restaurant) => {
@@ -126,35 +132,12 @@ const rows = computed(() => {
 
 const allSamples = computed(() => all.length > 0 && all.every(({ fictitious }) => fictitious));
 const categories = computed(() => categoriesOf(all, locale.value));
-const lunches = computed(() => todaysLunches(matching.value, now.value));
-
-/** «Sugerime algo» no encontró ningún abierto: lo dice la región de estado hasta que cambien los filtros. */
-const suggestionMissed = ref(false);
-
-watch(filters, () => {
-    suggestionMissed.value = false;
-});
-
-/** Cuántos quedan (o que no hay abiertos para sugerir): lo anuncia la región de estado al cambiar. */
-const countMessage = computed(() => {
-    if (suggestionMissed.value) {
-        return filtered.value ? t('finder.suggest_none_filtered') : t('finder.suggest_none');
-    }
-
-    if (!filtered.value) {
-        return all.length === 1 ? t('restaurants.count_one') : t('restaurants.count_many', { count: all.length });
-    }
-
-    return matching.value.length === 0 ? t('finder.none') : t('finder.count_filtered', { count: matching.value.length, total: all.length });
-});
 
 function suggest(): void {
-    const pick = pickSuggestion(matching.value, now.value);
+    const slug = pick();
 
-    suggestionMissed.value = pick === null;
-
-    if (pick !== null) {
-        emit('select', pick.slug);
+    if (slug !== null) {
+        emit('select', slug);
     }
 }
 
@@ -196,7 +179,9 @@ defineExpose({ focusItem });
             <RestaurantFilters :filters="filters" :categories="categories" @update:filters="emit('update:filters', $event)" />
 
             <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <p role="status" class="text-sm" data-count>{{ countMessage }}</p>
+                <!-- Se ve enseguida; el lector lo oye de la región de abajo, medio segundo después de dejar de teclear. -->
+                <p class="text-sm" aria-hidden="true" data-count>{{ message }}</p>
+                <p role="status" class="sr-only" data-count-status>{{ announced }}</p>
                 <button
                     type="button"
                     class="inline-flex min-h-touch items-center gap-2 rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
