@@ -128,7 +128,7 @@ El panel del inicio muestra una de tres cosas: la bienvenida con el estado de la
 
 Los marcadores son figuras del lienzo, no elementos de la página: no reciben foco ni los lee un lector de pantalla. Por eso la lista no es un extra: es la forma accesible de llegar a cada restaurante.
 
-#### Búsqueda, filtros, «Almuerzos de hoy» y «Sugiéreme algo»
+#### Búsqueda, filtros, «Almuerzos de hoy» y «Sugerime algo»
 
 Decidido en el [ADR 0028](adr/0028-busqueda-y-filtros-del-inicio.md). Todo pasa en el dispositivo, sobre los restaurantes que ya trajo el GeoJSON: buscar no hace peticiones.
 
@@ -136,11 +136,12 @@ Decidido en el [ADR 0028](adr/0028-busqueda-y-filtros-del-inicio.md). Todo pasa 
 | --- | --- | --- |
 | Filtros en la dirección | `resources/js/restaurants/filterParams.ts` | `q`, `open=1`, `delivery=1`, `price=1..4` y `category=slug`; lo que no se entiende se ignora. Nunca la ubicación |
 | Buscar, filtrar, sortear | `resources/js/restaurants/finder.ts` | Funciones puras: búsqueda sin tildes ni mayúsculas por nombre y categoría, filtros (abierto ahora con `openStatus`, domicilio, «hasta» un nivel de precio, categoría), los almuerzos de hoy y uno al azar entre los abiertos (el azar se inyecta) |
+| Filtrar, sugerir y anunciar | `resources/js/restaurants/useFinder.ts` | Lo que comparten la lista, la bienvenida y la capa: un solo reloj, los que cumplen los filtros, «Sugerime algo» (sin repetir el último), la categoría que ninguno tiene se descarta, y la región de estado (medio segundo después de dejar de teclear) |
 | Buscador y filtros | `resources/js/components/RestaurantFilters.vue`, en la lista | Un `<input type="search">` con su etiqueta y los filtros en un `<details>`, con «Quitar filtros» |
 | Almuerzos de hoy | `resources/js/components/TodaysLunches.vue`, en la lista | Los de los restaurantes que cumplen los filtros, del más barato al más caro, con precio y enlace a la ficha |
 | Bienvenida | `resources/js/components/WelcomeActions.vue` | «Sugerime algo», «Almuerzos de hoy (N)» y, con filtros, cuántos los cumplen y «Quitar filtros» |
 
-`Home.vue` guarda los filtros (los lee de la dirección cuando baja `finder.ts`, con la lista) y se los pasa a la lista y a la capa del mapa, que filtran cada una: el mapa dibuja solo los que los cumplen, más el elegido. Cada cambio vuelve a la dirección con `router.replace`, en el dispositivo y 300 ms después de dejar de teclear. La lista anuncia en una región de estado cuántos quedan («2 de 7 restaurantes») o que ninguno cumple, con «Quitar filtros»; un filtro saca filas sin reordenar las que quedan. Todo esto baja con la lista, fuera del arranque.
+`Home.vue` guarda los filtros (los lee de la dirección cuando baja `finder.ts`, con la lista) y se los pasa a la lista y a la capa del mapa, que filtran cada una: el mapa dibuja solo los que los cumplen, más el elegido. Cada cambio vuelve a la dirección con `router.replace`, en el dispositivo y 300 ms después de dejar de teclear. La lista anuncia en una región de estado cuántos quedan («2 de 7 restaurantes»), medio segundo después de dejar de teclear, o que ninguno cumple, con «Quitar filtros»; un filtro saca filas sin reordenar las que quedan. Todo esto baja con la lista, fuera del arranque.
 
 Los seeders dejan ocho restaurantes ficticios en puntos fijos del casco urbano (uno oculto): el mapa abre siempre con los mismos siete, cinco sueltos y un grupo de dos. Llevan un menú fijo de tres secciones, en español e inglés, con un plato agotado hoy en algunos y opciones de ejemplo (proteína obligatoria, adiciones, ingredientes para quitar y la preparación del jugo, rotuladas «(prueba)»); uno tiene horarios especiales cerca de la fecha y otro cierra hoy; uno queda sin menú y otro sin horario, para ver la ficha cuando faltan. `DailyMenuSeeder` publica el almuerzo de hoy en todos los ficticios menos uno; como es de un día, en desarrollo se vuelve a correr solo con `php artisan db:seed --class=DailyMenuSeeder`.
 
