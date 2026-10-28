@@ -51,6 +51,22 @@ test('anunciar una demora desde la misma ficha no cuenta como un cambio de otro'
     expect($restaurant->fresh()?->name)->toBe('Con demora');
 });
 
+test('anunciar una demora no se traga un cambio de administración: guardar avisa y el nombre queda', function () {
+    $restaurant = Restaurant::factory()->claimed()->create(['name' => 'Original']);
+    actInPanel(panelMember($restaurant), $restaurant);
+
+    $page = Livewire::test(EditRestaurantProfile::class);
+    $this->travel(2)->seconds();
+    Restaurant::query()->whereKey($restaurant->id)->update(['name' => 'Desde administración', 'updated_at' => now()]);
+    $this->travel(2)->seconds();
+    $page->callAction('announceDelay', ['minutes' => 30]);
+
+    $page->fillForm(['name' => 'Mi cambio'])->call('save')->assertNotified(__('panel.errors.conflict'));
+
+    expect($restaurant->fresh()?->name)->toBe('Desde administración')
+        ->and($restaurant->fresh()?->delay_minutes)->toBe(30);
+});
+
 test('un plato tampoco se pisa entre dos pestañas', function () {
     $restaurant = Restaurant::factory()->claimed()->create();
     actInPanel(panelMember($restaurant), $restaurant);

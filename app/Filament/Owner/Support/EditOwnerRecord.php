@@ -27,11 +27,12 @@ abstract class EditOwnerRecord extends EditRecord
      */
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        return $this->writeRespectingConstraints(function () use ($record, $data): Model {
-            $this->guardAgainstConcurrentEdit();
+        return $this->writeRespectingConstraints(fn (): Model => parent::handleRecordUpdate($record, $data));
+    }
 
-            return parent::handleRecordUpdate($record, $data);
-        });
+    protected function beforeSave(): void
+    {
+        $this->guardAgainstConcurrentEdit();
     }
 
     /**
@@ -46,7 +47,7 @@ abstract class EditOwnerRecord extends EditRecord
     protected function afterSave(): void
     {
         $this->touchOwnerUpdate();
-        $this->rememberVersion();
+        $this->rememberVersion($this->getRecord());
     }
 
     protected function versionedRecord(): Model

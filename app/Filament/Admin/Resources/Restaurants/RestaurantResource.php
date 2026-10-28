@@ -2,8 +2,10 @@
 
 namespace App\Filament\Admin\Resources\Restaurants;
 
+use App\Actions\Restaurants\ActionRefused;
 use App\Actions\Restaurants\HideRestaurant;
 use App\Actions\Restaurants\PublishRestaurant;
+use App\Actions\Restaurants\RestaurantStatusRules;
 use App\Enums\RestaurantPlan;
 use App\Enums\RestaurantStatus;
 use App\Filament\Admin\AdminResource;
@@ -14,14 +16,12 @@ use App\Filament\Owner\Support\Fields;
 use App\Models\Restaurant;
 use App\Support\GeoPoint;
 use App\Support\RestaurantSlug;
-use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
@@ -32,6 +32,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Las fichas, para administración (#19, ADR 0027): alta manual y edición de
@@ -39,9 +40,10 @@ use Illuminate\Support\Facades\Gate;
  * ubicación y categorías), y la moderación mínima: ocultar o mostrar una
  * ficha y ver cuándo la actualizó el restaurante.
  *
- * Reglas del estado (las mismas de PublishRestaurant): «reclamada» exige un
- * dueño y «sin reclamar», que no lo tenga; pasar de oculta a publicada exige
- * marcarla verificada, y una descartada de OpenStreetMap no se publica.
+ * Reglas del estado: las de RestaurantStatusRules, las mismas de
+ * PublishRestaurant y de aprobar un reclamo («reclamada» exige un dueño y
+ * «sin reclamar», que no lo tenga; publicar exige marcarla verificada, y una
+ * descartada de OpenStreetMap o retirada no se publica).
  */
 class RestaurantResource extends AdminResource
 {
@@ -94,8 +96,7 @@ class RestaurantResource extends AdminResource
                         ->label(__('panel.admin.restaurants.status'))
                         ->options(self::statusOptions())
                         ->default(RestaurantStatus::Hidden->value)
-                        ->required()
-                        ->rule(fn (?Restaurant $record, Get $get): Closure => self::statusRule($record, $get)),
+                        ->required(),
                     Select::make('plan')
                         ->label(__('panel.admin.restaurants.plan'))
                         ->options(collect(RestaurantPlan::cases())
@@ -129,35 +130,6 @@ class RestaurantResource extends AdminResource
     }
 
     /**
-     * @return Closure(string, mixed, Closure(string): void): void
-     */
-    private static function statusRule(?Restaurant $record, Get $get): Closure
-    {
-        return function (string $attribute, mixed $value, Closure $fail) use ($record, $get): void {
-            $status = RestaurantStatus::tryFrom(is_string($value) ? $value : '');
-            $hasOwner = $record !== null && $record->owners()->exists();
-
-            if ($status === RestaurantStatus::Claimed && ! $hasOwner) {
-                $fail(__('panel.admin.restaurants.claimed_needs_owner'));
-            }
-
-            if ($status === RestaurantStatus::Unclaimed && $hasOwner) {
-                $fail(__('panel.admin.restaurants.unclaimed_has_owner'));
-            }
-
-            $publishing = $status?->isPublished() === true && ($record === null || $record->status === RestaurantStatus::Hidden);
-
-            if ($publishing && ! $get('verified')) {
-                $fail(__('panel.admin.refused.not_verified'));
-            }
-
-            if ($publishing && $record?->source()->whereNotNull('dismissed_at')->exists()) {
-                $fail(__('panel.admin.refused.dismissed'));
-            }
-        };
-    }
-
-    /**
      * Lo que la ficha guardada muestra en el formulario.
      *
      * @param  array<string, mixed>  $data
@@ -180,23 +152,38 @@ class RestaurantResource extends AdminResource
 
     /**
      * Guarda el formulario en la ficha (nueva o existente). El slug, si se
-     * deja vacío al crear, sale del nombre.
+     * deja vacío al crear, sale del nombre. Llamar dentro de una transacción:
+     * el estado se comprueba con la fila bloqueada (RestaurantStatusRules) y
+     * un estado prohibido es un error del campo «Estado».
      *
      * @param  array<string, mixed>  $data
+     *
+     * @throws ValidationException
      */
     public static function persist(Restaurant $restaurant, array $data): Restaurant
     {
+        $slug = $data['slug'] ?? null;
+        $name = $data['name'] ?? '';
+        $verified = (bool) ($data['verified'] ?? false);
+        $status = RestaurantStatus::from(is_string($data['status'] ?? null) ? $data['status'] : 'hidden');
+
+        $current = $restaurant->exists
+            ? Restaurant::query()->lockForUpdate()->whereKey($restaurant->getKey())->firstOrFail()
+            : $restaurant;
+
+        try {
+            RestaurantStatusRules::assert($current, $status, $verified);
+        } catch (ActionRefused $refused) {
+            throw ValidationException::withMessages(['data.status' => __("panel.admin.refused.{$refused->reason}")]);
+        }
+
         /** @var array<string, mixed> $fillable */
         $fillable = Arr::only($data, self::FILLABLE);
         $restaurant->fill($fillable);
 
-        $slug = $data['slug'] ?? null;
-        $name = $data['name'] ?? '';
-        $verified = (bool) ($data['verified'] ?? false);
-
         $restaurant->forceFill([
             'slug' => is_string($slug) && $slug !== '' ? $slug : RestaurantSlug::unique(is_string($name) ? $name : ''),
-            'status' => RestaurantStatus::from(is_string($data['status'] ?? null) ? $data['status'] : 'hidden'),
+            'status' => $status,
             'plan' => RestaurantPlan::from(is_string($data['plan'] ?? null) ? $data['plan'] : 'free'),
             'is_fictitious' => (bool) ($data['is_fictitious'] ?? false),
             'verified_at' => $verified ? ($restaurant->verified_at ?? now()) : null,

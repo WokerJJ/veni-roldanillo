@@ -34,16 +34,17 @@ class EditRestaurant extends EditRecord
      */
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        return $this->writeRespectingConstraints(function () use ($data): Model {
-            $this->guardAgainstConcurrentEdit();
+        return $this->writeRespectingConstraints(fn (): Model => RestaurantResource::persist($this->restaurant(), $data));
+    }
 
-            return RestaurantResource::persist($this->restaurant(), $data);
-        });
+    protected function beforeSave(): void
+    {
+        $this->guardAgainstConcurrentEdit();
     }
 
     protected function afterSave(): void
     {
-        $this->rememberVersion();
+        $this->rememberVersion($this->getRecord());
     }
 
     protected function versionedRecord(): Model

@@ -4,7 +4,6 @@ namespace App\Filament\Owner\Pages;
 
 use App\Enums\PaymentMethod;
 use App\Filament\Concerns\DetectsConcurrentEdits;
-use App\Filament\Owner\Concerns\TouchesOwnerUpdate;
 use App\Filament\Owner\Concerns\TranslatesConstraintViolations;
 use App\Filament\Owner\Support\Fields;
 use App\Models\Restaurant;
@@ -33,7 +32,7 @@ use Illuminate\Support\Facades\Gate;
  */
 class EditRestaurantProfile extends EditTenantProfile
 {
-    use DetectsConcurrentEdits, TouchesOwnerUpdate, TranslatesConstraintViolations;
+    use DetectsConcurrentEdits, TranslatesConstraintViolations;
 
     /** Topes de los textos largos de la ficha. */
     public const DESCRIPTION_MAX = 1000;
@@ -118,8 +117,11 @@ class EditRestaurantProfile extends EditTenantProfile
                     $restaurant = $this->restaurant();
                     $minutes = $data['minutes'] ?? null;
                     abort_unless(is_numeric($minutes), 422);
-                    $restaurant->announceDelay((int) $minutes);
-                    $this->rememberVersion();
+                    $this->writeBesideForm(function () use ($restaurant, $minutes): Restaurant {
+                        $restaurant->announceDelay((int) $minutes);
+
+                        return $restaurant;
+                    });
                     Notification::make()->success()->title(__('panel.delay.announced'))->send();
                 }),
             Action::make('clearDelay')
@@ -127,8 +129,12 @@ class EditRestaurantProfile extends EditTenantProfile
                 ->color('gray')
                 ->visible(fn (): bool => $this->restaurant()->activeDelayMinutes() !== null)
                 ->action(function (): void {
-                    $this->restaurant()->clearDelay();
-                    $this->rememberVersion();
+                    $this->writeBesideForm(function (): Restaurant {
+                        $restaurant = $this->restaurant();
+                        $restaurant->clearDelay();
+
+                        return $restaurant;
+                    });
                     Notification::make()->success()->title(__('panel.delay.cleared'))->send();
                 }),
         ];
@@ -180,17 +186,20 @@ class EditRestaurantProfile extends EditTenantProfile
      */
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        return $this->writeRespectingConstraints(function () use ($record, $data): Model {
-            $this->guardAgainstConcurrentEdit();
-
-            return parent::handleRecordUpdate($record, $data);
-        });
+        return $this->writeRespectingConstraints(fn (): Model => parent::handleRecordUpdate($record, $data));
     }
 
+    protected function beforeSave(): void
+    {
+        $this->guardAgainstConcurrentEdit();
+    }
+
+    /** «Actualizada el…» en la misma ficha que se guardó: su versión es la que se recuerda. */
     protected function afterSave(): void
     {
-        $this->touchOwnerUpdate();
-        $this->rememberVersion();
+        $restaurant = $this->restaurant();
+        $restaurant->touchOwnerUpdate();
+        $this->rememberVersion($restaurant);
     }
 
     /** La ficha: si administración u otra pestaña la guardó, no se pisa. */
