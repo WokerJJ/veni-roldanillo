@@ -15,7 +15,7 @@ Cerrada: versión 0.1.0.
 
 ## Fase 1 · MVP
 
-- [ ] Inicio: búsqueda, filtros (abierto ahora, domicilio, precio, categoría), "Almuerzos de hoy", "Sugiéreme algo"
+- [x] Inicio: búsqueda, filtros (abierto ahora, domicilio, precio, categoría), "Almuerzos de hoy", "Sugiéreme algo" (#12, ADR 0028). Pendiente: publicar el almuerzo del día desde el panel del dueño
 - [x] Ficha del restaurante: datos, horarios con estado abierto/cerrado, menú por secciones (ADR 0018)
 - [x] Menú con opciones obligatorias, adiciones, quitar ingredientes y nota (ADR 0023)
 - [x] Carrito y mensaje de WhatsApp (barrio, dirección, referencia, ubicación opcional, pago, "¿con cuánto pagás?") (ADR 0024)
