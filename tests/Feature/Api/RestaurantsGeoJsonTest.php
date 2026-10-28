@@ -1,12 +1,14 @@
 <?php
 
 use App\Models\Category;
+use App\Models\DailyMenu;
 use App\Models\DeliveryZone;
 use App\Models\OpeningHour;
 use App\Models\Restaurant;
 use App\Models\SpecialHour;
 use App\Models\User;
 use App\Providers\AppServiceProvider;
+use App\Support\BusinessDay;
 use App\Support\GeoPoint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -134,7 +136,7 @@ test('cada restaurante lleva solo los campos públicos de la lista blanca', func
 
     expect(array_keys($feature))->toBe(['type', 'geometry', 'properties'])
         ->and(array_keys($feature['geometry']))->toBe(['type', 'coordinates'])
-        ->and(array_keys($feature['properties']))->toBe(['slug', 'name', 'categories', 'delivery', 'fictitious', 'hours', 'special_hours'])
+        ->and(array_keys($feature['properties']))->toBe(['slug', 'name', 'categories', 'delivery', 'fictitious', 'hours', 'special_hours', 'price_level', 'lunch'])
         ->and(array_keys($feature['properties']['categories'][0]))->toBe(['slug', 'name'])
         ->and(array_keys($feature['properties']['hours'][0]))->toBe(['weekday', 'opens', 'closes']);
 
@@ -163,7 +165,9 @@ test('responde lo que dice el contrato que también lee el cliente', function ()
         'name' => 'Restaurante de Prueba La Ceiba (ficticio)',
         'location' => new GeoPoint(4.4128, -76.1547),
         'delivery' => true,
+        'price_level' => 2,
     ]);
+    DailyMenu::factory()->for($ceiba)->create(['served_on' => '2026-10-07', 'description_es' => 'Almuerzo de prueba: sopa, arroz y jugo.', 'price' => 15000]);
     $ceiba->categories()->attach(Category::factory()->create(['slug' => 'comida-tipica', 'name_es' => 'Comida típica']));
     OpeningHour::factory()->for($ceiba)->create(['weekday' => 1, 'opens_at' => '11:00', 'closes_at' => '15:00']);
     OpeningHour::factory()->for($ceiba)->create(['weekday' => 5, 'opens_at' => '18:00', 'closes_at' => '02:00']);
@@ -176,6 +180,7 @@ test('responde lo que dice el contrato que también lee el cliente', function ()
         'name' => 'Restaurante de Prueba El Guadual (ficticio)',
         'location' => new GeoPoint(4.4102, -76.1539),
         'delivery' => false,
+        'price_level' => null,
     ]);
 
     $contract = json_decode((string) file_get_contents(base_path(RESTAURANTS_GEOJSON_CONTRACT)), true, flags: JSON_THROW_ON_ERROR);
@@ -334,6 +339,63 @@ describe('horarios para «abierto ahora»', function () {
     });
 });
 
+describe('nivel de precio y almuerzo de hoy (#12)', function () {
+    test('trae el nivel de precio, o null si el restaurante no lo cargó', function () {
+        Restaurant::factory()->create(['slug' => 'con-precio', 'price_level' => 3]);
+        Restaurant::factory()->create(['slug' => 'sin-precio', 'price_level' => null]);
+        $response = $this->get(RESTAURANTS_GEOJSON);
+
+        expect(geoJsonProperties($response, 'con-precio')['price_level'])->toBe(3)
+            ->and(geoJsonProperties($response, 'sin-precio')['price_level'])->toBeNull();
+    });
+
+    test('trae solo el almuerzo de hoy, con su fecha, descripción y precio', function () {
+        $this->travelTo('2026-10-07 12:00:00');
+        $restaurant = Restaurant::factory()->create(['slug' => 'la-ceiba']);
+        DailyMenu::factory()->for($restaurant)->create(['served_on' => '2026-10-06', 'description_es' => 'El de ayer', 'price' => 10000]);
+        DailyMenu::factory()->for($restaurant)->create(['served_on' => '2026-10-07', 'description_es' => 'Sopa y seco', 'price' => 14000]);
+        DailyMenu::factory()->for($restaurant)->create(['served_on' => '2026-10-08', 'description_es' => 'El de mañana', 'price' => 16000]);
+        $response = $this->get(RESTAURANTS_GEOJSON);
+
+        expect(geoJsonProperties($response, 'la-ceiba')['lunch'])->toBe(['date' => '2026-10-07', 'description' => 'Sopa y seco', 'price' => 14000])
+            ->and($response->getContent())->not->toContain('El de ayer')->not->toContain('El de mañana');
+    });
+
+    test('sin almuerzo publicado hoy, lunch va en null', function () {
+        Restaurant::factory()->create(['slug' => 'la-ceiba']);
+
+        expect(geoJsonProperties($this->get(RESTAURANTS_GEOJSON), 'la-ceiba')['lunch'])->toBeNull();
+    });
+
+    test('«hoy» es el día en Colombia: a las 23:30 de Roldanillo ya es mañana en UTC', function () {
+        // 04:30 UTC del 8 son las 23:30 del 7 en Colombia.
+        $this->travelTo(new DateTimeImmutable('2026-10-08 04:30:00', new DateTimeZone('UTC')));
+        $restaurant = Restaurant::factory()->create(['slug' => 'la-ceiba']);
+        DailyMenu::factory()->for($restaurant)->create(['served_on' => '2026-10-07', 'description_es' => 'El del 7']);
+        DailyMenu::factory()->for($restaurant)->create(['served_on' => '2026-10-08', 'description_es' => 'El del 8']);
+
+        expect(geoJsonProperties($this->get(RESTAURANTS_GEOJSON), 'la-ceiba')['lunch']['description'] ?? null)->toBe('El del 7');
+    });
+
+    test('la descripción va en el idioma de la URL, y en español si falta el inglés', function () {
+        $ceiba = Restaurant::factory()->create(['slug' => 'la-ceiba']);
+        $guadual = Restaurant::factory()->create(['slug' => 'el-guadual']);
+        DailyMenu::factory()->for($ceiba)->create(['description_es' => 'Sopa', 'description_en' => 'Soup']);
+        DailyMenu::factory()->for($guadual)->create(['description_es' => 'Sancocho', 'description_en' => null]);
+        $response = $this->get(RESTAURANTS_GEOJSON.'?lang=en');
+
+        expect(geoJsonProperties($response, 'la-ceiba')['lunch']['description'] ?? null)->toBe('Soup')
+            ->and(geoJsonProperties($response, 'el-guadual')['lunch']['description'] ?? null)->toBe('Sancocho');
+    });
+
+    test('el almuerzo de una ficha oculta no sale', function () {
+        $hidden = Restaurant::factory()->hidden()->create();
+        DailyMenu::factory()->for($hidden)->create(['description_es' => 'Almuerzo de una ficha oculta']);
+
+        expect($this->get(RESTAURANTS_GEOJSON)->getContent())->not->toContain('Almuerzo de una ficha oculta');
+    });
+});
+
 describe('caché', function () {
     test('se puede guardar un minuto en cualquier caché y lleva ETag', function () {
         Restaurant::factory()->create();
@@ -439,6 +501,7 @@ test('hace las mismas consultas con un restaurante que con muchos', function () 
             OpeningHour::factory()->for($restaurant)->create(['weekday' => 1]);
             SpecialHour::factory()->for($restaurant)->create(['on_date' => now()->toDateString()]);
             DeliveryZone::factory()->for($restaurant)->create();
+            DailyMenu::factory()->for($restaurant)->create(['served_on' => BusinessDay::today()->toDateString()]);
         });
     };
     $queries = function (): int {
@@ -455,8 +518,8 @@ test('hace las mismas consultas con un restaurante que con muchos', function () 
     $seed(8);
     $withNine = $queries();
 
-    // Una por tabla: restaurantes (con si tiene zonas), categorías, horario semanal y horarios especiales.
-    expect($withOne)->toBe(4)
-        ->and($withNine)->toBe(4)
+    // Una por tabla: restaurantes (con si tiene zonas), categorías, horario semanal, horarios especiales y almuerzos.
+    expect($withOne)->toBe(5)
+        ->and($withNine)->toBe(5)
         ->and($this->get(RESTAURANTS_GEOJSON)->json('features'))->toHaveCount(9);
 });

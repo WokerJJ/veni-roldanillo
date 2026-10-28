@@ -64,7 +64,18 @@ describe('pedir los restaurantes del mapa', () => {
         const [restaurant] = await pending;
 
         expect(restaurant).toEqual(LA_CEIBA);
-        expect(Object.keys(restaurant ?? {}).sort()).toEqual(['categories', 'coordinates', 'delivery', 'fictitious', 'hours', 'name', 'slug', 'special_hours']);
+        expect(Object.keys(restaurant ?? {}).sort()).toEqual([
+            'categories',
+            'coordinates',
+            'delivery',
+            'fictitious',
+            'hours',
+            'lunch',
+            'name',
+            'price_level',
+            'slug',
+            'special_hours',
+        ]);
     });
 
     it('descarta la figura que no trae punto, slug o nombre, y deja pasar las demás', async () => {
@@ -109,6 +120,8 @@ describe('pedir los restaurantes del mapa', () => {
                             delivery: 'sí',
                             hours: [{ weekday: '1', opens: '11:00', closes: '15:00' }, { weekday: 1, opens: '11:00', closes: '15:00' }],
                             special_hours: [{ date: '2026-10-07', closed: true }, { closed: true }],
+                            price_level: 7,
+                            lunch: { date: '2026-10-07', description: 'Sin precio' },
                         },
                     },
                 ],
@@ -125,6 +138,8 @@ describe('pedir los restaurantes del mapa', () => {
                 fictitious: false,
                 hours: [{ weekday: 1, opens: '11:00', closes: '15:00' }],
                 special_hours: [{ date: '2026-10-07', closed: true, opens: null, closes: null }],
+                price_level: null,
+                lunch: null,
             },
         ]);
     });

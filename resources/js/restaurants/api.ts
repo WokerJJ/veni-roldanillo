@@ -22,6 +22,16 @@ export interface RestaurantCategory {
     name: string;
 }
 
+/** El almuerzo del día que publicó el restaurante («Almuerzos de hoy», ADR 0028). */
+export interface Lunch {
+    /** `YYYY-MM-DD` en Colombia: pasado ese día ya no se muestra. */
+    date: string;
+    /** En el idioma con que se pidió la lista. */
+    description: string;
+    /** En pesos, entero. */
+    price: number;
+}
+
 /** Un restaurante como lo necesita el mapa: lo público y nada más (ADR 0017). */
 export interface Restaurant extends Schedule {
     /** Identificador público; el de la URL de la ficha. */
@@ -34,6 +44,10 @@ export interface Restaurant extends Schedule {
     delivery: boolean;
     /** Dato de ejemplo: la interfaz lo marca «Datos de ejemplo». */
     fictitious: boolean;
+    /** De 1 ($) a 4 ($$$$), o null si no lo cargó. */
+    price_level: number | null;
+    /** El almuerzo de hoy, o null si no publicó. */
+    lunch: Lunch | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -67,6 +81,20 @@ function parseSpecialHours(value: unknown): SpecialHours | null {
     };
 }
 
+function parsePriceLevel(value: unknown): number | null {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 4 ? value : null;
+}
+
+function parseLunch(value: unknown): Lunch | null {
+    return isRecord(value) &&
+        typeof value.date === 'string' &&
+        typeof value.description === 'string' &&
+        typeof value.price === 'number' &&
+        Number.isFinite(value.price)
+        ? { date: value.date, description: value.description, price: value.price }
+        : null;
+}
+
 /** Una figura de la respuesta; la que no trae lo mínimo (punto, slug y nombre) se descarta. */
 function parseFeature(value: unknown): Restaurant | null {
     if (!isRecord(value) || !isRecord(value.geometry) || !isRecord(value.properties)) {
@@ -96,6 +124,9 @@ function parseFeature(value: unknown): Restaurant | null {
         fictitious: properties.fictitious === true,
         hours: listOf(properties.hours, parseHours),
         special_hours: listOf(properties.special_hours, parseSpecialHours),
+        // Sumados en #12: una respuesta guardada de antes no los trae (null).
+        price_level: parsePriceLevel(properties.price_level),
+        lunch: parseLunch(properties.lunch),
     };
 }
 

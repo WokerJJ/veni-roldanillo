@@ -4,6 +4,8 @@ import { defineComponent, h, ref } from 'vue';
 
 import type { MapImage } from '@/map/layers';
 import type { Restaurant } from '@/restaurants/api';
+import type { Filters } from '@/restaurants/filterParams';
+import { NO_FILTERS } from '@/restaurants/filterParams';
 import type * as FakeInertia from '@/testing/inertia';
 import type * as FakeMapLibre from '@/testing/maplibre';
 import { EL_GUADUAL, LA_CEIBA, restaurant } from '@/testing/restaurants';
@@ -43,12 +45,14 @@ async function mountLayer(initial: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL
     const restaurants = ref(initial);
     // `chosen`: ya hay un elegido cuando el mapa todavía no pinta (el inicio abierto con ?r=slug).
     const selected = ref<string | null>(chosen);
+    // La búsqueda y los filtros del inicio (#12): null mientras no se leyeron de la dirección.
+    const filters = ref<Filters | null>(null);
     const onSelect = vi.fn<(slug: string) => void>();
     const wrapper = mount(
         defineComponent({
             render: () => [
                 h(ThemeToggle),
-                h(MapView, null, { default: () => h(RestaurantsLayer, { restaurants: restaurants.value, selected: selected.value, onSelect }) }),
+                h(MapView, null, { default: () => h(RestaurantsLayer, { restaurants: restaurants.value, selected: selected.value, filters: filters.value, onSelect }) }),
             ],
         }),
     );
@@ -77,6 +81,7 @@ async function mountLayer(initial: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL
     const slugsIn = (id: string) => (source(id)?.data as { features: { properties: { slug: string } }[] }).features.map((feature) => feature.properties.slug);
 
     return {
+        filters,
         wrapper,
         map,
         restaurants,
@@ -201,6 +206,35 @@ describe('RestaurantsLayer', () => {
 
         expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba', 'prueba-el-guadual']);
         expect(map.addLayer).toHaveBeenCalledTimes(layersAdded);
+    });
+
+    describe('filtros (#12)', () => {
+        it('dibuja solo los que cumplen los filtros, y vuelve a todos al quitarlos', async () => {
+            const { filters, slugsIn } = await mountLayer();
+
+            filters.value = { ...NO_FILTERS, delivery: true };
+            await flushPromises();
+            expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba']);
+
+            filters.value = { ...NO_FILTERS, query: 'GUADUAL' };
+            await flushPromises();
+            expect(slugsIn('restaurants')).toEqual(['prueba-el-guadual']);
+
+            filters.value = { ...NO_FILTERS };
+            await flushPromises();
+            expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba', 'prueba-el-guadual']);
+        });
+
+        it('el elegido se sigue dibujando aunque no cumpla los filtros', async () => {
+            const { filters, selected, slugsIn } = await mountLayer();
+
+            selected.value = 'prueba-el-guadual';
+            filters.value = { ...NO_FILTERS, delivery: true };
+            await flushPromises();
+
+            expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba']);
+            expect(slugsIn('restaurants-selected')).toEqual(['prueba-el-guadual']);
+        });
     });
 
     describe('tocar', () => {

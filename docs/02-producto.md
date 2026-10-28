@@ -6,7 +6,7 @@
 - Búsqueda por plato en todo el municipio, con precios (tolerante a errores: "amburguesa").
 - Filtros: abierto ahora, domicilio, precio, tipo de comida, método de pago.
 - **Almuerzos de hoy:** menú del día publicado por cada restaurante.
-- **Sugiéreme algo:** recomendación aleatoria para indecisos.
+- **Sugerime algo:** recomendación aleatoria para indecisos.
 - Explorar y pedir sin registro; cuenta solo para calificar.
 - Favoritos guardados en el dispositivo.
 

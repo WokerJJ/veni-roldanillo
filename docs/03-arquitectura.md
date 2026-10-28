@@ -102,11 +102,13 @@ Decidido en el [ADR 0017](adr/0017-restaurantes-en-el-mapa.md).
 | `fictitious` | Es un dato de ejemplo (`is_fictitious`): la interfaz lo marca «Datos de ejemplo» |
 | `hours` | Horario semanal: `[{ weekday, opens, closes }]`, `weekday` 0 = domingo, horas `HH:MM` |
 | `special_hours` | Horarios especiales de ayer a siete días: `[{ date, closed, opens, closes }]` |
+| `price_level` | Nivel de precio de 1 ($) a 4 ($$$$), o null si no lo cargó (#12) |
+| `lunch` | El almuerzo de hoy en Colombia, `{ date, description, price }` (descripción en el idioma pedido, precio en pesos), o null (#12, [ADR 0028](adr/0028-busqueda-y-filtros-del-inicio.md)) |
 
 - **Idioma**: `?lang=es` o `?lang=en` (sin parámetro, español; otro valor, 422). No mira la cookie ni `Accept-Language`: una URL es una sola respuesta.
 - **Caché**: `Cache-Control: public, max-age=60` y `ETag`; con `If-None-Match` al día, 304. El service worker no la guarda (ver «Qué se guarda y cómo»).
 - **Límite**: 60 peticiones por minuto por IP; después, 429 con `Retry-After`. Los errores salen como JSON.
-- **Consultas**: cuatro, haya los restaurantes que haya (restaurantes con si tienen zonas, categorías, horario semanal y horarios especiales de la ventana).
+- **Consultas**: cinco, haya los restaurantes que haya (restaurantes con si tienen zonas, categorías, horario semanal, horarios especiales de la ventana y el almuerzo de hoy).
 - **CSP**: la página lo pide con `fetch` al mismo origen (`connect-src 'self'`), sin cambios en la política. El ícono de los marcadores se dibuja desde una URL `data:`, que `img-src` ya admite.
 
 En la página del inicio (`resources/js/pages/Home.vue`):
@@ -126,7 +128,22 @@ El panel del inicio muestra una de tres cosas: la bienvenida con el estado de la
 
 Los marcadores son figuras del lienzo, no elementos de la página: no reciben foco ni los lee un lector de pantalla. Por eso la lista no es un extra: es la forma accesible de llegar a cada restaurante.
 
-Los seeders dejan ocho restaurantes ficticios en puntos fijos del casco urbano (uno oculto): el mapa abre siempre con los mismos siete, cinco sueltos y un grupo de dos. Llevan un menú fijo de tres secciones, en español e inglés, con un plato agotado hoy en algunos y opciones de ejemplo (proteína obligatoria, adiciones, ingredientes para quitar y la preparación del jugo, rotuladas «(prueba)»); uno tiene horarios especiales cerca de la fecha y otro cierra hoy; uno queda sin menú y otro sin horario, para ver la ficha cuando faltan.
+#### Búsqueda, filtros, «Almuerzos de hoy» y «Sugerime algo»
+
+Decidido en el [ADR 0028](adr/0028-busqueda-y-filtros-del-inicio.md). Todo pasa en el dispositivo, sobre los restaurantes que ya trajo el GeoJSON: buscar no hace peticiones.
+
+| Pieza | Dónde | Qué hace |
+| --- | --- | --- |
+| Filtros en la dirección | `resources/js/restaurants/filterParams.ts` | `q`, `open=1`, `delivery=1`, `price=1..4` y `category=slug`; lo que no se entiende se ignora. Nunca la ubicación |
+| Buscar, filtrar, sortear | `resources/js/restaurants/finder.ts` | Funciones puras: búsqueda sin tildes ni mayúsculas por nombre y categoría, filtros (abierto ahora con `openStatus`, domicilio, «hasta» un nivel de precio, categoría), los almuerzos de hoy y uno al azar entre los abiertos (el azar se inyecta) |
+| Filtrar, sugerir y anunciar | `resources/js/restaurants/useFinder.ts` | Lo que comparten la lista, la bienvenida y la capa: un solo reloj, los que cumplen los filtros, «Sugerime algo» (sin repetir el último), la categoría que ninguno tiene se descarta, y la región de estado (medio segundo después de dejar de teclear) |
+| Buscador y filtros | `resources/js/components/RestaurantFilters.vue`, en la lista | Un `<input type="search">` con su etiqueta y los filtros en un `<details>`, con «Quitar filtros» |
+| Almuerzos de hoy | `resources/js/components/TodaysLunches.vue`, en la lista | Los de los restaurantes que cumplen los filtros, del más barato al más caro, con precio y enlace a la ficha |
+| Bienvenida | `resources/js/components/WelcomeActions.vue` | «Sugerime algo», «Almuerzos de hoy (N)» y, con filtros, cuántos los cumplen y «Quitar filtros» |
+
+`Home.vue` guarda los filtros (los lee de la dirección cuando baja `finder.ts`, con la lista) y se los pasa a la lista y a la capa del mapa, que filtran cada una: el mapa dibuja solo los que los cumplen, más el elegido. Cada cambio vuelve a la dirección con `router.replace`, en el dispositivo y 300 ms después de dejar de teclear. La lista anuncia en una región de estado cuántos quedan («2 de 7 restaurantes»), medio segundo después de dejar de teclear, o que ninguno cumple, con «Quitar filtros»; un filtro saca filas sin reordenar las que quedan. Todo esto baja con la lista, fuera del arranque.
+
+Los seeders dejan ocho restaurantes ficticios en puntos fijos del casco urbano (uno oculto): el mapa abre siempre con los mismos siete, cinco sueltos y un grupo de dos. Llevan un menú fijo de tres secciones, en español e inglés, con un plato agotado hoy en algunos y opciones de ejemplo (proteína obligatoria, adiciones, ingredientes para quitar y la preparación del jugo, rotuladas «(prueba)»); uno tiene horarios especiales cerca de la fecha y otro cierra hoy; uno queda sin menú y otro sin horario, para ver la ficha cuando faltan. `DailyMenuSeeder` publica el almuerzo de hoy en todos los ficticios menos uno; como es de un día, en desarrollo se vuelve a correr solo con `php artisan db:seed --class=DailyMenuSeeder`.
 
 **«Abierto ahora» no viene del servidor**: lo calcula el dispositivo con esos horarios y la hora de Colombia (`resources/js/restaurants/openStatus.ts`, la única implementación). Así la respuesta guardada no envejece: el horario cambia poco y el estado se recalcula cada medio minuto con la página abierta. Las reglas: una franja pertenece al día en que empieza y, si cierra antes de lo que abre, termina al día siguiente; un horario especial reemplaza al semanal en su fecha (cerrado, o con otras franjas) sin tocar la madrugada que viene de la víspera; a la hora de cierre ya cerró; sin horarios cargados, «Horario sin confirmar». `statusText.ts` lo pone en palabras («Cerrado · abre mañana a las 11:00 a. m.») en el idioma de la interfaz.
 

@@ -2,6 +2,7 @@ import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Restaurant } from '@/restaurants/api';
+import { NO_FILTERS } from '@/restaurants/filterParams';
 import type * as FakeInertia from '@/testing/inertia';
 import { EL_GUADUAL, LA_CEIBA, restaurant } from '@/testing/restaurants';
 
@@ -217,5 +218,114 @@ describe('RestaurantList', () => {
 
             expect(wrapper.findAll('li [data-sample]')).toHaveLength(1);
         });
+    });
+});
+
+describe('búsqueda y filtros (#12)', () => {
+    const FONDA = restaurant({ slug: 'prueba-fonda', name: 'Fonda de Prueba (ficticio)', delivery: true });
+
+    it('un filtro saca filas sin reordenar las que quedan', async () => {
+        const { wrapper, items } = await mountList('es', [EL_GUADUAL, LA_CEIBA, FONDA]);
+        const before = items().map((item) => item.attributes('data-slug'));
+
+        await wrapper.setProps({ filters: { ...NO_FILTERS, delivery: true } });
+
+        expect(items().map((item) => item.attributes('data-slug'))).toEqual(before.filter((slug) => slug !== 'prueba-el-guadual'));
+        expect(wrapper.get('[data-count]').text()).toBe('2 de 3 restaurantes');
+    });
+
+    it('al escribir emite los filtros nuevos; no filtra por su cuenta', async () => {
+        const { wrapper, items } = await mountList();
+
+        await wrapper.get('input[data-search]').setValue('ceiba');
+
+        expect(wrapper.emitted('update:filters')).toEqual([[{ ...NO_FILTERS, query: 'ceiba' }]]);
+        expect(items()).toHaveLength(2);
+    });
+
+    it('las categorías para elegir salen de todos, sin repetir', async () => {
+        const { wrapper } = await mountList();
+
+        expect(wrapper.findAll('select[data-filter="category"] option').map((option) => option.text())).toEqual([
+            'Todos',
+            'Asados',
+            'Comida típica',
+            'Comidas rápidas',
+        ]);
+    });
+
+    it('«Sugerime algo» emite uno de los abiertos que cumplen los filtros; si no hay, lo dice', async () => {
+        const { wrapper } = await mountList('es', [EL_GUADUAL, LA_CEIBA]);
+
+        await wrapper.get('button[data-suggest]').trigger('click');
+        expect(wrapper.emitted('select')).toEqual([['prueba-la-ceiba']]);
+
+        await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'guadual' } });
+        await wrapper.get('button[data-suggest]').trigger('click');
+        expect(wrapper.emitted('select')).toHaveLength(1);
+        expect(wrapper.get('[data-count]').text()).toBe('Ahora no hay ningún restaurante abierto con estos filtros.');
+    });
+
+    it('una categoría que ninguno tiene (un enlace viejo) se descarta: no deja la lista vacía sin poder sacarla', async () => {
+        const { wrapper, items } = await mountList();
+
+        await wrapper.setProps({ filters: { ...NO_FILTERS, delivery: true, category: 'no-existe' } });
+
+        expect(wrapper.emitted('update:filters')).toEqual([[{ ...NO_FILTERS, delivery: true }]]);
+
+        // Con una que alguno tiene, no emite nada.
+        await wrapper.setProps({ filters: { ...NO_FILTERS, category: 'asados' } });
+
+        expect(wrapper.emitted('update:filters')).toHaveLength(1);
+        expect(items()).toHaveLength(1);
+    });
+
+    it('cada nivel de precio dice con palabras cuánto es, no solo con signos', async () => {
+        const options = async (locale: 'es' | 'en') =>
+            (await mountList(locale)).wrapper.findAll('select[data-filter="price"] option').map((option) => option.text());
+
+        expect(await options('es')).toEqual(['Cualquiera', 'Hasta $ · económico', 'Hasta $$ · moderado', 'Hasta $$$ · costoso', 'Hasta $$$$ · muy costoso']);
+        expect(await options('en')).toEqual(['Any', 'Up to $ · inexpensive', 'Up to $$ · moderate', 'Up to $$$ · expensive', 'Up to $$$$ · very expensive']);
+    });
+
+    it('«Sugerime algo» no repite el último sugerido si hay otro abierto', async () => {
+        const otro = restaurant({ slug: 'prueba-otro-abierto', name: 'Otro Abierto (ficticio)' });
+        const { wrapper } = await mountList('es', [LA_CEIBA, otro]);
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+
+        await wrapper.get('button[data-suggest]').trigger('click');
+        await wrapper.get('button[data-suggest]').trigger('click');
+        await wrapper.get('button[data-suggest]').trigger('click');
+
+        expect(wrapper.emitted('select')).toEqual([['prueba-la-ceiba'], ['prueba-otro-abierto'], ['prueba-la-ceiba']]);
+    });
+
+    it('Escape en el buscador con texto lo vacía, y no deja que cierre la lista', async () => {
+        const { wrapper } = await mountList();
+        await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'ceiba' } });
+
+        const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+        wrapper.get('input[data-search]').element.dispatchEvent(escape);
+
+        expect(escape.defaultPrevented).toBe(true);
+        expect(wrapper.emitted('update:filters')).toEqual([[NO_FILTERS]]);
+
+        // Vacío, Escape sigue de largo: quien muestra la lista la cierra.
+        await wrapper.setProps({ filters: NO_FILTERS });
+        const again = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+        wrapper.get('input[data-search]').element.dispatchEvent(again);
+
+        expect(again.defaultPrevented).toBe(false);
+        expect(wrapper.emitted('update:filters')).toHaveLength(1);
+    });
+
+    it('en inglés', async () => {
+        const { wrapper } = await mountList('en', [EL_GUADUAL, LA_CEIBA]);
+        await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'nothing' } });
+
+        expect(wrapper.get('label').text()).toBe('Search by name or type of food');
+        expect(wrapper.get('[data-count]').text()).toBe('No restaurant matches your search. Try fewer filters.');
+        expect(wrapper.get('button[data-empty-clear]').text()).toBe('Clear filters');
+        expect(wrapper.get('details[data-lunches] summary').text()).toBe("Today's lunches");
     });
 });

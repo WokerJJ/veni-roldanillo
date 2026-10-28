@@ -31,3 +31,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0025](0025-panel-del-dueno-con-filament.md) | Panel del dueño con Filament: login propio sin registro, tenancy por restaurante y un perfil de CSP solo para `/panel` | Aceptada |
 | [0026](0026-reclamar-y-retirar-una-ficha-sin-cuenta.md) | Reclamar y pedir el retiro de una ficha sin cuenta: contacto mínimo en la solicitud, revisión a mano y borrado a los seis meses | Aceptada |
 | [0027](0027-panel-de-administracion.md) | Panel de administración: segundo panel de Filament en `/admin`, acciones de dominio en transacción y control optimista al guardar | Aceptada |
+| [0028](0028-busqueda-y-filtros-del-inicio.md) | Búsqueda y filtros del inicio: en el dispositivo, en la dirección y con los almuerzos de hoy en la capa del mapa | Aceptada |

@@ -7,6 +7,8 @@ import { iconImage } from '@/map/iconImage';
 import type { MapGeoJson, MapHit, MapImage, MapLayerGroup } from '@/map/layers';
 import { useMap, useMapLayers } from '@/map/useMapLayers';
 import type { Restaurant } from '@/restaurants/api';
+import type { Filters } from '@/restaurants/filterParams';
+import { useFinder } from '@/restaurants/useFinder';
 import { color } from '@brand/tokens.json';
 
 /**
@@ -162,6 +164,8 @@ export default defineComponent({
         restaurants: { type: Array as PropType<readonly Restaurant[]>, required: true },
         /** Slug del restaurante elegido, o null. */
         selected: { type: String as PropType<string | null>, default: null },
+        /** La búsqueda y los filtros del inicio (#12): solo se dibujan los que los cumplen, y el elegido. */
+        filters: { type: Object as PropType<Readonly<Filters> | null>, default: null },
     },
     emits: {
         /** Alguien tocó un restaurante en el mapa. */
@@ -219,13 +223,23 @@ export default defineComponent({
             alive = false;
         });
 
+        // El elegido se dibuja aunque no cumpla los filtros: el resumen abierto es de él.
         const selectedRestaurant = computed(() => props.restaurants.find(({ slug }) => slug === props.selected) ?? null);
+        // Los mismos que la lista, con el mismo reloj (useFinder.ts). La hora solo cuenta con «abierto ahora» (ADR 0017).
+        const { matching: shown } = useFinder({ restaurants: () => props.restaurants, filters: () => props.filters });
+        /** Lo último que se le dio a la fuente: con «abierto ahora», cada medio minuto se recalcula, y casi siempre da lo mismo. */
+        let drawn: string | null = null;
 
-        // Los que se agrupan: todos menos el elegido, que va aparte.
+        // Los que se agrupan: los que cumplen los filtros menos el elegido, que va aparte.
         watch(
-            () => props.restaurants.filter((restaurant) => restaurant !== selectedRestaurant.value),
+            () => shown.value.filter((restaurant) => restaurant !== selectedRestaurant.value),
             (others) => {
-                layers.setData(SOURCE, featuresOf(others));
+                const key = others.map(({ slug, coordinates }) => `${slug}@${coordinates.join(',')}`).join(' ');
+
+                if (key !== drawn) {
+                    drawn = key;
+                    layers.setData(SOURCE, featuresOf(others));
+                }
             },
             { immediate: true },
         );

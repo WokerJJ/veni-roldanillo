@@ -29,9 +29,14 @@ import { openStatusText } from '@/restaurants/statusText';
  * solo botón de cerrar, que oculta la ruta (`closeDirections`) y devuelve el
  * resumen entero. El mapa queda a la vista.
  */
-const { restaurant, directionsOpen } = defineProps<{ restaurant: Restaurant; directionsOpen?: boolean }>();
+const { restaurant, directionsOpen, routeOffline } = defineProps<{
+    restaurant: Restaurant;
+    directionsOpen?: boolean;
+    /** «Cómo llegar» no bajó (sin señal): en lugar del slot, el aviso y cómo pedirlo de nuevo. */
+    routeOffline?: boolean;
+}>();
 
-defineEmits<{ close: []; directions: []; closeDirections: [] }>();
+defineEmits<{ close: []; directions: []; closeDirections: []; retryDirections: [] }>();
 
 const { t, locale } = useI18n();
 const now = useNow();
@@ -70,7 +75,20 @@ onMounted(() => {
             </button>
         </div>
 
-        <slot v-if="directionsOpen" />
+        <template v-if="directionsOpen">
+            <slot />
+            <!-- Si «Cómo llegar» no bajó (sin señal), queda cómo pedirlo de nuevo. Vivía en Home.vue: aquí baja con el resumen y no con el arranque (#12). -->
+            <div v-if="routeOffline" class="mt-1" data-directions>
+                <p role="status" class="text-sm" data-route-status>{{ t('directions.offline') }}</p>
+                <button
+                    type="button"
+                    class="mt-2 inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
+                    @click="$emit('retryDirections')"
+                >
+                    {{ t('directions.retry') }}
+                </button>
+            </div>
+        </template>
 
         <template v-else>
             <p v-if="restaurant.fictitious" class="mb-2"><SampleDataBadge /></p>

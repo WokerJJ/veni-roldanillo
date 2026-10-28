@@ -12,9 +12,15 @@ use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Menú del día («Almuerzos de hoy»).
+ *
+ * Larastan tipa la columna date de la migración como texto e ignora el cast;
+ * el @property fija el tipo (como en SpecialHour).
+ *
+ * @property Carbon $served_on
  */
 #[Fillable(['served_on', 'description_es', 'description_en', 'price'])]
 #[UsePolicy(RestaurantContentPolicy::class)]

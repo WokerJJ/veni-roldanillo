@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\DailyMenu;
 use App\Models\Restaurant;
+use App\Support\BusinessDay;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -18,7 +19,7 @@ class DailyMenuFactory extends Factory
     {
         return [
             'restaurant_id' => Restaurant::factory(),
-            'served_on' => now()->toDateString(),
+            'served_on' => BusinessDay::today()->toDateString(),
             'description_es' => 'Almuerzo de prueba: sopa, arroz, principio, proteína y jugo.',
             'description_en' => 'Test lunch: soup, rice, side, protein and juice.',
             'price' => fake()->numberBetween(24, 40) * 500,
