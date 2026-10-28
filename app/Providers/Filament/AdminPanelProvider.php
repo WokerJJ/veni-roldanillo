@@ -3,7 +3,9 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Admin\Auth\Login;
+use App\Filament\Auth\EditProfile;
 use App\Filament\Owner\Support\InitialsAvatarProvider;
+use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\UseContentSecurityPolicyProfile;
 use Filament\Http\Middleware\Authenticate;
@@ -44,7 +46,8 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login(Login::class)
-            ->profile(isSimple: false)
+            ->profile(EditProfile::class, isSimple: false)
+            ->databaseTransactions()
             ->brandName('Vení · Administración')
             ->favicon(asset('favicon.ico'))
             ->defaultAvatarProvider(InitialsAvatarProvider::class)
@@ -73,6 +76,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
+                RequirePasswordChange::class,
             ]);
     }
 }

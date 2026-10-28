@@ -2,9 +2,11 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Auth\EditProfile;
 use App\Filament\Owner\Auth\Login;
 use App\Filament\Owner\Pages\EditRestaurantProfile;
 use App\Filament\Owner\Support\InitialsAvatarProvider;
+use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\UseContentSecurityPolicyProfile;
 use App\Models\Restaurant;
@@ -90,7 +92,8 @@ class OwnerPanelProvider extends PanelProvider
             ->id('owner')
             ->path('panel')
             ->login(Login::class)
-            ->profile()
+            ->profile(EditProfile::class)
+            ->databaseTransactions()
             ->brandName('Vení · Panel')
             ->favicon(asset('favicon.ico'))
             ->defaultAvatarProvider(InitialsAvatarProvider::class)
@@ -122,6 +125,7 @@ class OwnerPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
+                RequirePasswordChange::class,
             ]);
     }
 }

@@ -12,7 +12,6 @@ use App\Models\RestaurantClaim;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
-use Filament\Notifications\Notification;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -22,10 +21,10 @@ use Illuminate\Support\Facades\Gate;
 /**
  * Reclamos «¿Es tu negocio?» (#20, ADR 0026 y 0027). Administración verifica
  * a mano (escribe o llama al celular) y aprueba: ApproveRestaurantClaim crea
- * o vincula la cuenta, la hace dueña y reclama la ficha en una transacción.
- * La contraseña temporal de una cuenta nueva se muestra una sola vez, en el
- * aviso que sigue a la aprobación; no se manda por correo (no hay correo
- * saliente) ni se puede volver a ver.
+ * la cuenta, la hace dueña y reclama la ficha en una transacción (si el
+ * correo ya tiene cuenta, se rechaza). La contraseña temporal se muestra una
+ * sola vez, en el modal que sigue a la aprobación (ListRestaurantClaims); no
+ * se manda por correo (no hay correo saliente) ni se puede volver a ver.
  */
 class RestaurantClaimResource extends AdminResource
 {
@@ -94,31 +93,14 @@ class RestaurantClaimResource extends AdminResource
                             ->maxLength(254)
                             ->required(),
                     ])
-                    ->action(fn (RestaurantClaim $record, array $data) => self::runAction(
-                        fn (User $admin) => self::approve($record, $admin, is_string($data['email'] ?? null) ? $data['email'] : ''),
+                    ->action(fn (RestaurantClaim $record, array $data, ListRestaurantClaims $livewire) => self::runAction(
+                        fn (User $admin) => $livewire->showTemporaryPassword(app(ApproveRestaurantClaim::class)->handle(
+                            $record, $admin, is_string($data['email'] ?? null) ? $data['email'] : '',
+                        )),
                         __('panel.admin.claims.approved'),
                     )),
                 self::rejectAction(),
             ]);
-    }
-
-    private static function approve(RestaurantClaim $claim, User $admin, string $email): void
-    {
-        $result = app(ApproveRestaurantClaim::class)->handle($claim, $admin, $email);
-
-        if ($result->temporaryPassword === null) {
-            Notification::make()->info()->title(__('panel.admin.claims.linked', ['email' => $result->owner->email]))->persistent()->send();
-
-            return;
-        }
-
-        // Una sola vez: no queda en la base (solo su hash) ni se vuelve a mostrar.
-        Notification::make()
-            ->warning()
-            ->title(__('panel.admin.claims.password_title', ['email' => $result->owner->email]))
-            ->body(__('panel.admin.claims.password_body', ['password' => $result->temporaryPassword]))
-            ->persistent()
-            ->send();
     }
 
     public static function getPages(): array

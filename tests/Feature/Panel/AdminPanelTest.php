@@ -11,6 +11,7 @@ use App\Filament\Admin\Resources\Removals\Pages\ListRemovalRequests;
 use App\Filament\Admin\Resources\Restaurants\Pages\CreateRestaurant;
 use App\Filament\Admin\Resources\Restaurants\Pages\EditRestaurant;
 use App\Filament\Admin\Resources\Restaurants\Pages\ListRestaurants;
+use App\Models\Category;
 use App\Models\Restaurant;
 use App\Models\RestaurantClaim;
 use App\Models\RestaurantRemovalRequest;
@@ -18,9 +19,9 @@ use App\Models\RestaurantSource;
 use App\Models\User;
 use Database\Seeders\PanelAdminSeeder;
 use Filament\Facades\Filament;
-use Filament\Notifications\Livewire\Notifications;
 use Filament\Notifications\NotificationMailbox;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
@@ -181,6 +182,49 @@ describe('fichas', function () {
             ->and($restaurant->fresh()?->plan->value)->toBe('free');
     });
 
+    test('en un conflicto tampoco se guardan las categorías', function () {
+        actAsAdmin();
+        $restaurant = Restaurant::factory()->claimed()->create();
+        panelMember($restaurant);
+        $category = Category::factory()->create();
+
+        $page = Livewire::test(EditRestaurant::class, ['record' => $restaurant->getRouteKey()]);
+        $this->travel(2)->seconds();
+        Restaurant::query()->whereKey($restaurant->id)->update(['name' => 'Desde el panel del dueño', 'updated_at' => now()]);
+
+        $page->fillForm(['categories' => [$category->id]])->call('save')->assertNotified(__('panel.errors.conflict'));
+
+        expect($restaurant->categories()->count())->toBe(0);
+    });
+
+    test('editar: una ficha con dueño no queda «sin reclamar» y una retirada no se publica', function () {
+        actAsAdmin();
+        $owned = Restaurant::factory()->claimed()->create(['verified_at' => now()]);
+        panelMember($owned);
+        $removed = Restaurant::factory()->hidden()->create(['verified_at' => now()]);
+        RestaurantRemovalRequest::factory()->approved()->create(['restaurant_id' => $removed->id]);
+
+        Livewire::test(EditRestaurant::class, ['record' => $owned->getRouteKey()])
+            ->fillForm(['status' => 'unclaimed'])->call('save')->assertHasFormErrors(['status']);
+        Livewire::test(EditRestaurant::class, ['record' => $removed->getRouteKey()])
+            ->fillForm(['status' => 'unclaimed', 'verified' => true])->call('save')->assertHasFormErrors(['status']);
+
+        expect($owned->fresh()?->status)->toBe(RestaurantStatus::Claimed)
+            ->and($removed->fresh()?->status)->toBe(RestaurantStatus::Hidden);
+    });
+
+    test('«mostrar» una ficha retirada avisa y la deja oculta', function () {
+        actAsAdmin();
+        $restaurant = Restaurant::factory()->hidden()->create(['verified_at' => now()]);
+        RestaurantRemovalRequest::factory()->approved()->create(['restaurant_id' => $restaurant->id]);
+
+        Livewire::test(ListRestaurants::class)
+            ->callTableAction('show', $restaurant, data: ['verified_now' => true])
+            ->assertNotified(__('panel.admin.refused.removed'));
+
+        expect($restaurant->fresh()?->status)->toBe(RestaurantStatus::Hidden);
+    });
+
     test('editar desde administración no mueve «Actualizada por el restaurante»', function () {
         actAsAdmin();
         $restaurant = Restaurant::factory()->claimed()->create(['updated_by_owner_at' => null]);
@@ -218,6 +262,19 @@ describe('borradores de OpenStreetMap', function () {
         Livewire::test(ListOsmDrafts::class)
             ->assertCanSeeTableRecords([$draft])
             ->assertCanNotSeeTableRecords([$dismissed, $own]);
+    });
+
+    test('la lista no muestra fichas ya verificadas ni retiradas, aunque vengan de OpenStreetMap', function () {
+        actAsAdmin();
+        $draft = osmDraft();
+        $verified = osmDraft();
+        $verified->forceFill(['verified_at' => now()])->save();
+        $removed = osmDraft();
+        RestaurantRemovalRequest::factory()->approved()->create(['restaurant_id' => $removed->id]);
+
+        Livewire::test(ListOsmDrafts::class)
+            ->assertCanSeeTableRecords([$draft])
+            ->assertCanNotSeeTableRecords([$verified, $removed]);
     });
 
     test('publicar exige confirmar la verificación y deja la ficha sin reclamar y verificada', function () {
@@ -259,30 +316,36 @@ describe('reclamos y retiros', function () {
             ->assertSee($pending->contact_phone);
     });
 
-    test('aprobar un reclamo crea la cuenta y muestra la contraseña temporal una vez; el dueño entra a su panel', function () {
+    test('aprobar un reclamo crea la cuenta y muestra la contraseña temporal una vez, en un modal que se limpia al cerrar', function () {
         actAsAdmin();
         $restaurant = Restaurant::factory()->create();
         $claim = RestaurantClaim::factory()->withoutAccount()->create(['restaurant_id' => $restaurant->id]);
 
-        Livewire::test(ListRestaurantClaims::class)
+        $page = Livewire::test(ListRestaurantClaims::class)
             ->callTableAction('approve', $claim, data: ['email' => 'nueva.duena@example.test'])
-            ->assertHasNoTableActionErrors();
+            ->assertActionMounted('temporaryPassword');
 
+        $password = (string) $page->get('temporaryPassword');
         $owner = User::query()->where('email', 'nueva.duena@example.test')->sole();
-        // Los avisos que vería administración (como Notification::assertNotified).
+
+        expect($password)->toHaveLength(ApproveRestaurantClaim::TEMPORARY_PASSWORD_LENGTH)
+            ->and(Hash::check($password, $owner->password))->toBeTrue()
+            ->and($claim->fresh()?->status)->toBe(ClaimStatus::Approved)
+            ->and($restaurant->fresh()?->status)->toBe(RestaurantStatus::Claimed);
+        $page->assertMountedActionModalSee($password);
+
+        // Ni en los avisos (Filament los guarda en la caché) ni en la sesión.
         app(NotificationMailbox::class)->flush();
-        $inbox = new Notifications;
-        $inbox->mount();
-        $inbox->pullNotificationsFromSession();
-        $body = (string) $inbox->notifications->map(fn ($notification) => $notification->getBody())->filter()->first();
-        preg_match('/: ([A-Za-z0-9]{16})\./', $body, $match);
+        $store = Cache::store(config('filament.cache_store'))->getStore();
+        $cached = serialize((fn () => $this->storage)->call($store));
+        expect($cached)->not->toContain($password)
+            ->and(serialize(session()->all()))->not->toContain($password);
 
-        expect($claim->fresh()?->status)->toBe(ClaimStatus::Approved)
-            ->and($restaurant->fresh()?->status)->toBe(RestaurantStatus::Claimed)
-            ->and($match[1] ?? null)->not->toBeNull()
-            ->and(Hash::check($match[1], $owner->password))->toBeTrue();
+        $page->call('unmountAction');
+        expect($page->get('temporaryPassword'))->toBeNull();
 
-        $this->actingAs($owner)->get("/panel/{$restaurant->slug}")->assertOk();
+        // Con la contraseña temporal, el dueño entra primero a cambiarla.
+        $this->actingAs($owner)->get("/panel/{$restaurant->slug}")->assertRedirect('/panel/profile');
     });
 
     test('el dueño nuevo abre su perfil para cambiar la contraseña temporal, sin pasar antes por su restaurante', function () {

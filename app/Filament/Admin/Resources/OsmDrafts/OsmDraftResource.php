@@ -4,6 +4,7 @@ namespace App\Filament\Admin\Resources\OsmDrafts;
 
 use App\Actions\Restaurants\DismissOsmDraft;
 use App\Actions\Restaurants\PublishRestaurant;
+use App\Enums\ClaimStatus;
 use App\Enums\RestaurantStatus;
 use App\Filament\Admin\AdminResource;
 use App\Filament\Admin\Resources\OsmDrafts\Pages\ListOsmDrafts;
@@ -21,7 +22,8 @@ use Illuminate\Support\Facades\Gate;
 
 /**
  * Borradores de OpenStreetMap (ADR 0021 y 0027): las fichas importadas que
- * siguen ocultas y no se descartaron, para el recorrido. Publicar
+ * siguen ocultas, sin verificar, sin descartar y sin un retiro aprobado,
+ * para el recorrido. Publicar
  * (PublishRestaurant, exige confirmar que se verificó en la calle) y
  * descartar (DismissOsmDraft) son las mismas acciones de `veni:publish` y
  * `veni:osm-dismiss`. Corregir el nombre, el punto o la categoría antes de
@@ -60,9 +62,14 @@ class OsmDraftResource extends AdminResource
 
         return $query
             ->where('status', RestaurantStatus::Hidden->value)
+            // Una ficha verificada ya se publicó alguna vez (y se ocultó después),
+            // y una con retiro aprobado la pidió quitar su negocio: no son borradores.
+            ->whereNull('verified_at')
             ->whereHas('source', fn (Builder $source) => $source
                 ->where('source', RestaurantSource::OPENSTREETMAP)
                 ->whereNull('dismissed_at'))
+            ->whereDoesntHave('removalRequests', fn (Builder $removal) => $removal
+                ->where('status', ClaimStatus::Approved->value))
             ->with(['source', 'categories']);
     }
 
