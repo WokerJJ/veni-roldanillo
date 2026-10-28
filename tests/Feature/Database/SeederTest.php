@@ -231,3 +231,11 @@ test('las cuentas de ejemplo del panel: dos dueños de restaurantes distintos y 
         // Y desde #19, la cuenta de administración de PanelAdminSeeder.
         ->and(User::query()->where('email', 'like', 'panel.%')->where('role', 'admin')->count())->toBe(1);
 });
+
+test('ninguna ficha sembrada queda «sin reclamar» con dueño ni «reclamada» sin dueño', function () {
+    $this->seed(DatabaseSeeder::class);
+    $this->seed(PanelOwnerSeeder::class);
+
+    expect(Restaurant::query()->where('status', RestaurantStatus::Unclaimed->value)->whereHas('owners')->count())->toBe(0)
+        ->and(Restaurant::query()->where('status', RestaurantStatus::Claimed->value)->whereDoesntHave('owners')->count())->toBe(0);
+});
