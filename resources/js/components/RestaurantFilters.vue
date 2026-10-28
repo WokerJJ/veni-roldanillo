@@ -30,13 +30,33 @@ const searchId = useId();
 /** Los filtros puestos además del buscador: se cuentan en el rótulo de «Filtros». */
 const activeCount = computed(() => [filters.open, filters.delivery, filters.price !== null, filters.category !== null].filter(Boolean).length);
 
-const PRICE_LEVELS = [1, 2, 3, 4];
+/** Cada nivel, con la palabra que lo dice: «$$» solo no le dice nada a un lector de pantalla. */
+const PRICE_LEVELS = [
+    { level: 1, name: 'finder.price_level_1' },
+    { level: 2, name: 'finder.price_level_2' },
+    { level: 3, name: 'finder.price_level_3' },
+    { level: 4, name: 'finder.price_level_4' },
+] as const;
 
 // Fijo al montar: si siguiera a los filtros, sacar el último cerraría el panel bajo el dedo.
 const startOpen = activeCount.value > 0;
 
 function update(changes: Partial<Filters>): void {
     emit('update:filters', { ...filters, ...changes });
+}
+
+/**
+ * Escape con texto vacía el buscador y se queda ahí: sin el preventDefault,
+ * el inicio cerraría la lista (Home.vue). Vacío, sigue de largo y la cierra.
+ * Sin el modificador `.esc`: su ayudante de Vue viajaría con el arranque.
+ */
+function onKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Escape' || filters.query === '') {
+        return;
+    }
+
+    event.preventDefault();
+    update({ query: '' });
 }
 
 function onSelect(event: Event, key: 'price' | 'category'): void {
@@ -61,6 +81,7 @@ function onSelect(event: Event, key: 'price' | 'category'): void {
                 class="min-h-touch w-full rounded-full border border-line bg-canvas pr-4 pl-10"
                 data-search
                 @input="update({ query: ($event.target as HTMLInputElement).value })"
+                @keydown="onKeydown"
             >
         </div>
 
@@ -83,8 +104,8 @@ function onSelect(event: Event, key: 'price' | 'category'): void {
                     {{ t('finder.price') }}
                     <select class="min-h-touch rounded-veni-sm border border-line bg-canvas px-2" data-filter="price" @change="onSelect($event, 'price')">
                         <option value="" :selected="filters.price === null">{{ t('finder.price_any') }}</option>
-                        <option v-for="level in PRICE_LEVELS" :key="level" :value="level" :selected="filters.price === level">
-                            {{ t('finder.price_up_to', { level: '$'.repeat(level) }) }}
+                        <option v-for="{ level, name } in PRICE_LEVELS" :key="level" :value="level" :selected="filters.price === level">
+                            {{ t('finder.price_up_to', { level: '$'.repeat(level), name: t(name) }) }}
                         </option>
                     </select>
                 </label>
