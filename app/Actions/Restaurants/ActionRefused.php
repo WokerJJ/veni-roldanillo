@@ -32,6 +32,14 @@ final class ActionRefused extends RuntimeException
 
     public const MISSING_NOTE = 'missing_note';
 
+    public const ACCOUNT_EXISTS = 'account_exists';
+
+    public const REMOVED = 'removed';
+
+    public const CLAIMED_NEEDS_OWNER = 'claimed_needs_owner';
+
+    public const UNCLAIMED_HAS_OWNER = 'unclaimed_has_owner';
+
     public function __construct(public readonly string $reason)
     {
         parent::__construct("Acción rechazada: {$reason}.");

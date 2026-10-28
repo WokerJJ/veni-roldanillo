@@ -14,6 +14,8 @@ use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 uses(RefreshDatabase::class);
@@ -40,11 +42,11 @@ test('aprobar un reclamo crea la cuenta, la hace dueña, reclama la ficha y marc
     $restaurant = $claim->restaurant()->firstOrFail();
     $owner = $result->owner;
 
-    expect($result->createdAccount())->toBeTrue()
-        ->and($result->temporaryPassword)->toHaveLength(ApproveRestaurantClaim::TEMPORARY_PASSWORD_LENGTH)
+    expect($result->temporaryPassword)->toHaveLength(ApproveRestaurantClaim::TEMPORARY_PASSWORD_LENGTH)
         ->and(Hash::check((string) $result->temporaryPassword, $owner->password))->toBeTrue()
         ->and($owner->email)->toBe('dueno@example.test')
         ->and($owner->isAdmin())->toBeFalse()
+        ->and($owner->must_change_password)->toBeTrue()
         ->and($claim->status)->toBe(ClaimStatus::Approved)
         ->and($claim->user_id)->toBe($owner->id)
         ->and($claim->reviewed_by)->toBe($admin->id)
@@ -53,20 +55,52 @@ test('aprobar un reclamo crea la cuenta, la hace dueña, reclama la ficha y marc
         ->and($owner->fresh()?->ownsRestaurant($restaurant))->toBeTrue();
 });
 
-test('si ya hay una cuenta con ese correo, se vincula sin contraseña nueva; si era empleada, sube a dueña', function () {
+test('si ya hay una cuenta con ese correo, no se vincula en silencio: se rechaza y no cambia nada', function () {
     $admin = User::factory()->admin()->create();
     $restaurant = Restaurant::factory()->create();
     $existing = User::factory()->create(['email' => 'dueno@example.test']);
     $restaurant->members()->attach($existing, ['role' => RestaurantRole::Staff->value]);
-    $hash = $existing->password;
+    $claim = pendingClaim($restaurant);
 
-    $result = app(ApproveRestaurantClaim::class)->handle(pendingClaim($restaurant), $admin, 'DUENO@example.test');
+    expect(fn () => app(ApproveRestaurantClaim::class)->handle($claim, $admin, 'DUENO@example.test'))
+        ->toThrow(ActionRefused::class, ActionRefused::ACCOUNT_EXISTS);
 
-    expect($result->createdAccount())->toBeFalse()
-        ->and($result->owner->id)->toBe($existing->id)
-        ->and($existing->fresh()?->password)->toBe($hash)
+    expect($claim->fresh()?->status)->toBe(ClaimStatus::Pending)
+        ->and($claim->fresh()?->user_id)->toBeNull()
         ->and(User::query()->count())->toBe(2)
-        ->and($existing->fresh()?->ownsRestaurant($restaurant))->toBeTrue();
+        ->and($existing->fresh()?->ownsRestaurant($restaurant))->toBeFalse()
+        ->and($restaurant->fresh()?->status)->toBe(RestaurantStatus::Unclaimed);
+});
+
+test('si otra aprobación crea la misma cuenta a la vez, esta termina rechazada y no en un error', function () {
+    // Otra conexión, como otra petición: lo que escribe queda confirmado.
+    config(['database.connections.race' => config('database.connections.'.config('database.default'))]);
+    $admin = User::factory()->admin()->create();
+    $claim = pendingClaim();
+    $raced = false;
+
+    User::creating(function (User $user) use (&$raced): void {
+        if ($raced || $user->email !== 'dueno@example.test') {
+            return;
+        }
+
+        $raced = true;
+        DB::connection('race')->table('users')->insert([
+            'name' => 'La otra aprobación', 'email' => 'dueno@example.test', 'password' => 'x', 'role' => 'user',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    });
+
+    try {
+        expect(fn () => app(ApproveRestaurantClaim::class)->handle($claim, $admin, 'dueno@example.test'))
+            ->toThrow(ActionRefused::class, ActionRefused::ACCOUNT_EXISTS);
+
+        expect($raced)->toBeTrue()
+            ->and($claim->fresh()?->status)->toBe(ClaimStatus::Pending);
+    } finally {
+        DB::connection('race')->table('users')->where('email', 'dueno@example.test')->delete();
+        DB::purge('race');
+    }
 });
 
 test('aprobar no deja nada a medias si la ficha ya no se puede reclamar', function (Closure $state) {
@@ -146,11 +180,27 @@ test('rechazar sin motivo no se puede, ni con solo espacios', function (string $
     expect($removal->fresh()?->status)->toBe(ClaimStatus::Pending);
 })->with(['vacío' => '', 'espacios' => "  \u{00A0}\t", 'largo' => str_repeat('a', 501)]);
 
-test('la base exige el motivo en una rechazada', function () {
-    $claim = pendingClaim();
+test('la base exige el motivo en una rechazada, en las dos tablas', function (Closure $make, string $constraint) {
+    $request = $make();
 
-    expect(fn () => $claim->forceFill(['status' => ClaimStatus::Rejected, 'reviewed_at' => now()])->save())
-        ->toThrow(QueryException::class, 'restaurant_claims_rejection_has_note');
+    expect(fn () => $request->forceFill(['status' => ClaimStatus::Rejected, 'reviewed_at' => now()])->save())
+        ->toThrow(QueryException::class, $constraint);
+})->with([
+    'reclamo' => [fn () => pendingClaim(), 'restaurant_claims_rejection_has_note'],
+    'retiro' => [fn () => RestaurantRemovalRequest::factory()->create(), 'restaurant_removal_requests_rejection_has_note'],
+]);
+
+test('anonimizar una aprobada vieja también vacía el motivo de la revisión', function () {
+    $old = ['review_note' => 'Confirmado con Nombre Privado', 'reviewed_at' => now()->subMonths(7)];
+    $claim = RestaurantClaim::factory()->approved()->create($old);
+    $removal = RestaurantRemovalRequest::factory()->approved()->create($old);
+
+    Artisan::call('model:prune', ['--model' => [RestaurantClaim::class, RestaurantRemovalRequest::class]]);
+
+    expect($claim->fresh()?->review_note)->toBeNull()
+        ->and($claim->fresh()?->status)->toBe(ClaimStatus::Approved)
+        ->and($removal->fresh()?->review_note)->toBeNull()
+        ->and($removal->fresh()?->status)->toBe(ClaimStatus::Approved);
 });
 
 test('aprobar un retiro oculta la ficha y marca la revisión, en una transacción', function () {

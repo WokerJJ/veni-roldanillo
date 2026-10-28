@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\DB;
  * actualiza, no lo lista para verificar ni lo marca como ido. La usan
  * `veni:osm-dismiss` y el panel de administración. Descartar dos veces no
  * cambia la fecha del primero.
+ *
+ * No autoriza: lo hace quien la llama (la Policy en el panel; la consola es
+ * de quien opera el servidor).
  */
 final class DismissOsmDraft
 {

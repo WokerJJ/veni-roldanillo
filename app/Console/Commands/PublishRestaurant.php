@@ -40,6 +40,7 @@ class PublishRestaurant extends Command
             $this->components->error(match ($refused->reason) {
                 ActionRefused::ALREADY_PUBLISHED => "{$slug} ya está publicada.",
                 ActionRefused::DISMISSED => "{$slug} está descartada (veni:osm-dismiss): no se publica.",
+                ActionRefused::REMOVED => "{$slug} tiene un pedido de retiro aprobado: no se vuelve a publicar.",
                 default => "{$slug} no está verificada. Si la verificaste en la calle, corré `php artisan veni:publish {$slug} --verified`: queda registrado con la fecha de ahora.",
             });
 
