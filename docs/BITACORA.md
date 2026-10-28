@@ -120,3 +120,16 @@ Diario de avance del proyecto: qué se hizo en cada bloque, decisiones y aprendi
 - **Dependencias:** happy-dom, fast-uri y serialize-javascript por avisos de seguridad.
 - Aprendizajes: las pruebas de dibujo del mapa que no corrían en local encontraron en CI un punto de prueba que había dejado de estar «lejos»: cambiar el criterio de cercanía cambió qué es lejos. Y un número en otro idioma («50,000») es una entrada válida, no un error de la persona.
 - Sigue el panel del dueño (#18).
+
+## 2026-10-28 · Parte 11 · Los paneles del dueño y de administración
+
+- **Versión 0.4.0 publicada**, con el menú con opciones, el carrito y el pedido por WhatsApp.
+- **#18 integrado:** panel del dueño con Filament en `/panel/{slug}` (ADR 0025). Cada dueño edita solo su restaurante: ficha, menú con «agotado hoy», opciones, promociones, horarios, horarios especiales y zonas de domicilio, y publica un aviso de demora que vence solo. La ficha pública muestra «Actualizada por el restaurante el…».
+- Filament necesita `'unsafe-eval'` en la CSP. Quedó solo en `/panel` y `/admin`, con una prueba de que el sitio público no cambia; la revisión no encontró forma de inyectar código en el panel.
+- La revisión del #18 encontró que borrar una sección con platos daba 500, que un grupo podía pedir más opciones de las que tenía y que la lista de platos hacía unas 500 consultas con 30 platos. Ahora avisa, valida y hace un número fijo de consultas.
+- **#20 integrado:** «¿Es tu negocio? Reclámalo» y «Pedir que retiren esta ficha» (ADR 0026), sin cuenta. Se revisan a mano: nada cambia solo. Límites por IP y por celular, campo trampa sin CAPTCHA de terceros, aviso de privacidad con responsable y versión aceptada, y las solicitudes resueltas se borran o anonimizan a los seis meses.
+- La revisión del #20 encontró que un texto con codificación inválida daba 500 y dejaba el nombre y el celular en el registro de errores, y que el tope por celular dejaba bloquear al dueño real. Las dos quedaron corregidas.
+- **#19 integrado:** panel de administración en `/admin` (ADR 0027). Alta y estado de las fichas, borradores de OpenStreetMap, y aprobar o rechazar reclamos y retiros. Aprobar un reclamo crea la cuenta del dueño con una contraseña temporal que se muestra una vez y hay que cambiar al entrar. Si dos personas guardan la misma ficha a la vez, se avisa en vez de pisar.
+- La revisión del #19 encontró dos fallas altas y las reprodujo: un dueño podía quedarse con la ficha de otro poniendo el mismo correo con otras mayúsculas, y una ficha retirada volvía a aparecer como borrador y se podía republicar. Ahora no se vincula una cuenta existente, el correo es único sin importar las mayúsculas y una ficha retirada no se republica.
+- Aprendizajes: una prueba que pasa en local puede fallar en CI por lo que hay en el disco (los assets compilados). Y las pruebas en el navegador siguen encontrando lo que las unitarias no ven: un 500 en el perfil del panel solo apareció al recorrerlo.
+- Siguen el inicio con búsqueda y filtros (#12) y la búsqueda por plato (#17).
