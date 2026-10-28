@@ -2,6 +2,7 @@ import { enableAutoUnmount, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Restaurant } from '@/restaurants/api';
+import { NO_FILTERS } from '@/restaurants/filterParams';
 import type * as FakeInertia from '@/testing/inertia';
 import { EL_GUADUAL, LA_CEIBA, restaurant } from '@/testing/restaurants';
 
@@ -217,5 +218,61 @@ describe('RestaurantList', () => {
 
             expect(wrapper.findAll('li [data-sample]')).toHaveLength(1);
         });
+    });
+});
+
+describe('búsqueda y filtros (#12)', () => {
+    const FONDA = restaurant({ slug: 'prueba-fonda', name: 'Fonda de Prueba (ficticio)', delivery: true });
+
+    it('un filtro saca filas sin reordenar las que quedan', async () => {
+        const { wrapper, items } = await mountList('es', [EL_GUADUAL, LA_CEIBA, FONDA]);
+        const before = items().map((item) => item.attributes('data-slug'));
+
+        await wrapper.setProps({ filters: { ...NO_FILTERS, delivery: true } });
+
+        expect(items().map((item) => item.attributes('data-slug'))).toEqual(before.filter((slug) => slug !== 'prueba-el-guadual'));
+        expect(wrapper.get('[data-count]').text()).toBe('2 de 3 restaurantes');
+    });
+
+    it('al escribir emite los filtros nuevos; no filtra por su cuenta', async () => {
+        const { wrapper, items } = await mountList();
+
+        await wrapper.get('input[data-search]').setValue('ceiba');
+
+        expect(wrapper.emitted('update:filters')).toEqual([[{ ...NO_FILTERS, query: 'ceiba' }]]);
+        expect(items()).toHaveLength(2);
+    });
+
+    it('las categorías para elegir salen de todos, sin repetir', async () => {
+        const { wrapper } = await mountList();
+
+        expect(wrapper.findAll('select[data-filter="category"] option').map((option) => option.text())).toEqual([
+            'Todos',
+            'Asados',
+            'Comida típica',
+            'Comidas rápidas',
+        ]);
+    });
+
+    it('«Sugerime algo» emite uno de los abiertos que cumplen los filtros; si no hay, lo dice', async () => {
+        const { wrapper } = await mountList('es', [EL_GUADUAL, LA_CEIBA]);
+
+        await wrapper.get('button[data-suggest]').trigger('click');
+        expect(wrapper.emitted('select')).toEqual([['prueba-la-ceiba']]);
+
+        await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'guadual' } });
+        await wrapper.get('button[data-suggest]').trigger('click');
+        expect(wrapper.emitted('select')).toHaveLength(1);
+        expect(wrapper.get('[data-count]').text()).toBe('Ahora no hay ningún restaurante abierto con estos filtros.');
+    });
+
+    it('en inglés', async () => {
+        const { wrapper } = await mountList('en', [EL_GUADUAL, LA_CEIBA]);
+        await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'nothing' } });
+
+        expect(wrapper.get('label').text()).toBe('Search by name or type of food');
+        expect(wrapper.get('[data-count]').text()).toBe('No restaurant matches your search. Try fewer filters.');
+        expect(wrapper.get('button[data-empty-clear]').text()).toBe('Clear filters');
+        expect(wrapper.get('details[data-lunches] summary').text()).toBe("Today's lunches");
     });
 });
