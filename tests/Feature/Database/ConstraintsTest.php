@@ -252,6 +252,29 @@ test('un restaurante tiene un solo almuerzo del día por fecha', function () {
     DailyMenu::factory()->for($menu->restaurant)->create(['served_on' => $menu->served_on]);
 })->throws(QueryException::class, 'daily_menus_restaurant_id_served_on_unique');
 
+test('el almuerzo del día tiene una descripción en español de 1 a 300 caracteres', function (string $description) {
+    DailyMenu::factory()->create(['description_es' => $description]);
+})->with([
+    'vacía' => '',
+    'solo espacios' => '   ',
+    'de 301' => str_repeat('a', 301),
+])->throws(QueryException::class, 'daily_menus_description_es_length');
+
+test('la descripción en inglés del almuerzo del día, si está, no pasa de 300 caracteres', function () {
+    DailyMenu::factory()->create(['description_en' => str_repeat('a', 301)]);
+})->throws(QueryException::class, 'daily_menus_description_en_length');
+
+test('el precio del almuerzo del día va de 1 a 1.000.000 pesos', function (int $price) {
+    DailyMenu::factory()->create(['price' => $price]);
+})->with([0, 1_000_001])->throws(QueryException::class, 'daily_menus_price_range');
+
+test('el almuerzo del día acepta los topes: 300 caracteres y 1.000.000 pesos', function () {
+    $menu = DailyMenu::factory()->create(['description_es' => str_repeat('a', 300), 'description_en' => str_repeat('b', 300), 'price' => 1_000_000]);
+    DailyMenu::factory()->create(['description_en' => null, 'price' => 1]);
+
+    expect($menu->exists)->toBeTrue()->and(DailyMenu::query()->count())->toBe(2);
+});
+
 test('el slug de una categoría solo admite minúsculas, dígitos y guiones', function () {
     Category::factory()->create(['slug' => 'Comida Típica']);
 })->throws(QueryException::class, 'categories_slug_format');
