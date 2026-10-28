@@ -63,3 +63,14 @@ test('los intentos contra una cuenta no frenan a otra', function () {
     attemptPanelLogin('duena@example.test', 'clave-de-prueba');
     $this->assertAuthenticatedAs($owner);
 });
+
+test('el correo se escribe con mayúsculas y entra igual', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+    $owner = panelMember($restaurant);
+    $owner->forceFill(['email' => 'duena@example.test', 'password' => 'clave-de-prueba'])->save();
+    Filament::setCurrentPanel(Filament::getPanel('owner'));
+
+    attemptPanelLogin('Duena@Example.TEST', 'clave-de-prueba');
+
+    $this->assertAuthenticatedAs($owner);
+});

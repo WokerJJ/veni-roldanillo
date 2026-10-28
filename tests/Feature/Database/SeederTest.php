@@ -94,9 +94,14 @@ test('los números de WhatsApp sembrados no pueden pertenecer a nadie', function
 test('el seeder arma menús con opciones obligatorias y adiciones', function () {
     $this->seed(DatabaseSeeder::class);
 
-    $dish = Dish::query()->whereHas('optionGroups', fn ($q) => $q->where('required', true))->firstOrFail();
+    // Hay platos con solo un grupo obligatorio («Preparación»): se busca uno
+    // con las dos cosas, sin depender del orden en que la base devuelve filas.
+    $withBoth = Dish::query()
+        ->whereHas('optionGroups', fn ($q) => $q->where('required', true))
+        ->whereHas('optionGroups', fn ($q) => $q->where('required', false))
+        ->exists();
 
-    expect($dish->optionGroups()->where('required', false)->exists())->toBeTrue()
+    expect($withBoth)->toBeTrue()
         // La dueña de UserSeeder y, desde #18, el otro dueño de PanelOwnerSeeder.
         ->and(Restaurant::query()->whereHas('owners')->count())->toBe(2);
 });

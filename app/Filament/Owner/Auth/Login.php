@@ -71,6 +71,25 @@ class Login extends FilamentLogin
         return $response;
     }
 
+    /**
+     * Las cuentas guardan el correo en minúsculas y sin espacios (User), así
+     * que el que se escribe al entrar se normaliza igual: «Dueno@…» también
+     * entra.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function getCredentialsFromFormData(array $data): array
+    {
+        $credentials = parent::getCredentialsFromFormData($data);
+
+        if (is_string($credentials['email'] ?? null)) {
+            $credentials['email'] = mb_strtolower(trim($credentials['email']));
+        }
+
+        return $credentials;
+    }
+
     /** La clave del límite por cuenta e IP de este panel. */
     public static function accountRateLimitKey(string $email, ?string $ip): string
     {
