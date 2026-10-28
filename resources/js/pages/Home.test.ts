@@ -943,6 +943,16 @@ describe('Home', () => {
         it('al filtrar en la lista, cambian la capa, el contador y la dirección, sin la ubicación', async () => {
             const { layer, panel, replace, wrapper } = await mountWithList();
 
+            // «¿Dónde estoy?» encendido: la lista ya tiene las distancias (con metros fáciles de reconocer).
+            // (El primero con ese nombre es el envoltorio del inicio, sin instancia: se avisa desde el de verdad.)
+            const distances = wrapper.findAllComponents({ name: 'RestaurantDistances' }).find((component) => component.vm !== undefined);
+            (distances?.vm as unknown as { $emit: (event: 'distances', meters: Record<string, number>) => void }).$emit('distances', {
+                'prueba-la-ceiba': 4730,
+                'prueba-el-guadual': 8160,
+            });
+            await flushPromises();
+            expect(panel().findAll('[data-distance]').map((distance) => distance.text().replaceAll(' ', ' '))).toEqual(['4,7 km', '8,2 km']);
+
             await panel().get('input[data-search]').setValue('guadual');
             await flushPromises();
 
@@ -953,6 +963,64 @@ describe('Home', () => {
             await settleUrl();
 
             expect(replace).toHaveBeenLastCalledWith(expect.objectContaining({ url: '/?q=guadual' }));
+            // Ninguna dirección lleva coordenadas ni metros: solo lo que se eligió en la pantalla.
+            for (const [{ url }] of replace.mock.calls as [{ url: string }][]) {
+                expect([...new URL(url, 'https://veni.test').searchParams.keys()]).toEqual(['q']);
+                expect(url).not.toMatch(/4730|8160|4\.4\d|76\.1/);
+            }
+        });
+
+        it('tres teclas seguidas dan un solo cambio de la dirección', async () => {
+            const { panel, replace } = await mountWithList();
+            replace.mockClear();
+
+            for (const query of ['g', 'gu', 'gua']) {
+                await panel().get('input[data-search]').setValue(query);
+            }
+
+            await settleUrl();
+
+            expect(replace).toHaveBeenCalledOnce();
+            expect(replace).toHaveBeenCalledWith(expect.objectContaining({ url: '/?q=gua' }));
+        });
+
+        it('abrir con una búsqueda en la dirección no la vuelve a escribir: «%20» y «+» son el mismo espacio', async () => {
+            const { replace, layer } = await mountHome({ url: '/?q=la%20ceiba', answer: [LA_CEIBA, EL_GUADUAL] });
+            await settleUrl();
+
+            expect(layer().props('filters')).toEqual({ ...NO_FILTERS, query: 'la ceiba' });
+            expect(replace).not.toHaveBeenCalled();
+        });
+
+        it('una categoría de la dirección que ningún restaurante tiene se descarta: la lista y el mapa los muestran todos', async () => {
+            const { layer, listButton, items, replace } = await mountHome({ url: '/?category=no-existe&delivery=1', answer: [LA_CEIBA, EL_GUADUAL] });
+            await settleUrl();
+
+            expect(layer().props('filters')).toEqual({ ...NO_FILTERS, delivery: true });
+            expect(replace).toHaveBeenLastCalledWith(expect.objectContaining({ url: '/?delivery=1' }));
+
+            await listButton()?.trigger('click');
+            await flushPromises();
+
+            expect(items().map((item) => item.attributes('data-slug'))).toEqual(['prueba-la-ceiba']);
+        });
+
+        it('Escape en el buscador con texto lo vacía y deja la lista abierta; vacío, la cierra', async () => {
+            const { panel, items, layer } = await mountWithList();
+            const search = panel().get('input[data-search]');
+            await search.setValue('guadual');
+            await flushPromises();
+
+            search.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+            await flushPromises();
+
+            expect(layer().props('filters')).toEqual(NO_FILTERS);
+            expect(items()).toHaveLength(2);
+
+            panel().get('input[data-search]').element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+            await flushPromises();
+
+            expect(items()).toHaveLength(0);
         });
 
         it('sin resultados lo dice, y «Quitar filtros» los saca de la lista, del mapa y de la dirección', async () => {

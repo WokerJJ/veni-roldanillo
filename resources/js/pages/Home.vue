@@ -341,7 +341,7 @@ function onKeydown(event: KeyboardEvent): void {
 function syncUrl(slug: string | null): void {
     const url = withSelected(page.url, slug);
 
-    if (url !== page.url) {
+    if (!(finder.value?.sameAddress(url, page.url) ?? url === page.url)) {
         router.replace({ url, preserveScroll: true, preserveState: true });
     }
 }
