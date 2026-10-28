@@ -123,13 +123,6 @@ class RestaurantSeeder extends FictitiousSeeder
 
             $this->seedSpecialHours($restaurant, $i);
 
-            $restaurant->dailyMenus()->create([
-                'served_on' => now()->toDateString(),
-                'description_es' => 'Almuerzo de prueba: sopa, arroz, principio, proteína y jugo.',
-                'description_en' => 'Test lunch: soup, rice, side, protein and juice.',
-                'price' => fake()->numberBetween(24, 36) * 500,
-            ]);
-
             if ($restaurant->delivery && $neighborhoods->isNotEmpty()) {
                 foreach (range(0, min(3, $neighborhoods->count()) - 1) as $k) {
                     $restaurant->deliveryZones()->create([

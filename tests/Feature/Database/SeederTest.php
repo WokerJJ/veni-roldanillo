@@ -2,6 +2,7 @@
 
 use App\Enums\OptionGroupKind;
 use App\Enums\RestaurantStatus;
+use App\Models\DailyMenu;
 use App\Models\DeliveryZone;
 use App\Models\Dish;
 use App\Models\Neighborhood;
@@ -9,7 +10,9 @@ use App\Models\Option;
 use App\Models\OptionGroup;
 use App\Models\Restaurant;
 use App\Models\User;
+use App\Support\BusinessDay;
 use Database\Seeders\CategorySeeder;
+use Database\Seeders\DailyMenuSeeder;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\NeighborhoodSeeder;
 use Database\Seeders\PanelOwnerSeeder;
@@ -178,6 +181,7 @@ test('ningún seeder corre fuera de local o testing', function (string $seeder, 
     NeighborhoodSeeder::class,
     UserSeeder::class,
     RestaurantSeeder::class,
+    DailyMenuSeeder::class,
 ])->with(['production', 'staging'])->throws(RuntimeException::class, 'ficticios');
 
 test('el seeder no deja usuarios sin marcar como ficticios', function () {
@@ -243,4 +247,22 @@ test('ninguna ficha sembrada queda «sin reclamar» con dueño ni «reclamada» 
 
     expect(Restaurant::query()->where('status', RestaurantStatus::Unclaimed->value)->whereHas('owners')->count())->toBe(0)
         ->and(Restaurant::query()->where('status', RestaurantStatus::Claimed->value)->whereDoesntHave('owners')->count())->toBe(0);
+});
+
+test('el seeder deja almuerzos de hoy en Colombia en los ficticios, menos en uno, y volver a sembrarlos no duplica', function () {
+    $this->seed(DatabaseSeeder::class);
+    $real = Restaurant::factory()->create(['is_fictitious' => false]);
+    $this->seed(DailyMenuSeeder::class);
+
+    $today = BusinessDay::today()->toDateString();
+    $lunches = DailyMenu::query()->with('restaurant:id,slug,is_fictitious')->get();
+
+    expect($lunches)->not->toBeEmpty()
+        ->and($lunches->every(fn (DailyMenu $menu): bool => $menu->served_on->toDateString() === $today))->toBeTrue()
+        ->and($lunches->every(fn (DailyMenu $menu): bool => $menu->restaurant->is_fictitious))->toBeTrue()
+        ->and($lunches->every(fn (DailyMenu $menu): bool => str_contains($menu->description_es, 'de prueba')))->toBeTrue()
+        ->and($lunches->pluck('restaurant.slug'))->not->toContain('prueba-la-chiminea')
+        ->and($lunches->pluck('restaurant_id'))->not->toContain($real->id)
+        ->and($lunches->pluck('restaurant_id')->duplicates())->toBeEmpty()
+        ->and($lunches)->toHaveCount(Restaurant::query()->where('is_fictitious', true)->count() - 1);
 });
