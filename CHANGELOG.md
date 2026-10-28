@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.4.0...v0.5.0) (2026-10-28)
+
+
+### Funcionalidades
+
+* «¿Es tu negocio? Reclámalo» y retiro de ficha ([#20](https://github.com/WokerJJ/veni-roldanillo/issues/20)) ([#98](https://github.com/WokerJJ/veni-roldanillo/issues/98)) ([693cc9d](https://github.com/WokerJJ/veni-roldanillo/commit/693cc9da1ba67e4b1181e49d562b617a0b4f40aa))
+* panel de administración ([#19](https://github.com/WokerJJ/veni-roldanillo/issues/19)) ([#99](https://github.com/WokerJJ/veni-roldanillo/issues/99)) ([cedd411](https://github.com/WokerJJ/veni-roldanillo/commit/cedd4118767a77849dafca20a0c82918e25919eb))
+* panel del dueño en Filament ([#18](https://github.com/WokerJJ/veni-roldanillo/issues/18)) ([#96](https://github.com/WokerJJ/veni-roldanillo/issues/96)) ([3941e5e](https://github.com/WokerJJ/veni-roldanillo/commit/3941e5e9ed3a0e4ab1f8401411b5cecbc076ec3b))
+
+
+### Correcciones
+
+* el login de los paneles acepta el correo con mayúsculas ([#100](https://github.com/WokerJJ/veni-roldanillo/issues/100)) ([ccb4580](https://github.com/WokerJJ/veni-roldanillo/commit/ccb45806fb7f75f871f32f38e464ee131f070478))
+
 ## [0.4.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.3.0...v0.4.0) (2026-10-25)
 
 
