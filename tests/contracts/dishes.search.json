@@ -1,0 +1,29 @@
+{
+    "results": [
+        {
+            "restaurant": {
+                "slug": "prueba-la-ceiba",
+                "name": "Restaurante de Prueba La Ceiba (ficticio)",
+                "url": "/restaurants/prueba-la-ceiba"
+            },
+            "dishes": [
+                {
+                    "id": 1,
+                    "name": "Sancocho de prueba",
+                    "description": "Sopa de ejemplo con arroz y aguacate.",
+                    "section": "Platos fuertes (prueba)",
+                    "price": 19500,
+                    "available": true
+                },
+                {
+                    "id": 2,
+                    "name": "Sancocho trifásico de prueba",
+                    "description": null,
+                    "section": "Platos fuertes (prueba)",
+                    "price": 24000,
+                    "available": false
+                }
+            ]
+        }
+    ]
+}

@@ -2,6 +2,7 @@
 
 use App\Enums\RestaurantRole;
 use App\Enums\RestaurantStatus;
+use App\Jobs\SyncRestaurantDishes;
 use App\Models\Category;
 use App\Models\Restaurant;
 use App\Models\RestaurantSource;
@@ -13,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
 /*
@@ -613,4 +615,17 @@ test('veni:osm-export entrega en GeoJSON la parte de la base que viene de OpenSt
     expect((string) Storage::disk('local')->get($files[0]))
         ->not->toContain('Propia de Prueba')
         ->not->toContain('300');
+});
+
+test('cambiar la categoría de un borrador pasa por Restaurant::syncCategories y no toca el índice de búsqueda', function () {
+    fakeOverpass();
+    $this->artisan('veni:osm-import')->assertSuccessful();
+    Queue::fake();
+
+    fakeOverpass(withTags(overpassResponse(), 9000000005, ['amenity' => 'restaurant']));
+    $this->artisan('veni:osm-import')->assertSuccessful();
+
+    expect(restaurantFromOsm(9000000005)->categories->pluck('slug')->all())->toBe(['restaurantes']);
+    // Un borrador está oculto: sus platos no están en el índice.
+    Queue::assertNotPushed(SyncRestaurantDishes::class);
 });

@@ -6,10 +6,10 @@
 | --- | --- |
 | `migrate` | Misma imagen, una sola ejecución en cada `docker compose up`: `php artisan migrate --force`. `app`, `worker` y `scheduler` esperan a que termine bien |
 | `app` | Laravel 13 en FrankenPHP: Octane en producción; modo clásico en desarrollo (ADR 0012). HTTP en `127.0.0.1:8000`, detrás del proxy que termina TLS (ADR 0014) |
-| `worker` | Misma imagen: `php artisan queue:work` (notificaciones, imágenes, traducciones) |
+| `worker` | Misma imagen: `php artisan queue:work` (el índice de búsqueda de platos; después, notificaciones, imágenes, traducciones) |
 | `scheduler` | Misma imagen: `php artisan schedule:work` (backups, recordatorios, reactivar "agotado hoy") |
 | `db` | `postgis/postgis` (PostgreSQL + PostGIS), sin puerto expuesto a internet |
-| `meilisearch` | Búsqueda de restaurantes y platos |
+| `meilisearch` | Búsqueda por plato (ADR 0029). Solo lo usa el servidor: sin puerto hacia internet, y el navegador pregunta a `/api/dishes/search` |
 | `reverb` (opcional) | Tiempo real para avisos de demora, driver de base de datos |
 
 Una sola imagen para migrate, app, worker y scheduler. Dockerfile multi-etapa: Node (Vite) → Composer (sin dev) → runtime mínimo, sin el `.env` y con un usuario sin root.
@@ -144,6 +144,18 @@ Decidido en el [ADR 0028](adr/0028-busqueda-y-filtros-del-inicio.md). Todo pasa 
 `Home.vue` guarda los filtros (los lee de la dirección cuando baja `finder.ts`, con la lista) y se los pasa a la lista y a la capa del mapa, que filtran cada una: el mapa dibuja solo los que los cumplen, más el elegido. Cada cambio vuelve a la dirección con `router.replace`, en el dispositivo y 300 ms después de dejar de teclear. La lista anuncia en una región de estado cuántos quedan («2 de 7 restaurantes»), medio segundo después de dejar de teclear, o que ninguno cumple, con «Quitar filtros»; un filtro saca filas sin reordenar las que quedan. Todo esto baja con la lista, fuera del arranque.
 
 Los seeders dejan ocho restaurantes ficticios en puntos fijos del casco urbano (uno oculto): el mapa abre siempre con los mismos siete, cinco sueltos y un grupo de dos. Llevan un menú fijo de tres secciones, en español e inglés, con un plato agotado hoy en algunos y opciones de ejemplo (proteína obligatoria, adiciones, ingredientes para quitar y la preparación del jugo, rotuladas «(prueba)»); uno tiene horarios especiales cerca de la fecha y otro cierra hoy; uno queda sin menú y otro sin horario, para ver la ficha cuando faltan. `DailyMenuSeeder` publica el almuerzo de hoy en todos los ficticios menos uno; como es de un día, en desarrollo se vuelve a correr solo con `php artisan db:seed --class=DailyMenuSeeder`.
+
+#### Búsqueda por plato
+
+Decidido en el [ADR 0029](adr/0029-busqueda-por-plato-con-meilisearch.md). Los platos no viajan al dispositivo: los busca Meilisearch, detrás de nuestro endpoint.
+
+| Pieza | Dónde | Qué hace |
+| --- | --- | --- |
+| Índice `dishes` | `App\Models\Dish` (`Searchable`), `config/scout.php` | Solo platos de restaurantes publicados: nombre, descripción y sección en ES/EN, precio, `available`, restaurante (slug y nombre) y categorías. Ajustes: buscables por importancia, filtrables (`restaurant_slug`, `category_slugs`, `price`, `available`), errores de tipeo y sinónimos |
+| Crear y resincronizar | `php artisan veni:search-sync` | Ajusta el índice, sube los platos publicados y saca los que sobran; repetible, nunca lo vacía |
+| Al día | Scout (el plato), `App\Observers\SearchIndexObserver` y `App\Jobs\SyncRestaurantDishes` (la ficha y las secciones) | Por la cola y después del *commit*: estado, nombre o slug de la ficha, categorías (administración) y nombre de una sección reindexan los platos del restaurante; borrar la ficha los saca |
+| Endpoint | `GET /api/dishes/search?q=…&lang=es\|en` (`DishSearchController`, `DishSearch`) | 3 a 60 caracteres; agrupado por restaurante (hasta 10, con 5 platos cada uno), confirmado en la base; caché pública de un minuto; 60 por minuto por IP; 503 sin caché si Meilisearch no responde |
+| «Platos» en la lista | `resources/js/components/DishResults.vue`, `restaurants/dishSearch.ts`, `restaurants/useDishSearch.ts` | Con tres letras o más, arriba de la lista: espera 350 ms, cancela la petición vieja, muestra solo los restaurantes que cumplen los demás filtros, y carga, sin resultados, sin señal y error. Baja con la lista |
 
 **«Abierto ahora» no viene del servidor**: lo calcula el dispositivo con esos horarios y la hora de Colombia (`resources/js/restaurants/openStatus.ts`, la única implementación). Así la respuesta guardada no envejece: el horario cambia poco y el estado se recalcula cada medio minuto con la página abierta. Las reglas: una franja pertenece al día en que empieza y, si cierra antes de lo que abre, termina al día siguiente; un horario especial reemplaza al semanal en su fecha (cerrado, o con otras franjas) sin tocar la madrugada que viene de la víspera; a la hora de cierre ya cerró; sin horarios cargados, «Horario sin confirmar». `statusText.ts` lo pone en palabras («Cerrado · abre mañana a las 11:00 a. m.») en el idioma de la interfaz.
 

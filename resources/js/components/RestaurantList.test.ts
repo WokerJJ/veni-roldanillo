@@ -234,6 +234,27 @@ describe('búsqueda y filtros (#12)', () => {
         expect(wrapper.get('[data-count]').text()).toBe('2 de 3 restaurantes');
     });
 
+    it('a «Platos» le pasa los restaurantes que cumplen los demás filtros, o ninguno si no hay más que la búsqueda', async () => {
+        const { default: DishResults } = await import('./DishResults.vue');
+        const { wrapper } = await mountList('es', [EL_GUADUAL, LA_CEIBA, FONDA]);
+
+        await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'sancocho' } });
+        expect(wrapper.getComponent(DishResults).props('allowed')).toBeNull();
+
+        await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'sancocho', delivery: true } });
+        expect([...(wrapper.getComponent(DishResults).props('allowed') ?? [])].sort()).toEqual(['prueba-fonda', 'prueba-la-ceiba']);
+    });
+
+    it('«Ver sin filtros» desde «Platos» deja solo la búsqueda', async () => {
+        const { default: DishResults } = await import('./DishResults.vue');
+        const { wrapper } = await mountList();
+        await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'sancocho', open: true } });
+
+        wrapper.getComponent(DishResults).vm.$emit('clearFilters');
+
+        expect(wrapper.emitted('update:filters')).toEqual([[{ ...NO_FILTERS, query: 'sancocho' }]]);
+    });
+
     it('al escribir emite los filtros nuevos; no filtra por su cuenta', async () => {
         const { wrapper, items } = await mountList();
 
@@ -323,7 +344,7 @@ describe('búsqueda y filtros (#12)', () => {
         const { wrapper } = await mountList('en', [EL_GUADUAL, LA_CEIBA]);
         await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'nothing' } });
 
-        expect(wrapper.get('label').text()).toBe('Search by name or type of food');
+        expect(wrapper.get('label').text()).toBe('Search by name, dish or type of food');
         expect(wrapper.get('[data-count]').text()).toBe('No restaurant matches your search. Try fewer filters.');
         expect(wrapper.get('button[data-empty-clear]').text()).toBe('Clear filters');
         expect(wrapper.get('details[data-lunches] summary').text()).toBe("Today's lunches");

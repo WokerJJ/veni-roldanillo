@@ -151,6 +151,14 @@ main() {
 
     env_replaced=0
     echo "La app responde /up."
+
+    # El índice de la búsqueda por plato (ADR 0029) igual a la base: lo crea
+    # la primera vez y aplica los ajustes de una versión nueva. En segundo
+    # plano (-d): el despliegue no lo espera ni falla por él; si no arranca,
+    # lo repite el scheduler a las 04:00.
+    if ! docker compose exec -d app php artisan veni:search-sync < /dev/null; then
+        echo "Aviso: no arrancó veni:search-sync; lo corre el scheduler a las 04:00." >&2
+    fi
     docker compose ps --all < /dev/null
 }
 

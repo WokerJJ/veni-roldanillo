@@ -2,18 +2,24 @@
 
 namespace App\Models;
 
+use App\Enums\RestaurantStatus;
 use App\Models\Concerns\HasTranslatableFields;
 use App\Models\Concerns\OwnedByRestaurant;
 use App\Models\Contracts\BelongsToRestaurant;
 use App\Policies\RestaurantContentPolicy;
+use App\Support\BusinessDay;
 use Database\Factories\DishFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Laravel\Scout\Searchable;
 
 /**
  * Plato con precio en pesos enteros.
@@ -34,6 +40,11 @@ use Illuminate\Support\Carbon;
  * hasta esa fecha, incluida. Larastan tipa la columna date de la migración
  * como texto e ignora el cast; el @property fija el tipo.
  *
+ * Búsqueda por plato (#17, ADR 0029): Scout lo indexa en Meilisearch al
+ * guardarlo o borrarlo, solo si está en la carta y su restaurante está
+ * publicado. Lo que cambia el restaurante (estado, nombre, categorías) o la
+ * sección (nombre) lo reindexa SyncRestaurantDishes.
+ *
  * @property Carbon|null $sold_out_until
  */
 #[Fillable([
@@ -44,7 +55,7 @@ use Illuminate\Support\Carbon;
 class Dish extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<DishFactory> */
-    use HasFactory, HasTranslatableFields, OwnedByRestaurant;
+    use HasFactory, HasTranslatableFields, OwnedByRestaurant, Searchable;
 
     /** @var array<string, mixed> */
     protected $attributes = [
@@ -74,6 +85,160 @@ class Dish extends Model implements BelongsToRestaurant
     public function translatableFields(): array
     {
         return ['name', 'description'];
+    }
+
+    /**
+     * Lo que carga cada documento del índice, en una consulta por relación.
+     * Del restaurante y la sección, enteros: quedan cargados en el plato que
+     * se guardó, y otro código puede leerlos después.
+     */
+    public const SEARCH_RELATIONS = ['restaurant', 'restaurant.categories:categories.id,categories.slug,categories.name_es,categories.name_en', 'menuSection'];
+
+    /** El índice de Meilisearch, con el prefijo de SCOUT_PREFIX si hay. */
+    public function searchableAs(): string
+    {
+        $prefix = config('scout.prefix');
+
+        return (is_string($prefix) ? $prefix : '').'dishes';
+    }
+
+    /**
+     * Los campos que viajan en el documento o deciden si se indexa. Cambiar
+     * otro («agotado hoy», el orden, la foto, las etiquetas) no toca el índice.
+     */
+    private const SEARCH_FIELDS = ['name_es', 'name_en', 'description_es', 'description_en', 'menu_section_id', 'price', 'available'];
+
+    /**
+     * Solo los platos en la carta de un restaurante publicado: ni ocultos ni
+     * borradores de OSM, ni los que el dueño sacó de la carta.
+     */
+    public function shouldBeSearchable(): bool
+    {
+        return $this->available && $this->restaurant !== null && $this->restaurant->status->isPublished();
+    }
+
+    /**
+     * Al guardarlo, Scout solo encola si es nuevo o cambió algo del índice.
+     * wasRecentlyCreated sigue en true en las actualizaciones siguientes del
+     * mismo objeto; recién creado, en cambio, todavía no tiene cambios.
+     */
+    public function searchIndexShouldBeUpdated(): bool
+    {
+        return ($this->wasRecentlyCreated && $this->getChanges() === [])
+            || $this->wasChanged(self::SEARCH_FIELDS);
+    }
+
+    /**
+     * El documento del índice: lo que cualquiera ve en la ficha y nada del
+     * dueño. `available` es la columna («lo tengo en la carta»); «agotado hoy»
+     * vence solo a la medianoche, así que se mira al responder, en la base.
+     *
+     * @return array<string, mixed>
+     */
+    public function toSearchableArray(): array
+    {
+        $restaurant = $this->restaurant;
+        /** @var Collection<int, Category> $categories */
+        $categories = $restaurant === null ? new Collection : $restaurant->categories;
+
+        return [
+            'id' => $this->id,
+            'name_es' => $this->name_es,
+            'name_en' => $this->name_en,
+            'description_es' => $this->description_es,
+            'description_en' => $this->description_en,
+            'section_es' => $this->menuSection?->name_es,
+            'section_en' => $this->menuSection?->name_en,
+            'price' => $this->price,
+            'available' => $this->available,
+            'restaurant_slug' => $restaurant?->slug,
+            'restaurant_name' => $restaurant?->name,
+            'category_slugs' => $categories->pluck('slug')->values()->all(),
+            'categories' => $categories->flatMap(fn (Category $category): array => array_values(array_filter([$category->name_es, $category->name_en])))->values()->all(),
+        ];
+    }
+
+    /**
+     * Antes de armar los documentos (al guardar uno, en la cola o con
+     * scout:import), las relaciones de todos juntos.
+     *
+     * @param  Collection<int, self>  $models
+     * @return Collection<int, self>
+     */
+    public function makeSearchableUsing(Collection $models): Collection
+    {
+        return $models->loadMissing(self::SEARCH_RELATIONS);
+    }
+
+    /**
+     * scout:import: solo los que van al índice, con sus relaciones.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    protected function makeAllSearchableUsing(Builder $query): Builder
+    {
+        return $query->with(self::SEARCH_RELATIONS)->indexable();
+    }
+
+    /**
+     * Los platos de restaurantes publicados.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function ofPublishedRestaurants(Builder $query): void
+    {
+        $query->whereHas('restaurant', fn (Builder $restaurants) => $restaurants->whereIn('status', RestaurantStatus::published()));
+    }
+
+    /**
+     * Los que van al índice (lo mismo que shouldBeSearchable, en la base): en
+     * la carta y de un restaurante publicado.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function indexable(Builder $query): void
+    {
+        $query->where('available', true)->ofPublishedRestaurants();
+    }
+
+    /**
+     * Sube al índice los que tienen que estar y saca los demás, sin la cola
+     * si scout.queue está apagado. Para recorrer muchos con chunkById.
+     *
+     * @param  Collection<int, self>  $dishes
+     */
+    public static function syncWithSearch(Collection $dishes, bool $searchable): void
+    {
+        if ($dishes->isEmpty()) {
+            return;
+        }
+
+        if (! $searchable) {
+            (new self)->queueRemoveFromSearch($dishes);
+
+            return;
+        }
+
+        $indexed = $dishes->filter(fn (self $dish): bool => $dish->shouldBeSearchable());
+        $removed = $dishes->diff($indexed);
+
+        if ($indexed->isNotEmpty()) {
+            (new self)->queueMakeSearchable($indexed);
+        }
+
+        if ($removed->isNotEmpty()) {
+            (new self)->queueRemoveFromSearch($removed);
+        }
+    }
+
+    /** ¿Se puede pedir hoy? En la carta y no «agotado hoy» (ADR 0018). */
+    public function orderableToday(): bool
+    {
+        return $this->available
+            && ($this->sold_out_until === null || $this->sold_out_until->toDateString() < BusinessDay::today()->toDateString());
     }
 
     /** @return BelongsTo<Restaurant, $this> */
