@@ -255,10 +255,11 @@ Lo que sirve Caddy desde `public/` sin pasar por Laravel lleva su propia caché 
    - baja la imagen de la aplicación (`docker compose pull`) sin haber tocado nada: si no se puede bajar, el `.env` y lo que está corriendo quedan como estaban;
    - copia el `.env` a `.env.anterior` y lo reemplaza, de un solo paso, por uno con el `APP_IMAGE` nuevo;
    - `docker compose up -d`: detiene `app`, `worker` y `scheduler`, corre **`migrate`** (`php artisan migrate --force`) y, solo si termina bien, arranca los nuevos;
-   - espera a que la app responda `/up`.
+   - espera a que la app responda `/up`;
+   - lanza `veni:search-sync` en segundo plano (el índice de platos al día; ver abajo).
 5. Pide `https://veniroldanillo.co/up` desde fuera.
 
-El índice de la búsqueda por plato (ADR 0029) vive en el volumen de Meilisearch y lo mantiene al día el `worker`; un despliegue no lo toca. Hay que correr `docker compose exec app php artisan veni:search-sync` una vez al crear el servidor (crea el índice con sus ajustes y sube los platos), después de un despliegue que cambie los ajustes del índice (`config/scout.php`) y si el `worker` estuvo parado: deja el índice igual a la base, sin vaciarlo, y se puede repetir. Si Meilisearch no está, la app sigue; solo la búsqueda por plato responde 503.
+El índice de la búsqueda por plato (ADR 0029) vive en el volumen de Meilisearch y lo mantiene al día el `worker`. `deploy.sh`, cuando la app ya responde `/up`, lanza `php artisan veni:search-sync` en segundo plano (`docker compose exec -d`): crea el índice la primera vez, aplica los ajustes de `config/scout.php` y deja el índice igual a la base, sin vaciarlo; el despliegue no lo espera ni falla por él. El `scheduler` lo repite cada día a las 04:00, así que un trabajo perdido o un `worker` parado se reparan solos al día siguiente. A mano, cuando haga falta antes: `docker compose exec app php artisan veni:search-sync` (se puede repetir). Si Meilisearch no está, la app sigue; solo la búsqueda por plato responde 503.
 
 Mientras dura la migración y el arranque la app no responde: unos 8 segundos en la prueba local, sin migraciones pendientes. A cambio, la versión anterior nunca atiende con el esquema nuevo.
 
