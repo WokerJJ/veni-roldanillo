@@ -14,8 +14,8 @@ use Illuminate\Database\Eloquent\Collection;
  * sigue Scout por su cuenta (Dish usa Searchable).
  *
  * - Restaurante: su estado (publicar, ocultar, retiro), su nombre o su slug.
- *   Las categorías se guardan después de la ficha; las reindexa
- *   EditRestaurant del panel de administración.
+ *   Las categorías no disparan eventos: las reindexa
+ *   Restaurant::syncCategories.
  * - Restaurante borrado: la base borra sus platos en cascada, sin eventos,
  *   así que se sacan del índice antes.
  * - Sección renombrada: su nombre va en cada plato.
@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\Collection;
 class SearchIndexObserver
 {
     /** Los campos de la ficha que viajan en el índice o deciden si se indexa. */
-    private const RESTAURANT_FIELDS = ['status', 'name', 'slug'];
+    public const RESTAURANT_FIELDS = ['status', 'name', 'slug'];
 
     public function saved(Restaurant|MenuSection $model): void
     {

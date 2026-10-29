@@ -11,6 +11,7 @@ use App\Filament\Admin\Resources\Removals\Pages\ListRemovalRequests;
 use App\Filament\Admin\Resources\Restaurants\Pages\CreateRestaurant;
 use App\Filament\Admin\Resources\Restaurants\Pages\EditRestaurant;
 use App\Filament\Admin\Resources\Restaurants\Pages\ListRestaurants;
+use App\Jobs\SyncRestaurantDishes;
 use App\Models\Category;
 use App\Models\Restaurant;
 use App\Models\RestaurantClaim;
@@ -24,6 +25,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -180,6 +182,28 @@ describe('fichas', function () {
 
         expect($restaurant->fresh()?->name)->toBe('Desde el panel del dueño')
             ->and($restaurant->fresh()?->plan->value)->toBe('free');
+    });
+
+    test('el índice de búsqueda: un trabajo si cambian las categorías o el nombre, ninguno si no', function () {
+        actAsAdmin();
+        $restaurant = Restaurant::factory()->claimed()->create();
+        panelMember($restaurant);
+        $category = Category::factory()->create();
+        $other = Category::factory()->create();
+        Queue::fake();
+
+        Livewire::test(EditRestaurant::class, ['record' => $restaurant->getRouteKey()])
+            ->fillForm(['plan' => 'featured'])->call('save')->assertHasNoFormErrors();
+        Queue::assertNotPushed(SyncRestaurantDishes::class);
+
+        Livewire::test(EditRestaurant::class, ['record' => $restaurant->getRouteKey()])
+            ->fillForm(['categories' => [$category->id]])->call('save')->assertHasNoFormErrors();
+        Queue::assertPushed(SyncRestaurantDishes::class, 1);
+
+        Livewire::test(EditRestaurant::class, ['record' => $restaurant->getRouteKey()])
+            ->fillForm(['name' => 'Otro nombre (ficticio)', 'categories' => [$other->id]])->call('save')->assertHasNoFormErrors();
+        Queue::assertPushed(SyncRestaurantDishes::class, 2);
+        expect($restaurant->categories()->pluck('categories.id')->all())->toBe([$other->id]);
     });
 
     test('en un conflicto tampoco se guardan las categorías', function () {

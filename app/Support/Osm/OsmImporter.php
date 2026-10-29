@@ -187,7 +187,7 @@ class OsmImporter
         }
 
         $restaurant->forceFill(['name' => $place->name, 'location' => $place->point])->save();
-        $restaurant->categories()->sync([$category->id]);
+        $restaurant->syncCategories([$category->id]);
         $source->forceFill(['imported_hash' => $hash])->save();
         $report->updated++;
     }

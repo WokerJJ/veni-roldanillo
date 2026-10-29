@@ -123,6 +123,10 @@ class RestaurantResource extends AdminResource
                     Select::make('categories')
                         ->label(__('panel.admin.restaurants.categories'))
                         ->relationship('categories', 'name_es')
+                        // Las guarda persist(), después de la ficha, con
+                        // Restaurant::syncCategories (reindexa los platos, ADR 0029).
+                        ->saveRelationshipsUsing(null)
+                        ->dehydrated()
                         ->multiple()
                         ->preload(),
                 ]),
@@ -189,6 +193,13 @@ class RestaurantResource extends AdminResource
             'verified_at' => $verified ? ($restaurant->verified_at ?? now()) : null,
             'location' => new GeoPoint(self::number($data['latitude'] ?? null), self::number($data['longitude'] ?? null)),
         ])->save();
+
+        if (is_array($data['categories'] ?? null)) {
+            $restaurant->syncCategories(array_values(array_filter(
+                $data['categories'],
+                fn (mixed $id): bool => is_int($id) || is_string($id),
+            )));
+        }
 
         return $restaurant;
     }

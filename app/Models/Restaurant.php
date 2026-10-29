@@ -7,7 +7,9 @@ use App\Enums\PaymentMethod;
 use App\Enums\RestaurantPlan;
 use App\Enums\RestaurantRole;
 use App\Enums\RestaurantStatus;
+use App\Jobs\SyncRestaurantDishes;
 use App\Models\Concerns\HasTranslatableFields;
+use App\Observers\SearchIndexObserver;
 use App\Support\BusinessDay;
 use App\Support\GeoPoint;
 use Carbon\CarbonInterface;
@@ -218,6 +220,27 @@ class Restaurant extends Model
     public function categories(): BelongsToMany
     {
         return $this->belongsToMany(Category::class);
+    }
+
+    /**
+     * Cambia las categorías de una ficha guardada. Es la única puerta (panel
+     * de administración e importación de OSM): las categorías van en cada
+     * plato del índice de búsqueda (ADR 0029) y no disparan eventos del
+     * modelo, así que aquí se reindexan sus platos si la ficha está publicada.
+     * Si el mismo guardado ya cambió el estado, el nombre o el slug,
+     * SearchIndexObserver ya lo encoló y no se repite.
+     *
+     * @param  list<int|string>  $ids
+     */
+    public function syncCategories(array $ids): void
+    {
+        $changes = $this->categories()->sync($ids);
+
+        if (array_filter($changes) !== []
+            && $this->status->isPublished()
+            && ! $this->wasChanged(SearchIndexObserver::RESTAURANT_FIELDS)) {
+            SyncRestaurantDishes::dispatch($this->id);
+        }
     }
 
     /**
