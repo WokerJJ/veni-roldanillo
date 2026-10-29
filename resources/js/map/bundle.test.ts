@@ -345,13 +345,16 @@ describe('presupuesto de descarga', () => {
         // sortear, leer y escribir los filtros de la dirección, los almuerzos
         // y los botones de la bienvenida bajan con la lista. Al arranque llegan
         // el estado de los filtros, su paso a la dirección y lo que carga lo demás.
+        // Con los platos (#17, ADR 0029): 82,71 antes y 82,73 después. La
+        // sección, la petición y su estado bajan con la lista; al arranque
+        // solo llegan las clases nuevas de Tailwind en el CSS de siempre.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
-    it('el resumen y la lista (con sus distancias, la búsqueda, los filtros y los almuerzos) no bajan con el arranque: el inicio los pide con import() apenas monta', () => {
+    it('el resumen y la lista (con sus distancias, la búsqueda, los filtros, los almuerzos y los platos) no bajan con el arranque: el inicio los pide con import() apenas monta', () => {
         const initial = initialChunks();
         const panels =
-            /\/resources\/js\/(?:components\/(?:Restaurant(?:Summary|List|Distances|Filters)|TodaysLunches|WelcomeActions)\.vue|restaurants\/(?:openStatus|statusText|distance|finder|filterParams)\.ts)$/;
+            /\/resources\/js\/(?:components\/(?:Restaurant(?:Summary|List|Distances|Filters)|TodaysLunches|WelcomeActions|DishResults)\.vue|restaurants\/(?:openStatus|statusText|distance|finder|filterParams|dishSearch|useDishSearch)\.ts)$/;
 
         expect(initial.filter((chunk) => has(chunk, panels))).toEqual([]);
         expect(chunkOf('/resources/js/pages/Home.vue').dynamicImports).toEqual(

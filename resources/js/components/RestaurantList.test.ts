@@ -323,7 +323,7 @@ describe('búsqueda y filtros (#12)', () => {
         const { wrapper } = await mountList('en', [EL_GUADUAL, LA_CEIBA]);
         await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'nothing' } });
 
-        expect(wrapper.get('label').text()).toBe('Search by name or type of food');
+        expect(wrapper.get('label').text()).toBe('Search by name, dish or type of food');
         expect(wrapper.get('[data-count]').text()).toBe('No restaurant matches your search. Try fewer filters.');
         expect(wrapper.get('button[data-empty-clear]').text()).toBe('Clear filters');
         expect(wrapper.get('details[data-lunches] summary').text()).toBe("Today's lunches");

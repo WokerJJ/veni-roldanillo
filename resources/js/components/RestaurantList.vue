@@ -2,6 +2,7 @@
 import { Link } from '@inertiajs/vue3';
 import { computed, onMounted, shallowRef, useId, useTemplateRef, watch } from 'vue';
 
+import DishResults from '@/components/DishResults.vue';
 import Icon from '@/components/Icon.vue';
 import RestaurantFilters from '@/components/RestaurantFilters.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
@@ -10,7 +11,7 @@ import { useI18n } from '@/composables/useI18n';
 import type { Restaurant } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
 import { NO_FILTERS } from '@/restaurants/filterParams';
-import { categoriesOf } from '@/restaurants/finder';
+import { categoriesOf, filterRestaurants } from '@/restaurants/finder';
 import { restaurantUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
 import { openStatusText } from '@/restaurants/statusText';
@@ -40,6 +41,10 @@ import { formatDistance } from '@/routing/directions';
  * tocado) y «Almuerzos de hoy»; cuántos quedan se anuncia en una región de
  * estado. Los filtros no se aplican aquí: se emiten (`update:filters`) y
  * Home.vue los aplica a la lista y al mapa a la vez.
+ *
+ * Con tres letras o más en el buscador (#17), arriba de todo, «Platos»: los
+ * que responden en el servidor, de los restaurantes que cumplen los demás
+ * filtros (DishResults.vue).
  *
  * Al abrirse toma el foco en el título (o en «Almuerzos de hoy», con
  * `start`); quien la muestra la cierra con
@@ -130,6 +135,15 @@ const rows = computed(() => {
         .sort((a, b) => (place.get(a.restaurant.slug) ?? place.size) - (place.get(b.restaurant.slug) ?? place.size));
 });
 
+/**
+ * Para «Platos» (#17): los que cumplen los demás filtros, sin la búsqueda
+ * (el plato es lo que se busca, no el nombre del restaurante). Sin la lista
+ * todavía, ninguno se deja afuera.
+ */
+const allowedForDishes = computed(() =>
+    all.length === 0 ? null : new Set(filterRestaurants(all, { ...filters.value, query: '' }, now.value).map(({ slug }) => slug)),
+);
+
 const allSamples = computed(() => all.length > 0 && all.every(({ fictitious }) => fictitious));
 const categories = computed(() => categoriesOf(all, locale.value));
 
@@ -177,6 +191,9 @@ defineExpose({ focusItem });
         <!-- Todo lo de abajo del título se desplaza junto: con poco alto, el buscador no deja la lista sin lugar. -->
         <div class="-mx-2 min-h-0 overflow-y-auto overscroll-contain px-2">
             <RestaurantFilters :filters="filters" :categories="categories" @update:filters="emit('update:filters', $event)" />
+
+            <!-- Con tres letras o más, los platos primero: si se buscó «sancocho», es lo que se quería ver. -->
+            <DishResults :query="filters.query" :allowed="allowedForDishes" @select="$emit('select', $event)" />
 
             <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <!-- Se ve enseguida; el lector lo oye de la región de abajo, medio segundo después de dejar de teclear. -->
