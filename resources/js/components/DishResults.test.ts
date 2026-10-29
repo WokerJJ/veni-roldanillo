@@ -127,8 +127,64 @@ describe('DishResults', () => {
         requests[0]?.respond(200, contract);
         await flushPromises();
 
-        expect(wrapper.find('[data-dishes-message]').text()).toContain('no en los restaurantes que cumplen los filtros');
+        expect(wrapper.find('[data-dishes-message]').text()).toBe('No encontramos «sancocho» entre los restaurantes con estos filtros.');
         expect(wrapper.find('[data-dishes-results]').exists()).toBe(false);
+
+        const clear = wrapper.get('button[data-dishes-clear-filters]');
+        expect(clear.text()).toBe('Ver sin filtros');
+        await clear.trigger('click');
+        expect(wrapper.emitted('clearFilters')).toEqual([[]]);
+    });
+
+    it('sin ningún plato, no ofrece quitar filtros', async () => {
+        const requests = stubDishFetch();
+        const wrapper = await mountResults('sancocho', new Set(['otro']));
+        await vi.advanceTimersByTimeAsync(DISH_SEARCH_DEBOUNCE_MS);
+        requests[0]?.respond(200, { results: [] });
+        await flushPromises();
+
+        expect(wrapper.find('[data-dishes-message]').text()).toBe('Ningún plato con «sancocho».');
+        expect(wrapper.find('[data-dishes-clear-filters]').exists()).toBe(false);
+    });
+
+    it('el botón de reintentar no queda escondido para el lector de pantalla', async () => {
+        const requests = stubDishFetch();
+        const wrapper = await mountResults('sancocho');
+        await vi.advanceTimersByTimeAsync(DISH_SEARCH_DEBOUNCE_MS);
+        requests[0]?.fail();
+        await flushPromises();
+
+        const retry = wrapper.get('[data-dishes-retry]').element;
+        expect(retry.closest('[aria-hidden="true"]')).toBeNull();
+        expect(wrapper.get('[data-dishes-message]').attributes('aria-hidden')).toBe('true');
+    });
+
+    it('pasado el límite de búsquedas (429) dice que no está disponible, no que falta señal', async () => {
+        const requests = stubDishFetch();
+        const wrapper = await mountResults('sancocho');
+        await vi.advanceTimersByTimeAsync(DISH_SEARCH_DEBOUNCE_MS);
+        requests[0]?.respond(429, { message: 'Too Many Attempts.' });
+        await flushPromises();
+
+        expect(wrapper.find('[data-dishes-status]').text()).toContain('no está disponible');
+        expect(wrapper.find('[data-dishes-retry]').exists()).toBe(false);
+    });
+
+    it('sin señal espera: al volver la conexión, busca solo', async () => {
+        const requests = stubDishFetch();
+        const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+        const wrapper = await mountResults('sancocho');
+        await vi.advanceTimersByTimeAsync(DISH_SEARCH_DEBOUNCE_MS);
+        expect(requests).toHaveLength(0);
+
+        online.mockReturnValue(true);
+        window.dispatchEvent(new Event('online'));
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(requests).toHaveLength(1);
+        requests[0]?.respond(200, contract);
+        await flushPromises();
+        expect(wrapper.find('[data-dishes-status]').text()).toBe('Platos que coinciden: 2');
     });
 
     it('si la búsqueda de platos no está (503), lo dice sin botón; si falla la red, ofrece reintentar', async () => {

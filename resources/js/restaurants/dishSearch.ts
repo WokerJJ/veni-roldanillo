@@ -37,7 +37,7 @@ export interface DishGroup {
     dishes: DishMatch[];
 }
 
-/** Meilisearch no respondió (503): la búsqueda de restaurantes del dispositivo sigue andando. */
+/** Meilisearch no respondió (503) o se pasó el límite (429): la búsqueda de restaurantes del dispositivo sigue andando. */
 export class DishSearchUnavailable extends Error {
     constructor() {
         super('La búsqueda por plato no está disponible.');
@@ -104,7 +104,7 @@ export function parseDishResults(body: unknown): DishGroup[] {
 /**
  * Pregunta por `query` (ya pasada por dishQuery) en `locale`. Sin cookies: es
  * pública, y cada URL es una respuesta que el navegador guarda un minuto. Se
- * rechaza con DishSearchUnavailable si el servidor dice 503, y con un error
+ * rechaza con DishSearchUnavailable si el servidor dice 503 o 429, y con un error
  * cualquiera si se aborta `signal`, pasa el plazo o la respuesta no sirve.
  */
 export async function fetchDishes(query: string, locale: Locale, signal: AbortSignal): Promise<DishGroup[]> {
@@ -130,7 +130,9 @@ export async function fetchDishes(query: string, locale: Locale, signal: AbortSi
             credentials: 'omit',
         });
 
-        if (response.status === 503) {
+        // 429 (pasado el límite por IP, que puede ser el de toda la NAT del
+        // operador): no es la señal; se dice lo mismo que con Meilisearch caído.
+        if (response.status === 503 || response.status === 429) {
             throw new DishSearchUnavailable();
         }
 

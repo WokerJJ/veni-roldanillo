@@ -10,7 +10,7 @@ import TodaysLunches from '@/components/TodaysLunches.vue';
 import { useI18n } from '@/composables/useI18n';
 import type { Restaurant } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
-import { NO_FILTERS } from '@/restaurants/filterParams';
+import { hasFilters, NO_FILTERS } from '@/restaurants/filterParams';
 import { categoriesOf, filterRestaurants } from '@/restaurants/finder';
 import { restaurantUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
@@ -137,12 +137,14 @@ const rows = computed(() => {
 
 /**
  * Para «Platos» (#17): los que cumplen los demás filtros, sin la búsqueda
- * (el plato es lo que se busca, no el nombre del restaurante). Sin la lista
- * todavía, ninguno se deja afuera.
+ * (el plato es lo que se busca, no el nombre del restaurante). Sin otros
+ * filtros o sin la lista todavía, ninguno se deja afuera: null.
  */
-const allowedForDishes = computed(() =>
-    all.length === 0 ? null : new Set(filterRestaurants(all, { ...filters.value, query: '' }, now.value).map(({ slug }) => slug)),
-);
+const allowedForDishes = computed(() => {
+    const others = { ...filters.value, query: '' };
+
+    return all.length === 0 || !hasFilters(others) ? null : new Set(filterRestaurants(all, others, now.value).map(({ slug }) => slug));
+});
 
 const allSamples = computed(() => all.length > 0 && all.every(({ fictitious }) => fictitious));
 const categories = computed(() => categoriesOf(all, locale.value));
@@ -193,7 +195,12 @@ defineExpose({ focusItem });
             <RestaurantFilters :filters="filters" :categories="categories" @update:filters="emit('update:filters', $event)" />
 
             <!-- Con tres letras o más, los platos primero: si se buscó «sancocho», es lo que se quería ver. -->
-            <DishResults :query="filters.query" :allowed="allowedForDishes" @select="$emit('select', $event)" />
+            <DishResults
+                :query="filters.query"
+                :allowed="allowedForDishes"
+                @select="$emit('select', $event)"
+                @clear-filters="emit('update:filters', { ...NO_FILTERS, query: filters.query })"
+            />
 
             <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <!-- Se ve enseguida; el lector lo oye de la región de abajo, medio segundo después de dejar de teclear. -->

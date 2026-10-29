@@ -30,7 +30,11 @@ const { query, allowed = null } = defineProps<{
     allowed?: ReadonlySet<string> | null;
 }>();
 
-defineEmits<{ select: [slug: string] }>();
+defineEmits<{
+    select: [slug: string];
+    /** «Ver sin filtros»: hay platos, pero en restaurantes que los filtros dejan afuera. */
+    clearFilters: [];
+}>();
 
 const { t, locale } = useI18n();
 const headingId = useId();
@@ -41,6 +45,8 @@ const { status, results, searched, retry } = useDishSearch(
 
 const groups = computed(() => withinFilters(results.value, allowed));
 const count = computed(() => groups.value.reduce((total, group) => total + group.dishes.length, 0));
+/** Llegaron platos, pero ninguno de un restaurante que cumple los filtros. */
+const filteredOut = computed(() => status.value === 'done' && count.value === 0 && results.value.length > 0);
 
 /** Lo que se lee al llegar la respuesta; vacío mientras carga. */
 const message = computed(() => {
@@ -48,7 +54,7 @@ const message = computed(() => {
         case 'done':
             return count.value > 0
                 ? t('dishes.count', { count: count.value })
-                : t(results.value.length > 0 ? 'dishes.none_filtered' : 'dishes.none', { query: searched.value });
+                : t(filteredOut.value ? 'dishes.none_filtered' : 'dishes.none', { query: searched.value });
         case 'offline':
             return t('dishes.offline');
         case 'unavailable':
@@ -71,8 +77,18 @@ const message = computed(() => {
             {{ t('dishes.loading') }}
         </p>
 
-        <div v-else-if="status !== 'done' || count === 0" class="px-2 pb-2 text-sm text-ink-muted" aria-hidden="true">
-            <p data-dishes-message>{{ message }}</p>
+        <!-- Solo el texto se esconde del lector (ya lo oyó de la región de estado); los botones, no. -->
+        <div v-else-if="status !== 'done' || count === 0" class="px-2 pb-2 text-sm text-ink-muted">
+            <p aria-hidden="true" data-dishes-message>{{ message }}</p>
+            <button
+                v-if="filteredOut"
+                type="button"
+                class="mt-1 inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold text-ink transition-colors hover:bg-surface"
+                data-dishes-clear-filters
+                @click="$emit('clearFilters')"
+            >
+                {{ t('dishes.clear_filters') }}
+            </button>
             <button
                 v-if="status === 'error' || status === 'offline'"
                 type="button"

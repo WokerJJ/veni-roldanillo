@@ -13,8 +13,9 @@ export const DISH_SEARCH_DEBOUNCE_MS = 350;
  * - `idle`: no hay consulta (menos de tres letras).
  * - `loading`: esperando la respuesta (o la pausa al teclear).
  * - `done`: llegó (puede ser sin resultados).
- * - `offline`: sin señal; no se preguntó.
- * - `unavailable`: el servidor dice que la búsqueda de platos no anda (503).
+ * - `offline`: sin señal; no se preguntó (se pregunta al volver la conexión).
+ * - `unavailable`: el servidor dice que la búsqueda de platos no anda (503) o
+ *   que se pasó el límite de búsquedas (429).
  * - `error`: cualquier otra falla (red, plazo, respuesta que no sirve).
  */
 export type DishSearchStatus = 'idle' | 'loading' | 'done' | 'offline' | 'unavailable' | 'error';
@@ -102,7 +103,24 @@ export function useDishSearch(query: () => string, locale: () => Locale): DishSe
         schedule(DISH_SEARCH_DEBOUNCE_MS);
     }, { immediate: true });
 
-    onBeforeUnmount(cancel);
+    // Sin señal no se preguntó: al volver la conexión, se busca lo que hay escrito.
+    function onOnline(): void {
+        if (status.value === 'offline') {
+            schedule(0);
+        }
+    }
+
+    if (typeof window !== 'undefined') {
+        window.addEventListener('online', onOnline);
+    }
+
+    onBeforeUnmount(() => {
+        cancel();
+
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('online', onOnline);
+        }
+    });
 
     return {
         status,
