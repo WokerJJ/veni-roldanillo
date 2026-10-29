@@ -19,8 +19,13 @@ use Psr\Http\Client\ClientExceptionInterface;
  */
 final class DishSearch
 {
-    /** Cuántos platos se le piden a Meilisearch, en orden de relevancia. */
-    public const MAX_HITS = 40;
+    /**
+     * Cuántos platos se le piden a Meilisearch, en orden de relevancia: el
+     * maxTotalHits del índice (config/scout.php). Con menos, un restaurante
+     * con muchos platos que coinciden deja afuera a los demás, y la respuesta
+     * se corta igual en MAX_RESTAURANTS × MAX_DISHES_PER_RESTAURANT.
+     */
+    public const MAX_HITS = 200;
 
     /** Cuántos restaurantes, como mucho, tiene una respuesta. */
     public const MAX_RESTAURANTS = 10;
@@ -46,7 +51,7 @@ final class DishSearch
                     /** @var Builder<Dish> $dishes */
                     $dishes
                         ->select(['id', 'restaurant_id', 'menu_section_id', 'name_es', 'name_en', 'description_es', 'description_en', 'price', 'available', 'sold_out_until'])
-                        ->ofPublishedRestaurants()
+                        ->indexable()
                         ->with(['restaurant:id,slug,name', 'menuSection:id,name_es,name_en']);
                 })
                 ->get();

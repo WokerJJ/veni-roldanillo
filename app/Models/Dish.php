@@ -41,9 +41,9 @@ use Laravel\Scout\Searchable;
  * como texto e ignora el cast; el @property fija el tipo.
  *
  * Búsqueda por plato (#17, ADR 0029): Scout lo indexa en Meilisearch al
- * guardarlo o borrarlo, solo si su restaurante está publicado. Lo que cambia
- * el restaurante (estado, nombre, categorías) o la sección (nombre) lo
- * reindexa SyncRestaurantDishes.
+ * guardarlo o borrarlo, solo si está en la carta y su restaurante está
+ * publicado. Lo que cambia el restaurante (estado, nombre, categorías) o la
+ * sección (nombre) lo reindexa SyncRestaurantDishes.
  *
  * @property Carbon|null $sold_out_until
  */
@@ -102,10 +102,30 @@ class Dish extends Model implements BelongsToRestaurant
         return (is_string($prefix) ? $prefix : '').'dishes';
     }
 
-    /** Solo los platos de un restaurante publicado: ni ocultos ni borradores de OSM. */
+    /**
+     * Los campos que viajan en el documento o deciden si se indexa. Cambiar
+     * otro («agotado hoy», el orden, la foto, las etiquetas) no toca el índice.
+     */
+    private const SEARCH_FIELDS = ['name_es', 'name_en', 'description_es', 'description_en', 'menu_section_id', 'price', 'available'];
+
+    /**
+     * Solo los platos en la carta de un restaurante publicado: ni ocultos ni
+     * borradores de OSM, ni los que el dueño sacó de la carta.
+     */
     public function shouldBeSearchable(): bool
     {
-        return $this->restaurant !== null && $this->restaurant->status->isPublished();
+        return $this->available && $this->restaurant !== null && $this->restaurant->status->isPublished();
+    }
+
+    /**
+     * Al guardarlo, Scout solo encola si es nuevo o cambió algo del índice.
+     * wasRecentlyCreated sigue en true en las actualizaciones siguientes del
+     * mismo objeto; recién creado, en cambio, todavía no tiene cambios.
+     */
+    public function searchIndexShouldBeUpdated(): bool
+    {
+        return ($this->wasRecentlyCreated && $this->getChanges() === [])
+            || $this->wasChanged(self::SEARCH_FIELDS);
     }
 
     /**
@@ -151,18 +171,18 @@ class Dish extends Model implements BelongsToRestaurant
     }
 
     /**
-     * scout:import: solo los de restaurantes publicados, con sus relaciones.
+     * scout:import: solo los que van al índice, con sus relaciones.
      *
      * @param  Builder<self>  $query
      * @return Builder<self>
      */
     protected function makeAllSearchableUsing(Builder $query): Builder
     {
-        return $query->with(self::SEARCH_RELATIONS)->ofPublishedRestaurants();
+        return $query->with(self::SEARCH_RELATIONS)->indexable();
     }
 
     /**
-     * Los platos de restaurantes publicados: los que van al índice.
+     * Los platos de restaurantes publicados.
      *
      * @param  Builder<self>  $query
      */
@@ -170,6 +190,18 @@ class Dish extends Model implements BelongsToRestaurant
     protected function ofPublishedRestaurants(Builder $query): void
     {
         $query->whereHas('restaurant', fn (Builder $restaurants) => $restaurants->whereIn('status', RestaurantStatus::published()));
+    }
+
+    /**
+     * Los que van al índice (lo mismo que shouldBeSearchable, en la base): en
+     * la carta y de un restaurante publicado.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function indexable(Builder $query): void
+    {
+        $query->where('available', true)->ofPublishedRestaurants();
     }
 
     /**
@@ -184,9 +216,22 @@ class Dish extends Model implements BelongsToRestaurant
             return;
         }
 
-        $searchable
-            ? (new self)->queueMakeSearchable($dishes->filter(fn (self $dish): bool => $dish->shouldBeSearchable()))
-            : (new self)->queueRemoveFromSearch($dishes);
+        if (! $searchable) {
+            (new self)->queueRemoveFromSearch($dishes);
+
+            return;
+        }
+
+        $indexed = $dishes->filter(fn (self $dish): bool => $dish->shouldBeSearchable());
+        $removed = $dishes->diff($indexed);
+
+        if ($indexed->isNotEmpty()) {
+            (new self)->queueMakeSearchable($indexed);
+        }
+
+        if ($removed->isNotEmpty()) {
+            (new self)->queueRemoveFromSearch($removed);
+        }
     }
 
     /** ¿Se puede pedir hoy? En la carta y no «agotado hoy» (ADR 0018). */

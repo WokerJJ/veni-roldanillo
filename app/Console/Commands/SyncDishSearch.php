@@ -14,10 +14,11 @@ use Meilisearch\Exceptions\ApiException;
 /**
  * Deja el índice de platos (#17, ADR 0029) igual a la base: aplica los
  * ajustes de config/scout.php (crea el índice si no existe), sube los platos
- * de los restaurantes publicados y saca los que sobran (de fichas ocultas o
- * platos borrados mientras el worker no corría). Se puede correr las veces que
- * haga falta: nunca vacía el índice, así la búsqueda sigue andando mientras
- * tanto.
+ * en la carta de los restaurantes publicados y saca los que sobran (de fichas
+ * ocultas, fuera de la carta o borrados mientras el worker no corría). Se
+ * puede correr las veces que haga falta: nunca vacía el índice, así la
+ * búsqueda sigue andando mientras tanto. El scheduler lo corre cada día
+ * (routes/console.php) y deploy.sh después de cada despliegue.
  *
  * Corre sin la cola: termina con todo enviado a Meilisearch, que lo aplica en
  * orden en unos segundos.
@@ -41,7 +42,7 @@ class SyncDishSearch extends Command
 
         config(['scout.queue' => false]);
 
-        $published = Dish::query()->ofPublishedRestaurants()->with(Dish::SEARCH_RELATIONS);
+        $published = Dish::query()->indexable()->with(Dish::SEARCH_RELATIONS);
 
         $count = $published->count();
         $published->chunkById(500, fn (Collection $dishes) => Dish::syncWithSearch($dishes, true));
@@ -62,7 +63,7 @@ class SyncDishSearch extends Command
 
         /** @var array<int, true> $keep */
         $keep = array_fill_keys(
-            Dish::query()->ofPublishedRestaurants()->pluck('id')->filter(fn (mixed $id): bool => is_int($id))->all(),
+            Dish::query()->indexable()->pluck('id')->filter(fn (mixed $id): bool => is_int($id))->all(),
             true,
         );
 
@@ -93,10 +94,35 @@ class SyncDishSearch extends Command
             }
         }
 
+        // Recorrer el índice lleva su tiempo: un plato que se publicó mientras
+        // tanto ya está en la cola para subir y no se borra.
+        $stale = array_values(array_diff($stale, $this->nowIndexable($stale)));
+
         if ($stale !== []) {
             $index->deleteDocuments($stale);
         }
 
         return count($stale);
+    }
+
+    /**
+     * De `$ids`, los que la base publica ahora mismo.
+     *
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    private function nowIndexable(array $ids): array
+    {
+        $indexable = [];
+
+        foreach (array_chunk($ids, self::PAGE) as $chunk) {
+            foreach (Dish::query()->indexable()->whereIn('id', $chunk)->pluck('id') as $id) {
+                if (is_int($id)) {
+                    $indexable[] = $id;
+                }
+            }
+        }
+
+        return $indexable;
     }
 }

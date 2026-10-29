@@ -112,7 +112,17 @@ test('en inglés, con lo que el dueño tradujo y, si no, en español', function 
         ->and(searchDishes('stew', 'en')->json('results'))->toHaveCount(1);
 });
 
-test('«agotado hoy» y fuera de la carta salen como no disponibles', function () {
+test('un plato fuera de la carta no aparece', function () {
+    $restaurant = Restaurant::factory()->create();
+    searchableDish($restaurant, 'Sopas', ['name_es' => 'Sancocho de la casa']);
+    searchableDish($restaurant, 'Sopas', ['name_es' => 'Sancocho de temporada', 'available' => false]);
+
+    $dishes = collect(searchDishes('sancocho')->assertOk()->json('results.0.dishes'));
+
+    expect($dishes->pluck('name')->all())->toBe(['Sancocho de la casa']);
+});
+
+test('«agotado hoy» sale como no disponible, y el de otro día como disponible', function () {
     $restaurant = Restaurant::factory()->create();
     $section = MenuSection::factory()->for($restaurant)->create();
     Dish::factory()->for($restaurant)->soldOutToday()->create(['menu_section_id' => $section->id, 'name_es' => 'Sancocho agotado']);
@@ -140,6 +150,37 @@ test('tiene topes: restaurantes por respuesta y platos por restaurante', functio
         ->and(max(array_map(fn (array $group): int => count($group['dishes']), $results)))->toBe(DishSearch::MAX_DISHES_PER_RESTAURANT);
 });
 
+test('un restaurante con muchos platos que coinciden no deja afuera a los demás', function () {
+    // Antes y después (por id) del que tiene muchos: el orden del motor no cambia la prueba.
+    $before = Restaurant::factory()->count(6)->create();
+    $before->each(fn (Restaurant $restaurant) => searchableDish($restaurant, 'Sopas', ['name_es' => 'Sancocho de la casa']));
+    $busy = Restaurant::factory()->create();
+
+    for ($i = 0; $i < 45; $i++) {
+        searchableDish($busy, 'Sopas', ['name_es' => "Sancocho número {$i}"]);
+    }
+
+    $after = Restaurant::factory()->count(5)->create();
+    $after->each(fn (Restaurant $restaurant) => searchableDish($restaurant, 'Sopas', ['name_es' => 'Sancocho de la casa']));
+
+    $results = searchDishes('sancocho')->assertOk()->json('results');
+
+    expect($results)->toHaveCount(DishSearch::MAX_RESTAURANTS)
+        ->and(max(array_map(fn (array $group): int => count($group['dishes']), $results)))->toBe(DishSearch::MAX_DISHES_PER_RESTAURANT);
+});
+
+test('con el ETag de la misma respuesta, 304 sin cuerpo', function () {
+    searchableDish(Restaurant::factory()->create(), 'Sopas', ['name_es' => 'Sancocho']);
+
+    $etag = (string) searchDishes('sancocho')->assertOk()->headers->get('ETag');
+    expect($etag)->not->toBe('');
+
+    $notModified = $this->withHeaders(['If-None-Match' => $etag])->getJson(DISH_SEARCH.'?q=sancocho');
+
+    $notModified->assertStatus(304);
+    expect($notModified->getContent())->toBe('');
+});
+
 test('se guarda un minuto en cachés públicas y la URL lleva el idioma', function () {
     $response = searchDishes('sancocho')->assertOk();
 
@@ -156,8 +197,19 @@ test('valida la consulta y el idioma', function (string $query, ?string $lang) {
     'con etiquetas' => ['<script>', null],
     'con comillas dobles' => ['"sancocho"', null],
     'con signos de búsqueda' => ['sancocho*', null],
+    'solo puntos' => ['...', null],
+    'solo guiones' => ['---', null],
+    'una letra con tildes sueltas' => ["a\u{0301}\u{0301}\u{0301}", null],
+    'dos letras y signos' => ['a.b-', null],
     'idioma desconocido' => ['sancocho', 'fr'],
 ]);
+
+test('un guion al empezar una palabra no excluye nada: se busca la palabra', function () {
+    searchableDish(Restaurant::factory()->create(), 'Sopas', ['name_es' => 'Sancocho de gallina']);
+
+    expect(searchDishes('-sancocho')->assertOk()->json('results'))->toHaveCount(1)
+        ->and(searchDishes('de -gallina')->assertOk()->json('results'))->toHaveCount(1);
+});
 
 test('sin consulta es un 422 en JSON', function () {
     $this->getJson(DISH_SEARCH)->assertStatus(422)->assertJsonValidationErrors('q');

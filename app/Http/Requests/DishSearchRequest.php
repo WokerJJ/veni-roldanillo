@@ -12,9 +12,10 @@ use Illuminate\Validation\Rule;
  * el idioma va en la URL: la respuesta se guarda en cachés y una URL es
  * siempre la misma respuesta.
  *
- * La consulta: de 3 a 60 caracteres (lo mismo que espera el buscador del
- * inicio antes de preguntar), solo letras, números, espacios, apóstrofos,
- * guiones y puntos. Lo demás no ayuda a encontrar un plato y es un 422.
+ * La consulta: de 3 a 60 caracteres con al menos tres letras o números (lo
+ * mismo que espera el buscador del inicio antes de preguntar), solo letras,
+ * números, espacios, apóstrofos, guiones y puntos. Lo demás no ayuda a
+ * encontrar un plato y es un 422.
  */
 class DishSearchRequest extends FormRequest
 {
@@ -34,13 +35,16 @@ class DishSearchRequest extends FormRequest
 
     /**
      * Espacios de más fuera, y los apóstrofos tipográficos del celular como «'».
+     * Un guion al empezar una palabra pasa a ser un espacio: para Meilisearch
+     * «-sancocho» es «sin sancocho», y aquí se busca un plato, no se excluye.
      */
     protected function prepareForValidation(): void
     {
         $query = $this->query(self::QUERY);
 
         if (is_string($query)) {
-            $clean = (string) preg_replace('/\s+/u', ' ', str_replace(['’', '‘', 'ʼ'], "'", $query));
+            $words = (string) preg_replace('/(?<!\S)-+/u', ' ', str_replace(['’', '‘', 'ʼ'], "'", $query));
+            $clean = (string) preg_replace('/\s+/u', ' ', $words);
             $this->merge([self::QUERY => trim($clean)]);
         }
     }
@@ -57,6 +61,8 @@ class DishSearchRequest extends FormRequest
                 'min:'.self::MIN_LENGTH,
                 'max:'.self::MAX_LENGTH,
                 "regex:/^[\\p{L}\\p{M}\\p{N}' .\\-]+$/u",
+                // Tres letras o números (las tildes sueltas no cuentan): «...» o «---» no buscan nada.
+                'regex:/(?:\p{L}|\p{N}).*(?:\p{L}|\p{N}).*(?:\p{L}|\p{N})/su',
             ],
             self::LANG => ['sometimes', Rule::enum(Locale::class)],
         ];

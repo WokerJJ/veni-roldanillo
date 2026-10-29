@@ -17,8 +17,8 @@ use Illuminate\Support\Facades\Log;
  * endpoint, nunca a Meilisearch: la clave no sale del servidor. La consulta no
  * se guarda (ni en el registro cuando Meilisearch falla).
  *
- * Bien: 200 y una caché pública de un minuto (lo que tarda en verse un plato
- * editado, como la capa del mapa). Meilisearch caído o lento: 503 sin caché,
+ * Bien: 200 con ETag y una caché pública de un minuto (lo que tarda en verse
+ * un plato editado, como la capa del mapa). Meilisearch caído o lento: 503 sin caché,
  * con Retry-After; el buscador del inicio sigue buscando restaurantes en el
  * dispositivo.
  */
@@ -44,8 +44,15 @@ class DishSearchController extends Controller
                 ->header('Cache-Control', 'no-store');
         }
 
-        return response()
+        $response = response()
             ->json(['results' => $results])
             ->setCache(['public' => true, 'max_age' => self::MAX_AGE]);
+
+        // Pasado el minuto, el navegador vuelve a preguntar con el ETag: si
+        // nada cambió, 304 sin cuerpo. Solo aquí: el 503 no se guarda.
+        $response->setEtag(hash('xxh128', (string) $response->getContent()));
+        $response->isNotModified($request);
+
+        return $response;
     }
 }
