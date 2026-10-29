@@ -5,6 +5,7 @@ namespace App\Filament\Admin\Resources\Restaurants\Pages;
 use App\Filament\Admin\Resources\Restaurants\RestaurantResource;
 use App\Filament\Concerns\DetectsConcurrentEdits;
 use App\Filament\Owner\Concerns\TranslatesConstraintViolations;
+use App\Jobs\SyncRestaurantDishes;
 use App\Models\Restaurant;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -42,9 +43,15 @@ class EditRestaurant extends EditRecord
         $this->guardAgainstConcurrentEdit();
     }
 
+    /**
+     * Las categorías van en cada plato del índice de búsqueda (ADR 0029) y
+     * Filament las guarda aparte de la ficha: se reindexan sus platos al
+     * confirmar el guardado (la cola espera a la transacción).
+     */
     protected function afterSave(): void
     {
         $this->rememberVersion($this->getRecord());
+        SyncRestaurantDishes::dispatch($this->restaurant()->id);
     }
 
     protected function versionedRecord(): Model
