@@ -258,6 +258,8 @@ Lo que sirve Caddy desde `public/` sin pasar por Laravel lleva su propia caché 
    - espera a que la app responda `/up`.
 5. Pide `https://veniroldanillo.co/up` desde fuera.
 
+El índice de la búsqueda por plato (ADR 0029) vive en el volumen de Meilisearch y lo mantiene al día el `worker`; un despliegue no lo toca. Hay que correr `docker compose exec app php artisan veni:search-sync` una vez al crear el servidor (crea el índice con sus ajustes y sube los platos), después de un despliegue que cambie los ajustes del índice (`config/scout.php`) y si el `worker` estuvo parado: deja el índice igual a la base, sin vaciarlo, y se puede repetir. Si Meilisearch no está, la app sigue; solo la búsqueda por plato responde 503.
+
 Mientras dura la migración y el arranque la app no responde: unos 8 segundos en la prueba local, sin migraciones pendientes. A cambio, la versión anterior nunca atiende con el esquema nuevo.
 
 Si la migración falla, ningún servicio arranca; si la app no llega a responder `/up`, el despliegue también falla. En los dos casos `deploy.sh`:
