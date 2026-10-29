@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\DishSearchController;
 use App\Http\Controllers\Api\RestaurantGeoJsonController;
 use Illuminate\Support\Facades\Route;
 
@@ -16,3 +17,10 @@ use Illuminate\Support\Facades\Route;
 Route::get('/restaurants.geojson', RestaurantGeoJsonController::class)
     ->middleware(['throttle:restaurant-map', 'cache.headers:public;max_age=60;etag'])
     ->name('api.restaurants.geojson');
+
+// La búsqueda por plato (#17, ADR 0029): Meilisearch detrás de este endpoint,
+// nunca desde el navegador. La caché (un minuto, o ninguna si Meilisearch no
+// responde) la pone el controlador; el límite es por IP real.
+Route::get('/dishes/search', DishSearchController::class)
+    ->middleware('throttle:dish-search')
+    ->name('api.dishes.search');
