@@ -7,11 +7,18 @@ use App\Models\Dish;
 use App\Models\MenuSection;
 use App\Models\Restaurant;
 use App\Models\User;
+use Illuminate\Console\Scheduling\Event;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Scout\EngineManager;
 use Laravel\Scout\Engines\NullEngine;
+use Laravel\Scout\Jobs\MakeSearchable;
+use Laravel\Scout\Scout;
+use Meilisearch\Client;
+use Meilisearch\Contracts\DocumentsResults;
+use Meilisearch\Endpoints\Indexes;
 
 /*
 | El índice de platos al día (#17, ADR 0029): qué se indexa, y que cada
@@ -99,11 +106,133 @@ test('crear, editar, agotar y borrar un plato mueven el índice', function () {
     expect($spy->updated)->toBe([$dish->id]);
 
     $dish->update(['price' => 21000]);
-    $dish->update(['sold_out_until' => now()]);
-    expect($spy->updated)->toBe([$dish->id, $dish->id, $dish->id]);
+    expect($spy->updated)->toBe([$dish->id, $dish->id]);
 
-    $dish->delete();
+    // Fuera de la carta: sale del índice.
+    $dish->update(['available' => false]);
     expect($spy->deleted)->toBe([$dish->id]);
+
+    $dish->update(['available' => true]);
+    $dish->delete();
+    expect($spy->updated)->toBe([$dish->id, $dish->id, $dish->id])
+        ->and($spy->deleted)->toBe([$dish->id, $dish->id]);
+});
+
+test('un plato fuera de la carta no se indexa', function () {
+    expect(panelDish(Restaurant::factory()->create(), ['available' => false])->shouldBeSearchable())->toBeFalse();
+});
+
+test('agotar hoy o mover el orden no encola nada para el índice; cambiar lo indexado sí', function () {
+    config(['scout.queue' => true]);
+    $dish = panelDish(Restaurant::factory()->create());
+    Queue::fake();
+
+    $dish->update(['sold_out_until' => now()]);
+    $dish->update(['position' => 7, 'tags' => ['picante']]);
+    Queue::assertNotPushed(Scout::$makeSearchableJob);
+
+    $dish->update(['description_en' => 'With cassava.']);
+    Queue::assertPushed(Scout::$makeSearchableJob, 1);
+});
+
+test('reindexar un restaurante saca los platos que salieron de la carta', function () {
+    $restaurant = Restaurant::factory()->create();
+    $kept = panelDish($restaurant);
+    $gone = panelDish($restaurant, ['available' => false]);
+    $spy = spyEngine();
+
+    (new SyncRestaurantDishes($restaurant->id))->handle();
+
+    expect($spy->updated)->toBe([$kept->id])
+        ->and($spy->deleted)->toBe([$gone->id]);
+});
+
+test('veni:search-sync no sube los platos fuera de la carta', function () {
+    $restaurant = Restaurant::factory()->create();
+    $kept = panelDish($restaurant);
+    panelDish($restaurant, ['available' => false]);
+    $spy = spyEngine();
+
+    $this->artisan('veni:search-sync')->expectsOutputToContain('Platos enviados al índice: 1.')->assertSuccessful();
+
+    expect($spy->updated)->toBe([$kept->id]);
+});
+
+test('veni:search-sync no borra un plato que se publicó mientras recorría el índice', function () {
+    $published = panelDish(Restaurant::factory()->create());
+    $hidden = Restaurant::factory()->hidden()->create();
+    $stale = panelDish($hidden);
+    $republished = panelDish(Restaurant::factory()->hidden()->create());
+
+    $deleted = [];
+    $indexes = Mockery::mock(Indexes::class)->shouldIgnoreMissing();
+    $indexes->allows('getDocuments')->andReturnUsing(function () use ($published, $stale, $republished): DocumentsResults {
+        // Lo publican desde el panel justo ahora, sin pasar por la cola.
+        Restaurant::query()->whereKey($republished->restaurant_id)->update(['status' => 'unclaimed']);
+
+        return new DocumentsResults([
+            'results' => [['id' => $published->id], ['id' => $stale->id], ['id' => $republished->id]],
+            'offset' => 0, 'limit' => 1000, 'total' => 3,
+        ]);
+    });
+    $indexes->allows('deleteDocuments')->andReturnUsing(function (array $ids) use (&$deleted): array {
+        $deleted = [...$deleted, ...$ids];
+
+        return [];
+    });
+    $client = Mockery::mock(Client::class)->shouldIgnoreMissing();
+    $client->allows('index')->andReturn($indexes);
+    app()->instance(Client::class, $client);
+    app(EngineManager::class)->forgetDrivers();
+    config(['scout.driver' => 'meilisearch', 'scout.queue' => false]);
+
+    $this->artisan('veni:search-sync')->expectsOutputToContain('Platos que sobraban en el índice: 1.')->assertSuccessful();
+
+    expect($deleted)->toBe([$stale->id]);
+});
+
+test('veni:search-sync corre todos los días, de a uno y en un solo servidor', function () {
+    $event = collect(app(Schedule::class)->events())
+        ->first(fn (Event $event): bool => str_contains((string) $event->command, 'veni:search-sync'));
+
+    expect($event)->toBeInstanceOf(Event::class)
+        ->and($event?->expression)->toBe('0 4 * * *')
+        ->and($event?->withoutOverlapping)->toBeTrue()
+        ->and($event?->onOneServer)->toBeTrue();
+});
+
+test('los trabajos del índice esperan cada vez más antes de reintentar', function () {
+    expect((new SyncRestaurantDishes(1))->backoff)->toBe([10, 60, 300])
+        ->and(Scout::$makeSearchableJob)->not->toBe(MakeSearchable::class)
+        ->and((new Scout::$makeSearchableJob(new Collection))->backoff())->toBe([10, 60, 300])
+        ->and((new Scout::$removeFromSearchJob(new Collection))->backoff())->toBe([10, 60, 300]);
+});
+
+describe('categorías de la ficha', function () {
+    test('cambiarlas en una ficha publicada reindexa sus platos; sin cambios u oculta, no', function () {
+        $restaurant = Restaurant::factory()->create();
+        $hidden = Restaurant::factory()->hidden()->create();
+        $category = Category::factory()->create();
+        Queue::fake();
+
+        $restaurant->refresh()->syncCategories([$category->id]);
+        Queue::assertPushed(SyncRestaurantDishes::class, fn (SyncRestaurantDishes $job): bool => $job->restaurantId === $restaurant->id);
+
+        $restaurant->refresh()->syncCategories([$category->id]);
+        $hidden->refresh()->syncCategories([$category->id]);
+        Queue::assertPushed(SyncRestaurantDishes::class, 1);
+    });
+
+    test('si la ficha ya cambió de nombre en el mismo guardado, un solo trabajo', function () {
+        $restaurant = Restaurant::factory()->create();
+        $category = Category::factory()->create();
+        Queue::fake();
+
+        $restaurant->refresh()->forceFill(['name' => 'Otro nombre (ficticio)'])->save();
+        $restaurant->syncCategories([$category->id]);
+
+        Queue::assertPushed(SyncRestaurantDishes::class, 1);
+    });
 });
 
 test('un plato de una ficha oculta no se sube: se saca', function () {

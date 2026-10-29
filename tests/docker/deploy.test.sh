@@ -47,6 +47,7 @@ echo "$* [entorno=${APP_IMAGE:-} .env=$(sed -n 's/^APP_IMAGE=//p' .env)]" >> "$F
 case "$*" in
     "compose pull"*) step=pull ;;
     "compose up"*) step=up ;;
+    "compose exec -d"*) step=search-sync ;;
     "compose exec"*)
         step=health
         cat > /dev/null
@@ -199,7 +200,7 @@ acepta_una_version_fijada_por_digest() {
 baja_la_imagen_antes_de_tocar_el_env() {
     run_deploy "$new_image"
     assert_ok || return 1
-    assert_docker_steps 'pull up exec ps' || return 1
+    assert_docker_steps 'pull up exec exec ps' || return 1
     assert_step_saw pull "$new_image" "$old_image" || return 1
     assert_step_saw up '' "$new_image" || return 1
 }
@@ -260,8 +261,15 @@ los_registros_quedan_en_el_servidor_y_no_en_la_salida() {
 leido_por_la_entrada_estandar_llega_a_la_ultima_linea() {
     run_deploy_from_stdin "$new_image"
     assert_ok || return 1
-    assert_docker_steps 'pull up exec ps' || return 1
+    assert_docker_steps 'pull up exec exec ps' || return 1
     grep -q 'La app responde /up' "$out" || fail "no llegó al final: la entrada estándar se consumió antes"
+}
+
+si_falla_search_sync_el_despliegue_sigue() {
+    FAKE_DOCKER_FAILS=search-sync run_deploy "$new_image"
+    assert_ok || return 1
+    assert_env_only_changed "APP_IMAGE=$old_image" "APP_IMAGE=$new_image" || return 1
+    grep -q '^compose exec -d app php artisan veni:search-sync' "$calls" || fail "no lanzó veni:search-sync"
 }
 
 # --- Ejecución -----------------------------------------------------------------
@@ -290,6 +298,7 @@ run_test si_up_no_responde_vuelve_al_env_anterior
 run_test repetir_la_misma_version_no_reescribe_el_env
 run_test los_registros_quedan_en_el_servidor_y_no_en_la_salida
 run_test leido_por_la_entrada_estandar_llega_a_la_ultima_linea
+run_test si_falla_search_sync_el_despliegue_sigue
 
 echo
 echo "$((total - failures)) de $total pruebas pasaron"

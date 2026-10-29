@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Jobs\Search\MakeSearchable;
+use App\Jobs\Search\RemoveFromSearch;
 use App\Models\MenuSection;
 use App\Models\Restaurant;
 use App\Observers\SearchIndexObserver;
@@ -12,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Scout\Scout;
 use Meilisearch\Client as MeilisearchClient;
 
 class AppServiceProvider extends ServiceProvider
@@ -106,9 +109,12 @@ class AppServiceProvider extends ServiceProvider
             ->by((string) $request->ip()));
 
         // Los cambios de la ficha y de las secciones que mueven el índice de
-        // búsqueda por plato (ADR 0029); los del plato los sigue Scout.
+        // búsqueda por plato (ADR 0029); los del plato los sigue Scout, con
+        // esperas entre reintentos (App\Jobs\Search).
         Restaurant::observe(SearchIndexObserver::class);
         MenuSection::observe(SearchIndexObserver::class);
+        Scout::makeSearchableUsing(MakeSearchable::class);
+        Scout::removeFromSearchUsing(RemoveFromSearch::class);
 
         // Reclamos y retiros (#20): por IP aquí, con todos los envíos. El tope
         // por celular va en RestaurantContactRequest, después de validar. Pasado

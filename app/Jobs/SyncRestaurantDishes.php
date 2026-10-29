@@ -23,6 +23,16 @@ class SyncRestaurantDishes implements ShouldQueue
 {
     use Queueable;
 
+    /**
+     * Segundos de espera antes de cada reintento (el worker hace tres): si
+     * Meilisearch se reinicia, no se gastan todos en el mismo segundo. Los
+     * usan también los trabajos de Scout (App\Jobs\Search).
+     */
+    public const BACKOFF = [10, 60, 300];
+
+    /** @var list<int> */
+    public $backoff = self::BACKOFF;
+
     public function __construct(public readonly int $restaurantId)
     {
         $this->afterCommit();

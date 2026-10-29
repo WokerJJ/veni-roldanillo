@@ -16,3 +16,8 @@ Artisan::command('inspire', function () {
 Schedule::command('model:prune', [
     '--model' => [RestaurantClaim::class, RestaurantRemovalRequest::class],
 ])->daily()->onOneServer();
+
+// El índice de la búsqueda por plato (#17, ADR 0029) igual a la base: lo
+// mantiene el worker, y esto repara lo que se perdió (un trabajo que agotó
+// sus intentos, un worker parado). A la madrugada, cuando casi nadie busca.
+Schedule::command('veni:search-sync')->dailyAt('04:00')->withoutOverlapping()->onOneServer();
