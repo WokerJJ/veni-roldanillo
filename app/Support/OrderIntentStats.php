@@ -36,7 +36,7 @@ final readonly class OrderIntentStats
 
     public static function for(Restaurant $restaurant, int $days, ?CarbonImmutable $now = null): self
     {
-        $timezone = (string) config('app.timezone');
+        $timezone = config()->string('app.timezone');
         $today = ($now ?? CarbonImmutable::now())->setTimezone($timezone)->startOfDay();
         $currentStart = $today->subDays($days - 1);
         $previousStart = $currentStart->subDays($days);

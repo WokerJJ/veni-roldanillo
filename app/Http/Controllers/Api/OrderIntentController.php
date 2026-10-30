@@ -63,7 +63,7 @@ class OrderIntentController extends Controller
 
         // La IP solo vive en la llave de la caché, como huella (HMAC) y por
         // DEDUPE_SECONDS: nunca en order_intents.
-        $key = 'order-intent:'.hash_hmac('sha256', $request->ip().'|'.$restaurantId, (string) config('app.key'));
+        $key = 'order-intent:'.hash_hmac('sha256', $request->ip().'|'.$restaurantId, config()->string('app.key'));
 
         if (Cache::add($key, true, self::DEDUPE_SECONDS)) {
             $intent = new OrderIntent(['fulfillment' => Fulfillment::from($data['fulfillment'])]);
