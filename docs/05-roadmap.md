@@ -31,7 +31,7 @@ Cerrada: versión 0.1.0.
 - [x] "¿Es tu negocio? Reclámalo" y retiro de ficha (#20, ADR 0026)
 - [ ] Guía de platos típicos (ES/EN)
 - [ ] Registro de clics en "Pedir por WhatsApp" (order_intents) y estadísticas básicas del dueño
-- [ ] Páginas legales: tratamiento de datos, términos, política de reseñas
+- [x] Páginas legales: tratamiento de datos, términos, política de reseñas (#23, ADR 0030; borradores pendientes de revisión jurídica)
 
 ## Piloto
 
