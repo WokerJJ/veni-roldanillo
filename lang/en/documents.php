@@ -2,8 +2,11 @@
 
 // The public legal documents (#23, ADR 0030). Same structure and keys as
 // lang/es/documents.php (a test checks it); the Spanish text is the reference
-// one. :controller and :email are filled in by the controller.
+// one. :controller, :email, :holder, :address and :phone are filled in by the
+// controller.
 return [
+
+    'pending' => '[pending publication]',
 
     'privacy' => [
         'title' => 'Personal data processing',
@@ -13,7 +16,7 @@ return [
             'controller' => [
                 'heading' => 'Who is responsible for your data',
                 'content' => [
-                    'The data controller is :controller, the project behind this site in Roldanillo, Valle del Cauca, Colombia.',
+                    'The data controller is :controller, the project behind this site in Roldanillo, Valle del Cauca, Colombia, run by :holder, with its address at :address and phone number :phone.',
                     'For any question, correction, complaint or deletion request about your data, write to :email. That is the contact channel for this policy.',
                 ],
             ],
@@ -32,7 +35,7 @@ return [
                         'Claiming a listing ("Is this your business? Claim it") or asking for its removal: your name, your mobile number, your email if you leave it, your role or relationship with the business, the message or reason you write, and the date and version of the privacy notice you accepted. It is stored in our database, never published and never sent to third parties.',
                         'Owner and admin accounts: name, email, password (stored as a hash, never in plain text), language and role. They are created by the Vení team or come from an approved claim; the site has no open sign-up.',
                         'Business data: name, address, opening hours, menu, prices and the restaurant\'s WhatsApp number, so you can contact it. The business publishes or authorizes it. Places that come from OpenStreetMap are added only with their name, type and point on the map, never with phone numbers or emails, and stay hidden until they are checked.',
-                        'Technical records: when you visit the site, the server opens a session that stores your IP address, the browser you use and your last activity, so the site works and to protect it from abuse (attempt limits). It is deleted on its own a few hours after inactivity. Attempt limits keep the IP for a while and, on the forms, an encrypted fingerprint of the mobile number, not the number itself.',
+                        'Technical records: when you visit the site, the server opens a session that stores your IP address, the browser you use and your last activity, so the site works and to protect it from abuse (attempt limits). It is deleted after two hours of inactivity. Attempt limits keep for a while the IP, a fingerprint (HMAC) of the mobile number on the forms and, when signing in to the panels, a fingerprint of the email: never the number or the email in plain text.',
                     ],
                     'Search: what you type in the search box is used to answer and is not stored. If a search fails, the log records only the type of error, not what you searched for.',
                     'For now there are no reviews and no accounts to rate. When they arrive (see the review policy), this policy will be updated before we ask you for any new data.',
@@ -70,6 +73,7 @@ return [
                 'content' => [
                     [
                         'Reviewing a claim or a removal request and contacting you about it, at the mobile number or email you left.',
+                        'If your claim is approved, creating your owner account with that name and email, so you can manage the listing.',
                         'Giving owners and the admin team access to the panels.',
                         'Showing the directory with the businesses\' information.',
                         'Keeping the site running and secure: sessions, attempt limits and error logs.',
@@ -107,9 +111,9 @@ return [
                 'heading' => 'How long we keep it',
                 'content' => [
                     [
-                        'Claims and removal requests: while they are being reviewed and up to six months after they are resolved. After that, rejected ones are deleted and approved ones are anonymized: the name, mobile number, email, message and reason are deleted, and only the outcome remains (which listing, what was decided and when), which explains why a listing changed owner or was hidden.',
+                        'Claims and removal requests: while they are being reviewed and up to six months after they are resolved. After that, rejected ones are deleted and approved ones are anonymized: the name, mobile number, email, message or reason and the review note are deleted, and only what identifies no one remains: which listing, the role or relationship with the business that was stated (for example, "owner" or "employee"), what was decided, who on the team reviewed it and when. That explains why a listing changed owner or was hidden.',
                         'Owner and admin accounts: while they are active. If you ask for yours to be deleted, we delete it except for what a law requires us to keep.',
-                        'Sessions: they are deleted on their own after about two hours of inactivity.',
+                        'Sessions: they are deleted after two hours of inactivity. The cleanup runs every hour, so none lasts more than three. Attempt limits are deleted when they expire, with the same cleanup.',
                         'What is stored on your phone: as described above, or until you delete it.',
                     ],
                 ],
@@ -136,7 +140,7 @@ return [
                         'Queries (what data we have and what we do with it): we answer within 10 business days at most. If we cannot make it, we tell you why before the deadline and answer within 5 more business days at most.',
                         'Claims (correct, update, delete or revoke, or report that we did not follow this policy): we answer within 15 business days at most from the day after we receive it. If we cannot make it, we tell you why and answer within 8 more business days at most. If the claim is missing information, we ask you for it within the following 5 days; if two months go by without you sending it, we understand you withdrew it.',
                     ],
-                    'While a claim is being resolved, we mark the data as "claim in progress".',
+                    'While a complaint about a claim or removal request is being resolved, the admin team writes "complaint in progress" and the date in that request\'s review note, and changes it once it is resolved.',
                 ],
             ],
             'security' => [
@@ -155,7 +159,7 @@ return [
                 'heading' => 'Validity and changes',
                 'content' => [
                     'This policy applies from the date shown above, next to its version. If we change it significantly, we will say so on the site before applying the change; if a change affects what we use data we already have for, we will ask you for a new authorization.',
-                    'Requests sent before this version accepted the provisional notice of October 26, 2026 (version "2026-10-26"), which said the same as this policy about that data: it is used only to review the request, it is not published or shared, and it is deleted or anonymized six months after the request is resolved.',
+                    'Requests sent before this policy accepted the provisional notice of October 26, 2026 (version "2026-10-26"). That notice said the data is used only to review the request and get in touch about it, that it is not published or shared, and that it is deleted six months after the request is resolved. That is what happens: after six months the data that identifies the person is deleted; of an approved claim or removal request, only what identifies no one remains, as described in "How long". That notice did not mention creating the owner account: if your claim is from then and it is approved, we ask for your authorization before creating it.',
                     'The databases are kept for as long as Vení provides the service, with the periods for each kind of data stated above.',
                 ],
             ],
@@ -177,7 +181,7 @@ return [
             'orders' => [
                 'heading' => 'Orders are between you and the restaurant',
                 'content' => [
-                    'Vení does not sell food, does not charge, does not take payments and charges no commissions, neither to you nor to restaurants. When you order through WhatsApp, the site only puts the message together and opens it in WhatsApp; the order, the final price, delivery, payment and handover are agreed directly between you and the restaurant.',
+                    'Vení does not sell food, charges no commissions on orders and does not receive their payments. Restaurants can hire a featured plan, which is labeled "Sponsored" and never changes their reviews. When you order through WhatsApp, the site only puts the message together and opens it in WhatsApp; the order, the final price, delivery, payment and handover are agreed directly between you and the restaurant.',
                     'Vení is not a party to that agreement. Any complaint about an order (what arrived, how it arrived, how much it cost) goes to the restaurant, which answers as the seller under the Colombian Consumer Statute (Law 1480 of 2011).',
                 ],
             ],

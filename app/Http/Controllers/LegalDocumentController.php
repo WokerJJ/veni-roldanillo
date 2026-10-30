@@ -74,16 +74,28 @@ class LegalDocumentController extends Controller
 
     /**
      * El texto del documento en el idioma de la petición, con el responsable
-     * y el correo de contacto ya puestos.
+     * (config/privacy.php; «pendiente» si falta un dato) y el correo de
+     * contacto ya puestos.
      *
      * @return array{title: string, description: string, intro: string, sections: array<string, array{heading: string, content: list<string|list<string>>}>}
      */
     private function text(LegalDocument $document): array
     {
+        /** @var string $pending */
+        $pending = __('documents.pending');
+
         /** @var array{title: string, description: string, intro: string, sections: array<string, array{heading: string, content: list<string|list<string>>}>} $text */
         $text = __($document->langKey(), [
             'controller' => RestaurantContactRequest::PRIVACY_CONTROLLER,
             'email' => config()->string('privacy.contact_email'),
+            ...array_map(
+                fn (mixed $value): string => is_string($value) && trim($value) !== '' ? trim($value) : $pending,
+                [
+                    'holder' => config('privacy.controller.holder'),
+                    'address' => config('privacy.controller.address'),
+                    'phone' => config('privacy.controller.phone'),
+                ],
+            ),
         ]);
 
         return $text;

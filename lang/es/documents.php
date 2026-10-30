@@ -8,9 +8,14 @@
 // en los dos idiomas. Cambiar lo que dice un documento exige subir su versión
 // en App\Enums\LegalDocument.
 //
-// :controller y :email los pone el controlador (el responsable y el correo de
+// :controller, :email, :holder, :address y :phone los pone el controlador (el
+// responsable, el correo, el nombre legal, el domicilio y el teléfono de
 // config/privacy.php).
 return [
+
+    // Lo que dice la página en lugar de un dato del responsable que falta en
+    // config/privacy.php (en el repositorio, siempre).
+    'pending' => '[pendiente de publicar]',
 
     'privacy' => [
         'title' => 'Tratamiento de datos personales',
@@ -20,7 +25,7 @@ return [
             'controller' => [
                 'heading' => 'Quién responde por tus datos',
                 'content' => [
-                    'El responsable del tratamiento es :controller, el proyecto que hace este sitio en Roldanillo, Valle del Cauca, Colombia.',
+                    'El responsable del tratamiento es :controller, el proyecto que hace este sitio en Roldanillo, Valle del Cauca, Colombia, a cargo de :holder, con domicilio en :address y teléfono :phone.',
                     'Para cualquier consulta, corrección, queja o pedido de borrado sobre tus datos, escribinos a :email. Ese es el canal de atención de esta política.',
                 ],
             ],
@@ -39,7 +44,7 @@ return [
                         'Reclamar una ficha («¿Es tu negocio? Reclámalo») o pedir que la retiren: tu nombre, tu celular, tu correo si lo dejás, tu rol o relación con el negocio, el mensaje o el motivo que escribas, y la fecha y la versión del aviso de privacidad que aceptaste. Se guardan en nuestra base de datos, no se publican y no se mandan a terceros.',
                         'Cuentas de dueños y de administración: nombre, correo, contraseña (guardada cifrada con un hash, nunca en claro), idioma y rol. Las crea el equipo de Vení o salen de un reclamo aprobado; el sitio no tiene registro abierto.',
                         'Datos de los negocios: nombre, dirección, horarios, menú, precios y el número de WhatsApp del restaurante, para que lo puedas contactar. Los publica o autoriza el negocio. Los locales que vienen de OpenStreetMap entran solo con nombre, tipo y punto en el mapa, nunca con teléfonos ni correos, y quedan ocultos hasta verificarlos.',
-                        'Registros técnicos: al visitar el sitio, el servidor abre una sesión que guarda tu dirección IP, el navegador que usás y la última actividad, para que el sitio funcione y para protegerlo de abusos (límites de intentos). Se borra sola a las pocas horas de inactividad. Los límites de intentos guardan por un rato la IP y, en los formularios, una huella cifrada del celular, no el número.',
+                        'Registros técnicos: al visitar el sitio, el servidor abre una sesión que guarda tu dirección IP, el navegador que usás y la última actividad, para que el sitio funcione y para protegerlo de abusos (límites de intentos). Se borra a las dos horas de inactividad. Los límites de intentos guardan por un rato la IP, una huella (HMAC) del celular en los formularios y, en el ingreso a los paneles, una huella del correo: nunca el número ni el correo en claro.',
                     ],
                     'Búsqueda: lo que escribís en el buscador se usa para responder y no se guarda. Si la búsqueda falla, el registro anota solo el tipo de error, no lo que buscaste.',
                     'Por ahora no hay reseñas ni cuentas para calificar. Cuando lleguen (ver la política de reseñas), esta política se actualizará antes de pedirte cualquier dato nuevo.',
@@ -77,6 +82,7 @@ return [
                 'content' => [
                     [
                         'Revisar un reclamo o un pedido de retiro y contactarte por él, al celular o al correo que dejaste.',
+                        'Si se aprueba tu reclamo, crear tu cuenta de dueño con ese nombre y ese correo, para que administrés la ficha.',
                         'Dar acceso a los paneles a dueños y administración.',
                         'Mostrar el directorio con la información de los negocios.',
                         'Mantener el sitio funcionando y seguro: sesiones, límites de intentos y registros de errores.',
@@ -114,9 +120,9 @@ return [
                 'heading' => 'Por cuánto tiempo',
                 'content' => [
                     [
-                        'Reclamos y pedidos de retiro: mientras se revisan y hasta seis meses después de resolverlos. Pasado ese tiempo, los rechazados se borran y los aprobados se anonimizan: se borran el nombre, el celular, el correo, el mensaje y el motivo, y queda solo el resultado (qué ficha, qué se decidió y cuándo), que explica por qué una ficha cambió de dueño o se ocultó.',
+                        'Reclamos y pedidos de retiro: mientras se revisan y hasta seis meses después de resolverlos. Pasado ese tiempo, los rechazados se borran y los aprobados se anonimizan: se borran el nombre, el celular, el correo, el mensaje o el motivo y la nota de la revisión, y queda solo lo que no identifica a nadie: qué ficha, el rol o la relación con el negocio que se declaró (por ejemplo, «dueño» o «empleado»), qué se decidió, quién del equipo lo revisó y cuándo. Eso explica por qué una ficha cambió de dueño o se ocultó.',
                         'Cuentas de dueños y de administración: mientras estén activas. Si pedís que se borre la tuya, la borramos salvo lo que una ley nos obligue a conservar.',
-                        'Sesiones: se borran solas tras unas dos horas de inactividad.',
+                        'Sesiones: se borran tras dos horas de inactividad. La limpieza corre cada hora, así que ninguna dura más de tres. Los límites de intentos se borran al vencer, con la misma limpieza.',
                         'Lo guardado en tu teléfono: lo que se dice arriba, o hasta que lo borrés.',
                     ],
                 ],
@@ -143,7 +149,7 @@ return [
                         'Consultas (qué datos tenemos y qué hacemos con ellos): te respondemos en un máximo de 10 días hábiles. Si no alcanzamos, te avisamos el motivo antes de que venza el plazo y te respondemos en máximo 5 días hábiles más.',
                         'Reclamos (corregir, actualizar, borrar o revocar, o avisar que no cumplimos esta política): te respondemos en un máximo de 15 días hábiles desde el día siguiente a recibirlo. Si no alcanzamos, te avisamos el motivo y te respondemos en máximo 8 días hábiles más. Si al reclamo le falta información, te la pedimos en los 5 días siguientes; si pasan dos meses sin que la mandés, entendemos que desististe.',
                     ],
-                    'Mientras se resuelve un reclamo, marcamos el dato como «reclamo en trámite».',
+                    'Mientras se resuelve un reclamo sobre una solicitud de reclamo o de retiro, administración anota «reclamo en trámite» y la fecha en la nota de revisión de esa solicitud, y la cambia al resolverlo.',
                 ],
             ],
             'security' => [
@@ -162,7 +168,7 @@ return [
                 'heading' => 'Vigencia y cambios',
                 'content' => [
                     'Esta política rige desde la fecha que aparece arriba, junto a su versión. Si la cambiamos de forma importante, lo diremos en el sitio antes de aplicar el cambio; si un cambio afecta para qué usamos datos que ya tenemos, te pediremos una autorización nueva.',
-                    'Las solicitudes enviadas antes de esta versión aceptaron el aviso provisional del 26 de octubre de 2026 (versión «2026-10-26»), que decía lo mismo que esta política sobre esos datos: se usan solo para revisar la solicitud, no se publican ni se comparten, y se borran o anonimizan a los seis meses de resolverla.',
+                    'Las solicitudes enviadas antes de esta política aceptaron el aviso provisional del 26 de octubre de 2026 (versión «2026-10-26»). Ese aviso decía que los datos se usan solo para revisar la solicitud y contactar por ella, que no se publican ni se comparten y que se borran seis meses después de resolverla. Así se hace: a los seis meses se borran los datos que identifican a la persona; de un reclamo o un retiro aprobado queda solo lo que no identifica a nadie, como se dice en «Por cuánto tiempo». Ese aviso no nombraba la creación de la cuenta de dueño: si tu reclamo es de entonces y se aprueba, te pedimos la autorización antes de crearla.',
                     'Las bases de datos se conservan mientras Vení preste el servicio, con los plazos de cada dato que se dicen arriba.',
                 ],
             ],
@@ -184,7 +190,7 @@ return [
             'orders' => [
                 'heading' => 'Los pedidos son entre vos y el restaurante',
                 'content' => [
-                    'Vení no vende comida, no cobra, no recibe pagos y no cobra comisiones, ni a vos ni a los restaurantes. Cuando pedís por WhatsApp, el sitio solo arma el mensaje y lo abre en WhatsApp; el pedido, el precio final, el domicilio, el pago y la entrega se acuerdan directamente entre vos y el restaurante.',
+                    'Vení no vende comida, no cobra comisiones por los pedidos ni recibe sus pagos. Los restaurantes pueden contratar un plan destacado, que se marca como «Patrocinado» y nunca cambia sus reseñas. Cuando pedís por WhatsApp, el sitio solo arma el mensaje y lo abre en WhatsApp; el pedido, el precio final, el domicilio, el pago y la entrega se acuerdan directamente entre vos y el restaurante.',
                     'Vení no es parte de ese acuerdo. Cualquier reclamo por un pedido (lo que llegó, cómo llegó, cuánto costó) se hace al restaurante, que responde como vendedor según el Estatuto del Consumidor (Ley 1480 de 2011).',
                 ],
             ],

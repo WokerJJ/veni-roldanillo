@@ -8,6 +8,7 @@ use App\Models\MenuSection;
 use App\Models\Restaurant;
 use App\Observers\SearchIndexObserver;
 use App\Support\ContentSecurityPolicyProfiles;
+use App\Support\LegalReadiness;
 use GuzzleHttp\Client as GuzzleClient;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -132,5 +133,9 @@ class AppServiceProvider extends ServiceProvider
         if ($this->app->isProduction() && config('security.csp.report_only') === true) {
             Log::warning('CSP_REPORT_ONLY está activo en producción: la política de contenido no bloquea nada, solo informa en la consola del navegador.');
         }
+
+        // La política de datos publicada con el correo de ejemplo, sin el
+        // responsable o todavía como borrador (#23): avisa en el registro.
+        LegalReadiness::report();
     }
 }

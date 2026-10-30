@@ -21,6 +21,15 @@ dataset('legal documents', [
     'reseñas' => ['/reviews-policy', LegalDocument::Reviews],
 ]);
 
+/** Los textos del aviso plegable de los formularios de reclamo y retiro. */
+function legalFormNotice(string $locale): array
+{
+    return array_map(
+        fn (string $key): string => trans("requests.{$key}", [], $locale),
+        ['privacy_summary', 'privacy_controller', 'privacy_body', 'privacy_policy_link', 'privacy_contact', 'privacy_version', 'privacy_accept'],
+    );
+}
+
 /** Todas las cadenas de un documento ya armado (título, intro y secciones). */
 function legalPageText(array $document): string
 {
@@ -136,25 +145,41 @@ test('los textos de los documentos tienen las mismas claves y marcadores en los 
 
     // Solo los marcadores que pone el controlador.
     preg_match_all('/:([a-z]+)/', implode("\n", array_map('strval', $es)), $markers);
-    expect(array_values(array_unique($markers[1])))->each->toBeIn(['controller', 'email']);
+    expect(array_values(array_unique($markers[1])))->each->toBeIn(['controller', 'email', 'holder', 'address', 'phone']);
 });
 
-test('los enlaces del pie, la bienvenida y los créditos usan las rutas de los documentos', function () {
-    // Los dibujan LegalLinks.vue (en el pie y la bienvenida) y Credits.vue, y
-    // lo prueba Vitest; aquí, que las direcciones que escriben son las de
-    // routes/web.php.
-    $source = fn (string $file): string => (string) file_get_contents(resource_path("js/{$file}"));
+test('cada versión publicada fija su texto: cambiarlo exige subir la versión', function (LegalDocument $document) {
+    // tests/fixtures/legal-hashes.php guarda, por documento, la huella del
+    // texto (español e inglés) de cada versión. Lo que aceptó cada persona
+    // es «la versión X»: si el texto cambia y la versión no, ese registro
+    // deja de decir qué leyó.
+    /** @var array<string, array<string, string>> $hashes */
+    $hashes = require base_path('tests/fixtures/legal-hashes.php');
+    $text = json_encode([
+        trans($document->langKey(), [], 'es'),
+        trans($document->langKey(), [], 'en'),
+        // El resumen de los formularios es parte del aviso de la política.
+        ...($document === LegalDocument::Privacy ? [legalFormNotice('es'), legalFormNotice('en')] : []),
+    ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    $version = $document->version();
 
-    foreach (LegalDocument::cases() as $document) {
-        $path = route($document->routeName(), absolute: false);
+    expect($hashes[$document->value] ?? [])->toHaveKey($version, message: "{$document->value} {$version} no tiene huella en tests/fixtures/legal-hashes.php");
+    expect(hash('sha256', $text))->toBe($hashes[$document->value][$version], "El texto de {$document->value} cambió sin cambiar su versión: subí la versión y la fecha en App\Enums\LegalDocument y agregá la huella nueva a tests/fixtures/legal-hashes.php.");
+})->with(LegalDocument::cases());
 
-        expect($source('components/LegalLinks.vue'))->toContain("href: '{$path}'")
-            ->and($source('pages/Credits.vue'))->toContain("href=\"{$path}\"");
-    }
+test('el aviso de los formularios nombra todas las finalidades de la política (#23)', function (string $locale, string $account) {
+    // Si se aprueba el reclamo, con ese nombre y ese correo se crea la cuenta
+    // del dueño: es una finalidad y la casilla la tiene que decir.
+    expect(trans('requests.privacy_accept', [], $locale))->toContain($account);
 
-    expect($source('layouts/AppLayout.vue'))->toContain('<LegalLinks />')
-        ->and($source('pages/Home.vue'))->toContain('<LegalLinks short');
-});
+    $this->withoutVite();
+    $this->get("/privacy?lang={$locale}")->assertInertia(function (Assert $page) use ($account) {
+        expect(legalPageText($page->toArray()['props']['document']))->toContain($account);
+    });
+})->with([
+    ['es', 'cuenta de dueño con ese nombre'],
+    ['en', 'owner account with that name'],
+]);
 
 test('el formulario de reclamo enlaza la política con la versión que acepta', function () {
     $this->withoutVite();

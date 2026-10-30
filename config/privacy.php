@@ -16,4 +16,22 @@ return [
 
     'contact_email' => env('VENI_PRIVACY_CONTACT_EMAIL', 'privacidad@example.test'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Quién responde por los datos (#23, Decreto 1377 de 2013)
+    |--------------------------------------------------------------------------
+    |
+    | La política de tratamiento de datos (/privacy) nombra al responsable con
+    | su nombre legal, su domicilio y su teléfono. Nunca los reales en el
+    | repositorio: aquí no hay valor por defecto y la página dice «pendiente»;
+    | en producción, App\Support\LegalReadiness avisa en el registro si faltan.
+    |
+    */
+
+    'controller' => [
+        'holder' => env('VENI_PRIVACY_CONTROLLER_HOLDER'),
+        'address' => env('VENI_PRIVACY_CONTROLLER_ADDRESS'),
+        'phone' => env('VENI_PRIVACY_CONTROLLER_PHONE'),
+    ],
+
 ];
