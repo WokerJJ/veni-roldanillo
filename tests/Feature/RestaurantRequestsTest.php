@@ -2,6 +2,7 @@
 
 use App\Enums\ClaimantRole;
 use App\Enums\ClaimStatus;
+use App\Enums\LegalDocument;
 use App\Enums\RemovalRelationship;
 use App\Enums\RestaurantStatus;
 use App\Http\Controllers\RestaurantRequestController;
@@ -247,7 +248,13 @@ describe('reclamar una ficha', function () {
                 'controller' => 'Vení Roldanillo',
                 'contact_email' => 'privacidad@example.test',
                 'version' => RestaurantContactRequest::PRIVACY_NOTICE_VERSION,
+                'policy_url' => '/privacy',
             ]));
+    });
+
+    test('el aviso acepta la versión de la política de tratamiento de datos (#23)', function () {
+        // La versión que guarda cada solicitud es la de la política publicada en /privacy.
+        expect(RestaurantContactRequest::PRIVACY_NOTICE_VERSION)->toBe(LegalDocument::Privacy->version());
     });
 
     test('la base no deja un mensaje de más de 1000 caracteres', function () {

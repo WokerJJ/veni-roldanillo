@@ -190,6 +190,12 @@ watch(
                             <p>{{ t('requests.privacy_controller', { controller: privacy.controller }) }}</p>
                             <p>{{ t('requests.privacy_body') }}</p>
                             <p>
+                                <a :href="privacy.policy_url" target="_blank" rel="noopener" class="inline-flex min-h-touch items-center font-semibold underline underline-offset-4" data-privacy-policy>
+                                    {{ t('requests.privacy_policy_link') }}
+                                    <span class="sr-only">{{ t('credits.opens_new_tab') }}</span>
+                                </a>
+                            </p>
+                            <p>
                                 {{ t('requests.privacy_contact') }}
                                 <a :href="`mailto:${privacy.contact_email}`" class="font-semibold underline underline-offset-4 wrap-anywhere">{{ privacy.contact_email }}</a>
                             </p>

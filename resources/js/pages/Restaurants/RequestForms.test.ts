@@ -12,7 +12,7 @@ vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
  */
 
 const RESTAURANT = { slug: 'la-ceiba', name: 'La Ceiba (ficticio)', fictitious: true };
-const PRIVACY = { controller: 'Vení Roldanillo', contact_email: 'privacidad@example.test', version: '2026-10-26' };
+const PRIVACY = { controller: 'Vení Roldanillo', contact_email: 'privacidad@example.test', version: '0.1', policy_url: '/privacy' };
 
 type Kind = 'Claim' | 'Removal';
 
@@ -156,6 +156,17 @@ describe.each(['Claim', 'Removal'] as const)('Restaurants/%s', (kind) => {
         expect(privacy).toContain('Vení Roldanillo');
         expect(privacy).toContain('privacidad@example.test');
         expect(wrapper.get('[data-privacy] a[href="mailto:privacidad@example.test"]').text()).toBe('privacidad@example.test');
+    });
+
+    it('el aviso enlaza la política completa y dice su versión (#23)', async () => {
+        const { wrapper } = await mountForm(kind);
+        const policy = wrapper.get('[data-privacy-policy]');
+
+        expect(policy.attributes('href')).toBe('/privacy');
+        // En otra pestaña, para no perder lo que ya se escribió en el formulario.
+        expect(policy.attributes('target')).toBe('_blank');
+        expect(policy.text()).toContain('política completa de tratamiento de datos');
+        expect(wrapper.get('[data-privacy]').text()).toContain('Versión del aviso: 0.1');
     });
 
     it('el error de la autorización queda enlazado a la casilla', async () => {

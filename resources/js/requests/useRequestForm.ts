@@ -40,6 +40,8 @@ export interface PrivacyNotice {
     controller: string;
     contact_email: string;
     version: string;
+    /** La política completa de tratamiento de datos (/privacy, #23). */
+    policy_url: string;
 }
 
 /** Los campos de contacto vacíos, para empezar un formulario. */

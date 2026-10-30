@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ClaimStatus;
+use App\Enums\LegalDocument;
 use App\Enums\RestaurantStatus;
 use App\Http\Requests\RestaurantContactRequest;
 use App\Http\Requests\StoreRemovalRequestRequest;
@@ -125,6 +126,7 @@ class RestaurantRequestController extends Controller
                 'controller' => RestaurantContactRequest::PRIVACY_CONTROLLER,
                 'contact_email' => config()->string('privacy.contact_email'),
                 'version' => RestaurantContactRequest::PRIVACY_NOTICE_VERSION,
+                'policy_url' => route(LegalDocument::Privacy->routeName(), absolute: false),
             ],
         ]);
     }
