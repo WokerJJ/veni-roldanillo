@@ -61,6 +61,14 @@ describe('Créditos', () => {
         }
     });
 
+    it('enlaza los tres documentos legales a las rutas del servidor (#23)', async () => {
+        const wrapper = await mountCredits();
+
+        // Las de routes/web.php: legal.privacy, legal.terms y legal.reviews,
+        // las mismas que LEGAL_DOCUMENTS (LegalLinks.test.ts).
+        expect(wrapper.findAll('[data-legal-links] a').map((link) => link.attributes('href'))).toEqual(['/privacy', '/terms', '/reviews-policy']);
+    });
+
     it('está en inglés', async () => {
         const wrapper = await mountCredits('en');
 

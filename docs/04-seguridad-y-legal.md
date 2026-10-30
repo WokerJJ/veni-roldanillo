@@ -33,16 +33,30 @@ Un origen nuevo que la página necesite (otro host del mapa, un servicio externo
 ## Marco legal (Colombia)
 
 - **Ley 1581 de 2012 (Habeas Data):** política de tratamiento de datos, autorización explícita al registrarse, derechos de consulta, actualización y supresión. Datos mínimos (celular, alias). Direcciones solo en el dispositivo; ubicación: solo el resultado de la verificación.
-- **Reclamos y retiros de fichas (ADR 0026):** nombre, celular, correo opcional y lo que pide cada formulario, con la autorización expresa, su fecha (`privacy_accepted_at`) y la versión del aviso aceptada (`privacy_notice_version`); no se publican ni se mandan a terceros; a los seis meses de resueltos, los rechazados se borran y los aprobados se anonimizan (`model:prune` diario). Hasta que exista la política (#23), el formulario trae un resumen del tratamiento con el responsable y el correo de contacto (`VENI_PRIVACY_CONTACT_EMAIL`).
+- **Reclamos y retiros de fichas (ADR 0026):** nombre, celular, correo opcional y lo que pide cada formulario, con la autorización expresa, su fecha (`privacy_accepted_at`) y la versión del aviso aceptada (`privacy_notice_version`); no se publican ni se mandan a terceros; a los seis meses de resueltos, los rechazados se borran y los aprobados se anonimizan (`model:prune` diario). El formulario trae un resumen del tratamiento con el responsable y el correo de contacto (`VENI_PRIVACY_CONTACT_EMAIL`) y enlaza la política completa (`/privacy`); la versión aceptada es la de la política (`LegalDocument::PRIVACY_VERSION`). Las solicitudes enviadas antes de #23 guardan `2026-10-26`, el resumen provisional, que dice lo mismo sobre esos datos (ADR 0030).
 - **Ley 1480 de 2011 (Estatuto del Consumidor):** publicidad veraz; lo pagado se marca "Patrocinado".
 - **Derechos de autor:** solo información pública de los negocios; fotos y logos con autorización escrita; no copiar datos ni fotos de Google, TripAdvisor u otros. Única excepción: OpenStreetMap (ADR 0021).
 - **OpenStreetMap (ODbL):** atribución visible en el mapa y en la página de créditos (`/credits`). De OpenStreetMap se importan solo nombre, tipo y punto de los locales de comida, como fichas ocultas hasta verificarlas en la calle y con su procedencia guardada; nunca teléfonos, correos, sitios web ni redes. La parte de la base que viene de allí queda bajo ODbL y se entrega a quien la pida.
 - **Reseñas:** prohibido condicionar premios a calificaciones altas; política de reseñas pública.
 - **Propiedad intelectual:** software registrado ante la DNDA; marca ante la SIC (clases 9, 35, 42). El software no es patentable en Colombia (Decisión 486 de la CAN).
 
+## Documentos legales (#23, ADR 0030)
+
+Públicos, en español y en inglés, enlazados en el pie, en la bienvenida del inicio y en los créditos:
+
+| Documento | Ruta | Versión |
+| --- | --- | --- |
+| Tratamiento de datos personales | `/privacy` | `LegalDocument::PRIVACY_VERSION` |
+| Términos de uso | `/terms` | `LegalDocument::TERMS_VERSION` |
+| Política de reseñas (la que regirá cuando existan) | `/reviews-policy` | `LegalDocument::REVIEWS_VERSION` |
+
+- **Dónde vive el texto:** `lang/es/documents.php` (referencia) y `lang/en/documents.php`, con las mismas claves y marcadores (lo prueba `tests/Feature/LegalPagesTest.php`). No van en `lang/{es,en}.json`, que viaja entero al navegador: el texto llega como prop solo a su página. `:controller` y `:email` los pone el controlador desde `RestaurantContactRequest::PRIVACY_CONTROLLER` y `config/privacy.php`, y también `:holder`, `:address` y `:phone` (el nombre legal, el domicilio y el teléfono del responsable, `VENI_PRIVACY_CONTROLLER_*`); el que falta sale como «pendiente de publicar».
+- **Cómo se versionan:** cada documento tiene su versión y su fecha en `App\Enums\LegalDocument`, visibles arriba de la página. Cambiar lo que dice un documento exige subir las dos en el mismo commit; lo que dijo cada versión queda en git, y `tests/fixtures/legal-hashes.php` guarda la huella (sha256) del texto de cada versión en los dos idiomas (la de la política suma el aviso de los formularios): si el texto cambia sin subir la versión, `LegalPagesTest` falla. Los borradores van en `0.x`; la versión revisada por un abogado será `1.0`.
+- **El aviso de los formularios** (reclamo y retiro) es un resumen de la política y acepta su versión: el formulario manda la versión que mostró y el servidor la valida contra `LegalDocument::PRIVACY_VERSION`: si la política cambió con el formulario abierto, no guarda y pide revisar el aviso; `privacy_notice_version` guarda la versión validada. Si una versión nueva cambiara para qué se usan datos ya recogidos, hay que pedir una autorización nueva (la política lo dice).
+- **Borrador:** mientras no los revise un abogado, cada página dice «Borrador pendiente de revisión jurídica» (no es asesoría legal). Se apaga con `VENI_LEGAL_DRAFT_NOTICE=false` (`config/legal.php`), junto con la subida de versión.
+- **Retención de lo técnico:** `veni:prune-expired` (cada hora, `routes/console.php`) borra las sesiones inactivas por más de `SESSION_LIFETIME` y las filas vencidas de `cache` y `cache_locks`, como dice la política; Laravel solo lo hace por sorteo. Los logins de los paneles no ofrecen «Recordarme»: el sitio usa solo las cookies de sesión, CSRF e idioma.
+- **Pendiente para el despliegue:** la identidad del responsable (nombre legal, domicilio y teléfono en `VENI_PRIVACY_CONTROLLER_*`, y su correo real en `VENI_PRIVACY_CONTACT_EMAIL`; el Decreto 1377 los pide en la política, y en producción `App\Support\LegalReadiness` avisa en el registro mientras falten o sigan siendo de ejemplo), el proveedor de alojamiento nombrado como encargado y la revisión jurídica de los tres textos (con `VENI_LEGAL_DRAFT_NOTICE=false` al terminar).
+
 ## Documentos pendientes
 
-- Política de tratamiento de datos personales.
-- Términos y condiciones.
-- Política de reseñas.
 - Formato de autorización de uso de información e imágenes para restaurantes.

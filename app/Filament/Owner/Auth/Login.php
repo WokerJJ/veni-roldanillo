@@ -6,6 +6,7 @@ use App\Models\User;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as FilamentLogin;
+use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
@@ -39,6 +40,21 @@ class Login extends FilamentLogin
 
     /** Prefijo de la clave del límite por cuenta: cada panel cuenta aparte. */
     protected const string RATE_LIMIT_PREFIX = 'owner-panel-login';
+
+    /**
+     * Correo y contraseña, sin «Recordarme»: la política de datos (#23) dice
+     * que el sitio usa solo tres cookies (sesión, CSRF e idioma), y esa sería
+     * una cuarta, de semanas. Sin el campo en el formulario, getState() no lo
+     * devuelve y Filament entra sin recordar, aunque el navegador lo mande.
+     */
+    public function form(Schema $schema): Schema
+    {
+        return $schema
+            ->components([
+                $this->getEmailFormComponent(),
+                $this->getPasswordFormComponent(),
+            ]);
+    }
 
     public function authenticate(): ?LoginResponse
     {

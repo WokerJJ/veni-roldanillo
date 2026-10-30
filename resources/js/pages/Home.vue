@@ -37,7 +37,7 @@ const RouteDirections: FunctionalComponent = (_props, { attrs }) => (routeParts.
 | tanto el panel sigue con la bienvenida; si no bajan, lo dice y deja
 | volver a pedirlos.
 */
-const panelParts = shallowRef<{ summary: Component; list: Component; distances: Component; welcome: Component } | null>(null);
+const panelParts = shallowRef<{ summary: Component; list: Component; distances: Component; welcome: Component; legal: Component } | null>(null);
 let loadingPanelParts = false;
 const panelPartsFailed = ref(false);
 
@@ -47,6 +47,7 @@ const list = shallowRef<{ focusItem: (slug: string) => void } | null>(null);
 const RestaurantList: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.list, { ...attrs, ref: list }) : null);
 const RestaurantDistances: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.distances, attrs) : null);
 const WelcomeActions: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.welcome, attrs) : null);
+const LegalLinks: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.legal, attrs) : null);
 
 /*
 | La búsqueda y los filtros (#12, ADR 0028) viven en la dirección, como el
@@ -101,12 +102,13 @@ function loadPanelParts(): void {
         import('@/components/RestaurantList.vue'),
         import('@/components/RestaurantDistances.vue'),
         import('@/components/WelcomeActions.vue'),
+        import('@/components/LegalLinks.vue'),
         import('@/restaurants/finder'),
     ])
-        .then(([summary, list, distances, welcome, finderModule]) => {
+        .then(([summary, list, distances, welcome, legal, finderModule]) => {
             finder.value = finderModule;
             filters.value ??= finderModule.filtersFromUrl(page.url);
-            panelParts.value = { summary: summary.default, list: list.default, distances: distances.default, welcome: welcome.default };
+            panelParts.value = { summary: summary.default, list: list.default, distances: distances.default, welcome: welcome.default, legal: legal.default };
         })
         .catch((error: unknown) => {
             // Sin señal y sin la PWA guardada: se vuelve a pedir con «Reintentar», al tocar un restaurante o con «Ver la lista».
@@ -576,6 +578,8 @@ onBeforeUnmount(() => {
                 <Link href="/credits" class="mt-1 inline-flex min-h-touch items-center self-start text-sm text-ink-muted underline" data-credits>
                     {{ t('credits.link') }}
                 </Link>
+                <!-- Y los documentos legales (#23), que bajan con la lista. -->
+                <LegalLinks short class="text-sm text-ink-muted" />
             </template>
         </BottomSheet>
 

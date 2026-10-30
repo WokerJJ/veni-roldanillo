@@ -263,8 +263,24 @@ test('CSP_REPORT_ONLY se lee como booleano: off, no y 0 no lo activan', function
     'vacía' => ['', false],
 ]);
 
+/**
+ * Los datos legales completos (#23): sin esto, en producción también avisa
+ * App\Support\LegalReadiness, y estas pruebas cuentan solo el aviso de la CSP.
+ */
+function cspLegalReady(): void
+{
+    config([
+        'privacy.contact_email' => 'privacidad@veniroldanillo.co',
+        'privacy.controller.holder' => 'Responsable (ficticio)',
+        'privacy.controller.address' => 'Dirección (ficticia)',
+        'privacy.controller.phone' => '+57 300 000 0000',
+        'legal.draft_notice' => false,
+    ]);
+}
+
 test('al arrancar en producción con CSP_REPORT_ONLY avisa en el registro', function () {
     $this->app['env'] = 'production';
+    cspLegalReady();
     config(['security.csp.report_only' => true]);
     Log::spy();
 
@@ -275,6 +291,7 @@ test('al arrancar en producción con CSP_REPORT_ONLY avisa en el registro', func
 
 test('sin CSP_REPORT_ONLY, o fuera de producción, no avisa', function (string $env, bool $reportOnly) {
     $this->app['env'] = $env;
+    cspLegalReady();
     config(['security.csp.report_only' => $reportOnly]);
     Log::spy();
 

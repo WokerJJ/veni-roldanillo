@@ -2,12 +2,14 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\LegalDocument;
 use App\Providers\AppServiceProvider;
 use App\Rules\PlainText;
 use App\Support\ColombianMobile;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\Rule;
 
 /**
  * Lo que comparten «Reclámalo» y «Pedir que retiren esta ficha» (#20, ADR
@@ -31,10 +33,13 @@ abstract class RestaurantContactRequest extends FormRequest
 
     /**
      * Versión del aviso de privacidad que acepta quien envía (Ley 1581): se
-     * guarda en cada solicitud. Cambiar el texto de `requests.privacy_*` o el
-     * responsable exige subirla.
+     * guarda en cada solicitud. Desde #23 es la versión de la política de
+     * tratamiento de datos (/privacy, ADR 0030), a la que enlaza el aviso;
+     * las solicitudes anteriores guardan «2026-10-26», el resumen provisional
+     * del ADR 0026. Cambiar la política, el resumen (`requests.privacy_*`) o
+     * el responsable exige subir LegalDocument::PRIVACY_VERSION.
      */
-    public const PRIVACY_NOTICE_VERSION = '2026-10-26';
+    public const PRIVACY_NOTICE_VERSION = LegalDocument::PRIVACY_VERSION;
 
     /** Quién responde por los datos (el aviso lo nombra). */
     public const PRIVACY_CONTROLLER = 'Vení Roldanillo';
@@ -99,6 +104,9 @@ abstract class RestaurantContactRequest extends FormRequest
             'contact_phone' => ['required', 'string', 'regex:/^573\d{9}$/'],
             'contact_email' => ['nullable', 'string', new PlainText, 'max:'.self::EMAIL_MAX, 'email:rfc'],
             'accepts_privacy' => ['accepted'],
+            // La versión del aviso que vio quien envía: si la política cambió
+            // con el formulario abierto, aceptó otro texto y no se guarda (#23).
+            'privacy_notice_version' => ['required', 'string', Rule::in([self::PRIVACY_NOTICE_VERSION])],
             self::HONEYPOT => ['nullable', 'string', new PlainText, 'max:500'],
         ];
     }
@@ -115,6 +123,7 @@ abstract class RestaurantContactRequest extends FormRequest
             'contact_phone' => __('requests.error.phone'),
             'contact_email' => __('requests.error.email'),
             'accepts_privacy' => __('requests.error.privacy'),
+            'privacy_notice_version' => __('requests.error.privacy_changed'),
             self::HONEYPOT => __('requests.error.failed'),
         ];
     }

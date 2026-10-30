@@ -32,6 +32,8 @@ export interface ContactFields extends RequestFields {
     contact_phone: string;
     contact_email: string;
     accepts_privacy: boolean;
+    /** La versión del aviso que se mostró: el servidor rechaza una vieja (#23). */
+    privacy_notice_version: string;
     website: string;
 }
 
@@ -40,11 +42,13 @@ export interface PrivacyNotice {
     controller: string;
     contact_email: string;
     version: string;
+    /** La política completa de tratamiento de datos (/privacy, #23). */
+    policy_url: string;
 }
 
 /** Los campos de contacto vacíos, para empezar un formulario. */
 export function emptyContact(): ContactFields {
-    return { contact_name: '', contact_phone: '', contact_email: '', accepts_privacy: false, website: '' };
+    return { contact_name: '', contact_phone: '', contact_email: '', accepts_privacy: false, privacy_notice_version: '', website: '' };
 }
 
 export interface RequestForm<T extends RequestFields> {

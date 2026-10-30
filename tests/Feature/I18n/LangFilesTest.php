@@ -85,10 +85,12 @@ function langFilesKeysUsedInCode(): array
     }
 
     // Los textos del panel del dueño van en lang/{idioma}/panel.php, solo del
-    // servidor (ADR 0025); los revisa su propia prueba, abajo. Las claves con
+    // servidor (ADR 0025); los revisa su propia prueba, abajo. Los documentos
+    // legales, en lang/{idioma}/documents.php (ADR 0030), los revisan
+    // LegalPagesTest y LegalReadinessTest. Las claves con
     // «::» son de un paquete (las vistas de Filament copiadas en
     // resources/views/vendor) y las trae el paquete.
-    $keys = array_values(array_unique(array_filter($keys, fn (string $key): bool => ! str_starts_with($key, 'panel.') && ! str_contains($key, '::'))));
+    $keys = array_values(array_unique(array_filter($keys, fn (string $key): bool => ! str_starts_with($key, 'panel.') && ! str_starts_with($key, 'documents.') && ! str_contains($key, '::'))));
     sort($keys);
 
     return $keys;

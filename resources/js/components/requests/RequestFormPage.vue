@@ -42,7 +42,9 @@ defineSlots<{
     }) => unknown;
 }>();
 
-const form = useRequestForm<ContactFields & Extra>(action, { ...emptyContact(), ...extra });
+// La versión del aviso que se muestra viaja con el envío: si la política
+// cambió mientras el formulario estaba abierto, el servidor no guarda (#23).
+const form = useRequestForm<ContactFields & Extra>(action, { ...emptyContact(), privacy_notice_version: privacy.version, ...extra });
 
 const { t } = useI18n();
 
@@ -190,6 +192,12 @@ watch(
                             <p>{{ t('requests.privacy_controller', { controller: privacy.controller }) }}</p>
                             <p>{{ t('requests.privacy_body') }}</p>
                             <p>
+                                <a :id="fieldId('privacy_notice_version')" :href="privacy.policy_url" target="_blank" rel="noopener" class="inline-flex min-h-touch items-center font-semibold underline underline-offset-4" data-privacy-policy>
+                                    {{ t('requests.privacy_policy_link') }}
+                                    <span class="sr-only">{{ t('credits.opens_new_tab') }}</span>
+                                </a>
+                            </p>
+                            <p>
                                 {{ t('requests.privacy_contact') }}
                                 <a :href="`mailto:${privacy.contact_email}`" class="font-semibold underline underline-offset-4 wrap-anywhere">{{ privacy.contact_email }}</a>
                             </p>
@@ -211,6 +219,7 @@ watch(
                         <span>{{ t('requests.privacy_accept') }}</span>
                     </label>
                     <p v-if="fieldError('accepts_privacy')" :id="consentErrorId" class="mt-1 text-sm font-semibold" data-error>{{ fieldError('accepts_privacy') }}</p>
+                    <p v-if="fieldError('privacy_notice_version')" class="mt-1 text-sm font-semibold" data-error>{{ fieldError('privacy_notice_version') }}</p>
                 </div>
 
                 <button

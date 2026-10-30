@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Restaurant;
+use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -74,3 +75,21 @@ test('el correo se escribe con mayúsculas y entra igual', function () {
 
     $this->assertAuthenticatedAs($owner);
 });
+
+test('el login de los dos paneles no ofrece «Recordarme» ni deja una sesión recordada (#23)', function (string $panel) {
+    // La política de datos dice que el sitio usa solo tres cookies (sesión,
+    // CSRF e idioma): la de «recordarme» sería una cuarta, de semanas.
+    $user = $panel === 'admin' ? User::factory()->admin()->create() : panelMember(Restaurant::factory()->claimed()->create());
+    $user->forceFill(['email' => 'cuenta@example.test', 'password' => 'clave-de-prueba', 'remember_token' => null])->save();
+    Filament::setCurrentPanel(Filament::getPanel($panel));
+
+    Livewire::test(Filament::getPanel($panel)->getLoginRouteAction())
+        ->assertFormFieldDoesNotExist('remember')
+        // Aunque el navegador mande el campo a mano, no cuenta.
+        ->set('data.remember', true)
+        ->fillForm(['email' => 'cuenta@example.test', 'password' => 'clave-de-prueba'])
+        ->call('authenticate');
+
+    $this->assertAuthenticatedAs($user);
+    expect($user->fresh()?->getRememberToken())->toBeEmpty();
+})->with(['owner', 'admin']);

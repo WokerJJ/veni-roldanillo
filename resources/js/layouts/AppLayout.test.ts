@@ -36,6 +36,16 @@ describe('AppLayout', () => {
         expect(wrapper.get('footer [data-credits]').attributes('href')).toBe('/credits');
     });
 
+    it('el pie enlaza los tres documentos legales en una navegación con nombre, que baja aparte (#23)', async () => {
+        const wrapper = await mountLayout();
+        await vi.dynamicImportSettled();
+        const nav = wrapper.get('footer nav[data-legal-links]');
+
+        expect(nav.attributes('aria-label')).toBe('Documentos legales');
+        expect(nav.findAll('a').map((link) => link.attributes('href'))).toEqual(['/privacy', '/terms', '/reviews-policy']);
+        expect(nav.get('[data-legal-link="privacy"]').text()).toBe('Tratamiento de datos personales');
+    });
+
     it('en modo inmersivo ocupa justo el alto de la pantalla, sin pie de página', async () => {
         const wrapper = await mountLayout({ immersive: true });
 

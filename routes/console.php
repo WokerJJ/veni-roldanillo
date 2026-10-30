@@ -17,6 +17,11 @@ Schedule::command('model:prune', [
     '--model' => [RestaurantClaim::class, RestaurantRemovalRequest::class],
 ])->daily()->onOneServer();
 
+// Las sesiones inactivas y la caché vencida (#23): la política de datos dice
+// que la sesión, con la IP, se borra tras unas dos horas sin uso, y Laravel
+// solo lo hace por sorteo. Cada hora, así ninguna pasa de tres.
+Schedule::command('veni:prune-expired')->hourly()->onOneServer();
+
 // El índice de la búsqueda por plato (#17, ADR 0029) igual a la base: lo
 // mantiene el worker, y esto repara lo que se perdió (un trabajo que agotó
 // sus intentos, un worker parado). A la madrugada, cuando casi nadie busca.
