@@ -12,7 +12,7 @@ vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
  */
 
 const RESTAURANT = { slug: 'la-ceiba', name: 'La Ceiba (ficticio)', fictitious: true };
-const PRIVACY = { controller: 'Vení Roldanillo', contact_email: 'privacidad@example.test', version: '0.1', policy_url: '/privacy' };
+const PRIVACY = { controller: 'Vení Roldanillo', contact_email: 'privacidad@example.test', version: '9.9', policy_url: '/privacy' };
 
 type Kind = 'Claim' | 'Removal';
 
@@ -113,6 +113,31 @@ describe.each(['Claim', 'Removal'] as const)('Restaurants/%s', (kind) => {
         expect(options.preserveState).toBe(true);
     });
 
+    it('manda la versión del aviso que se mostró, para que el servidor rechace una vieja (#23)', async () => {
+        const { wrapper, lastPost } = await mountForm(kind);
+        await fillContact(wrapper);
+
+        await wrapper.get('form').trigger('submit');
+
+        expect(lastPost().data).toMatchObject({ privacy_notice_version: '9.9' });
+    });
+
+    it('si el aviso cambió, lo dice junto a la casilla y el resumen lleva al enlace de la política', async () => {
+        const { wrapper, lastPost } = await mountForm(kind);
+        await fillContact(wrapper);
+        await wrapper.get('form').trigger('submit');
+
+        lastPost().options.onError?.({ privacy_notice_version: 'El aviso de privacidad cambió: revisalo y volvé a aceptarlo.' });
+        await flushPromises();
+
+        const link = wrapper.get('[data-errors] a');
+        expect(link.text()).toBe('El aviso de privacidad cambió: revisalo y volvé a aceptarlo.');
+        const target = wrapper.find(link.attributes('href') ?? '#nada');
+        expect(target.exists()).toBe(true);
+        expect(target.attributes('data-privacy-policy')).toBeDefined();
+        expect(wrapper.findAll('[data-error]').map((error) => error.text())).toContain('El aviso de privacidad cambió: revisalo y volvé a aceptarlo.');
+    });
+
     it('mientras se envía, el botón lo dice y otro toque no manda dos veces', async () => {
         const { wrapper, inertia, lastPost } = await mountForm(kind);
         await wrapper.get('form').trigger('submit');
@@ -166,7 +191,7 @@ describe.each(['Claim', 'Removal'] as const)('Restaurants/%s', (kind) => {
         // En otra pestaña, para no perder lo que ya se escribió en el formulario.
         expect(policy.attributes('target')).toBe('_blank');
         expect(policy.text()).toContain('política completa de tratamiento de datos');
-        expect(wrapper.get('[data-privacy]').text()).toContain('Versión del aviso: 0.1');
+        expect(wrapper.get('[data-privacy]').text()).toContain('Versión del aviso: 9.9');
     });
 
     it('el error de la autorización queda enlazado a la casilla', async () => {

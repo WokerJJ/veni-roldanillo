@@ -49,6 +49,7 @@ function restaurantRequestsClaim(array $overrides = []): array
         'claimant_role' => 'owner',
         'message' => 'Tengo el local desde 2019 (dato ficticio).',
         'accepts_privacy' => true,
+        'privacy_notice_version' => LegalDocument::PRIVACY_VERSION,
         'website' => '',
         ...$overrides,
     ];
@@ -64,6 +65,7 @@ function restaurantRequestsRemoval(array $overrides = []): array
         'relationship' => 'owner',
         'reason' => 'El local cerró (dato ficticio).',
         'accepts_privacy' => '1',
+        'privacy_notice_version' => LegalDocument::PRIVACY_VERSION,
         'website' => '',
         ...$overrides,
     ];
@@ -238,6 +240,24 @@ describe('reclamar una ficha', function () {
 
         expect(RestaurantClaim::query()->sole()->privacy_notice_version)->toBe(RestaurantContactRequest::PRIVACY_NOTICE_VERSION);
     });
+
+    test('con un aviso que ya cambió no guarda y pide revisarlo (#23)', function (string $path, array $data, string $locale, string $message) {
+        // Quien abrió el formulario antes de un cambio de la política aceptó
+        // otro texto: se le pide leer el vigente antes de guardar nada.
+        Restaurant::factory()->create(['slug' => 'la-ceiba']);
+
+        foreach ([['privacy_notice_version' => '2026-10-26'], ['privacy_notice_version' => null]] as $stale) {
+            restaurantRequestsPost("{$path}?lang={$locale}", [...$data, ...$stale])
+                ->assertRedirect()
+                ->assertSessionHasErrors(['privacy_notice_version' => $message]);
+        }
+
+        expect(RestaurantClaim::query()->count())->toBe(0)
+            ->and(RestaurantRemovalRequest::query()->count())->toBe(0);
+    })->with([
+        'reclamo' => ['/restaurants/la-ceiba/claim', restaurantRequestsClaim(), 'es', 'El aviso de privacidad cambió: revisalo y volvé a aceptarlo.'],
+        'retiro' => ['/restaurants/la-ceiba/removal', restaurantRequestsRemoval(), 'en', 'The privacy notice has changed: please review it and accept it again.'],
+    ]);
 
     test('la página dice quién responde por los datos y a qué correo escribir', function () {
         Restaurant::factory()->create(['slug' => 'la-ceiba']);

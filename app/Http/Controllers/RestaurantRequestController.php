@@ -51,7 +51,7 @@ class RestaurantRequestController extends Controller
             $attributes = $request->safe()->only(['contact_name', 'contact_phone', 'contact_email', 'claimant_role', 'message']);
             $claim = new RestaurantClaim($attributes);
             $claim->privacy_accepted_at = now();
-            $claim->privacy_notice_version = RestaurantContactRequest::PRIVACY_NOTICE_VERSION;
+            $claim->privacy_notice_version = $request->string('privacy_notice_version')->toString();
 
             $this->savePendingOnce($restaurant->claims(), $claim);
         }
@@ -75,7 +75,7 @@ class RestaurantRequestController extends Controller
             $attributes = $request->safe()->only(['contact_name', 'contact_phone', 'contact_email', 'relationship', 'reason']);
             $removal = new RestaurantRemovalRequest($attributes);
             $removal->privacy_accepted_at = now();
-            $removal->privacy_notice_version = RestaurantContactRequest::PRIVACY_NOTICE_VERSION;
+            $removal->privacy_notice_version = $request->string('privacy_notice_version')->toString();
 
             $this->savePendingOnce($restaurant->removalRequests(), $removal);
         }
