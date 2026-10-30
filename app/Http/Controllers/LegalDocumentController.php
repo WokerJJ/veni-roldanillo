@@ -25,9 +25,10 @@ class LegalDocumentController extends Controller
         $locale = Locale::current();
         $text = $this->text($document);
         $date = $document->effectiveDate();
-        // Con un idioma, locale() devuelve la fecha; sin él, el idioma actual.
+        // Con un idioma, locale() devuelve la fecha (sin él, el idioma actual):
+        // la comprobación es para el tipo, la otra rama no ocurre.
         $localizedDate = $date->locale($locale->value);
-        assert($localizedDate instanceof CarbonImmutable);
+        $dateLabel = $localizedDate instanceof CarbonImmutable ? $localizedDate->isoFormat('LL') : $date->toDateString();
 
         $sections = [];
         foreach ($text['sections'] as $id => $section) {
@@ -50,7 +51,7 @@ class LegalDocumentController extends Controller
                 'intro' => $text['intro'],
                 'version' => $document->version(),
                 'effective_date' => $date->toDateString(),
-                'effective_date_label' => $localizedDate->isoFormat('LL'),
+                'effective_date_label' => $dateLabel,
                 'sections' => $sections,
             ],
             'draft' => config()->boolean('legal.draft_notice'),
