@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\LegalDocument;
+use App\Http\Controllers\LegalDocumentController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\RestaurantController;
 use App\Http\Controllers\RestaurantRequestController;
@@ -31,6 +33,12 @@ Route::controller(RestaurantRequestController::class)
 // Créditos (#58, ADR 0021): la atribución a OpenStreetMap (ODbL) y cómo pedir
 // la parte de la base que viene de allí.
 Route::inertia('/credits', 'Credits')->name('credits');
+
+// Documentos legales (#23, ADR 0030): la política de tratamiento de datos, los
+// términos de uso y la política de reseñas. El texto, en lang/{idioma}/documents.php.
+Route::get('/privacy', LegalDocumentController::class)->defaults('document', LegalDocument::Privacy->value)->name('legal.privacy');
+Route::get('/terms', LegalDocumentController::class)->defaults('document', LegalDocument::Terms->value)->name('legal.terms');
+Route::get('/reviews-policy', LegalDocumentController::class)->defaults('document', LegalDocument::Reviews->value)->name('legal.reviews');
 
 // Límite por IP real (AppServiceProvider): 429 con el aviso en el idioma de la petición.
 Route::put('/locale', LocaleController::class)
