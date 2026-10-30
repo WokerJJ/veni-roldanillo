@@ -76,6 +76,9 @@ describe('Documento legal', () => {
     it('la tabla de contenido enlaza cada sección por su ancla, y cada sección tiene su h2', async () => {
         const wrapper = await mountLegal();
         const links = wrapper.findAll('[data-toc] a');
+        // Sin números: las secciones no van numeradas en el texto (#23).
+        expect(wrapper.find('[data-toc] ol').exists()).toBe(false);
+        expect(wrapper.findAll('[data-toc] ul > li')).toHaveLength(links.length);
         const sections = wrapper.findAll('[data-section]');
 
         expect(links.map((link) => link.attributes('href'))).toEqual(['#privacy-controller', '#privacy-rights']);

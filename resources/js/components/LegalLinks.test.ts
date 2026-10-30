@@ -33,6 +33,13 @@ describe('LegalLinks', () => {
         ]);
     });
 
+    it('enlaza a las rutas de los documentos en el servidor (#23)', async () => {
+        const links = (await mountLinks()).findAll('a');
+
+        // Las de routes/web.php: legal.privacy, legal.terms y legal.reviews.
+        expect(links.map((link) => link.attributes('href'))).toEqual(['/privacy', '/terms', '/reviews-policy']);
+    });
+
     it('en la bienvenida, solo los datos personales y los términos', async () => {
         const links = (await mountLinks({ short: true })).findAll('a');
 

@@ -79,11 +79,12 @@ const linkClass = 'inline-flex min-h-touch items-center font-semibold underline 
 
         <nav class="mt-6 rounded-veni-sm border border-line px-4 py-3" aria-labelledby="documento-indice" data-toc>
             <h2 id="documento-indice" class="text-lg">{{ t('legal.toc') }}</h2>
-            <ol class="mt-1 list-disc pl-8">
+            <!-- Las secciones no van numeradas: viñetas, como las listas del texto. -->
+            <ul class="mt-1 list-disc pl-8">
                 <li v-for="section in document.sections" :key="section.id">
                     <a :href="`#${anchor(section)}`" class="inline-flex min-h-touch items-center underline underline-offset-4">{{ section.heading }}</a>
                 </li>
-            </ol>
+            </ul>
         </nav>
 
         <section
