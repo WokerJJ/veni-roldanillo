@@ -167,9 +167,12 @@ test('una reclamación resuelta lleva fecha de resolución', function () {
 })->throws(QueryException::class, 'restaurant_claims_review_consistency');
 
 test('borrar un usuario deja sus intenciones de pedido anónimas', function () {
-    $intent = OrderIntent::factory()->for(User::factory())->create();
+    // El carrito no llena device_hash (ADR 0031), pero la base lo sigue
+    // borrando si alguna vez llega a tenerlo.
+    $device = fn (): string => hash('sha256', fake()->uuid());
+    $intent = OrderIntent::factory()->for(User::factory())->create(['device_hash' => $device()]);
 
-    $other = OrderIntent::factory()->create();
+    $other = OrderIntent::factory()->create(['device_hash' => $device()]);
 
     expect($intent->device_hash)->not->toBeNull();
 
@@ -184,7 +187,7 @@ test('borrar un usuario deja sus intenciones de pedido anónimas', function () {
 
 test('order_intents no tiene columnas de dirección, contenido ni ubicación', function () {
     expect(Schema::getColumnListing('order_intents'))->toEqualCanonicalizing([
-        'id', 'restaurant_id', 'user_id', 'device_hash', 'confirmed', 'created_at', 'updated_at',
+        'id', 'restaurant_id', 'fulfillment', 'user_id', 'device_hash', 'confirmed', 'created_at', 'updated_at',
     ]);
 });
 
@@ -219,6 +222,13 @@ test('ninguna tabla tiene columnas de ubicación o dirección salvo restaurantes
 test('una promoción termina después de empezar', function () {
     Promotion::factory()->create(['starts_at' => now(), 'ends_at' => now()]);
 })->throws(QueryException::class, 'promotions_valid_period');
+
+test('fulfillment solo acepta domicilio o recoger (#22)', function () {
+    DB::table('order_intents')->insert([
+        'restaurant_id' => Restaurant::factory()->create()->id, 'fulfillment' => 'drone',
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+})->throws(QueryException::class, 'order_intents_fulfillment_check');
 
 test('el device_hash es un SHA-256 en hexadecimal', function () {
     OrderIntent::factory()->create(['device_hash' => 'dispositivo-sin-hash']);

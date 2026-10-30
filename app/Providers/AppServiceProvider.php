@@ -60,6 +60,14 @@ class AppServiceProvider extends ServiceProvider
     public const DISH_SEARCHES_PER_MINUTE = 60;
 
     /**
+     * Registros de «Enviar pedido por WhatsApp» por minuto desde una misma IP
+     * (POST /api/restaurants/{slug}/order-intents, #22, ADR 0031). Una
+     * persona manda uno o dos pedidos; el margen es para la NAT del operador
+     * móvil y lo que se pase solo infla una estadística, no expone nada.
+     */
+    public const ORDER_INTENTS_PER_MINUTE = 30;
+
+    /**
      * Register any application services.
      */
     public function register(): void
@@ -107,6 +115,9 @@ class AppServiceProvider extends ServiceProvider
             ->by((string) $request->ip()));
 
         RateLimiter::for('dish-search', fn (Request $request) => Limit::perMinute(self::DISH_SEARCHES_PER_MINUTE)
+            ->by((string) $request->ip()));
+
+        RateLimiter::for('order-intents', fn (Request $request) => Limit::perMinute(self::ORDER_INTENTS_PER_MINUTE)
             ->by((string) $request->ip()));
 
         // Los cambios de la ficha y de las secciones que mueven el índice de
