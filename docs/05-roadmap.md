@@ -30,7 +30,7 @@ Cerrada: versión 0.1.0.
 - [x] Panel de administración: alta de restaurantes, borradores de OpenStreetMap, reclamos y retiros, ocultar y mostrar fichas (#19, ADR 0027). Pendiente: moderación de reseñas (con #21), registro de cambios, 2FA
 - [x] "¿Es tu negocio? Reclámalo" y retiro de ficha (#20, ADR 0026)
 - [ ] Guía de platos típicos (ES/EN)
-- [ ] Registro de clics en "Pedir por WhatsApp" (order_intents) y estadísticas básicas del dueño
+- [x] Registro de clics en "Pedir por WhatsApp" (order_intents, sin identificador) y estadísticas básicas del dueño (#22, ADR 0031). Pendiente: «¿Al final sí pediste?»
 - [x] Páginas legales: tratamiento de datos, términos, política de reseñas (#23, ADR 0030; borradores pendientes de revisión jurídica)
 
 ## Piloto
