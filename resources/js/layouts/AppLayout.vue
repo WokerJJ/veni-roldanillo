@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { onBeforeUnmount, useTemplateRef } from 'vue';
+import type { Component, FunctionalComponent } from 'vue';
+import { h, onBeforeUnmount, shallowRef, useTemplateRef, watch } from 'vue';
 
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
@@ -46,6 +47,33 @@ const stopFocusingContent = router.on('navigate', () => {
 });
 
 onBeforeUnmount(stopFocusingContent);
+
+/*
+| Los documentos legales del pie (#23, ADR 0030) bajan aparte y solo cuando
+| hay pie: el layout viaja en el arranque y el inicio (inmersivo) no los
+| muestra; la bienvenida los pide con la lista. Si no bajan (sin señal), el
+| pie queda con los créditos, que sí van en el arranque.
+*/
+const legalLinks = shallowRef<Component>();
+const LegalLinks: FunctionalComponent = (_props, { attrs }) => (legalLinks.value === undefined ? null : h(legalLinks.value, attrs));
+
+watch(
+    () => immersive,
+    (isImmersive) => {
+        if (isImmersive || legalLinks.value !== undefined) {
+            return;
+        }
+
+        import('@/components/LegalLinks.vue')
+            .then((module) => {
+                legalLinks.value = module.default;
+            })
+            .catch((error: unknown) => {
+                console.error('[layout] No se pudieron cargar los enlaces legales.', error);
+            });
+    },
+    { immediate: true },
+);
 </script>
 
 <template>
@@ -89,10 +117,13 @@ onBeforeUnmount(stopFocusingContent);
         <footer v-if="!immersive" class="border-t border-line">
             <div class="mx-auto max-w-5xl px-4 py-6 text-sm text-ink-muted">
                 <p>{{ t('layout.footer', { year }) }}</p>
-                <!-- La atribución de OpenStreetMap (ODbL) y cómo pedir sus datos: ADR 0021. -->
-                <Link href="/credits" class="inline-flex min-h-touch items-center underline" data-credits>
-                    {{ t('credits.link') }}
-                </Link>
+                <div class="flex flex-wrap gap-x-4">
+                    <!-- La atribución de OpenStreetMap (ODbL) y cómo pedir sus datos: ADR 0021. -->
+                    <Link href="/credits" class="inline-flex min-h-touch items-center underline" data-credits>
+                        {{ t('credits.link') }}
+                    </Link>
+                    <LegalLinks />
+                </div>
             </div>
         </footer>
 

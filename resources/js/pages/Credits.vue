@@ -60,6 +60,15 @@ const linkClass = 'inline-flex min-h-touch items-center gap-1 font-semibold unde
             </a>
         </section>
 
+        <section class="mt-8 border-t border-line pt-6" aria-labelledby="creditos-legales" data-legal-links>
+            <h2 id="creditos-legales" class="text-xl">{{ t('credits.legal_heading') }}</h2>
+            <ul class="mt-2">
+                <li><Link href="/privacy" :class="linkClass">{{ t('legal.privacy_link') }}</Link></li>
+                <li><Link href="/terms" :class="linkClass">{{ t('legal.terms_link') }}</Link></li>
+                <li><Link href="/reviews-policy" :class="linkClass">{{ t('legal.reviews_link') }}</Link></li>
+            </ul>
+        </section>
+
         <section class="mt-8 border-t border-line pt-6" aria-labelledby="creditos-otros">
             <h2 id="creditos-otros" class="text-xl">{{ t('credits.others_heading') }}</h2>
             <ul class="mt-3 max-w-prose">
