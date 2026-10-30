@@ -2,6 +2,7 @@
 
 use App\Enums\LegalDocument;
 use App\Models\Restaurant;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -10,6 +11,9 @@ use Inertia\Testing\AssertableInertia as Assert;
 | Públicos, en los dos idiomas, con versión y fecha, el aviso de borrador que
 | se apaga con config y el texto desde lang/{idioma}/documents.php.
 */
+
+// El reclamo crea un restaurante: cada prueba en su transacción.
+uses(RefreshDatabase::class);
 
 dataset('legal documents', [
     'datos personales' => ['/privacy', LegalDocument::Privacy],
