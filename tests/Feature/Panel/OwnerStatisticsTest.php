@@ -116,3 +116,26 @@ test('una sola consulta, que usa el índice (restaurant_id, created_at)', functi
     $plan = collect(DB::select('EXPLAIN '.$queries[0]['query'], $queries[0]['bindings']))->pluck('QUERY PLAN')->implode("\n");
     expect($plan)->toContain('order_intents_restaurant_id_created_at_index');
 });
+
+test('la tabla lleva su título para lectores de pantalla y el cambio se anuncia (EVA-014)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+    actInPanel(panelMember($restaurant), $restaurant);
+
+    Livewire::test(Statistics::class)
+        ->assertSeeHtml('<caption')
+        ->assertSeeHtml(__('panel.stats.per_day').'</caption>')
+        ->assertSeeHtml('aria-live="polite"');
+});
+
+test('un período que no es número en la URL no rompe la página: queda en 7 días', function () {
+    // Con Livewire::withQueryParams y no con una petición HTTP: la petición
+    // con ?days=abc deja estado de Livewire en el proceso y ensucia el HTML de
+    // las pruebas que siguen (la de /offline).
+    $restaurant = Restaurant::factory()->claimed()->create();
+    actInPanel(panelMember($restaurant), $restaurant);
+
+    Livewire::withQueryParams(['days' => 'abc'])
+        ->test(Statistics::class)
+        ->assertOk()
+        ->assertSee(__('panel.stats.current', ['days' => 7]));
+});

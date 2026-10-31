@@ -38,7 +38,7 @@
         <x-filament::section>
             <p style="color: var(--gray-500)">{{ __('panel.stats.current', ['days' => $days]) }}</p>
             <p style="font-size: 1.875rem; font-weight: 600; font-variant-numeric: tabular-nums" data-stat="current">{{ $stats->current }}</p>
-            <p style="color: var(--gray-500); margin-top: 0.25rem" data-stat="change">{{ $changeText }}</p>
+            <p style="color: var(--gray-500); margin-top: 0.25rem" data-stat="change" aria-live="polite">{{ $changeText }}</p>
         </x-filament::section>
         <x-filament::section>
             <p style="color: var(--gray-500)">{{ __('panel.stats.previous', ['days' => $days]) }}</p>
@@ -60,6 +60,9 @@
 
     <x-filament::section :heading="__('panel.stats.per_day')">
         <table style="width: 100%; border-collapse: collapse">
+            {{-- El título de la tabla para lectores de pantalla; a la vista ya
+                 está el de la sección. --}}
+            <caption style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0">{{ __('panel.stats.per_day') }}</caption>
             <thead>
                 <tr style="color: var(--gray-500); text-align: start">
                     <th scope="col" style="padding: 0.25rem 1rem 0.25rem 0; text-align: start; font-weight: 500">{{ __('panel.stats.day') }}</th>
