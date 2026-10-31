@@ -110,9 +110,14 @@ describe('SavedOnDevice', () => {
         const wrapper = await mountSaved();
 
         await wrapper.get('[data-clear-all]').trigger('click');
+        await flushPromises();
         expect(wrapper.get('[data-clear-all-confirm]').text()).toBe('¿Borrar todo lo guardado en este teléfono?');
+        // El botón que se tocó desaparece: el foco va a «No», la opción que no borra (WCAG 2.4.3).
+        expect(document.activeElement).toBe(wrapper.get('[data-clear-all-no]').element);
         await wrapper.get('[data-clear-all-no]').trigger('click');
+        await flushPromises();
         expect(useAddressBook().addresses.value).toHaveLength(1);
+        expect(document.activeElement).toBe(wrapper.get('[data-clear-all]').element);
 
         await wrapper.get('[data-clear-all]').trigger('click');
         await wrapper.get('[data-clear-all-yes]').trigger('click');
@@ -125,12 +130,13 @@ describe('SavedOnDevice', () => {
         expect(wrapper.get('[data-announcement]').text()).toBe('Se borró todo lo guardado en este teléfono.');
     });
 
-    it('desde el carrito (sin restaurantes) no muestra los favoritos; cierra con Escape sin que siga al documento', async () => {
+    it('desde el carrito (sin restaurantes) no muestra los favoritos ni «Borrar todo lo guardado»; cierra con Escape sin que siga al documento', async () => {
         const wrapper = await mountSaved(null, 'en');
         const onDocument = vi.fn();
         document.addEventListener('keydown', onDocument);
 
         expect(wrapper.find('[data-favorites-title]').exists()).toBe(false);
+        expect(wrapper.find('[data-clear-all]').exists()).toBe(false);
         expect(wrapper.get('h2').text()).toBe('Saved on this phone');
 
         await wrapper.get('dialog').trigger('keydown', { key: 'Escape' });

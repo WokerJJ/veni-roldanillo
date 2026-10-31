@@ -19,7 +19,8 @@ import { LABEL_KEYS, LABEL_KINDS, labelText, suggestedKind } from '@/saved/label
  * Es un <dialog> nativo con showModal(), como el carrito: en un celular sale
  * de abajo (ADR 0022) y desde 768 px queda centrado. Lo abren la lista del
  * inicio (con `restaurants`, para poner nombre a cada favorito) y el carrito
- * (sin ellos: solo las direcciones). Baja con import() al abrirlo: no pesa
+ * (sin ellos: solo las direcciones, sin favoritos ni «Borrar todo lo
+ * guardado», que se ofrece solo desde el inicio). Baja con import() al abrirlo: no pesa
  * en el arranque. Sin v-model ni .prevent, como el carrito: sumarían código
  * al chunk de Vue (resources/js/map/bundle.test.ts).
  */
@@ -111,7 +112,7 @@ async function save(): Promise<void> {
 
     const saved = book.save(form.value, editing.value === 'new' ? null : editing.value);
     editing.value = null;
-    await announce(saved === null ? t('saved.full') : t('saved.address_saved', { label: labelText(form.value.label, t) }));
+    await announce(saved === null ? t('saved.full', { max: MAX_ADDRESSES }) : t('saved.address_saved', { label: labelText(form.value.label, t) }));
     await focusField('[data-addresses-title]');
 }
 
@@ -125,6 +126,17 @@ async function removeFavorite(slug: string, name: string | null): Promise<void> 
     favorites.remove(slug);
     await announce(t('favorites.removed', { name: name ?? t('saved.favorite_missing') }));
     await focusField('[data-favorites-title]');
+}
+
+/** Al pedir confirmación el botón desaparece: el foco va a «No», la opción que no borra (WCAG 2.4.3). */
+async function askClearAll(): Promise<void> {
+    confirmingClear.value = true;
+    await focusField('[data-clear-all-no]');
+}
+
+async function cancelClearAll(): Promise<void> {
+    confirmingClear.value = false;
+    await focusField('[data-clear-all]');
 }
 
 async function clearAll(): Promise<void> {
@@ -371,7 +383,7 @@ onBeforeUnmount(() => {
                 </ul>
             </section>
 
-            <section class="mt-6 border-t border-line pt-4" :aria-labelledby="`${id}-clear`">
+            <section v-if="restaurants !== null" class="mt-6 border-t border-line pt-4" :aria-labelledby="`${id}-clear`">
                 <h3 :id="`${id}-clear`" class="text-lg">{{ t('saved.clear_all') }}</h3>
                 <p class="text-sm text-ink-muted">{{ t('saved.clear_all_hint') }}</p>
                 <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -380,7 +392,7 @@ onBeforeUnmount(() => {
                         <button type="button" class="inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold" data-clear-all-yes @click="clearAll">
                             {{ t('saved.clear_all_yes') }}
                         </button>
-                        <button type="button" class="inline-flex min-h-touch items-center rounded-full px-4 hover:bg-surface" data-clear-all-no @click="confirmingClear = false">
+                        <button type="button" class="inline-flex min-h-touch items-center rounded-full px-4 hover:bg-surface" data-clear-all-no @click="cancelClearAll">
                             {{ t('order.cart.clear_no') }}
                         </button>
                     </template>
@@ -389,7 +401,7 @@ onBeforeUnmount(() => {
                         type="button"
                         class="inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold hover:bg-surface"
                         data-clear-all
-                        @click="confirmingClear = true"
+                        @click="askClearAll"
                     >
                         {{ t('saved.clear_all') }}
                     </button>
