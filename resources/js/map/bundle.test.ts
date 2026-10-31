@@ -354,6 +354,9 @@ describe('presupuesto de descarga', () => {
         // Tailwind; al arranque solo llega la lista de dependencias de lo que
         // baja después. Con una hoja de estilos propia en el botón de favorito
         // llegaba a 83,05: cada chunk nuevo en esa lista se paga aquí.
+        // Con las correcciones de la revisión de #16: 82,967 antes y 82,989
+        // después; useLazyDialog, compartido por la lista y el carrito, es
+        // uno de esos chunks.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 

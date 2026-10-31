@@ -3,7 +3,7 @@ import { computed, nextTick, ref } from 'vue';
 
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
-import { useFavorites } from '@/saved/favorites';
+import { MAX_FAVORITES, useFavorites } from '@/saved/favorites';
 
 /**
  * Marcar un restaurante como favorito (#16, ADR 0032), en la ficha y en el
@@ -30,7 +30,7 @@ async function toggle(): Promise<void> {
     await nextTick();
 
     if (!before && !now) {
-        announcement.value = t('favorites.full');
+        announcement.value = t('favorites.full', { max: MAX_FAVORITES });
     } else {
         announcement.value = t(now ? 'favorites.added' : 'favorites.removed', { name });
     }

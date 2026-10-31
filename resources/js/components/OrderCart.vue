@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { Component, FunctionalComponent } from 'vue';
-import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useId, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from 'vue';
 
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
+import { useLazyDialog } from '@/composables/useLazyDialog';
 import { formatPesos } from '@/i18n/intl';
 import type { DeliveryMode, DetailsField, OrderContext, OrderDetails } from '@/order/checkout';
 import {
@@ -25,7 +25,7 @@ import { useOrder } from '@/order/useOrder';
 import type { PaymentMethod, RestaurantProfile } from '@/restaurants/profile';
 import { PAYMENT_METHOD_KEYS } from '@/restaurants/profile';
 import type { AddressLabel, AddressLabelKind, SavedAddress } from '@/saved/addresses';
-import { LABEL_MAX_LENGTH, useAddressBook } from '@/saved/addresses';
+import { isStored, LABEL_MAX_LENGTH, MAX_ADDRESSES, useAddressBook } from '@/saved/addresses';
 import { LABEL_KEYS, LABEL_KINDS, labelText, suggestedKind } from '@/saved/labels';
 
 /**
@@ -42,9 +42,10 @@ import { LABEL_KEYS, LABEL_KINDS, labelText, suggestedKind } from '@/saved/label
  * del arranque (resources/js/map/bundle.test.ts).
  *
  * Las direcciones salen de la libreta del teléfono (#16, ADR 0032): al abrir
- * se completa con la usada más recientemente, se puede elegir otra y
- * «Guardar esta dirección» la guarda o la pone al día. La libreta se edita en
- * SavedOnDevice.vue, que baja con import() al tocar «Editar o borrar».
+ * se completa con la usada más recientemente, se puede elegir otra y, con
+ * «Guardar esta dirección» marcada, se guarda o se pone al día al enviar. La
+ * libreta se edita en SavedOnDevice.vue, que baja con import() al tocar
+ * «Editar o borrar».
  *
  * La ubicación se pide solo si la persona toca «Agregar mi ubicación», vive
  * en este componente mientras está abierto y sale únicamente dentro del
@@ -79,18 +80,20 @@ const number = computed(() => whatsappNumber(restaurant.whatsapp));
 | La libreta de direcciones (#16, ADR 0032): una para todos los restaurantes.
 | Lo que «Recordar» guardaba por restaurante antes de ella (#15) pasa a la
 | libreta la primera vez que se abre este carrito y se borra de donde estaba:
-| un solo lugar para cada dirección.
+| un solo lugar para cada dirección. Se borra solo si quedó escrita en la
+| libreta: llena o sin espacio, sigue donde estaba para la próxima vez.
 */
 const book = useAddressBook();
 const legacy = loadDelivery(restaurant.slug);
 
 if (legacy !== null) {
-    forgetDelivery(restaurant.slug);
+    const { neighborhood, address, reference, name } = legacy;
+    const empty = address.trim() === '' && neighborhood.trim() === '';
+    const same = book.addresses.value.find((saved) => saved.address === address && saved.neighborhood === neighborhood);
+    const moved = empty ? null : book.save({ label: same?.label ?? { kind: suggestedKind(book.addresses.value), text: '' }, neighborhood, address, reference, name }, same?.id ?? null);
 
-    if (legacy.address.trim() !== '' || legacy.neighborhood.trim() !== '') {
-        const same = book.addresses.value.find((saved) => saved.address === legacy.address && saved.neighborhood === legacy.neighborhood);
-        const { neighborhood, address, reference, name } = legacy;
-        book.save({ label: same?.label ?? { kind: suggestedKind(book.addresses.value), text: '' }, neighborhood, address, reference, name }, same?.id ?? null);
+    if (empty || (moved !== null && isStored(moved))) {
+        forgetDelivery(restaurant.slug);
     }
 }
 
@@ -116,11 +119,25 @@ const details = ref<OrderDetails>({
     ...(legacy === null ? {} : { mode: legacy.mode }),
     ...(initial === null ? {} : fromSaved(initial)),
 });
-const remember = ref(initial !== null);
-/** «Editar o borrar tus direcciones»: la pantalla de lo guardado, que baja con import() al tocarlo. */
-const manager = shallowRef<Component | null>(null);
-const managing = ref(false);
-const Manager: FunctionalComponent = (_props, { attrs }) => (manager.value === null ? null : h(manager.value, attrs));
+/** «Guardar esta dirección»: nunca arranca marcada, ni al completar con una guardada. */
+const remember = ref(false);
+/**
+ * «Editar o borrar tus direcciones»: la pantalla de lo guardado, que baja con
+ * import() al tocarlo. Al cerrarla, el foco vuelve a ese botón; si ya no está
+ * (se borraron todas), al barrio o al título.
+ */
+const {
+    Dialog: Manager,
+    open: managing,
+    show: openManager,
+    close: closeManager,
+} = useLazyDialog(
+    () => import('@/components/SavedOnDevice.vue'),
+    'carrito',
+    () => {
+        (dialog.value?.querySelector<HTMLElement>('[data-saved-manage], [data-neighborhood]') ?? title.value)?.focus();
+    },
+);
 /** Lo que se escribe en «¿Con cuánto pagás?», tal cual. */
 const cashText = ref('');
 type LocationState = 'idle' | 'locating' | 'denied' | 'error';
@@ -262,6 +279,11 @@ function onRemember(event: Event): void {
 
     rememberFull.value = false;
     remember.value = box?.checked === true;
+
+    // Una dirección nueva se guarda apenas se marca; una de la libreta se pone al día al enviar.
+    if (remember.value && activeId.value === null) {
+        saveAddress();
+    }
 }
 
 function onLabelKind(kind: AddressLabelKind): void {
@@ -273,21 +295,15 @@ function onLabelText(event: Event): void {
 }
 
 /**
- * «Guardar esta dirección» (antes «Recordar», #15): marcada, la dirección del
- * formulario queda en la libreta y se pone al día con cada cambio; desmarcada,
- * se borra de la libreta. Solo barrio, dirección, referencia y nombre: nunca
- * la ubicación ni el pago. Sin dirección ni barrio todavía, no hay qué guardar.
+ * «Guardar esta dirección» (antes «Recordar», #15): con la casilla marcada,
+ * la dirección del formulario queda en la libreta (una nueva, apenas se
+ * marca) y los cambios se guardan al enviar el pedido, no con cada tecla.
+ * Desmarcarla no borra nada: solo deja de ponerla al día (se borra en
+ * «Editar o borrar» o con «Borrar esta dirección»). Solo barrio, dirección,
+ * referencia y nombre: nunca la ubicación ni el pago. Sin dirección ni barrio
+ * todavía, no hay qué guardar.
  */
-function rememberedNow(): void {
-    if (!remember.value) {
-        if (activeId.value !== null) {
-            book.remove(activeId.value);
-            activeId.value = null;
-        }
-
-        return;
-    }
-
+function saveAddress(): void {
     const { neighborhood, address, reference, name } = details.value;
 
     if (address.trim() === '' && neighborhood.trim() === '') {
@@ -305,8 +321,6 @@ function rememberedNow(): void {
         activeId.value = saved;
     }
 }
-
-watch([remember, label, () => details.value.neighborhood, () => details.value.address, () => details.value.reference, () => details.value.name], rememberedNow);
 
 // Si la dirección en uso se borró (desde «Editar o borrar», o en otra pestaña), el formulario queda, sin guardar.
 watch(book.addresses, (addresses) => {
@@ -332,7 +346,7 @@ async function choose(saved: SavedAddress | null): Promise<void> {
 
     activeId.value = saved.id;
     label.value = { ...saved.label };
-    remember.value = true;
+    remember.value = false;
     update(fromSaved(saved));
     await announce(t('order.form.saved_used', { label: labelText(saved.label, t) }));
 }
@@ -347,35 +361,6 @@ async function forget(): Promise<void> {
     neighborhoodMissing.value = null;
     update({ neighborhood: '', address: '', reference: '', name: '' });
     await announce(t('order.form.forgotten'));
-}
-
-/** Si la pantalla de lo guardado ya bajó (una función: TypeScript no arrastra el null a la promesa). */
-function managerLoaded(): boolean {
-    return manager.value !== null;
-}
-
-function openManager(): void {
-    if (managerLoaded()) {
-        managing.value = true;
-
-        return;
-    }
-
-    import('@/components/SavedOnDevice.vue')
-        .then((module) => {
-            manager.value = module.default;
-            managing.value = true;
-        })
-        .catch((error: unknown) => {
-            // Sin señal y sin la PWA guardada: el botón queda para volver a intentarlo.
-            console.error('[carrito] No se pudo abrir lo guardado en el teléfono.', error);
-        });
-}
-
-async function closeManager(): Promise<void> {
-    managing.value = false;
-    await nextTick();
-    dialog.value?.querySelector<HTMLElement>('[data-saved-manage]')?.focus();
 }
 
 function step(index: number, delta: number): void {
@@ -448,7 +433,15 @@ async function onSend(event: MouseEvent): Promise<void> {
         return;
     }
 
-    rememberedNow();
+    // Al recoger no se toca la libreta. Con domicilio, la dirección enviada queda como la usada más recientemente.
+    if (delivery.value) {
+        if (remember.value) {
+            saveAddress();
+        } else if (activeId.value !== null) {
+            book.touch(activeId.value);
+        }
+    }
+
     await announce(t('order.form.sent'));
 }
 
@@ -807,7 +800,7 @@ onBeforeUnmount(() => {
                             <span>{{ t('order.form.remember') }}</span>
                         </label>
                         <p :id="`${id}-remember-hint`" class="text-sm text-ink-muted">{{ t('order.form.remember_hint') }}</p>
-                        <p v-if="rememberFull" class="mt-1 text-sm font-semibold" role="status" data-remember-full>{{ t('order.form.remember_full') }}</p>
+                        <p v-if="rememberFull" class="mt-1 text-sm font-semibold" role="status" data-remember-full>{{ t('order.form.remember_full', { max: MAX_ADDRESSES }) }}</p>
 
                         <fieldset v-if="remember" class="mt-2" data-label>
                             <legend class="font-semibold">{{ t('address.label') }}</legend>

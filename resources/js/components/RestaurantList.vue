@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import type { Component, FunctionalComponent } from 'vue';
-import { computed, h, nextTick, onMounted, ref, shallowRef, useId, useTemplateRef, watch } from 'vue';
+import { computed, onMounted, shallowRef, useId, useTemplateRef, watch } from 'vue';
 
 import DishResults from '@/components/DishResults.vue';
 import Icon from '@/components/Icon.vue';
@@ -9,6 +8,7 @@ import RestaurantFilters from '@/components/RestaurantFilters.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import TodaysLunches from '@/components/TodaysLunches.vue';
 import { useI18n } from '@/composables/useI18n';
+import { useLazyDialog } from '@/composables/useLazyDialog';
 import type { Restaurant } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
 import { hasFilters, NO_FILTERS } from '@/restaurants/filterParams';
@@ -166,39 +166,19 @@ const favoriteRows = computed(() => {
 });
 
 /** «Guardado en este teléfono»: la pantalla de lo guardado, que baja con import() al tocarlo. */
-const manager = shallowRef<Component | null>(null);
-const managing = ref(false);
 const savedButton = useTemplateRef<HTMLButtonElement>('savedButton');
-const Manager: FunctionalComponent = (_props, { attrs }) => (manager.value === null ? null : h(manager.value, attrs));
-
-/** Si la pantalla de lo guardado ya bajó (una función: TypeScript no arrastra el null a la promesa). */
-function managerLoaded(): boolean {
-    return manager.value !== null;
-}
-
-function openManager(): void {
-    if (managerLoaded()) {
-        managing.value = true;
-
-        return;
-    }
-
-    import('@/components/SavedOnDevice.vue')
-        .then((module) => {
-            manager.value = module.default;
-            managing.value = true;
-        })
-        .catch((error: unknown) => {
-            // Sin señal y sin la PWA guardada: el botón queda para volver a intentarlo.
-            console.error('[lista] No se pudo abrir lo guardado en el teléfono.', error);
-        });
-}
-
-async function closeManager(): Promise<void> {
-    managing.value = false;
-    await nextTick();
-    savedButton.value?.focus();
-}
+const {
+    Dialog: Manager,
+    open: managing,
+    show: openManager,
+    close: closeManager,
+} = useLazyDialog(
+    () => import('@/components/SavedOnDevice.vue'),
+    'lista',
+    () => {
+        savedButton.value?.focus();
+    },
+);
 
 const allSamples = computed(() => all.length > 0 && all.every(({ fictitious }) => fictitious));
 const categories = computed(() => categoriesOf(all, locale.value));
