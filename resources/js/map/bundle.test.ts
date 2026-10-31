@@ -348,6 +348,12 @@ describe('presupuesto de descarga', () => {
         // Con los platos (#17, ADR 0029): 82,71 antes y 82,73 después. La
         // sección, la petición y su estado bajan con la lista; al arranque
         // solo llegan las clases nuevas de Tailwind en el CSS de siempre.
+        // Con las direcciones y los favoritos (#16, ADR 0032): 82,985 antes y
+        // 82,971 después. La libreta, los favoritos y su pantalla bajan con el
+        // resumen, la lista, la ficha y el carrito, sin clases nuevas de
+        // Tailwind; al arranque solo llega la lista de dependencias de lo que
+        // baja después. Con una hoja de estilos propia en el botón de favorito
+        // llegaba a 83,05: cada chunk nuevo en esa lista se paga aquí.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
