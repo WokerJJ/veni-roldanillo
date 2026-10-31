@@ -9,7 +9,15 @@ import { LEGAL_DOCUMENTS } from '@/legal/documents';
  * de las páginas con pie lleva los tres; la bienvenida del inicio, los dos
  * primeros (`short`). Baja aparte del arranque (AppLayout y Home lo piden con
  * import()); los créditos, al lado, sí van en el arranque.
+ *
+ * Antes de la navegación va el enlace a la guía de platos típicos (#21), que
+ * se muestra en los mismos dos lugares y por eso baja con este chunk: en el
+ * arranque no cabía ni un enlace más (resources/js/map/bundle.test.ts). Van
+ * sin envoltura, como hijos del contenedor (la fila del pie o la columna de
+ * la bienvenida), y los dos reciben la clase que le pongan al componente.
  */
+defineOptions({ inheritAttrs: false });
+
 const { short } = defineProps<{ short?: boolean }>();
 
 const { t } = useI18n();
@@ -18,7 +26,8 @@ const LINKS = short ? LEGAL_DOCUMENTS.slice(0, 2) : LEGAL_DOCUMENTS;
 </script>
 
 <template>
-    <nav :aria-label="t('legal.nav_label')" data-legal-links>
+    <Link v-bind="$attrs" href="/dishes" class="inline-flex min-h-touch items-center self-start underline" data-dish-guide-link>{{ t('layout.dish_guide_link') }}</Link>
+    <nav v-bind="$attrs" :aria-label="t('legal.nav_label')" data-legal-links>
         <ul class="flex flex-wrap gap-x-4">
             <li v-for="link in LINKS" :key="link.href">
                 <Link :href="link.href" class="inline-flex min-h-touch items-center underline" :data-legal-link="link.key">{{ t(link.label) }}</Link>

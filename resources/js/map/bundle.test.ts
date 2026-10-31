@@ -348,6 +348,11 @@ describe('presupuesto de descarga', () => {
         // Con los platos (#17, ADR 0029): 82,71 antes y 82,73 después. La
         // sección, la petición y su estado bajan con la lista; al arranque
         // solo llegan las clases nuevas de Tailwind en el CSS de siempre.
+        // Con los documentos legales (#23) quedó en 82,985. La guía de platos
+        // (#21), como toda página nueva, suma una entrada al registro de
+        // páginas de app.ts (83,007 solo con eso); su enlace baja con los
+        // documentos legales (LegalLinks) y no con el arranque, y el registro
+        // se achicó (claves sin «./pages» y un error más corto): 82,98.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 

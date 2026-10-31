@@ -145,6 +145,15 @@ describe('Home', () => {
         expect(credits.text()).toBe('Créditos y datos de OpenStreetMap');
     });
 
+    it('la bienvenida enlaza la guía de platos típicos, que baja con la lista (#21)', async () => {
+        const { wrapper } = await mountHome({ locale: 'en' });
+        await vi.dynamicImportSettled();
+
+        const guide = wrapper.get('section [data-dish-guide-link]');
+        expect(guide.attributes('href')).toBe('/dishes');
+        expect(guide.text()).toBe('Typical dishes guide');
+    });
+
     it('muestra el mapa de Roldanillo', async () => {
         const { map } = await mountHome();
 
