@@ -356,13 +356,19 @@ describe('presupuesto de descarga', () => {
         // Abrir la lista cuando la dirección trae una búsqueda (#21) la
         // decide la bienvenida, que baja con la lista: en Home.vue solo queda
         // escuchar su aviso (82,99). Hacerlo en Home.vue lo pasaba (83,02).
+        // Con lo que trajo main (#22) midió 83,002: se aplicó la regla de
+        // abajo. El mapa de los íconos bajo demanda (una entrada por ícono:
+        // crecía con el set) pasó a un chunk que baja con el primero que se
+        // pide (icons/onDemand.ts): 82,26. Se midió también diferir lo que
+        // se ve del aviso de versión nueva (UpdatePrompt.vue): sacaba 0,125,
+        // a cambio de partir su región de estado, y no se hizo.
         //
-        // Quedan menos de 10 bytes (los hashes de los chunks que se piden con
-        // import() mueven unos pocos). Desde acá la regla es esta: la próxima
-        // página (su entrada en el registro de app.ts) o lo próximo que sume
-        // al arranque tiene que sacar antes algo de él, en el mismo cambio, y
-        // medirlo aquí; si no hay qué sacar, se abre una decisión (un ADR) y
-        // recién entonces se sube el presupuesto. No se sube para que entre.
+        // Desde acá la regla es esta: la próxima página (su entrada en el
+        // registro de app.ts) o lo próximo que sume al arranque tiene que
+        // sacar antes algo de él, en el mismo cambio, y medirlo aquí; si no
+        // hay qué sacar, se abre una decisión (un ADR) y recién entonces se
+        // sube el presupuesto. No se sube para que entre. Los hashes de los
+        // chunks que se piden con import() mueven unos pocos bytes.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
@@ -395,6 +401,16 @@ describe('presupuesto de descarga', () => {
             expect.arrayContaining([chunkOf('/resources/js/components/RouteLayer.vue').fileName, chunkOf('/resources/js/components/RouteDirections.vue').fileName]),
         );
         expect(loadedWith(chunkOf('/resources/js/components/RouteLayer.vue')).some((chunk) => has(chunk, /\/resources\/js\/routing\/veni-mapa\/router\.ts$/))).toBe(true);
+    });
+
+    it('el mapa de los íconos bajo demanda no baja con el arranque: crece con cada ícono del set', () => {
+        const catalog = chunkOf('/resources/js/icons/onDemand.ts');
+        const initial = initialChunks();
+
+        expect(initial).not.toContain(catalog);
+        expect(initial.some((chunk) => chunk.dynamicImports.includes(catalog.fileName))).toBe(true);
+        // En el arranque quedan los íconos del layout, que no pueden llegar tarde.
+        expect(initial.some((chunk) => has(chunk, /\/resources\/icons\/colombia\/(?:idioma|luna|sol)\.svg/))).toBe(true);
     });
 
     it('la ficha de un restaurante no baja con el arranque: es un chunk aparte', () => {
