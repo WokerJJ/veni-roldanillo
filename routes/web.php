@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\LegalDocument;
+use App\Http\Controllers\DishGuideController;
 use App\Http\Controllers\LegalDocumentController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\RestaurantController;
@@ -39,6 +40,10 @@ Route::inertia('/credits', 'Credits')->name('credits');
 Route::get('/privacy', LegalDocumentController::class)->defaults('document', LegalDocument::Privacy->value)->name('legal.privacy');
 Route::get('/terms', LegalDocumentController::class)->defaults('document', LegalDocument::Terms->value)->name('legal.terms');
 Route::get('/reviews-policy', LegalDocumentController::class)->defaults('document', LegalDocument::Reviews->value)->name('legal.reviews');
+
+// La guía de platos típicos (#21): el texto, en lang/{idioma}/guide.php, viaja
+// solo a su página (como los documentos legales, ADR 0030).
+Route::get('/dishes', DishGuideController::class)->name('dishes.guide');
 
 // Límite por IP real (AppServiceProvider): 429 con el aviso en el idioma de la petición.
 Route::put('/locale', LocaleController::class)
