@@ -353,6 +353,16 @@ describe('presupuesto de descarga', () => {
         // páginas de app.ts (83,007 solo con eso); su enlace baja con los
         // documentos legales (LegalLinks) y no con el arranque, y el registro
         // se achicó (claves sin «./pages» y un error más corto): 82,98.
+        // Abrir la lista cuando la dirección trae una búsqueda (#21) la
+        // decide la bienvenida, que baja con la lista: en Home.vue solo queda
+        // escuchar su aviso (82,99). Hacerlo en Home.vue lo pasaba (83,02).
+        //
+        // Quedan menos de 10 bytes (los hashes de los chunks que se piden con
+        // import() mueven unos pocos). Desde acá la regla es esta: la próxima
+        // página (su entrada en el registro de app.ts) o lo próximo que sume
+        // al arranque tiene que sacar antes algo de él, en el mismo cambio, y
+        // medirlo aquí; si no hay qué sacar, se abre una decisión (un ADR) y
+        // recién entonces se sube el presupuesto. No se sube para que entre.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
