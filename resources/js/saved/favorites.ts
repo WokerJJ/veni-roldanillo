@@ -10,15 +10,18 @@ import { isRecord, readItem, writeItem } from '@/device/localStore';
  *
  * Como solo es el slug, el nombre y lo demás salen de la lista del mapa: un
  * favorito que ya no está (se ocultó o se retiró) no aparece y no rompe nada;
- * si vuelve, vuelve como favorito. Hasta 100.
+ * si vuelve, vuelve como favorito. Hasta 100, con slugs de hasta 140
+ * caracteres como los del servidor.
  */
 
 export const FAVORITES_KEY = 'veni:favorites';
 export const MAX_FAVORITES = 100;
-const MAX_RAW_LENGTH = 12_000;
 /** La forma de un slug de Laravel (Str::slug): minúsculas, números y guiones. */
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const SLUG_MAX_LENGTH = 100;
+/** El largo de la columna `restaurants.slug`. */
+const SLUG_MAX_LENGTH = 140;
+/** Lo más que se lee: los 100 favoritos con el slug más largo, entre comillas y comas. */
+const MAX_RAW_LENGTH = MAX_FAVORITES * (SLUG_MAX_LENGTH + 3) + 20;
 
 interface Stored {
     v: 1;

@@ -40,11 +40,20 @@ describe('los favoritos', () => {
         expect(favorites.slugs.value).toEqual([]);
     });
 
+    it('acepta slugs de hasta 140 caracteres, como el servidor, y 100 de ellos', () => {
+        const longest = (index: number): string => `${String(index).padStart(3, '0')}-${'a'.repeat(136)}`;
+        const slugs = Array.from({ length: MAX_FAVORITES }, (_, index) => longest(index));
+
+        expect(useFavorites().toggle(longest(0))).toBe(true);
+        expect(useFavorites().toggle(`${longest(1)}a`)).toBe(false);
+        expect(parseFavorites(JSON.stringify({ v: 1, data: slugs }))).toEqual(slugs);
+    });
+
     it('descarta lo que no tiene forma de favoritos', () => {
         expect(parseFavorites('no es json')).toEqual([]);
         expect(parseFavorites(JSON.stringify({ v: 2, data: ['la-ceiba'] }))).toEqual([]);
         expect(parseFavorites(JSON.stringify({ v: 1, data: 'la-ceiba' }))).toEqual([]);
-        expect(parseFavorites('x'.repeat(12_001))).toEqual([]);
+        expect(parseFavorites('x'.repeat(100_000))).toEqual([]);
         expect(parseFavorites(JSON.stringify({ v: 1, data: ['la-ceiba', 7, 'La Ceiba', '../x', 'la-ceiba', 'el-guadual'] }))).toEqual(['la-ceiba', 'el-guadual']);
     });
 
