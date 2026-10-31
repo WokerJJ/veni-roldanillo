@@ -1,9 +1,41 @@
 import type { Lunch, Restaurant, RestaurantCategory } from './api';
 import type { Filters } from './filterParams';
+import { filtersFromUrl as readFilters, hasFilters } from './filterParams';
 import { businessDay, openStatus } from './openStatus';
 
 // Leer y escribir los filtros de la dirección también baja con la lista: el inicio los pide de aquí.
-export { filtersFromUrl, hasFilters, NO_FILTERS, sameAddress, writeFilters } from './filterParams';
+export { hasFilters, NO_FILTERS, sameAddress, writeFilters } from './filterParams';
+
+/*
+| Una dirección con búsqueda o filtros (`/?q=sancocho`: «Buscar dónde lo
+| sirven», de la guía de platos, #21, o un enlace compartido) abre la lista
+| una vez, cuando ya están los restaurantes: ahí están la búsqueda y la
+| sección «Platos» (#17), que el mapa solo no muestra. Sin un parámetro
+| aparte, para que los enlaces ya compartidos también la abran.
+|
+| Lo decide la bienvenida (WelcomeActions.vue), que se monta recién cuando
+| hay restaurantes y baja con la lista: en el inicio solo queda escuchar su
+| `list`, porque el arranque no tiene lugar (resources/js/map/bundle.test.ts).
+| Se reconocen por ser el mismo objeto que leyó el inicio de su dirección: los
+| que se cambian en la lista son otros, y al cerrarla no la vuelven a abrir.
+*/
+const listFromUrl = new WeakSet<Readonly<Filters>>();
+
+/** Los filtros que pide una dirección (filterParams.ts); con alguno puesto, abren la lista una vez. */
+export function filtersFromUrl(url: string): Filters {
+    const filters = readFilters(url);
+
+    if (hasFilters(filters)) {
+        listFromUrl.add(filters);
+    }
+
+    return filters;
+}
+
+/** ¿Son los filtros que trajo la dirección y todavía no abrieron la lista? Responde que sí una sola vez. */
+export function opensListFromUrl(filters: Readonly<Filters> | null): boolean {
+    return filters !== null && listFromUrl.delete(filters);
+}
 
 /*
 | Búsqueda, filtros, «Almuerzos de hoy» y «Sugiéreme algo» del inicio (#12),

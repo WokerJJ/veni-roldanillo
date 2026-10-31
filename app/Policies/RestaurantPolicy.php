@@ -43,6 +43,15 @@ class RestaurantPolicy
     }
 
     /**
+     * Las estadísticas de «Enviar pedido por WhatsApp» (#22, ADR 0031): las
+     * del dueño de la ficha y de administración; un empleado no las ve.
+     */
+    public function viewStatistics(User $user, Restaurant $restaurant): bool
+    {
+        return $user->isAdmin() || $user->ownsRestaurant($restaurant);
+    }
+
+    /**
      * Borrar es solo del administrador (el dueño pide el retiro de la ficha).
      * Sin restore ni forceDelete: no hay borrado lógico (para retirar una
      * ficha sin borrarla está el estado hidden).

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
 import type { Restaurant } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
 import { NO_FILTERS } from '@/restaurants/filterParams';
+import { opensListFromUrl } from '@/restaurants/finder';
 import { useFinderPanel } from '@/restaurants/useFinder';
 
 /**
@@ -17,6 +18,9 @@ import { useFinderPanel } from '@/restaurants/useFinder';
  * «Sugerime algo» elige uno al azar entre los abiertos ahora que cumplen los
  * filtros y lo emite como si lo hubieran tocado en el mapa (`select`); si no
  * hay ninguno, lo dice en su región de estado.
+ *
+ * Si el inicio se abrió con una búsqueda o filtros en la dirección (#21), al
+ * montarse pide abrir la lista (`list`), una sola vez (finder.ts).
  */
 const { restaurants, filters = null } = defineProps<{
     restaurants: readonly Restaurant[];
@@ -27,6 +31,8 @@ const emit = defineEmits<{
     select: [slug: string];
     /** Abrir la lista en «Almuerzos de hoy». */
     lunches: [];
+    /** Abrir la lista: la dirección traía una búsqueda o filtros. */
+    list: [];
     'update:filters': [filters: Filters];
 }>();
 
@@ -42,6 +48,12 @@ const { filtered, lunches, announced, suggest: pick } = useFinderPanel(
     },
 );
 const lunchCount = computed(() => lunches.value.length);
+
+onMounted(() => {
+    if (opensListFromUrl(filters)) {
+        emit('list');
+    }
+});
 
 function suggest(): void {
     const slug = pick();

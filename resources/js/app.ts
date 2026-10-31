@@ -33,11 +33,14 @@ if (import.meta.env.PROD) {
 void createInertiaApp({
     title: (title) => (title ? `${title} · ${appName}` : appName),
     resolve: (name) => {
-        const pages = import.meta.glob<DefineComponent>('./pages/**/*.vue');
-        const page = pages[`./pages/${name}.vue`];
+        // Con `base`, las claves del registro de páginas van sin «./pages»: el
+        // registro viaja en el arranque y cada página nueva le suma una entrada
+        // (resources/js/map/bundle.test.ts).
+        const pages = import.meta.glob<DefineComponent>('./**/*.vue', { base: './pages' });
+        const page = pages[`./${name}.vue`];
 
         if (!page) {
-            throw new Error(`Página de Inertia no encontrada: ${name}`);
+            throw new Error(`No existe la página ${name}.`);
         }
 
         return page();

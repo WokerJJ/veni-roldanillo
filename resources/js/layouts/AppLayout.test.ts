@@ -36,6 +36,15 @@ describe('AppLayout', () => {
         expect(wrapper.get('footer [data-credits]').attributes('href')).toBe('/credits');
     });
 
+    it('el pie enlaza la guía de platos típicos, que baja con los documentos legales (#21)', async () => {
+        const wrapper = await mountLayout();
+        await vi.dynamicImportSettled();
+
+        const guide = wrapper.get('footer [data-dish-guide-link]');
+        expect(guide.attributes('href')).toBe('/dishes');
+        expect(guide.text()).toBe('Guía de platos típicos');
+    });
+
     it('el pie enlaza los tres documentos legales en una navegación con nombre, que baja aparte (#23)', async () => {
         const wrapper = await mountLayout();
         await vi.dynamicImportSettled();

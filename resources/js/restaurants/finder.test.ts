@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import { EL_GUADUAL, LA_CEIBA, restaurant } from '@/testing/restaurants';
 
-import { categoriesOf, filterRestaurants, matchesQuery, normalizeText, pickSuggestion, todaysLunches, withoutUnknownCategory } from './finder';
+import {
+    categoriesOf,
+    filterRestaurants,
+    filtersFromUrl,
+    matchesQuery,
+    normalizeText,
+    opensListFromUrl,
+    pickSuggestion,
+    todaysLunches,
+    withoutUnknownCategory,
+} from './finder';
 import { NO_FILTERS } from './filterParams';
 
 /** Miércoles 7 de octubre de 2026, 12:00 en Colombia: La Ceiba (11–15) abierta, El Guadual (18–02) cerrado. */
@@ -162,5 +172,17 @@ describe('pickSuggestion', () => {
         expect(pickSuggestion(abiertos, NOON, () => 0.999, 'tercero')?.slug).toBe('segundo');
         expect(pickSuggestion([EL_GUADUAL, LA_CEIBA], NOON, () => 0, LA_CEIBA.slug)?.slug).toBe(LA_CEIBA.slug);
         expect(pickSuggestion(abiertos, NOON, () => 0, 'cerrado-o-ajeno')?.slug).toBe(LA_CEIBA.slug);
+    });
+});
+
+describe('opensListFromUrl (#21)', () => {
+    it('los filtros que trajo la dirección abren la lista una sola vez; sin filtros, o con otros, no', () => {
+        const fromUrl = filtersFromUrl('/?q=sancocho');
+
+        expect(opensListFromUrl(fromUrl)).toBe(true);
+        expect(opensListFromUrl(fromUrl)).toBe(false);
+        expect(opensListFromUrl(filtersFromUrl('/?lang=es'))).toBe(false);
+        expect(opensListFromUrl({ ...filtersFromUrl('/?q=sancocho') })).toBe(false);
+        expect(opensListFromUrl(null)).toBe(false);
     });
 });

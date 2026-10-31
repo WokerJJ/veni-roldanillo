@@ -557,6 +557,7 @@ onBeforeUnmount(() => {
                             :filters="filters"
                             @select="selectFromMap"
                             @lunches="openList('lunches')"
+                            @list="openList()"
                             @update:filters="filters = $event"
                         />
                         <SampleDataBadge v-if="hasSampleData" />
