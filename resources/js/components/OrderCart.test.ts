@@ -1,6 +1,7 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
+import { forgetSentOrderIntents } from '@/order/intent';
 import type { OrderItem } from '@/order/selection';
 import { resetOrders, useOrder } from '@/order/useOrder';
 import type { RestaurantProfile } from '@/restaurants/profile';
@@ -104,9 +105,19 @@ function stubCurrentPosition(result: { latitude: number; longitude: number; accu
 
 enableAutoUnmount(afterEach);
 
+// El aviso de «Enviar» (#22) no sale a la red en las pruebas.
+beforeEach(() => {
+    forgetSentOrderIntents();
+    vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))),
+    );
+});
+
 afterEach(() => {
     resetOrders();
     window.localStorage.clear();
+    vi.unstubAllGlobals();
 });
 
 describe('OrderCart', () => {
@@ -240,6 +251,51 @@ describe('OrderCart', () => {
         expect(link.attributes('target')).toBe('_blank');
         expect(link.attributes('rel')).toBe('noopener noreferrer');
         expect(await clickSend(link.element as HTMLElement)).toBe(false);
+    });
+
+    it('«Enviar» avisa al servidor sin frenar el enlace, solo con la entrega (#22, ADR 0031)', async () => {
+        const stub = stubCurrentPosition({ latitude: 4.412812, longitude: -76.154734, accuracy: 18.4 });
+        const { wrapper } = await mountCart();
+        await wrapper.get('[data-neighborhood]').setValue('El Mirador (ficticio)');
+        await wrapper.get('[data-address]').setValue('Cra 5 #8-20');
+        await wrapper.get('[data-name]').setValue('Ana');
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
+        await wrapper.get('[data-location-add]').trigger('click');
+        await flushPromises();
+        expect(stub).toHaveBeenCalledOnce();
+        const fetchMock = vi.mocked(fetch);
+        expect(fetchMock).not.toHaveBeenCalled();
+
+        // El aviso sale en el mismo clic, antes de cualquier espera: no hay
+        // await entre el toque y la petición, y el clic no se frena.
+        const link = wrapper.get('[data-send]').element as HTMLElement;
+        let calledDuringClick = false;
+        link.addEventListener('click', () => {
+            calledDuringClick = fetchMock.mock.calls.length === 1;
+        });
+        expect(await clickSend(link)).toBe(false);
+        expect(calledDuringClick).toBe(true);
+
+        expect(fetchMock).toHaveBeenCalledOnce();
+        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toBe('/api/restaurants/prueba-la-ceiba/order-intents');
+        expect(init.keepalive).toBe(true);
+        expect(init.body).toBe('{"fulfillment":"delivery"}');
+        for (const secret of ['Cra 5', 'Ana', 'Sancocho', '4.41', '45']) {
+            expect(JSON.stringify([url, init])).not.toContain(secret);
+        }
+
+        // Un doble toque no se manda dos veces.
+        await clickSend(link);
+        expect(fetchMock).toHaveBeenCalledOnce();
+    });
+
+    it('si falta algo, «Enviar» no avisa al servidor', async () => {
+        const { wrapper } = await mountCart();
+
+        await clickSend(wrapper.get('[data-send]').element as HTMLElement);
+
+        expect(fetch).not.toHaveBeenCalled();
     });
 
     it('«¿con cuánto pagás?» sale solo con efectivo y avisa si no es un valor o no alcanza', async () => {

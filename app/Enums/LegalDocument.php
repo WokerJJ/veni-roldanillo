@@ -24,7 +24,7 @@ enum LegalDocument: string
      * que aceptan los formularios de reclamo y retiro (ADR 0026), que guardan
      * este valor en `privacy_notice_version`.
      */
-    public const PRIVACY_VERSION = '0.2';
+    public const PRIVACY_VERSION = '0.3';
 
     public const TERMS_VERSION = '0.2';
 

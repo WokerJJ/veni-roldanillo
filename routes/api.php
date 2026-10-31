@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\DishSearchController;
+use App\Http\Controllers\Api\OrderIntentController;
 use App\Http\Controllers\Api\RestaurantGeoJsonController;
+use App\Http\Middleware\RequireSameOriginJson;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -24,3 +26,13 @@ Route::get('/restaurants.geojson', RestaurantGeoJsonController::class)
 Route::get('/dishes/search', DishSearchController::class)
     ->middleware('throttle:dish-search')
     ->name('api.dishes.search');
+
+// El toque en «Enviar pedido por WhatsApp» (#22, ADR 0031): solo el
+// restaurante y si era domicilio o recoger, para las estadísticas del dueño.
+// Sin sesión ni cookies, así que no hay CSRF que verificar:
+// RequireSameOriginJson exige JSON (un formulario de otro sitio no lo puede
+// mandar sin CORS) y rechaza lo que el navegador marca como de otro sitio u
+// otro origen. El límite es por IP (o /64), como huella HMAC.
+Route::post('/restaurants/{slug}/order-intents', OrderIntentController::class)
+    ->middleware(['throttle:order-intents', RequireSameOriginJson::class])
+    ->name('api.order-intents.store');

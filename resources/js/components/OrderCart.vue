@@ -16,6 +16,7 @@ import {
     parseCash,
     REFERENCE_MAX_LENGTH,
 } from '@/order/checkout';
+import { recordOrderIntent } from '@/order/intent';
 import { orderMessage, whatsappNumber, whatsappUrl } from '@/order/message';
 import type { OrderItem } from '@/order/selection';
 import { MAX_QUANTITY, MIN_QUANTITY } from '@/order/selection';
@@ -40,6 +41,7 @@ import { PAYMENT_METHOD_KEYS } from '@/restaurants/profile';
  * La ubicación se pide solo si la persona toca «Agregar mi ubicación», vive
  * en este componente mientras está abierto y sale únicamente dentro del
  * texto del mensaje: no se guarda ni va al servidor ni a la URL de la app.
+ * Al servidor va solo el aviso de que se tocó «Enviar» (order/intent.ts).
  */
 const { restaurant } = defineProps<{
     restaurant: Pick<RestaurantProfile, 'slug' | 'name' | 'whatsapp' | 'delivery' | 'payment_methods'>;
@@ -294,6 +296,9 @@ async function onSend(event: MouseEvent): Promise<void> {
         return;
     }
 
+    // El aviso para las estadísticas del dueño (#22, ADR 0031): sin esperar
+    // la respuesta ni frenar el enlace, y solo con domicilio o recoger.
+    recordOrderIntent(restaurant.slug, delivery.value ? 'delivery' : 'pickup');
     rememberedNow();
     await announce(t('order.form.sent'));
 }

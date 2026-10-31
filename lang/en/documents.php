@@ -37,6 +37,7 @@ return [
                         'Business data: name, address, opening hours, menu, prices and the restaurant\'s WhatsApp number, so you can contact it. The business publishes or authorizes it. Places that come from OpenStreetMap are added only with their name, type and point on the map, never with phone numbers or emails, and stay hidden until they are checked.',
                         'Technical records: when you visit the site, the server opens a session that stores your IP address, the browser you use and your last activity, so the site works and to protect it from abuse (attempt limits). It is deleted after two hours of inactivity. Attempt limits keep for a while the IP, a fingerprint (HMAC) of the mobile number on the forms and, when signing in to the panels, a fingerprint of the email: never the number or the email in plain text.',
                     ],
+                    'Ordering through WhatsApp: when you tap "Send order on WhatsApp", your phone tells the server it was tapped, with only two pieces of data: the restaurant and whether the order is for delivery or pickup. It is stored with the date and time. The dishes, the total, the address, the name, the location, your IP, your account and any identifier of your phone are not stored: the record does not say who tapped.',
                     'Search: what you type in the search box is used to answer and is not stored. If a search fails, the log records only the type of error, not what you searched for.',
                     'For now there are no reviews and no accounts to rate. When they arrive (see the review policy), this policy will be updated before we ask you for any new data.',
                 ],
@@ -59,6 +60,7 @@ return [
                 'content' => [
                     'When you tap "Send order on WhatsApp", your phone puts the order message together and opens it in WhatsApp, addressed to the restaurant. The message carries what you entered: dishes, estimated total, neighborhood, address, landmark, name, payment method and, only if you tap "Add my location to the message", a link with your location.',
                     'That message does not go through Vení: it travels in the WhatsApp link, goes through WhatsApp (Meta) servers and is received by the restaurant. You see it and decide whether to send it. From then on, WhatsApp and the restaurant process it, each under its own policies.',
+                    'The only thing that reaches Vení is the notice that you tapped "Send": the restaurant and whether it is for delivery or pickup, with nothing from the message. With it the owner sees how many times people wrote to them from Vení each day. It is a count, not tracking: there is no way to know who it was or to link two taps by the same person.',
                 ],
             ],
             'cookies' => [
@@ -76,6 +78,7 @@ return [
                         'If your claim is approved, creating your owner account with that name and email, so you can manage the listing.',
                         'Giving owners and the admin team access to the panels.',
                         'Showing the directory with the businesses\' information.',
+                        'Telling each owner how many times "Send order on WhatsApp" was tapped on their listing, per day and whether it was delivery or pickup.',
                         'Keeping the site running and secure: sessions, attempt limits and error logs.',
                         'Handling questions and complaints about this policy.',
                     ],
@@ -113,6 +116,7 @@ return [
                     [
                         'Claims and removal requests: while they are being reviewed and up to six months after they are resolved. After that, rejected ones are deleted and approved ones are anonymized: the name, mobile number, email, message or reason and the review note are deleted, and only what identifies no one remains: which listing, the role or relationship with the business that was stated (for example, "owner" or "employee"), what was decided, who on the team reviewed it and when. That explains why a listing changed owner or was hidden.',
                         'Owner and admin accounts: while they are active. If you ask for yours to be deleted, we delete it except for what a law requires us to keep.',
+                        'The "Send order on WhatsApp" notices: 13 months, to compare a month with the same one a year earlier; then they are deleted automatically. So a double tap is not counted twice, and no more than 20 taps a day are counted from the same connection to the same restaurant, the server keeps a fingerprint (HMAC) of the IP (for IPv6, of its network) with the restaurant, never the IP itself: the double-tap one stops counting after 10 seconds and the daily one after 24 hours, and both are deleted within the following hour.',
                         'Sessions: they are deleted after two hours of inactivity. The cleanup runs every hour, so none lasts more than three. Attempt limits are deleted when they expire, with the same cleanup.',
                         'What is stored on your phone: as described above, or until you delete it.',
                     ],

@@ -2,11 +2,14 @@
 
 namespace Database\Factories;
 
+use App\Enums\Fulfillment;
 use App\Models\OrderIntent;
 use App\Models\Restaurant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
+ * Como los registra el carrito (#22, ADR 0031): sin persona ni dispositivo.
+ *
  * @extends Factory<OrderIntent>
  */
 class OrderIntentFactory extends Factory
@@ -18,8 +21,9 @@ class OrderIntentFactory extends Factory
     {
         return [
             'restaurant_id' => Restaurant::factory(),
+            'fulfillment' => fake()->randomElement(Fulfillment::cases()),
             'user_id' => null,
-            'device_hash' => hash('sha256', fake()->uuid()),
+            'device_hash' => null,
             'confirmed' => null,
         ];
     }

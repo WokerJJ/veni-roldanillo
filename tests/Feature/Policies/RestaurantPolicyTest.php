@@ -97,3 +97,13 @@ test('la pertenencia se consulta en la base y no en relaciones cargadas', functi
 
     expect(Gate::forUser($owner)->denies('update', $other))->toBeTrue();
 });
+
+test('las estadísticas (#22) las ven el dueño y administración; ni un empleado ni el dueño de otro', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+    $other = Restaurant::factory()->claimed()->create();
+
+    expect(Gate::forUser(memberOf($restaurant, RestaurantRole::Owner))->allows('viewStatistics', $restaurant))->toBeTrue()
+        ->and(Gate::forUser(memberOf($other, RestaurantRole::Owner))->denies('viewStatistics', $restaurant))->toBeTrue()
+        ->and(Gate::forUser(memberOf($restaurant, RestaurantRole::Staff))->denies('viewStatistics', $restaurant))->toBeTrue()
+        ->and(Gate::forUser(User::factory()->admin()->create())->allows('viewStatistics', $restaurant))->toBeTrue();
+});
