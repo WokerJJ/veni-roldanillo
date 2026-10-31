@@ -24,7 +24,7 @@ const linkClass = 'inline-flex min-h-touch items-center gap-1 font-semibold unde
     <div class="mx-auto w-full max-w-3xl px-4 pt-2 pb-10">
         <Link href="/" class="-ml-2 inline-flex min-h-touch items-center gap-1 rounded-full px-2 font-semibold hover:bg-surface" data-back>
             <Icon name="chevron-izquierda" :size="20" />
-            {{ t('restaurant.back_to_map') }}
+            {{ t('layout.back_to_map') }}
         </Link>
 
         <h1 class="mt-2 text-2xl leading-tight min-[480px]:text-3xl">{{ t('credits.title') }}</h1>

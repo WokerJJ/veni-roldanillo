@@ -62,7 +62,7 @@ const linkClass = 'inline-flex min-h-touch items-center font-semibold underline 
     <article class="mx-auto w-full max-w-3xl px-4 pt-2 pb-10" :data-legal="document.key" aria-labelledby="documento-titulo">
         <Link href="/" class="-ml-2 inline-flex min-h-touch items-center gap-1 rounded-full px-2 font-semibold hover:bg-surface" data-back>
             <Icon name="chevron-izquierda" :size="20" />
-            {{ t('restaurant.back_to_map') }}
+            {{ t('layout.back_to_map') }}
         </Link>
 
         <h1 id="documento-titulo" class="mt-2 text-2xl leading-tight min-[480px]:text-3xl">{{ document.title }}</h1>
