@@ -350,3 +350,42 @@ describe('búsqueda y filtros (#12)', () => {
         expect(wrapper.get('details[data-lunches] summary').text()).toBe("Today's lunches");
     });
 });
+
+describe('RestaurantList · favoritos (#16)', () => {
+    afterEach(() => {
+        window.localStorage.clear();
+    });
+
+    it('sin filtros, «Tus favoritos» va arriba con los que están en el mapa; uno que ya no está se ignora', async () => {
+        window.localStorage.setItem('veni:favorites', JSON.stringify({ v: 1, data: ['ya-no-esta', EL_GUADUAL.slug] }));
+        const { wrapper } = await mountList();
+
+        const section = wrapper.get('[data-favorites]');
+        expect(section.get('h3').text()).toBe('Tus favoritos');
+        expect(section.findAll('button[data-favorite-slug]').map((button) => button.attributes('data-favorite-slug'))).toEqual([EL_GUADUAL.slug]);
+
+        await section.get('button').trigger('click');
+        expect(wrapper.emitted('select')).toEqual([[EL_GUADUAL.slug]]);
+
+        await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'ceiba' } });
+        expect(wrapper.find('[data-favorites]').exists()).toBe(false);
+    });
+
+    it('sin favoritos no hay sección, y «Guardado en este teléfono» abre lo guardado y devuelve el foco al cerrar', async () => {
+        const { wrapper } = await mountList();
+
+        expect(wrapper.find('[data-favorites]').exists()).toBe(false);
+
+        await wrapper.get('[data-saved-open]').trigger('click');
+        await vi.waitFor(() => {
+            expect(wrapper.find('[data-saved]').exists()).toBe(true);
+        });
+        expect(wrapper.find('[data-saved] [data-favorites-empty]').exists()).toBe(true);
+
+        await wrapper.get('[data-saved] [data-close]').trigger('click');
+        await vi.waitFor(() => {
+            expect(document.activeElement).toBe(wrapper.get('[data-saved-open]').element);
+        });
+        expect(wrapper.find('[data-saved]').exists()).toBe(false);
+    });
+});
