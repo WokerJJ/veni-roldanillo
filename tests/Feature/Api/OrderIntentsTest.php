@@ -6,10 +6,11 @@ use App\Models\OrderIntent;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Providers\AppServiceProvider;
-use Illuminate\Cache\Events\KeyWritten;
+use Illuminate\Cache\RateLimiter as Limiter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Testing\TestResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -30,7 +31,25 @@ uses(RefreshDatabase::class);
  */
 function sendOrderIntent(string $slug, array $body = ['fulfillment' => 'delivery'], array $headers = [], string $ip = '203.0.113.7'): TestResponse
 {
-    return test()->withServerVariables(['REMOTE_ADDR' => $ip])->postJson("/api/restaurants/{$slug}/order-intents", $body, $headers);
+    return sendOrderIntentTo("/api/restaurants/{$slug}/order-intents", $body, $headers, $ip);
+}
+
+/**
+ * @param  array<string, mixed>  $body
+ * @param  array<string, string>  $headers
+ * @return TestResponse<Response>
+ */
+function sendOrderIntentTo(string $uri, array $body, array $headers = [], string $ip = '203.0.113.7'): TestResponse
+{
+    return test()->withServerVariables(['REMOTE_ADDR' => $ip])->postJson($uri, $body, $headers);
+}
+
+/** El origen de APP_URL, como lo manda el navegador en la cabecera Origin. */
+function appOrigin(): string
+{
+    $url = parse_url(config()->string('app.url'));
+
+    return ($url['scheme'] ?? 'http').'://'.($url['host'] ?? 'localhost').(isset($url['port']) ? ':'.$url['port'] : '');
 }
 
 test('registra el clic con el restaurante y la entrega, sin persona ni dispositivo', function () {
@@ -148,21 +167,6 @@ test('un doble toque cuenta una vez; pasados unos segundos, o desde otra IP o a 
     expect(OrderIntent::query()->where('restaurant_id', $restaurant->id)->count())->toBe(3);
 });
 
-test('la IP no queda en la base: solo como huella en la llave de la caché', function () {
-    $restaurant = Restaurant::factory()->claimed()->create();
-    $keys = [];
-    Event::listen(KeyWritten::class, function (KeyWritten $event) use (&$keys): void {
-        $keys[] = $event->key;
-    });
-
-    sendOrderIntent($restaurant->slug, ip: '203.0.113.77')->assertNoContent();
-
-    $dedupe = array_values(array_filter($keys, fn (string $key): bool => str_starts_with($key, 'order-intent:')));
-    expect($dedupe)->toHaveCount(1)
-        ->and($dedupe[0])->not->toContain('203.0.113.77')
-        ->and(json_encode(DB::table('order_intents')->get()))->not->toContain('203.0.113.77');
-});
-
 test('pasado el límite por minuto responde 429 por IP', function () {
     $restaurants = Restaurant::factory()->claimed()->count(2)->create();
 
@@ -172,4 +176,170 @@ test('pasado el límite por minuto responde 429 por IP', function () {
 
     sendOrderIntent($restaurants[0]->slug)->assertStatus(429)->assertHeader('Retry-After');
     sendOrderIntent($restaurants[0]->slug, ip: '198.51.100.21')->assertNoContent();
+});
+
+test('un Content-Type que solo menciona JSON responde 415 sin registrar (BUG-013)', function (string $contentType) {
+    $restaurant = Restaurant::factory()->claimed()->create();
+
+    $this->call('POST', "/api/restaurants/{$restaurant->slug}/order-intents", server: [
+        'CONTENT_TYPE' => $contentType,
+        'HTTP_ACCEPT' => 'application/json',
+    ], content: '{"fulfillment":"delivery"}')->assertStatus(415);
+
+    expect(OrderIntent::query()->count())->toBe(0);
+})->with([
+    'parámetro con /json' => ['text/plain; a=/json'],
+    'tipo con +json' => ['text/plain+json'],
+    'jsonp' => ['application/jsonp'],
+]);
+
+test('JSON con charset cuenta (BUG-013)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+
+    $this->call('POST', "/api/restaurants/{$restaurant->slug}/order-intents", server: [
+        'CONTENT_TYPE' => 'application/json; charset=utf-8',
+        'HTTP_ACCEPT' => 'application/json',
+    ], content: '{"fulfillment":"delivery"}')->assertNoContent();
+
+    expect(OrderIntent::query()->count())->toBe(1);
+});
+
+test('Sec-Fetch-Site distinto de same-origin responde 403 (BUG-013)', function (string $site) {
+    $restaurant = Restaurant::factory()->claimed()->create();
+
+    sendOrderIntent($restaurant->slug, headers: ['Sec-Fetch-Site' => $site])->assertForbidden();
+
+    expect(OrderIntent::query()->count())->toBe(0);
+})->with(['cross-site', 'same-site', 'none']);
+
+test('un Origin distinto del de APP_URL responde 403; el propio cuenta (BUG-013)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+
+    sendOrderIntent($restaurant->slug, headers: ['Origin' => 'https://otro.example'])->assertForbidden();
+    sendOrderIntent($restaurant->slug, headers: ['Origin' => 'null'])->assertForbidden();
+    expect(OrderIntent::query()->count())->toBe(0);
+
+    sendOrderIntent($restaurant->slug, headers: ['Origin' => appOrigin(), 'Sec-Fetch-Site' => 'same-origin'])->assertNoContent();
+    expect(OrderIntent::query()->count())->toBe(1);
+});
+
+test('la entrega se lee solo del cuerpo JSON: la query string no cuenta (EVA-011)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+
+    sendOrderIntentTo("/api/restaurants/{$restaurant->slug}/order-intents?fulfillment=pickup", [])
+        ->assertUnprocessable()->assertJsonValidationErrors('fulfillment');
+    expect(OrderIntent::query()->count())->toBe(0);
+
+    sendOrderIntentTo("/api/restaurants/{$restaurant->slug}/order-intents?fulfillment=pickup", ['fulfillment' => 'delivery'])->assertNoContent();
+    expect(OrderIntent::query()->sole()->fulfillment)->toBe(Fulfillment::Delivery);
+});
+
+test('misma IP, distinta entrega en el mismo restaurante: cuentan dos (AUD-003)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+
+    sendOrderIntent($restaurant->slug, ['fulfillment' => 'delivery'])->assertNoContent();
+    sendOrderIntent($restaurant->slug, ['fulfillment' => 'pickup'])->assertNoContent();
+
+    expect(OrderIntent::query()->count())->toBe(2);
+});
+
+test('pasado el tope diario por IP y restaurante responde 204 sin registrar (BUG-014)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+    $other = Restaurant::factory()->claimed()->create();
+
+    for ($i = 1; $i <= OrderIntentController::DAILY_MAX + 1; $i++) {
+        sendOrderIntent($restaurant->slug)->assertNoContent();
+        $this->travel(OrderIntentController::DEDUPE_SECONDS + 1)->seconds();
+    }
+
+    expect(OrderIntent::query()->count())->toBe(OrderIntentController::DAILY_MAX);
+
+    // Otro restaurante, u otra IP, tienen su propio tope.
+    sendOrderIntent($other->slug)->assertNoContent();
+    sendOrderIntent($restaurant->slug, ip: '198.51.100.4')->assertNoContent();
+    expect(OrderIntent::query()->count())->toBe(OrderIntentController::DAILY_MAX + 2);
+
+    // Al día siguiente vuelve a contar.
+    $this->travel(1)->days();
+    sendOrderIntent($restaurant->slug)->assertNoContent();
+    expect(OrderIntent::query()->count())->toBe(OrderIntentController::DAILY_MAX + 3);
+});
+
+test('dos IPv6 del mismo /64 son la misma para el doble toque y el límite (BUG-014)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+    $other = Restaurant::factory()->claimed()->create();
+
+    sendOrderIntent($restaurant->slug, ip: '2001:db8:1:2::1')->assertNoContent();
+    sendOrderIntent($restaurant->slug, ip: '2001:db8:1:2:ffff:ffff:ffff:ffff')->assertNoContent();
+    expect(OrderIntent::query()->count())->toBe(1);
+
+    // Otro /64 es otro cliente.
+    sendOrderIntent($restaurant->slug, ip: '2001:db8:1:3::1')->assertNoContent();
+    expect(OrderIntent::query()->count())->toBe(2);
+
+    // Una IPv4 escrita como IPv6 (::ffff:a.b.c.d) es esa IPv4, no todo el /64 de ::ffff.
+    sendOrderIntent($restaurant->slug, ip: '203.0.113.9')->assertNoContent();
+    sendOrderIntent($restaurant->slug, ip: '::ffff:203.0.113.9')->assertNoContent();
+    sendOrderIntent($restaurant->slug, ip: '::ffff:203.0.113.10')->assertNoContent();
+    expect(OrderIntent::query()->count())->toBe(4);
+
+    $this->travel(OrderIntentController::DEDUPE_SECONDS + 1)->seconds();
+    $this->travel(1)->minutes();
+    for ($i = 1; $i <= AppServiceProvider::ORDER_INTENTS_PER_MINUTE; $i++) {
+        sendOrderIntent(($i % 2 === 0 ? $restaurant : $other)->slug, ip: "2001:db8:1:2::{$i}")->assertNoContent();
+    }
+    sendOrderIntent($restaurant->slug, ip: '2001:db8:1:2::abcd')->assertStatus(429);
+    sendOrderIntent($restaurant->slug, ip: '2001:db8:1:3::abcd')->assertNoContent();
+});
+
+test('con el store database ninguna llave guarda la IP ni su md5; el doble toque caduca a los 10 s y el tope al día (EVA-010, BUG-016)', function () {
+    // La caché de producción es la base (config/cache.php): las filas vencidas
+    // se quedan hasta que veni:prune-expired las borra, cada hora.
+    config(['cache.default' => 'database']);
+    $limiter = new Limiter(Cache::store('database'));
+    $orderIntents = app(Limiter::class)->limiter('order-intents');
+    expect($orderIntents)->toBeInstanceOf(Closure::class);
+    $limiter->for('order-intents', $orderIntents);
+    app()->instance(Limiter::class, $limiter);
+    RateLimiter::clearResolvedInstance(Limiter::class);
+
+    $restaurant = Restaurant::factory()->claimed()->create();
+    $ip = '203.0.113.77';
+    $table = config()->string('cache.stores.database.table');
+
+    sendOrderIntent($restaurant->slug, ip: $ip)->assertNoContent();
+
+    $rows = DB::table($table)->get(['key', 'expiration']);
+    expect($rows)->not->toBeEmpty();
+    foreach ($rows as $row) {
+        expect($row->key)->not->toContain($ip)->not->toContain(md5('order-intents'.$ip));
+    }
+    expect(json_encode(DB::table('order_intents')->get()))->not->toContain($ip);
+
+    $expiration = fn (string $kind): mixed => $rows->first(fn (object $row): bool => str_contains($row->key, "order-intent:{$kind}:") && ! str_ends_with($row->key, ':timer'))?->expiration;
+    expect($expiration('dedupe'))->toBe(now()->getTimestamp() + OrderIntentController::DEDUPE_SECONDS)
+        ->and($expiration('daily'))->toBe(now()->getTimestamp() + OrderIntentController::DAILY_SECONDS);
+
+    // La limpieza horaria borra la huella del doble toque cuando vence; la del tope sigue.
+    $this->travel(OrderIntentController::DEDUPE_SECONDS + 1)->seconds();
+    $this->artisan('veni:prune-expired')->assertSuccessful();
+    expect(DB::table($table)->where('key', 'like', '%order-intent:dedupe:%')->count())->toBe(0)
+        ->and(DB::table($table)->where('key', 'like', '%order-intent:daily:%')->count())->toBeGreaterThan(0);
+});
+
+test('el cuerpo es el de tests/contracts/order-intent.request.json, el que manda el carrito (EVA-012)', function () {
+    $contract = json_decode((string) file_get_contents(base_path('tests/contracts/order-intent.request.json')), true, flags: JSON_THROW_ON_ERROR);
+    $allowed = array_map(fn (Fulfillment $case): string => $case->value, Fulfillment::cases());
+
+    expect(array_keys($contract['body']))->toBe(['fulfillment'])
+        ->and($contract['body']['fulfillment'])->toEqualCanonicalizing($allowed)
+        ->and($contract['contentType'])->toBe('application/json');
+
+    $restaurant = Restaurant::factory()->claimed()->create();
+    sendOrderIntent($restaurant->slug, $contract['example'])->assertNoContent();
+    foreach ($contract['body']['fulfillment'] as $value) {
+        sendOrderIntent($restaurant->slug, ['fulfillment' => $value], ip: '198.51.100.30')->assertNoContent();
+    }
+
+    expect(OrderIntent::query()->count())->toBe(1 + count($allowed));
 });
