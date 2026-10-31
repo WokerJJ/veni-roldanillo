@@ -58,7 +58,9 @@ return [
                     [
                         'Tu ubicación: se usa para mostrar dónde estás en el mapa y calcular rutas, en el teléfono. No se manda al servidor ni queda en la dirección de la página ni guardada.',
                         'El carrito de un pedido, por un día.',
-                        'Tus datos de entrega (barrio, dirección, referencia y nombre), solo si marcás «Recordar» en el formulario del pedido, por 90 días desde la última vez que los usás. «Borrar datos guardados» los quita.',
+                        'Tus direcciones de entrega (etiqueta, barrio, dirección, referencia y nombre), solo las que guardás con «Guardar esta dirección» o en «Guardado en este teléfono»: hasta 10, para pedir en cualquier restaurante, cada una por un año desde la última vez que enviaste un pedido con ella. Completar el pedido con una guardada no la cambia: los cambios se guardan al enviar y solo si marcás la casilla. Desmarcarla no la borra; se borra en «Editar o borrar tus direcciones».',
+                        'Tus restaurantes favoritos: solo cuáles son (hasta 100), hasta que los quités.',
+                        'Desde la lista del inicio, «Guardado en este teléfono» → «Borrar todo lo guardado» quita tus direcciones, tus favoritos y los pedidos sin enviar; el idioma y el tema quedan.',
                         'El idioma y el tema (claro u oscuro) que elegiste, y las páginas y archivos que la app guarda para funcionar sin conexión.',
                     ],
                     'Podés borrar todo esto cuando querás desde los ajustes de tu navegador (borrar los datos del sitio) o desinstalando la app.',

@@ -49,7 +49,9 @@ return [
                     [
                         'Your location: it is used to show where you are on the map and to calculate routes, on the phone. It is not sent to the server, put in the page address or stored.',
                         'The cart of an order, for one day.',
-                        'Your delivery details (neighborhood, address, landmark and name), only if you tick "Remember" on the order form, for 90 days since you last used them. "Delete saved details" removes them.',
+                        'Your delivery addresses (label, neighborhood, address, landmark and name), only the ones you save with "Save this address" or in "Saved on this phone": up to 10, to order from any restaurant, each for one year since you last sent an order with it. Filling in an order with a saved one does not change it: changes are saved when you send, and only if you tick the box. Unticking it does not delete it; you delete it in "Edit or delete your addresses".',
+                        'Your favorite restaurants: only which ones they are (up to 100), until you remove them.',
+                        'From the home list, "Saved on this phone" → "Delete everything saved" removes your addresses, your favorites and unsent orders; the language and theme stay.',
                         'The language and theme (light or dark) you chose, and the pages and files the app keeps to work offline.',
                     ],
                     'You can delete all of this whenever you want from your browser settings (clear the site data) or by uninstalling the app.',
