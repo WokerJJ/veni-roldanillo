@@ -3,10 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 
 import { forgetSentOrderIntents } from '@/order/intent';
 import type { OrderItem } from '@/order/selection';
+import type { AddressFields } from '@/saved/addresses';
+import { ADDRESSES_KEY, MAX_ADDRESSES, resetAddressBook, useAddressBook } from '@/saved/addresses';
 import { resetOrders, useOrder } from '@/order/useOrder';
 import type { RestaurantProfile } from '@/restaurants/profile';
 import type * as FakeInertia from '@/testing/inertia';
 import { nth } from '@/testing/present';
+import { quotaExceeded, spyStorage } from '@/testing/storage';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 
@@ -39,6 +42,7 @@ const SANCOCHO: OrderItem = {
     note: 'bien caliente',
 };
 const JUICE: OrderItem = { dish: 'Jugo de prueba', unitPrice: 4000, quantity: 1, choices: [], removed: [], note: null };
+const HOME: AddressFields = { label: { kind: 'home', text: '' }, neighborhood: 'El Mirador (ficticio)', address: '', reference: '', name: 'Ana' };
 
 /** Los espacios que no parten la línea («$ 18.500») como uno común. */
 function plain(text: string): string {
@@ -116,6 +120,7 @@ beforeEach(() => {
 
 afterEach(() => {
     resetOrders();
+    resetAddressBook();
     window.localStorage.clear();
     vi.unstubAllGlobals();
 });
@@ -350,7 +355,7 @@ describe('OrderCart', () => {
         expect(wrapper.find('[data-location-added]').exists()).toBe(false);
     });
 
-    it('«Recordar» guarda barrio, dirección, referencia y nombre en el dispositivo, nunca la ubicación; «Borrar» los quita', async () => {
+    it('«Guardar esta dirección» la guarda en la libreta del teléfono, nunca la ubicación ni el pago; «Borrar» la quita', async () => {
         stubCurrentPosition({ latitude: 4.41, longitude: -76.15, accuracy: 10 });
         const { wrapper } = await mountCart();
 
@@ -358,28 +363,126 @@ describe('OrderCart', () => {
         await wrapper.get('[data-location-add]').trigger('click');
         await wrapper.get('[data-payment="cash"]').setValue(true);
         await wrapper.get('[data-cash]').setValue('50000');
-        expect(window.localStorage.getItem('veni:delivery:prueba-la-ceiba')).toBeNull();
+        expect(window.localStorage.getItem(ADDRESSES_KEY)).toBeNull();
 
         await wrapper.get('[data-remember]').setValue(true);
-        await wrapper.get('[data-reference]').setValue('casa azul');
         await flushPromises();
+        // Una dirección nueva se guarda al marcar; lo que cambie después, al enviar.
+        expect(useAddressBook().addresses.value).toMatchObject([{ address: 'Cra 5 #8-20', reference: '', label: { kind: 'home' } }]);
 
-        const saved = window.localStorage.getItem('veni:delivery:prueba-la-ceiba') ?? '';
+        await wrapper.get('[data-label-kind="work"]').setValue(true);
+        await wrapper.get('[data-reference]').setValue('casa azul');
+        await wrapper.get('[data-neighborhood]').setValue('El Mirador (ficticio)');
+        await flushPromises();
+        expect(useAddressBook().addresses.value).toMatchObject([{ reference: '', label: { kind: 'home' } }]);
+
+        await clickSend(wrapper.get('[data-send]').element as HTMLElement);
+
+        const saved = window.localStorage.getItem(ADDRESSES_KEY) ?? '';
         expect(saved).toContain('Cra 5 #8-20');
         expect(saved).toContain('casa azul');
+        expect(saved).toContain('"kind":"work"');
         expect(saved).not.toContain('4.41');
         expect(saved).not.toContain('cash');
         expect(saved).not.toContain('50000');
         expect(saved).not.toContain('50.000');
+        // Nada por restaurante: la libreta es una sola.
+        expect(window.localStorage.getItem('veni:delivery:prueba-la-ceiba')).toBeNull();
 
         await wrapper.get('[data-forget]').trigger('click');
         await flushPromises();
-        expect(window.localStorage.getItem('veni:delivery:prueba-la-ceiba')).toBeNull();
+        expect(window.localStorage.getItem(ADDRESSES_KEY)).toBeNull();
         expect((wrapper.get('[data-address]').element as HTMLInputElement).value).toBe('');
-        expect(wrapper.get('[data-announcement]').text()).toBe('Se borraron los datos guardados en este teléfono.');
+        expect(wrapper.get('[data-announcement]').text()).toBe('Se borró la dirección de este teléfono.');
     });
 
-    it('al abrir de nuevo, trae los datos recordados', async () => {
+    it('precargar «Casa» no marca la casilla; desmarcarla no la borra de la libreta', async () => {
+        useAddressBook().save({ ...HOME, address: 'Cra 5' });
+        const before = useAddressBook().addresses.value;
+        const { wrapper } = await mountCart();
+
+        expect((wrapper.get('[data-remember]').element as HTMLInputElement).checked).toBe(false);
+
+        await wrapper.get('[data-remember]').setValue(true);
+        await wrapper.get('[data-remember]').setValue(false);
+        await flushPromises();
+
+        expect(useAddressBook().addresses.value).toEqual(before);
+        expect((wrapper.get('[data-address]').element as HTMLInputElement).value).toBe('Cra 5');
+    });
+
+    it('editar «Casa» no la cambia en la libreta hasta enviar el pedido, y solo con la casilla marcada', async () => {
+        useAddressBook().save({ ...HOME, address: 'Cra 5' });
+        const { wrapper } = await mountCart();
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
+
+        await wrapper.get('[data-address]').setValue('Calle 7');
+        await clickSend(wrapper.get('[data-send]').element as HTMLElement);
+        expect(useAddressBook().addresses.value).toMatchObject([{ address: 'Cra 5' }]);
+
+        await wrapper.get('[data-remember]').setValue(true);
+        await wrapper.get('[data-address]').setValue('Calle 8');
+        await flushPromises();
+        expect(useAddressBook().addresses.value).toMatchObject([{ address: 'Cra 5' }]);
+
+        await clickSend(wrapper.get('[data-send]').element as HTMLElement);
+        expect(useAddressBook().addresses.value).toMatchObject([{ label: { kind: 'home' }, address: 'Calle 8' }]);
+    });
+
+    it('al recoger no se escribe nada en la libreta', async () => {
+        useAddressBook().save({ ...HOME, address: 'Cra 5' }, null, Date.now() - 60_000);
+        const before = useAddressBook().addresses.value;
+        const { wrapper } = await mountCart();
+
+        await wrapper.get('[data-remember]').setValue(true);
+        await wrapper.get('[data-address]').setValue('Calle 8');
+        await wrapper.get('[data-mode="pickup"]').setValue(true);
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
+        const { setItem, restore } = spyStorage();
+        onTestFinished(restore);
+
+        expect(await clickSend(wrapper.get('[data-send]').element as HTMLElement)).toBe(false);
+
+        expect(setItem.mock.calls.filter(([key]) => key === ADDRESSES_KEY)).toEqual([]);
+        expect(useAddressBook().addresses.value).toEqual(before);
+    });
+
+    it('enviar el pedido marca la dirección como usada: la próxima vez se abre con ella', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        onTestFinished(() => {
+            vi.useRealTimers();
+        });
+        vi.setSystemTime(new Date('2026-10-20T12:00:00Z'));
+        const older = useAddressBook().save({ ...HOME, address: 'Calle vieja' }, null, Date.now() - 60_000);
+        useAddressBook().save({ ...HOME, label: { kind: 'work', text: '' }, address: 'Cra 5' });
+        const first = await mountCart();
+
+        expect((first.wrapper.get('[data-address]').element as HTMLInputElement).value).toBe('Cra 5');
+        await first.wrapper.get(`[data-saved-address="${String(older)}"]`).setValue(true);
+        await first.wrapper.get('[data-payment="nequi"]').setValue(true);
+        vi.setSystemTime(new Date('2026-10-21T12:00:00Z'));
+        await clickSend(first.wrapper.get('[data-send]').element as HTMLElement);
+
+        expect(useAddressBook().addresses.value[0]).toMatchObject({ id: older, address: 'Calle vieja', usedAt: Date.now() });
+        first.wrapper.unmount();
+
+        const second = await mountCart(RESTAURANT, []);
+        expect((second.wrapper.get('[data-address]').element as HTMLInputElement).value).toBe('Calle vieja');
+    });
+
+    it('al abrir, trae la dirección usada más recientemente, en cualquier restaurante', async () => {
+        useAddressBook().save({ ...HOME, address: 'Calle vieja' }, null, Date.now() - 60_000);
+        useAddressBook().save({ ...HOME, label: { kind: 'work', text: '' }, address: 'Cra 5' });
+        const { wrapper } = await mountCart();
+
+        expect((wrapper.get('[data-address]').element as HTMLInputElement).value).toBe('Cra 5');
+        expect((wrapper.get('[data-name]').element as HTMLInputElement).value).toBe('Ana');
+        expect((wrapper.get('[data-remember]').element as HTMLInputElement).checked).toBe(false);
+        expect(plain(wrapper.get('[data-fee]').text())).toBe('$ 1.500');
+        expect(wrapper.findAll('[data-saved-addresses] .font-semibold').map((node) => node.text())).toEqual(['Tus direcciones', 'Trabajo', 'Casa', 'Editar o borrar tus direcciones']);
+    });
+
+    it('lo que «Recordar» guardaba por restaurante (#15) pasa a la libreta y se borra de donde estaba', async () => {
         window.localStorage.setItem(
             'veni:delivery:prueba-la-ceiba',
             JSON.stringify({ v: 1, savedAt: Date.now(), data: { mode: 'delivery', neighborhood: 'El Mirador (ficticio)', address: 'Cra 5', reference: 'casa azul', name: 'Ana' } }),
@@ -387,8 +490,100 @@ describe('OrderCart', () => {
         const { wrapper } = await mountCart();
 
         expect((wrapper.get('[data-address]').element as HTMLInputElement).value).toBe('Cra 5');
-        expect((wrapper.get('[data-remember]').element as HTMLInputElement).checked).toBe(true);
+        expect((wrapper.get('[data-remember]').element as HTMLInputElement).checked).toBe(false);
         expect(plain(wrapper.get('[data-fee]').text())).toBe('$ 1.500');
+        expect(window.localStorage.getItem('veni:delivery:prueba-la-ceiba')).toBeNull();
+        expect(useAddressBook().addresses.value).toMatchObject([{ label: { kind: 'home' }, address: 'Cra 5', reference: 'casa azul', name: 'Ana' }]);
+    });
+
+    it('lo de #15 no se borra si no entró en la libreta llena', async () => {
+        const legacy = JSON.stringify({ v: 1, savedAt: Date.now(), data: { mode: 'delivery', neighborhood: 'El Mirador (ficticio)', address: 'Cra 99', reference: '', name: 'Ana' } });
+        Array.from({ length: MAX_ADDRESSES }, (_, index) => useAddressBook().save({ ...HOME, address: `Calle ${String(index)}` }));
+        window.localStorage.setItem('veni:delivery:prueba-la-ceiba', legacy);
+        await mountCart();
+
+        expect(window.localStorage.getItem('veni:delivery:prueba-la-ceiba')).toBe(legacy);
+        expect(useAddressBook().addresses.value).toHaveLength(MAX_ADDRESSES);
+    });
+
+    it('lo de #15 no se borra si la libreta no se pudo escribir', async () => {
+        const legacy = JSON.stringify({ v: 1, savedAt: Date.now(), data: { mode: 'delivery', neighborhood: 'El Mirador (ficticio)', address: 'Cra 99', reference: '', name: 'Ana' } });
+        window.localStorage.setItem('veni:delivery:prueba-la-ceiba', legacy);
+        const { setItem, restore } = spyStorage();
+        setItem.mockImplementation(quotaExceeded);
+        onTestFinished(restore);
+        await mountCart(RESTAURANT, []);
+
+        expect(window.localStorage.getItem('veni:delivery:prueba-la-ceiba')).toBe(legacy);
+    });
+
+    it('elegir una de la libreta completa el formulario; un barrio que no es de este restaurante se pide de la lista sin perderlo', async () => {
+        useAddressBook().save({ ...HOME, label: { kind: 'other', text: 'Donde mi mamá' }, neighborhood: 'Otro barrio', address: 'Calle 9', reference: '' }, null, Date.now() - 60_000);
+        useAddressBook().save({ ...HOME, address: 'Cra 5' });
+        const { wrapper } = await mountCart();
+        const other = useAddressBook().addresses.value[1];
+
+        await wrapper.get(`[data-saved-address="${String(other?.id)}"]`).setValue(true);
+        await flushPromises();
+
+        expect((wrapper.get('[data-address]').element as HTMLInputElement).value).toBe('Calle 9');
+        expect((wrapper.get('[data-neighborhood]').element as HTMLSelectElement).value).toBe('');
+        expect(wrapper.get('[data-neighborhood-missing]').text()).toContain('«Otro barrio» no está entre los barrios');
+        expect(wrapper.get('[data-neighborhood]').attributes('aria-describedby')).toContain('-neighborhood-saved');
+        expect(wrapper.get('[data-announcement]').text()).toBe('Se completó con «Donde mi mamá». Revisá los datos antes de enviar.');
+        // Sigue guardado con su barrio: el vacío del formulario no lo pisa.
+        expect(useAddressBook().addresses.value.find(({ id }) => id === other?.id)?.neighborhood).toBe('Otro barrio');
+
+        await wrapper.get('[data-saved-other]').setValue(true);
+        await flushPromises();
+
+        expect((wrapper.get('[data-address]').element as HTMLInputElement).value).toBe('');
+        expect((wrapper.get('[data-remember]').element as HTMLInputElement).checked).toBe(false);
+        expect(useAddressBook().addresses.value).toHaveLength(2);
+    });
+
+    it('con la libreta llena no guarda otra y lo dice', async () => {
+        Array.from({ length: MAX_ADDRESSES }, (_, index) => useAddressBook().save({ ...HOME, address: `Calle ${String(index)}` }));
+        const { wrapper } = await mountCart();
+
+        await wrapper.get('[data-saved-other]').setValue(true);
+        await wrapper.get('[data-address]').setValue('Cra 5');
+        await wrapper.get('[data-remember]').setValue(true);
+        await flushPromises();
+
+        expect((wrapper.get('[data-remember]').element as HTMLInputElement).checked).toBe(false);
+        expect(wrapper.get('[data-remember-full]').text()).toBe('Ya tenés 10 direcciones guardadas: borrá una para guardar otra.');
+        expect(useAddressBook().addresses.value).toHaveLength(MAX_ADDRESSES);
+    });
+
+    it('«Editar o borrar tus direcciones» abre lo guardado encima del carrito; borrar la que está en uso deja el formulario sin guardar', async () => {
+        useAddressBook().save({ ...HOME, address: 'Cra 5' });
+        const { wrapper } = await mountCart();
+
+        await wrapper.get('[data-saved-manage]').trigger('click');
+        await flushPromises();
+        await vi.waitFor(() => {
+            expect(wrapper.find('[data-saved]').exists()).toBe(true);
+        });
+
+        // Desde el carrito no van los favoritos: no tiene los nombres de los restaurantes.
+        expect(wrapper.find('[data-favorites-title]').exists()).toBe(false);
+
+        // «Borrar todo lo guardado» se hace desde el inicio, no desde un pedido.
+        expect(wrapper.find('[data-clear-all]').exists()).toBe(false);
+
+        await wrapper.get('[data-address-delete]').trigger('click');
+        await flushPromises();
+
+        expect((wrapper.get('[data-remember]').element as HTMLInputElement).checked).toBe(false);
+        expect((wrapper.get('[data-address]').element as HTMLInputElement).value).toBe('Cra 5');
+
+        await wrapper.get('[data-saved] [data-close]').trigger('click');
+        await flushPromises();
+        expect(wrapper.find('[data-saved]').exists()).toBe(false);
+        // Sin direcciones ya no está «Editar o borrar»: el foco va al barrio, no se pierde.
+        expect(wrapper.find('[data-saved-manage]').exists()).toBe(false);
+        expect(document.activeElement).toBe(wrapper.get('[data-neighborhood]').element);
     });
 
     it('si el restaurante no tiene WhatsApp, no se ofrece enviar', async () => {

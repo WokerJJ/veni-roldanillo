@@ -8,6 +8,7 @@ import RestaurantFilters from '@/components/RestaurantFilters.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import TodaysLunches from '@/components/TodaysLunches.vue';
 import { useI18n } from '@/composables/useI18n';
+import { useLazyDialog } from '@/composables/useLazyDialog';
 import type { Restaurant } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
 import { hasFilters, NO_FILTERS } from '@/restaurants/filterParams';
@@ -16,6 +17,7 @@ import { restaurantUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
 import { openStatusText } from '@/restaurants/statusText';
 import { useFinderPanel } from '@/restaurants/useFinder';
+import { useFavorites } from '@/saved/favorites';
 import { formatDistance } from '@/routing/directions';
 
 /**
@@ -45,6 +47,10 @@ import { formatDistance } from '@/routing/directions';
  * Con tres letras o más en el buscador (#17), arriba de todo, «Platos»: los
  * que responden en el servidor, de los restaurantes que cumplen los demás
  * filtros (DishResults.vue).
+ *
+ * Sin filtros, arriba de la lista van «Tus favoritos» (#16, ADR 0032), y al
+ * final, «Guardado en este teléfono», que abre SavedOnDevice.vue (baja con
+ * import() al tocarlo) para editar y borrar direcciones y favoritos.
  *
  * Al abrirse toma el foco en el título (o en «Almuerzos de hoy», con
  * `start`); quien la muestra la cierra con
@@ -146,6 +152,34 @@ const allowedForDishes = computed(() => {
     return all.length === 0 || !hasFilters(others) ? null : new Set(filterRestaurants(all, others, now.value).map(({ slug }) => slug));
 });
 
+
+/**
+ * «Tus favoritos» (#16, ADR 0032): los marcados en este teléfono que están en
+ * el mapa, del último marcado al primero. Uno que se ocultó o se retiró no
+ * viene en la lista y no aparece; si vuelve, vuelve como favorito.
+ */
+const favorites = useFavorites();
+const favoriteRows = computed(() => {
+    const bySlug = new Map(details.value.map((detail) => [detail.restaurant.slug, detail]));
+
+    return favorites.slugs.value.map((slug) => bySlug.get(slug)).filter((detail) => detail !== undefined);
+});
+
+/** «Guardado en este teléfono»: la pantalla de lo guardado, que baja con import() al tocarlo. */
+const savedButton = useTemplateRef<HTMLButtonElement>('savedButton');
+const {
+    Dialog: Manager,
+    open: managing,
+    show: openManager,
+    close: closeManager,
+} = useLazyDialog(
+    () => import('@/components/SavedOnDevice.vue'),
+    'lista',
+    () => {
+        savedButton.value?.focus();
+    },
+);
+
 const allSamples = computed(() => all.length > 0 && all.every(({ fictitious }) => fictitious));
 const categories = computed(() => categoriesOf(all, locale.value));
 
@@ -229,6 +263,24 @@ defineExpose({ focusItem });
 
             <TodaysLunches class="mt-2" :lunches="lunches" :filtered="filtered" :focus="start === 'lunches'" />
 
+            <!-- Con filtros no: lo que se ve abajo es lo que se buscó. -->
+            <section v-if="!filtered && favoriteRows.length > 0" class="mt-2" :aria-labelledby="`${headingId}-favorites`" data-favorites>
+                <h3 :id="`${headingId}-favorites`" class="font-semibold">{{ t('favorites.title') }}</h3>
+                <ul class="-mx-2">
+                    <li v-for="{ restaurant, status } in favoriteRows" :key="restaurant.slug">
+                        <button
+                            type="button"
+                            class="flex min-h-touch w-full min-w-0 flex-col justify-center rounded-veni-sm px-2 py-1 text-left hover:bg-surface"
+                            :data-favorite-slug="restaurant.slug"
+                            @click="$emit('select', restaurant.slug)"
+                        >
+                            <span class="font-semibold">{{ restaurant.name }}</span>
+                            <span class="text-sm text-ink-muted">{{ status }}</span>
+                        </button>
+                    </li>
+                </ul>
+            </section>
+
             <p v-if="allSamples" class="mt-2 mb-1"><SampleDataBadge /></p>
 
             <ul ref="list" class="-mx-2">
@@ -259,6 +311,20 @@ defineExpose({ focusItem });
                     </Link>
                 </li>
             </ul>
+
+            <!-- Direcciones y favoritos de este teléfono (#16): verlos, editarlos y borrarlos. -->
+            <button
+                ref="savedButton"
+                type="button"
+                class="mt-2 inline-flex min-h-touch items-center gap-2 rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
+                data-saved-open
+                @click="openManager"
+            >
+                <Icon name="corazon" :size="20" />
+                {{ t('saved.open') }}
+            </button>
         </div>
+
+        <Manager v-if="managing" :restaurants="all" @close="closeManager" />
     </section>
 </template>
