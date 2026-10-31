@@ -318,6 +318,8 @@ Decisiones en el ADR 0026. En la ficha pública, «¿Es tu negocio? Reclámalo»
 
 La atribución y cómo pedir la parte de la base que viene de OpenStreetMap están en `/credits` (página `Credits`), enlazada desde la bienvenida del inicio y desde el pie.
 
+La guía de platos típicos (#21) está en `/dishes` (`DishGuideController`, página `DishGuide`), enlazada desde la bienvenida del inicio y desde el pie (el enlace baja con `LegalLinks`, fuera del arranque). Sigue el patrón del ADR 0030: el texto propio, en `lang/{es,en}/guide.php` (secciones con sus platos; cada clave es un ancla), viaja como prop solo a su página, y `lang/{es,en}.json` lleva solo el nombre del enlace. No consulta la base ni la API: cada plato enlaza al inicio con la búsqueda puesta (`/?q=…`, #12 y #17); lo que busca va en español en los dos idiomas, porque los menús están en español.
+
 ### Pendiente para fases posteriores
 
 | Tabla | Campos principales | Cuándo |
