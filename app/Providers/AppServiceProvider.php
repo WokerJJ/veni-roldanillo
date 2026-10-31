@@ -7,6 +7,7 @@ use App\Jobs\Search\RemoveFromSearch;
 use App\Models\MenuSection;
 use App\Models\Restaurant;
 use App\Observers\SearchIndexObserver;
+use App\Support\ClientFingerprint;
 use App\Support\ContentSecurityPolicyProfiles;
 use App\Support\LegalReadiness;
 use GuzzleHttp\Client as GuzzleClient;
@@ -60,6 +61,14 @@ class AppServiceProvider extends ServiceProvider
     public const DISH_SEARCHES_PER_MINUTE = 60;
 
     /**
+     * Registros de «Enviar pedido por WhatsApp» por minuto desde una misma IP
+     * (POST /api/restaurants/{slug}/order-intents, #22, ADR 0031). Una
+     * persona manda uno o dos pedidos; el margen es para la NAT del operador
+     * móvil y lo que se pase solo infla una estadística, no expone nada.
+     */
+    public const ORDER_INTENTS_PER_MINUTE = 30;
+
+    /**
      * Register any application services.
      */
     public function register(): void
@@ -108,6 +117,12 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('dish-search', fn (Request $request) => Limit::perMinute(self::DISH_SEARCHES_PER_MINUTE)
             ->by((string) $request->ip()));
+
+        // Por huella HMAC de la IP (o del /64 si es IPv6), no por la IP: el
+        // throttle guarda md5(nombre.llave), que con la IP se revierte probando
+        // todas las IPv4 y se emparejaría con el registro del pedido (ADR 0031).
+        RateLimiter::for('order-intents', fn (Request $request) => Limit::perMinute(self::ORDER_INTENTS_PER_MINUTE)
+            ->by(ClientFingerprint::of($request)));
 
         // Los cambios de la ficha y de las secciones que mueven el índice de
         // búsqueda por plato (ADR 0029); los del plato los sigue Scout, con

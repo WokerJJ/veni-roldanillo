@@ -34,3 +34,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0028](0028-busqueda-y-filtros-del-inicio.md) | Búsqueda y filtros del inicio: en el dispositivo, en la dirección y con los almuerzos de hoy en la capa del mapa | Aceptada |
 | [0029](0029-busqueda-por-plato-con-meilisearch.md) | Búsqueda por plato con Meilisearch: un índice de platos publicados, al día por la cola y detrás de nuestro endpoint | Aceptada |
 | [0030](0030-documentos-legales-versionados.md) | Documentos legales: texto en archivos de idioma del servidor, versión en el código y aviso de borrador por config | Aceptada |
+| [0031](0031-registro-de-pedidos-y-estadisticas-del-dueno.md) | Registro del toque en «Enviar pedido por WhatsApp» y estadísticas del dueño: un conteo sin identificador | Aceptada |

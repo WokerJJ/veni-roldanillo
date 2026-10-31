@@ -1,0 +1,11 @@
+{
+    "method": "POST",
+    "path": "/api/restaurants/{slug}/order-intents",
+    "contentType": "application/json",
+    "body": {
+        "fulfillment": ["delivery", "pickup"]
+    },
+    "example": {
+        "fulfillment": "delivery"
+    }
+}

@@ -46,6 +46,7 @@ return [
                         'Datos de los negocios: nombre, dirección, horarios, menú, precios y el número de WhatsApp del restaurante, para que lo puedas contactar. Los publica o autoriza el negocio. Los locales que vienen de OpenStreetMap entran solo con nombre, tipo y punto en el mapa, nunca con teléfonos ni correos, y quedan ocultos hasta verificarlos.',
                         'Registros técnicos: al visitar el sitio, el servidor abre una sesión que guarda tu dirección IP, el navegador que usás y la última actividad, para que el sitio funcione y para protegerlo de abusos (límites de intentos). Se borra a las dos horas de inactividad. Los límites de intentos guardan por un rato la IP, una huella (HMAC) del celular en los formularios y, en el ingreso a los paneles, una huella del correo: nunca el número ni el correo en claro.',
                     ],
+                    'Pedido por WhatsApp: al tocar «Enviar pedido por WhatsApp», tu teléfono le avisa al servidor que se tocó, con solo dos datos: el restaurante y si el pedido es a domicilio o para recoger. Se guarda con la fecha y la hora. No se guardan los platos, el total, la dirección, el nombre, la ubicación, tu IP, tu cuenta ni un identificador de tu teléfono: el registro no dice quién lo tocó.',
                     'Búsqueda: lo que escribís en el buscador se usa para responder y no se guarda. Si la búsqueda falla, el registro anota solo el tipo de error, no lo que buscaste.',
                     'Por ahora no hay reseñas ni cuentas para calificar. Cuando lleguen (ver la política de reseñas), esta política se actualizará antes de pedirte cualquier dato nuevo.',
                 ],
@@ -68,6 +69,7 @@ return [
                 'content' => [
                     'Al tocar «Enviar pedido por WhatsApp», tu teléfono arma el mensaje con el pedido y lo abre en WhatsApp, dirigido al restaurante. El mensaje lleva lo que vos pusiste: platos, total estimado, barrio, dirección, referencia, nombre, forma de pago y, solo si tocás «Agregar mi ubicación al mensaje», un enlace con tu ubicación.',
                     'Ese mensaje no pasa por Vení: viaja en el enlace de WhatsApp, pasa por los servidores de WhatsApp (Meta) y lo recibe el restaurante. Vos lo ves y decidís si lo enviás. Desde ese momento lo tratan WhatsApp y el restaurante, cada uno según sus propias políticas.',
+                    'Lo único que llega a Vení es el aviso de que tocaste «Enviar»: el restaurante y si es a domicilio o para recoger, sin nada del mensaje. Con eso el dueño ve cuántas veces le escribieron desde Vení por día. Es un conteo, no un seguimiento: no se puede saber quién fue ni juntar dos toques de la misma persona.',
                 ],
             ],
             'cookies' => [
@@ -85,6 +87,7 @@ return [
                         'Si se aprueba tu reclamo, crear tu cuenta de dueño con ese nombre y ese correo, para que administrés la ficha.',
                         'Dar acceso a los paneles a dueños y administración.',
                         'Mostrar el directorio con la información de los negocios.',
+                        'Contarle a cada dueño cuántas veces tocaron «Enviar pedido por WhatsApp» en su ficha, por día y si era domicilio o recoger.',
                         'Mantener el sitio funcionando y seguro: sesiones, límites de intentos y registros de errores.',
                         'Atender las consultas y reclamos sobre esta política.',
                     ],
@@ -122,6 +125,7 @@ return [
                     [
                         'Reclamos y pedidos de retiro: mientras se revisan y hasta seis meses después de resolverlos. Pasado ese tiempo, los rechazados se borran y los aprobados se anonimizan: se borran el nombre, el celular, el correo, el mensaje o el motivo y la nota de la revisión, y queda solo lo que no identifica a nadie: qué ficha, el rol o la relación con el negocio que se declaró (por ejemplo, «dueño» o «empleado»), qué se decidió, quién del equipo lo revisó y cuándo. Eso explica por qué una ficha cambió de dueño o se ocultó.',
                         'Cuentas de dueños y de administración: mientras estén activas. Si pedís que se borre la tuya, la borramos salvo lo que una ley nos obligue a conservar.',
+                        'Los avisos de «Enviar pedido por WhatsApp»: 13 meses, para comparar un mes con el mismo del año anterior; después se borran solos. Para no contar dos veces un doble toque ni más de 20 toques por día desde una misma conexión al mismo restaurante, el servidor guarda una huella (HMAC) de la IP (si es IPv6, de su red) con el restaurante, nunca la IP: la del doble toque deja de contar a los 10 segundos y la del día a las 24 horas, y las dos se borran dentro de la hora siguiente.',
                         'Sesiones: se borran tras dos horas de inactividad. La limpieza corre cada hora, así que ninguna dura más de tres. Los límites de intentos se borran al vencer, con la misma limpieza.',
                         'Lo guardado en tu teléfono: lo que se dice arriba, o hasta que lo borrés.',
                     ],

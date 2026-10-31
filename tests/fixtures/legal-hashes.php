@@ -9,6 +9,7 @@ return [
     'privacy' => [
         '0.1' => '6d0650cd73b8c87e33087ab52002a409c63a4ed95314074d752d87b5465228a2',
         '0.2' => 'e1a4ed7490abf9900cda7a2dc668ec920730a21ea8bed6b9d7864f48a8b930a4',
+        '0.3' => '35d27d57b6a1ba350eb3de66bdeee9bdf18c70f680df383a1a4425527a152c58',
     ],
     'terms' => [
         '0.1' => 'd719204c70753a5ef238e2e7069c123d29a4508a45b67ce7f34aea347d893a7a',
