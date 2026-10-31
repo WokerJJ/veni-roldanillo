@@ -19,7 +19,7 @@ Cerrada: versión 0.1.0.
 - [x] Ficha del restaurante: datos, horarios con estado abierto/cerrado, menú por secciones (ADR 0018)
 - [x] Menú con opciones obligatorias, adiciones, quitar ingredientes y nota (ADR 0023)
 - [x] Carrito y mensaje de WhatsApp (barrio, dirección, referencia, ubicación opcional, pago, "¿con cuánto pagás?") (ADR 0024)
-- [x] Direcciones y favoritos guardados en el dispositivo (#16, ADR 0032)
+- [x] Direcciones y favoritos guardados en el dispositivo: libreta para todos los restaurantes, favoritos en la ficha y el resumen, «Tus favoritos» en la lista y «Borrar todo lo guardado» (#16, ADR 0032). Pendiente: filtro «Favoritos» en el mapa
 - [x] Mapa de veni-mapa en el inicio (ADR 0007)
 - [x] Restaurantes sobre el mapa, con su resumen y el estado «abierto ahora» (ADR 0016 y 0017)
 - [x] Locales de OpenStreetMap como fichas ocultas para verificar en la calle, con su atribución en `/credits` (#58, ADR 0021)

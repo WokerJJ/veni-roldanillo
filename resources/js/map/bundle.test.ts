@@ -362,6 +362,15 @@ describe('presupuesto de descarga', () => {
         // pide (icons/onDemand.ts): 82,26. Se midió también diferir lo que
         // se ve del aviso de versión nueva (UpdatePrompt.vue): sacaba 0,125,
         // a cambio de partir su región de estado, y no se hizo.
+        // Con las direcciones y los favoritos (#16, ADR 0032): 82,985 antes y
+        // 82,971 después (medido antes de #21 y #22). La libreta, los favoritos y su pantalla bajan con el
+        // resumen, la lista, la ficha y el carrito, sin clases nuevas de
+        // Tailwind; al arranque solo llega la lista de dependencias de lo que
+        // baja después. Con una hoja de estilos propia en el botón de favorito
+        // llegaba a 83,05: cada chunk nuevo en esa lista se paga aquí.
+        // Con las correcciones de la revisión de #16: 82,967 antes y 82,989
+        // después; useLazyDialog, compartido por la lista y el carrito, es
+        // uno de esos chunks.
         //
         // Desde acá la regla es esta: la próxima página (su entrada en el
         // registro de app.ts) o lo próximo que sume al arranque tiene que

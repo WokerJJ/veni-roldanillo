@@ -2,6 +2,7 @@
 import { Link } from '@inertiajs/vue3';
 import { computed, onMounted, useId, useTemplateRef } from 'vue';
 
+import FavoriteButton from '@/components/FavoriteButton.vue';
 import Icon from '@/components/Icon.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import { useI18n } from '@/composables/useI18n';
@@ -21,7 +22,8 @@ import { openStatusText } from '@/restaurants/statusText';
  * lo muestra lo cierra con `close` (el botón o Escape) y devuelve el foco.
  *
  * Termina en «Cómo llegar» (#11), que pide la ruta con `directions`, y en el
- * enlace a la ficha completa del restaurante (#13). Con la ruta pedida
+ * enlace a la ficha completa del restaurante (#13), y en «Favorito» (#16),
+ * que lo marca solo en este teléfono. Con la ruta pedida
  * (`directionsOpen`), en lugar del botón va lo que la página ponga en el slot:
  * el panel de la ruta, que llega con import(). Va dentro del diálogo.
  *
@@ -126,6 +128,7 @@ onMounted(() => {
                     {{ t('restaurants.view_details') }}
                     <Icon name="chevron-derecha" :size="20" />
                 </Link>
+                <FavoriteButton :slug="restaurant.slug" :name="restaurant.name" />
             </div>
         </template>
     </section>

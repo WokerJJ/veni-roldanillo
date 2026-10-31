@@ -53,8 +53,12 @@ test('cada documento es una página pública con su versión y su fecha', functi
             ->has('related', 2));
 })->with('legal documents');
 
-test('cada documento está en los dos idiomas', function (string $path, LegalDocument $document, string $locale, string $date) {
+test('cada documento está en los dos idiomas', function (string $path, LegalDocument $document, string $locale, string $example) {
     $this->withoutVite();
+    // Cada documento tiene su propia fecha de vigencia (sube con su versión).
+    // El formato es el de la fecha larga del idioma; $example lo muestra.
+    $date = $document->effectiveDate()->locale($locale)->isoFormat('LL');
+    expect(preg_match('/^\d{1,2} de \p{L}+ de \d{4}$|^\p{L}+ \d{1,2}, \d{4}$/u', $date))->toBe(1, "{$date} no se parece a {$example}");
 
     $response = $this->get("{$path}?lang={$locale}")->assertOk();
 

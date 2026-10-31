@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useTemplate
 
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
+import { useLazyDialog } from '@/composables/useLazyDialog';
 import { formatPesos } from '@/i18n/intl';
 import type { DeliveryMode, DetailsField, OrderContext, OrderDetails } from '@/order/checkout';
 import {
@@ -20,10 +21,13 @@ import { recordOrderIntent } from '@/order/intent';
 import { orderMessage, whatsappNumber, whatsappUrl } from '@/order/message';
 import type { OrderItem } from '@/order/selection';
 import { MAX_QUANTITY, MIN_QUANTITY } from '@/order/selection';
-import { forgetDelivery, loadDelivery, saveDelivery } from '@/order/storage';
+import { forgetDelivery, loadDelivery } from '@/order/storage';
 import { useOrder } from '@/order/useOrder';
 import type { PaymentMethod, RestaurantProfile } from '@/restaurants/profile';
 import { PAYMENT_METHOD_KEYS } from '@/restaurants/profile';
+import type { AddressLabel, AddressLabelKind, SavedAddress } from '@/saved/addresses';
+import { isStored, LABEL_MAX_LENGTH, MAX_ADDRESSES, useAddressBook } from '@/saved/addresses';
+import { LABEL_KEYS, LABEL_KINDS, labelText, suggestedKind } from '@/saved/labels';
 
 /**
  * El carrito de un restaurante (#15, ADR 0024): las líneas del pedido (con sus
@@ -37,6 +41,12 @@ import { PAYMENT_METHOD_KEYS } from '@/restaurants/profile';
  * carga OrderBar recién al tocar «Ver tu pedido»: no pesa en la ficha ni en
  * el arranque. Sin v-model ni .prevent: sumarían código al chunk de Vue, el
  * del arranque (resources/js/map/bundle.test.ts).
+ *
+ * Las direcciones salen de la libreta del teléfono (#16, ADR 0032): al abrir
+ * se completa con la usada más recientemente, se puede elegir otra y, con
+ * «Guardar esta dirección» marcada, se guarda o se pone al día al enviar. La
+ * libreta se edita en SavedOnDevice.vue, que baja con import() al tocar
+ * «Editar o borrar».
  *
  * La ubicación se pide solo si la persona toca «Agregar mi ubicación», vive
  * en este componente mientras está abierto y sale únicamente dentro del
@@ -68,20 +78,68 @@ const context = computed<OrderContext>(() => ({
 
 const number = computed(() => whatsappNumber(restaurant.whatsapp));
 
-const remembered = loadDelivery(restaurant.slug);
+/*
+| La libreta de direcciones (#16, ADR 0032): una para todos los restaurantes.
+| Lo que «Recordar» guardaba por restaurante antes de ella (#15) pasa a la
+| libreta la primera vez que se abre este carrito y se borra de donde estaba:
+| un solo lugar para cada dirección. Se borra solo si quedó escrita en la
+| libreta: llena o sin espacio, sigue donde estaba para la próxima vez.
+*/
+const book = useAddressBook();
+const legacy = loadDelivery(restaurant.slug);
+
+if (legacy !== null) {
+    const { neighborhood, address, reference, name } = legacy;
+    const empty = address.trim() === '' && neighborhood.trim() === '';
+    const same = book.addresses.value.find((saved) => saved.address === address && saved.neighborhood === neighborhood);
+    const moved = empty ? null : book.save({ label: same?.label ?? { kind: suggestedKind(book.addresses.value), text: '' }, neighborhood, address, reference, name }, same?.id ?? null);
+
+    if (empty || (moved !== null && isStored(moved))) {
+        forgetDelivery(restaurant.slug);
+    }
+}
+
+/** La de la libreta que se está usando (al abrir, la usada más recientemente), o null. */
+const initial = book.addresses.value[0] ?? null;
+const activeId = ref<string | null>(initial?.id ?? null);
+const label = ref<AddressLabel>(initial === null ? { kind: suggestedKind(book.addresses.value), text: '' } : { ...initial.label });
+/** El barrio guardado que no está entre las zonas de este restaurante: se pide elegirlo. */
+const neighborhoodMissing = ref<string | null>(null);
+const rememberFull = ref(false);
+
+/** Los campos del formulario que salen de una dirección guardada. Con zonas, el barrio solo si es una de ellas. */
+function fromSaved(saved: SavedAddress): Partial<OrderDetails> {
+    const zones = context.value.zones;
+    const fits = zones.length === 0 || zones.some((zone) => zone.neighborhood === saved.neighborhood);
+    neighborhoodMissing.value = fits || saved.neighborhood === '' ? null : saved.neighborhood;
+
+    return { neighborhood: fits ? saved.neighborhood : '', address: saved.address, reference: saved.reference, name: saved.name };
+}
+
 const details = ref<OrderDetails>({
     ...emptyDetails(context.value),
-    ...(remembered === null
-        ? {}
-        : {
-              mode: remembered.mode,
-              neighborhood: remembered.neighborhood,
-              address: remembered.address,
-              reference: remembered.reference,
-              name: remembered.name,
-          }),
+    ...(legacy === null ? {} : { mode: legacy.mode }),
+    ...(initial === null ? {} : fromSaved(initial)),
 });
-const remember = ref(remembered !== null);
+/** «Guardar esta dirección»: nunca arranca marcada, ni al completar con una guardada. */
+const remember = ref(false);
+/**
+ * «Editar o borrar tus direcciones»: la pantalla de lo guardado, que baja con
+ * import() al tocarlo. Al cerrarla, el foco vuelve a ese botón; si ya no está
+ * (se borraron todas), al barrio o al título.
+ */
+const {
+    Dialog: Manager,
+    open: managing,
+    show: openManager,
+    close: closeManager,
+} = useLazyDialog(
+    () => import('@/components/SavedOnDevice.vue'),
+    'carrito',
+    () => {
+        (dialog.value?.querySelector<HTMLElement>('[data-saved-manage], [data-neighborhood]') ?? title.value)?.focus();
+    },
+);
 /** Lo que se escribe en «¿Con cuánto pagás?», tal cual. */
 const cashText = ref('');
 type LocationState = 'idle' | 'locating' | 'denied' | 'error';
@@ -130,8 +188,15 @@ function errorFor(field: DetailsField): string | null {
     return attempted.value ? (problems.value.get(field) ?? null) : null;
 }
 
+/** El barrio guardado que falta elegir de la lista, mientras no se elige otro. */
+const missingNeighborhood = computed(() => (details.value.neighborhood === '' ? neighborhoodMissing.value : null));
+
 function describedBy(field: DetailsField, hint: boolean): string | undefined {
-    const ids = [hint ? `${id}-${field}-hint` : null, errorFor(field) === null ? null : `${id}-${field}-error`].filter((value) => value !== null);
+    const ids = [
+        hint ? `${id}-${field}-hint` : null,
+        field === 'neighborhood' && missingNeighborhood.value !== null ? `${id}-neighborhood-saved` : null,
+        errorFor(field) === null ? null : `${id}-${field}-error`,
+    ].filter((value) => value !== null);
 
     return ids.length === 0 ? undefined : ids.join(' ');
 }
@@ -204,24 +269,98 @@ function onCash(event: Event): void {
 }
 
 function onRemember(event: Event): void {
-    remember.value = event.target instanceof HTMLInputElement && event.target.checked;
-}
+    const box = event.target instanceof HTMLInputElement ? event.target : null;
 
-function rememberedNow(): void {
-    if (remember.value) {
-        const { mode, neighborhood, address, reference, name } = details.value;
-        saveDelivery(restaurant.slug, { mode, neighborhood, address, reference, name });
-    } else {
-        forgetDelivery(restaurant.slug);
+    // Con la libreta llena no entra otra: la casilla vuelve a quedar sin marcar, y se dice por qué.
+    if (box !== null && box.checked && activeId.value === null && book.full.value) {
+        box.checked = false;
+        rememberFull.value = true;
+
+        return;
+    }
+
+    rememberFull.value = false;
+    remember.value = box?.checked === true;
+
+    // Una dirección nueva se guarda apenas se marca; una de la libreta se pone al día al enviar.
+    if (remember.value && activeId.value === null) {
+        saveAddress();
     }
 }
 
-// Lo que se recuerda se guarda con cada cambio; desmarcar «Recordar» lo borra.
-watch([remember, () => details.value.mode, () => details.value.neighborhood, () => details.value.address, () => details.value.reference, () => details.value.name], rememberedNow);
+function onLabelKind(kind: AddressLabelKind): void {
+    label.value = { kind, text: label.value.text };
+}
+
+function onLabelText(event: Event): void {
+    label.value = { kind: 'other', text: inputValue(event) };
+}
+
+/**
+ * «Guardar esta dirección» (antes «Recordar», #15): con la casilla marcada,
+ * la dirección del formulario queda en la libreta (una nueva, apenas se
+ * marca) y los cambios se guardan al enviar el pedido, no con cada tecla.
+ * Desmarcarla no borra nada: solo deja de ponerla al día (se borra en
+ * «Editar o borrar» o con «Borrar esta dirección»). Solo barrio, dirección,
+ * referencia y nombre: nunca la ubicación ni el pago. Sin dirección ni barrio
+ * todavía, no hay qué guardar.
+ */
+function saveAddress(): void {
+    const { neighborhood, address, reference, name } = details.value;
+
+    if (address.trim() === '' && neighborhood.trim() === '') {
+        return;
+    }
+
+    // Con zonas, un barrio guardado que no es de este restaurante queda sin elegir: no se pisa con el vacío.
+    const kept = neighborhood === '' && context.value.zones.length > 0 ? (book.addresses.value.find((saved) => saved.id === activeId.value)?.neighborhood ?? '') : neighborhood;
+    const saved = book.save({ label: label.value, neighborhood: kept, address, reference, name }, activeId.value);
+
+    if (saved === null) {
+        remember.value = false;
+        rememberFull.value = true;
+    } else {
+        activeId.value = saved;
+    }
+}
+
+// Si la dirección en uso se borró (desde «Editar o borrar», o en otra pestaña), el formulario queda, sin guardar.
+watch(book.addresses, (addresses) => {
+    if (activeId.value !== null && !addresses.some((saved) => saved.id === activeId.value)) {
+        activeId.value = null;
+        remember.value = false;
+    }
+});
+
+/** Elegir una de la libreta completa el formulario; «Otra dirección» lo deja en blanco (el nombre queda). */
+async function choose(saved: SavedAddress | null): Promise<void> {
+    rememberFull.value = false;
+
+    if (saved === null) {
+        activeId.value = null;
+        remember.value = false;
+        label.value = { kind: suggestedKind(book.addresses.value), text: '' };
+        neighborhoodMissing.value = null;
+        update({ neighborhood: '', address: '', reference: '' });
+
+        return;
+    }
+
+    activeId.value = saved.id;
+    label.value = { ...saved.label };
+    remember.value = false;
+    update(fromSaved(saved));
+    await announce(t('order.form.saved_used', { label: labelText(saved.label, t) }));
+}
 
 async function forget(): Promise<void> {
+    if (activeId.value !== null) {
+        book.remove(activeId.value);
+        activeId.value = null;
+    }
+
     remember.value = false;
-    forgetDelivery(restaurant.slug);
+    neighborhoodMissing.value = null;
     update({ neighborhood: '', address: '', reference: '', name: '' });
     await announce(t('order.form.forgotten'));
 }
@@ -299,7 +438,16 @@ async function onSend(event: MouseEvent): Promise<void> {
     // El aviso para las estadísticas del dueño (#22, ADR 0031): sin esperar
     // la respuesta ni frenar el enlace, y solo con domicilio o recoger.
     recordOrderIntent(restaurant.slug, delivery.value ? 'delivery' : 'pickup');
-    rememberedNow();
+
+    // Al recoger no se toca la libreta. Con domicilio, la dirección enviada queda como la usada más recientemente.
+    if (delivery.value) {
+        if (remember.value) {
+            saveAddress();
+        } else if (activeId.value !== null) {
+            book.touch(activeId.value);
+        }
+    }
+
     await announce(t('order.form.sent'));
 }
 
@@ -457,10 +605,44 @@ onBeforeUnmount(() => {
                     </fieldset>
 
                     <template v-if="delivery">
+                        <!-- La libreta (#16): elegir una completa el formulario; lo de abajo se puede cambiar igual. -->
+                        <fieldset v-if="book.addresses.value.length > 0" class="mt-3" data-saved-addresses>
+                            <legend class="font-semibold">{{ t('order.form.saved_addresses') }}</legend>
+                            <label v-for="saved in book.addresses.value" :key="saved.id" class="flex min-h-touch cursor-pointer items-start gap-3 py-1">
+                                <input
+                                    type="radio"
+                                    class="order-cart-check mt-0.5 size-5 shrink-0"
+                                    :name="`${id}-saved`"
+                                    :checked="activeId === saved.id"
+                                    :data-saved-address="saved.id"
+                                    @change="choose(saved)"
+                                >
+                                <span class="min-w-0">
+                                    <span class="block font-semibold wrap-anywhere">{{ labelText(saved.label, t) }}</span>
+                                    <span class="block text-sm wrap-anywhere text-ink-muted">{{ saved.address }}</span>
+                                </span>
+                            </label>
+                            <label class="flex min-h-touch cursor-pointer items-center gap-3">
+                                <input type="radio" class="order-cart-check size-5 shrink-0" :name="`${id}-saved`" :checked="activeId === null" data-saved-other @change="choose(null)">
+                                <span>{{ t('order.form.saved_other') }}</span>
+                            </label>
+                            <button
+                                type="button"
+                                class="inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
+                                data-saved-manage
+                                @click="openManager"
+                            >
+                                {{ t('order.form.saved_manage') }}
+                            </button>
+                        </fieldset>
+
                         <div class="mt-3" data-field="neighborhood">
                             <label :for="`${id}-neighborhood`" class="font-semibold">{{ t('order.form.neighborhood') }}</label>
                             <p :id="`${id}-neighborhood-hint`" class="text-sm text-ink-muted">
                                 {{ t(context.zones.length > 0 ? 'order.form.neighborhood_hint' : 'order.form.neighborhood_free_hint') }}
+                            </p>
+                            <p v-if="missingNeighborhood" :id="`${id}-neighborhood-saved`" class="text-sm font-semibold" data-neighborhood-missing>
+                                {{ t('order.form.saved_neighborhood_missing', { name: missingNeighborhood }) }}
                             </p>
                             <select
                                 v-if="context.zones.length > 0"
@@ -611,7 +793,7 @@ onBeforeUnmount(() => {
                         <p v-if="errorFor('cash')" :id="`${id}-cash-error`" class="mt-1 text-sm font-semibold" data-error>{{ errorFor('cash') }}</p>
                     </div>
 
-                    <div class="mt-4">
+                    <div v-if="delivery" class="mt-4" data-remember-block>
                         <label class="flex min-h-touch cursor-pointer items-start gap-3 py-1">
                             <input
                                 type="checkbox"
@@ -624,6 +806,35 @@ onBeforeUnmount(() => {
                             <span>{{ t('order.form.remember') }}</span>
                         </label>
                         <p :id="`${id}-remember-hint`" class="text-sm text-ink-muted">{{ t('order.form.remember_hint') }}</p>
+                        <p v-if="rememberFull" class="mt-1 text-sm font-semibold" role="status" data-remember-full>{{ t('order.form.remember_full', { max: MAX_ADDRESSES }) }}</p>
+
+                        <fieldset v-if="remember" class="mt-2" data-label>
+                            <legend class="font-semibold">{{ t('address.label') }}</legend>
+                            <label v-for="kind in LABEL_KINDS" :key="kind" class="flex min-h-touch cursor-pointer items-center gap-3">
+                                <input
+                                    type="radio"
+                                    class="order-cart-check size-5 shrink-0"
+                                    :name="`${id}-label`"
+                                    :checked="label.kind === kind"
+                                    :data-label-kind="kind"
+                                    @change="onLabelKind(kind)"
+                                >
+                                <span>{{ t(LABEL_KEYS[kind]) }}</span>
+                            </label>
+                            <div v-if="label.kind === 'other'" class="mt-1">
+                                <label :for="`${id}-label-text`" class="font-semibold">{{ t('address.label_text') }}</label>
+                                <input
+                                    :id="`${id}-label-text`"
+                                    type="text"
+                                    class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
+                                    :value="label.text"
+                                    :maxlength="LABEL_MAX_LENGTH"
+                                    data-label-text
+                                    @input="onLabelText"
+                                >
+                            </div>
+                        </fieldset>
+
                         <button
                             v-if="remember"
                             type="button"
@@ -683,6 +894,9 @@ onBeforeUnmount(() => {
 
         <p role="status" class="sr-only" data-announcement>{{ announcement }}</p>
         <p role="alert" class="sr-only" data-alert>{{ alertText }}</p>
+
+        <!-- «Editar o borrar tus direcciones»: otro diálogo encima de este, solo con la libreta. -->
+        <Manager v-if="managing" @close="closeManager" />
     </dialog>
 </template>
 
