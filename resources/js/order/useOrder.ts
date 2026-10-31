@@ -77,9 +77,15 @@ function onVisibilityChange(): void {
     }
 }
 
-/** Otra pestaña cambió el carrito de un restaurante que esta ya tiene abierto. */
+/** Otra pestaña cambió el carrito de un restaurante que esta ya tiene abierto (key null: vació todo). */
 function onStorage(event: StorageEvent): void {
-    if (event.key === null || !event.key.startsWith(CART_PREFIX)) {
+    if (event.key === null) {
+        forgetAllOrders();
+
+        return;
+    }
+
+    if (!event.key.startsWith(CART_PREFIX)) {
         return;
     }
 

@@ -51,6 +51,15 @@ describe('useOrder', () => {
         expect(useOrder('la-ceiba').count.value).toBe(1);
     });
 
+    it('si otra pestaña vacía todo el almacenamiento, el pedido abierto también se vacía', () => {
+        const order = useOrder('la-ceiba');
+        order.add(juice);
+
+        window.dispatchEvent(new StorageEvent('storage', { key: null, newValue: null }));
+
+        expect(order.items.value).toEqual([]);
+    });
+
     it('vaciar deja el pedido en cero', () => {
         const order = useOrder('la-ceiba');
 

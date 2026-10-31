@@ -21,7 +21,15 @@ const FILES = [
     'resources/js/saved/clearAll.ts',
     'resources/js/components/FavoriteButton.vue',
     'resources/js/components/SavedOnDevice.vue',
+    'resources/js/saved/labels.ts',
+    'resources/js/components/OrderCart.vue',
+    'resources/js/components/RestaurantList.vue',
 ];
+
+/** Lo único permitido: la lista del inicio navega a las fichas con el <Link> de Inertia, que no lleva nada de lo guardado. */
+const ALLOWED: Partial<Record<string, RegExp>> = {
+    'resources/js/components/RestaurantList.vue': /^import \{ Link \} from '@inertiajs\/vue3';$/m,
+};
 
 const NETWORK = /\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource|axios|@inertiajs|\brouter\b|navigator\.serviceWorker/;
 
@@ -34,7 +42,10 @@ afterEach(() => {
 
 describe('lo guardado en el dispositivo no sale del teléfono', () => {
     it.each(FILES)('%s no tiene con qué hacer una petición', (file) => {
-        expect(readFileSync(file, 'utf8')).not.toMatch(NETWORK);
+        const allowed = ALLOWED[file];
+        const source = readFileSync(file, 'utf8');
+
+        expect(allowed === undefined ? source : source.replace(allowed, '')).not.toMatch(NETWORK);
     });
 
     it('guardar, leer y borrar no hace ninguna petición', () => {
