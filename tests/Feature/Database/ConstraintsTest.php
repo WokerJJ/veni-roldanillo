@@ -230,6 +230,22 @@ test('fulfillment solo acepta domicilio o recoger (#22)', function () {
     ]);
 })->throws(QueryException::class, 'order_intents_fulfillment_check');
 
+test('created_at y updated_at de order_intents no son nulos y los pone la base si faltan (AUD-002)', function () {
+    $id = DB::table('order_intents')->insertGetId(['restaurant_id' => Restaurant::factory()->create()->id, 'fulfillment' => 'pickup']);
+    $row = DB::table('order_intents')->where('id', $id)->first();
+
+    expect($row?->created_at)->not->toBeNull()
+        ->and($row?->updated_at)->not->toBeNull();
+
+    DB::table('order_intents')->where('id', $id)->update(['created_at' => null]);
+})->throws(QueryException::class, 'created_at');
+
+test('order_intents tiene un índice BRIN por created_at para el borrado de los 13 meses (AUD-001)', function () {
+    $definition = DB::scalar("SELECT indexdef FROM pg_indexes WHERE tablename = 'order_intents' AND indexname = 'order_intents_created_at_brin'");
+
+    expect($definition)->toBeString()->toContain('USING brin (created_at)');
+});
+
 test('el device_hash es un SHA-256 en hexadecimal', function () {
     OrderIntent::factory()->create(['device_hash' => 'dispositivo-sin-hash']);
 })->throws(QueryException::class, 'order_intents_device_hash_format');

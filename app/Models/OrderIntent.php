@@ -44,7 +44,7 @@ class OrderIntent extends Model
     /** @return Builder<self> */
     public function prunable(): Builder
     {
-        return self::query()->where('created_at', '<', now()->subMonths(self::RETENTION_MONTHS));
+        return self::query()->where('created_at', '<', now()->subMonthsNoOverflow(self::RETENTION_MONTHS));
     }
 
     /** @return BelongsTo<Restaurant, $this> */
