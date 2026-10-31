@@ -1,3 +1,5 @@
+import { isRecord, readItem, text, writeItem } from '@/device/localStore';
+
 import type { DeliveryMode } from './checkout';
 import { ADDRESS_MAX_LENGTH, NAME_MAX_LENGTH, NEIGHBORHOOD_MAX_LENGTH, REFERENCE_MAX_LENGTH } from './checkout';
 import type { ChosenOption, OrderItem } from './selection';
@@ -11,7 +13,9 @@ import { clampQuantity, NOTE_MAX_LENGTH } from './selection';
  *   es de hoy, y el menú y los precios cambian;
  * - los datos de entrega (`veni:delivery:<slug>`), solo si la persona marca
  *   «Recordar» y 90 días desde la última vez que los usó: modo, barrio,
- *   dirección, referencia y nombre.
+ *   dirección, referencia y nombre. Desde la libreta de direcciones (#16,
+ *   ADR 0032) ya no se escriben: el carrito los lee una vez, los pasa a la
+ *   libreta (saved/addresses.ts) y los borra.
  *
  * Nunca la ubicación, el medio de pago ni «¿con cuánto pagás?». Nada de
  * esto sale del teléfono (regla 2 de producto). El almacenamiento puede
@@ -54,40 +58,12 @@ interface Stored {
     data: unknown;
 }
 
-function storage(): Storage | null {
-    try {
-        return typeof window === 'undefined' ? null : window.localStorage;
-    } catch {
-        return null;
-    }
-}
-
 function read(key: string): string | null {
-    try {
-        return storage()?.getItem(key) ?? null;
-    } catch {
-        return null;
-    }
+    return readItem(key);
 }
 
 function write(key: string, value: string | null): void {
-    try {
-        if (value === null) {
-            storage()?.removeItem(key);
-        } else {
-            storage()?.setItem(key, value);
-        }
-    } catch {
-        // Sin espacio o bloqueado: no se recuerda, y nada más.
-    }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function text(value: unknown, max: number): string | null {
-    return typeof value === 'string' && value.length <= max ? value : null;
+    writeItem(key, value);
 }
 
 function price(value: unknown): number | null {
