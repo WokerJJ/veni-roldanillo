@@ -1,5 +1,7 @@
 import { computed, type ComputedRef, shallowRef } from 'vue';
 
+import { removeWithPrefix } from '@/device/localStore';
+
 import type { OrderItem } from './selection';
 import { addItem, clampQuantity, itemsCount, itemsTotal } from './selection';
 import { CART_PREFIX, CART_TTL_MS, loadSavedCart, parseCart, saveCart } from './storage';
@@ -150,19 +152,19 @@ export function useOrder(slug: string): Order {
     };
 }
 
+/**
+ * Vacía todos los pedidos sin enviar, en la memoria y en el dispositivo
+ * («Borrar todo lo guardado», #16). Las pestañas abiertas que tengan uno lo
+ * ven vaciarse por el evento `storage`.
+ */
+export function forgetAllOrders(): void {
+    orders.value = new Map();
+    changedAt.clear();
+    removeWithPrefix(CART_PREFIX);
+}
+
 /** Solo para las pruebas: empezar sin pedidos, ni en memoria ni guardados. */
 export function resetOrders(): void {
-    orders.value = new Map();
+    forgetAllOrders();
     loaded.clear();
-    changedAt.clear();
-
-    try {
-        for (const key of Object.keys(window.localStorage)) {
-            if (key.startsWith(CART_PREFIX)) {
-                window.localStorage.removeItem(key);
-            }
-        }
-    } catch {
-        // Sin almacenamiento no hay nada que borrar.
-    }
 }
