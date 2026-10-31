@@ -2,6 +2,7 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 
+import FavoriteButton from '@/components/FavoriteButton.vue';
 import Icon from '@/components/Icon.vue';
 import OrderBar from '@/components/OrderBar.vue';
 import RestaurantContact from '@/components/RestaurantContact.vue';
@@ -148,16 +149,19 @@ onBeforeUnmount(() => {
                     abre el restaurante sin pedir la ubicación de nadie. Una
                     ficha oculta no está en el mapa: no hay a dónde llevar.
                 -->
-                <Link
-                    v-if="!restaurant.hidden"
-                    :href="mapUrl(restaurant.slug)"
-                    class="mt-4 inline-flex min-h-touch items-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
-                    data-directions
-                    @click="onDirectionsClick"
-                >
-                    <Icon name="ubicacion" :size="20" />
-                    {{ t('restaurant.directions') }}
-                </Link>
+                <div v-if="!restaurant.hidden" class="mt-4 flex flex-wrap gap-2">
+                    <Link
+                        :href="mapUrl(restaurant.slug)"
+                        class="inline-flex min-h-touch items-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                        data-directions
+                        @click="onDirectionsClick"
+                    >
+                        <Icon name="ubicacion" :size="20" />
+                        {{ t('restaurant.directions') }}
+                    </Link>
+                    <!-- Favorito (#16): solo el slug, en este teléfono. Una ficha oculta no está en el mapa ni en la lista. -->
+                    <FavoriteButton :slug="restaurant.slug" :name="restaurant.name" />
+                </div>
 
                 <p v-if="restaurant.description" class="mt-4 max-w-prose whitespace-pre-line" data-description>{{ restaurant.description }}</p>
 
