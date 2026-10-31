@@ -70,6 +70,18 @@ describe('LegalLinks', () => {
         expect(wrapper.get('nav').classes()).toContain('text-sm');
     });
 
+    it('los demás atributos no se repiten en los dos: un id queda, como mucho, en uno', async () => {
+        const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
+        inertia.reset();
+        inertia.receiveFromServer('es', { replace: true });
+        const { default: LegalLinks } = await import('./LegalLinks.vue');
+
+        const wrapper = mount(LegalLinks, { attrs: { id: 'x', class: 'text-sm' } });
+
+        expect(wrapper.findAll('#x').length).toBeLessThanOrEqual(1);
+        expect(wrapper.get('nav').classes()).toContain('text-sm');
+    });
+
     it('en inglés', async () => {
         const wrapper = await mountLinks({}, 'en');
 
