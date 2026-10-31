@@ -145,6 +145,15 @@ describe('Home', () => {
         expect(credits.text()).toBe('Créditos y datos de OpenStreetMap');
     });
 
+    it('la bienvenida enlaza la guía de platos típicos, que baja con la lista (#21)', async () => {
+        const { wrapper } = await mountHome({ locale: 'en' });
+        await vi.dynamicImportSettled();
+
+        const guide = wrapper.get('section [data-dish-guide-link]');
+        expect(guide.attributes('href')).toBe('/dishes');
+        expect(guide.text()).toBe('Typical dishes guide');
+    });
+
     it('muestra el mapa de Roldanillo', async () => {
         const { map } = await mountHome();
 
@@ -982,6 +991,49 @@ describe('Home', () => {
 
             expect(replace).toHaveBeenCalledOnce();
             expect(replace).toHaveBeenCalledWith(expect.objectContaining({ url: '/?q=gua' }));
+        });
+
+        it('abrir con una búsqueda en la dirección («Buscar dónde lo sirven», de la guía de platos) abre la lista y busca el plato (#21)', async () => {
+            const { network, panel } = await mountHome({ url: '/?q=sancocho', answer: [LA_CEIBA, EL_GUADUAL] });
+
+            expect(panel().get<HTMLInputElement>('input[data-search]').element.value).toBe('sancocho');
+
+            // La sección «Platos» (#17) pide la búsqueda cuando se deja de teclear.
+            await new Promise((resolve) => setTimeout(resolve, 400));
+            await flushPromises();
+
+            const dishSearches = network.fetchMock.mock.calls.map(([url]) => url).filter((url) => url.startsWith('/api/dishes/search?'));
+            expect(dishSearches).toHaveLength(1);
+            expect(new URL(dishSearches[0] ?? '', 'https://veni.test').searchParams.get('q')).toBe('sancocho');
+        });
+
+        it('la lista que abrió la dirección se abre una sola vez: al cerrarla queda la bienvenida, con la búsqueda puesta', async () => {
+            const { layer, listButton, panel, pressEscape } = await mountHome({ url: '/?q=sancocho', answer: [LA_CEIBA, EL_GUADUAL] });
+
+            await pressEscape();
+
+            expect(listButton()).toBeDefined();
+            expect(panel().find('input[data-search]').exists()).toBe(false);
+            expect(layer().props('filters')).toEqual({ ...NO_FILTERS, query: 'sancocho' });
+        });
+
+        it('sin búsqueda ni filtros en la dirección, el inicio abre con la bienvenida', async () => {
+            const { listButton, panel } = await mountHome({ url: '/?lang=es', answer: [LA_CEIBA, EL_GUADUAL] });
+
+            expect(listButton()).toBeDefined();
+            expect(panel().find('input[data-search]').exists()).toBe(false);
+        });
+
+        it('con la búsqueda en la dirección, la lista espera a que lleguen los restaurantes', async () => {
+            const { network, panel } = await mountHome({ url: '/?q=sancocho' });
+
+            expect(panel().find('input[data-search]').exists()).toBe(false);
+            expect(panel().get('[role="status"]').text()).toBe('Cargando los restaurantes…');
+
+            network.requests[0]?.respond([LA_CEIBA, EL_GUADUAL]);
+            await flushPromises();
+
+            expect(panel().get<HTMLInputElement>('input[data-search]').element.value).toBe('sancocho');
         });
 
         it('abrir con una búsqueda en la dirección no la vuelve a escribir: «%20» y «+» son el mismo espacio', async () => {

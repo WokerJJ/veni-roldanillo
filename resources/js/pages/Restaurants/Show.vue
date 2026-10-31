@@ -109,7 +109,7 @@ onBeforeUnmount(() => {
     <div class="mx-auto w-full max-w-3xl px-4 pt-2 pb-10">
         <Link href="/" class="-ml-2 inline-flex min-h-touch items-center gap-1 rounded-full px-2 font-semibold hover:bg-surface" data-back>
             <Icon name="chevron-izquierda" :size="20" />
-            {{ t('restaurant.back_to_map') }}
+            {{ t('layout.back_to_map') }}
         </Link>
 
         <article>

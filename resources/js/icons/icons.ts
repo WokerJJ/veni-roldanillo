@@ -1,6 +1,8 @@
 // Solo el tipo: los nombres salen del manifiesto y el JSON no entra al bundle.
 import type manifest from '../../icons/colombia/manifest.json';
 
+import type * as OnDemand from './onDemand';
+
 /**
  * Nombres de los íconos copiados de colombia-icons (ADR 0011): las claves de
  * «icons» del manifiesto. Agregar un ícono al manifiesto lo agrega al tipo.
@@ -17,10 +19,11 @@ export interface IconArt {
 | Los íconos del layout viajan en el bundle inicial: están en todas las
 | páginas y, si llegaran después, el encabezado parpadearía. El resto es un
 | chunk por ícono que se pide la primera vez que una página lo pinta, así el
-| set puede crecer sin que crezca la primera carga.
+| set puede crecer sin que crezca la primera carga. El mapa de esos chunks
+| (onDemand.ts) también baja aparte, con el primero que se pide.
 |
 | Los patrones de import.meta.glob tienen que ser literales: la lista de los
-| críticos se repite, negada, en el segundo.
+| críticos se repite, negada, en onDemand.ts.
 */
 const critical = import.meta.glob<string>('./{idioma,luna,sol}.svg', {
     base: '../../icons/colombia',
@@ -29,11 +32,17 @@ const critical = import.meta.glob<string>('./{idioma,luna,sol}.svg', {
     import: 'default',
 });
 
-const onDemand = import.meta.glob<string>(['./*.svg', '!./{idioma,luna,sol}.svg'], {
-    base: '../../icons/colombia',
-    query: '?raw',
-    import: 'default',
-});
+/** El mapa de los íconos bajo demanda, cuando ya se pidió. Si no bajó (sin red), se vuelve a pedir la próxima vez. */
+let catalog: Promise<typeof OnDemand> | undefined;
+
+function onDemandCatalog(): Promise<typeof OnDemand> {
+    catalog ??= import('./onDemand').catch((error: unknown) => {
+        catalog = undefined;
+        throw error;
+    });
+
+    return catalog;
+}
 
 /** El tamaño lo pone el componente; el espacio de nombres, Vue al crear el <svg>. */
 const SET_BY_COMPONENT = new Set(['xmlns', 'width', 'height']);
@@ -91,7 +100,7 @@ export async function loadIcon(name: IconName): Promise<IconArt> {
         return ready;
     }
 
-    const load = onDemand[file(name)];
+    const load = (await onDemandCatalog()).onDemand[file(name)];
 
     if (!load) {
         throw new Error(`No existe el ícono «${name}».`);
