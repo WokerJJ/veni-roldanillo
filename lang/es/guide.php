@@ -8,8 +8,9 @@
 | la primera visita. lang/en/guide.php tiene las mismas claves (lo prueba
 | tests/Feature/DishGuidePageTest.php).
 |
-| Cada sección agrupa platos; la clave de la sección y la de cada plato son
-| sus anclas en la página. `search` es lo que se busca en el inicio con
+| Son entre 10 y 15 platos, el rango que pide el issue #21 (lo prueba
+| tests/Feature/DishGuidePageTest.php). Cada sección agrupa platos; la clave
+| de la sección y la de cada plato son sus anclas en la página. `search` es lo que se busca en el inicio con
 | «Buscar dónde lo sirven» (/?q=…): va en español en los dos idiomas, porque
 | los menús de los restaurantes están en español.
 */
@@ -17,7 +18,7 @@
 return [
     'title' => 'Guía de platos típicos',
     'description' => 'Qué es el sancocho, el pandebono, el champús o el cholado, cuándo se comen y dónde los sirven en Roldanillo: los platos y bebidas típicos del Valle del Cauca, contados por Vení.',
-    'intro' => 'En Roldanillo se come lo que se come en el Valle del Cauca: sopas de olla grande, fritos de plátano, panes de yuca y queso, y bebidas para el calor. Acá te contamos qué es cada cosa y cuándo se pide, para que llegués sabiendo. Y si te antojás, buscá quién lo sirve hoy.',
+    'intro' => 'En Roldanillo se come lo que se come en el Valle del Cauca: sopas de olla grande, fritos de plátano, panes de yuca y queso, y bebidas para el calor. Acá te contamos qué es cada cosa y cuándo se pide, para que llegués sabiendo. Y si se te antoja, buscá quién lo sirve hoy.',
     'note' => 'Esta guía la escribió el equipo de Vení. Cada casa y cada cocina tiene su receta: lo que leés acá es lo más común, no la única forma de hacerlo.',
     'toc' => 'En esta guía',
     'when' => 'Cuándo se come',
@@ -41,13 +42,6 @@ return [
                     'summary' => 'Arroz húmedo y cremoso, cocinado con carne de cerdo, pollo, longaniza o chorizo, papa y hogao. «Atollado» quiere decir que queda jugoso, nada suelto.',
                     'when' => 'Al almuerzo y en reuniones grandes, porque se hace en cantidad.',
                     'tip' => 'No esperés un arroz seco: se parece más a un guiso. Es contundente, así que una porción alcanza.',
-                ],
-                'tamal' => [
-                    'name' => 'Tamal',
-                    'search' => 'tamal',
-                    'summary' => 'Masa de maíz con carnes, verduras y huevo, envuelta en hoja de plátano y cocida por horas. Cada familia le pone lo suyo.',
-                    'when' => 'Al desayuno, más que todo los fines de semana y en diciembre, con chocolate caliente.',
-                    'tip' => 'La hoja de plátano no se come: abrila y comé lo de adentro. Con chocolate y arepa o pan es el desayuno de domingo.',
                 ],
             ],
         ],
@@ -90,6 +84,13 @@ return [
                     'when' => 'Al desayuno o para picar.',
                     'tip' => 'Llenan bastante: con una o dos tenés para el antojo.',
                 ],
+                'tamal' => [
+                    'name' => 'Tamal',
+                    'search' => 'tamal',
+                    'summary' => 'Masa de maíz con carnes, verduras y huevo, envuelta en hoja de plátano y cocida por horas. Cada familia le pone lo suyo.',
+                    'when' => 'Al desayuno, más que todo los fines de semana y en diciembre, con chocolate caliente.',
+                    'tip' => 'La hoja de plátano no se come: abrila y comé lo de adentro. Con chocolate y arepa o pan es el desayuno de domingo.',
+                ],
             ],
         ],
 
@@ -108,7 +109,7 @@ return [
                     'search' => 'lulada',
                     'summary' => 'Lulo machacado, no licuado, con hielo, azúcar y limón. Queda con pedacitos de fruta y un sabor ácido que refresca.',
                     'when' => 'Cuando aprieta el calor, a cualquier hora.',
-                    'tip' => 'El lulo es ácido: si lo querés menos dulce, pedilo con poca azúcar.',
+                    'tip' => 'Es ácida y refresca: si la querés menos dulce, pedila con poca azúcar.',
                 ],
                 'cholado' => [
                     'name' => 'Cholado',
@@ -129,7 +130,7 @@ return [
                     'search' => 'chontaduro',
                     'summary' => 'El fruto de una palma, cocido, que se vende en la calle con sal, con miel o con las dos. Tiene una textura harinosa y un sabor que no se parece a otro.',
                     'when' => 'A cualquier hora, en los carritos de la calle.',
-                    'tip' => 'Es un sabor para probar sin prejuicios: empezá con sal y miel, como lo pide la mayoría.',
+                    'tip' => 'Es un sabor para probar sin prejuicios: empezá con sal y miel, como se suele pedir.',
                 ],
                 'manjar-blanco' => [
                     'name' => 'Manjar blanco',

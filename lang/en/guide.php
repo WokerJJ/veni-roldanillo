@@ -30,16 +30,9 @@ return [
                 'arroz-atollado' => [
                     'name' => 'Arroz atollado (soupy rice)',
                     'search' => 'arroz atollado',
-                    'summary' => 'Moist, creamy rice cooked with pork, chicken, longaniza or chorizo sausage, potato and hogao (a tomato and onion sauce). «Atollado» means it stays juicy, never loose.',
+                    'summary' => 'Moist, creamy rice cooked with pork, chicken, longaniza or chorizo sausage, potato and hogao (a tomato and onion sauce). “Atollado” means it stays juicy, never loose.',
                     'when' => 'At lunch and at big gatherings, because it is cooked in large batches.',
                     'tip' => 'Do not expect dry rice: it is closer to a stew. It is filling, so one serving is enough.',
-                ],
-                'tamal' => [
-                    'name' => 'Tamal',
-                    'search' => 'tamal',
-                    'summary' => 'Corn dough with meats, vegetables and egg, wrapped in a plantain leaf and cooked for hours. Every family makes it its own way.',
-                    'when' => 'For breakfast, mostly on weekends and in December, with hot chocolate.',
-                    'tip' => 'The plantain leaf is not eaten: unwrap it and eat what is inside. With hot chocolate and an arepa or bread, it is a Sunday breakfast.',
                 ],
             ],
         ],
@@ -51,7 +44,7 @@ return [
                     'name' => 'Pandebono (cheese bread)',
                     'search' => 'pandebono',
                     'summary' => 'A small bread made with cassava starch and cheese, golden outside and soft inside. It is one of the most typical flavors of the Valle.',
-                    'when' => 'For breakfast or the «algo», the afternoon snack, with coffee, hot chocolate or a drink made with oats.',
+                    'when' => 'For breakfast or the “algo”, the afternoon snack, with coffee, hot chocolate or a drink made with oats.',
                     'tip' => 'Fresh out of the oven it is a different thing: ask when the next batch comes out.',
                 ],
                 'pandeyuca' => [
@@ -82,6 +75,13 @@ return [
                     'when' => 'For breakfast or as a snack.',
                     'tip' => 'They are filling: one or two are enough for a snack.',
                 ],
+                'tamal' => [
+                    'name' => 'Tamal',
+                    'search' => 'tamal',
+                    'summary' => 'Corn dough with meats, vegetables and egg, wrapped in a plantain leaf and cooked for hours. Every family makes it its own way.',
+                    'when' => 'For breakfast, mostly on weekends and in December, with hot chocolate.',
+                    'tip' => 'The plantain leaf is not eaten: unwrap it and eat what is inside. With hot chocolate and an arepa or bread, it is a Sunday breakfast.',
+                ],
             ],
         ],
 
@@ -100,7 +100,7 @@ return [
                     'search' => 'lulada',
                     'summary' => 'Lulo fruit mashed, not blended, with ice, sugar and lime. It keeps small pieces of fruit and a refreshing sour taste.',
                     'when' => 'Whenever the heat is strong, at any time.',
-                    'tip' => 'Lulo is sour: if you want it less sweet, ask for little sugar.',
+                    'tip' => 'It is sour and refreshing: if you want it less sweet, ask for little sugar.',
                 ],
                 'cholado' => [
                     'name' => 'Cholado (shaved ice with fruit)',
@@ -121,7 +121,7 @@ return [
                     'search' => 'chontaduro',
                     'summary' => 'The fruit of a palm tree, cooked and sold on the street with salt, honey or both. It has a starchy texture and a taste unlike any other.',
                     'when' => 'At any time, from street carts.',
-                    'tip' => 'Try it with an open mind: start with salt and honey, the way most people order it.',
+                    'tip' => 'Try it with an open mind: start with salt and honey, the way it is usually ordered.',
                 ],
                 'manjar-blanco' => [
                     'name' => 'Manjar blanco (milk and rice sweet)',
@@ -133,7 +133,7 @@ return [
                 'desamargado' => [
                     'name' => 'Desamargado (citrus peel sweet)',
                     'search' => 'desamargado',
-                    'summary' => 'A sweet of fruit and citrus peels in syrup. Before cooking, the bitterness is taken out of them, hence the name («desamargar» means to remove the bitterness).',
+                    'summary' => 'A sweet of fruit and citrus peels in syrup. Before cooking, the bitterness is taken out of them, hence the name (“desamargar” means to remove the bitterness).',
                     'when' => 'Mostly in December, among the sweets of the season.',
                     'tip' => 'It is sweet and fragrant: people eat it a little at a time, in small servings.',
                 ],
