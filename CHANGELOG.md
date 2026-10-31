@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.5.0...v0.6.0) (2026-10-31)
+
+
+### Funcionalidades
+
+* búsqueda por plato con Meilisearch ([#17](https://github.com/WokerJJ/veni-roldanillo/issues/17)) ([#104](https://github.com/WokerJJ/veni-roldanillo/issues/104)) ([dd01455](https://github.com/WokerJJ/veni-roldanillo/commit/dd0145503d1ac27c981de95b9320de34712ba475))
+* búsqueda, filtros, «Almuerzos de hoy» y «Sugerime algo» en el inicio ([#12](https://github.com/WokerJJ/veni-roldanillo/issues/12)) ([#102](https://github.com/WokerJJ/veni-roldanillo/issues/102)) ([0a9b987](https://github.com/WokerJJ/veni-roldanillo/commit/0a9b9876b713050a9000e995ac79e473dca55782))
+* guía de platos típicos en español e inglés ([#21](https://github.com/WokerJJ/veni-roldanillo/issues/21)) ([#109](https://github.com/WokerJJ/veni-roldanillo/issues/109)) ([966ed5c](https://github.com/WokerJJ/veni-roldanillo/commit/966ed5c4ec5823ca8e84afed58b5a8f1ef92cf24))
+* páginas legales: datos personales, términos y política de reseñas ([#23](https://github.com/WokerJJ/veni-roldanillo/issues/23)) ([#107](https://github.com/WokerJJ/veni-roldanillo/issues/107)) ([a5df74f](https://github.com/WokerJJ/veni-roldanillo/commit/a5df74fdd5dce5a1a593bb6f7bc8f4b538847993))
+* registro de pedidos por WhatsApp y estadísticas del dueño ([#22](https://github.com/WokerJJ/veni-roldanillo/issues/22)) ([#108](https://github.com/WokerJJ/veni-roldanillo/issues/108)) ([d7c61be](https://github.com/WokerJJ/veni-roldanillo/commit/d7c61bee7c52dbcd08093c3f4388812d53dfa4c7))
+
 ## [0.5.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.4.0...v0.5.0) (2026-10-28)
 
 
