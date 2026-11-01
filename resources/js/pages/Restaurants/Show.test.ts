@@ -559,7 +559,11 @@ describe('Restaurants/Show', () => {
 
 describe('Restaurants/Show: promociones (#113)', () => {
     it('sin promociones vigentes (o de una ficha guardada antes) no hay sección', async () => {
-        for (const restaurant of [profile({ promotions: [] }), { ...profile(), promotions: undefined }]) {
+        // Una ficha guardada antes de #113 no trae la clave.
+        const older: RestaurantProfile = profile();
+        delete older.promotions;
+
+        for (const restaurant of [profile({ promotions: [] }), older]) {
             const { wrapper } = await mountShow(restaurant);
 
             expect(wrapper.findAll('h2').map((title) => title.text())).not.toContain('Promociones');
