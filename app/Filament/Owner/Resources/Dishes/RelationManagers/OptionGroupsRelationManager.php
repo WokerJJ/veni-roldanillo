@@ -7,6 +7,7 @@ use App\Filament\Owner\Concerns\TouchesOwnerUpdate;
 use App\Filament\Owner\Concerns\TranslatesConstraintViolations;
 use App\Filament\Owner\Support\Fields;
 use App\Models\Dish;
+use App\Models\Ingredient;
 use App\Models\OptionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -24,6 +25,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 
 /**
  * Grupos de opciones de un plato (ADR 0023) con sus opciones: elegir
@@ -111,6 +113,20 @@ class OptionGroupsRelationManager extends RelationManager
                     Fields::text('name_en', __('panel.fields.name_en'), 80),
                     Fields::pesos('price_delta', __('panel.options.price_delta'), 500_000)->default(0),
                     Toggle::make('available')->label(__('panel.options.available'))->default(true),
+                    // Un «Quitar tomate» o una adición de aguacate pueden ser
+                    // un ingrediente de la lista (#112, ADR 0033): su «agotado
+                    // hoy» los ajusta. Solo los de este restaurante; un
+                    // disparador de la base lo asegura también.
+                    Select::make('ingredient_id')
+                        ->label(__('panel.ingredients.option_ingredient'))
+                        ->helperText(__('panel.ingredients.option_ingredient_help'))
+                        ->options(fn (): array => Ingredient::query()
+                            ->where('restaurant_id', $this->dish()->restaurant_id)
+                            ->orderBy('name_es')->orderBy('id')
+                            ->pluck('name_es', 'id')
+                            ->all())
+                        ->rule(fn (): Exists => Rule::exists('ingredients', 'id')->where('restaurant_id', $this->dish()->restaurant_id))
+                        ->columnSpan(2),
                 ]),
         ]);
     }
