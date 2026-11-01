@@ -195,9 +195,9 @@ describe('lista blanca', function () {
             ->and(array_keys($profile['hours'][0]))->toBe(['weekday', 'opens', 'closes'])
             ->and(array_keys($profile['special_hours'][0]))->toBe(['date', 'closed', 'opens', 'closes', 'note'])
             ->and(array_keys($profile['menu'][0]))->toBe(['name', 'dishes'])
-            ->and(array_keys($profile['menu'][0]['dishes'][0]))->toBe(['name', 'description', 'price', 'sold_out_until', 'groups'])
+            ->and(array_keys($profile['menu'][0]['dishes'][0]))->toBe(['name', 'description', 'price', 'sold_out_until', 'ingredients', 'groups'])
             ->and(array_keys($profile['menu'][0]['dishes'][0]['groups'][0]))->toBe(['name', 'kind', 'min', 'max', 'options'])
-            ->and(array_keys($profile['menu'][0]['dishes'][0]['groups'][0]['options'][0]))->toBe(['name', 'price']);
+            ->and(array_keys($profile['menu'][0]['dishes'][0]['groups'][0]['options'][0]))->toBe(['name', 'price', 'ingredient']);
     });
 
     test('manda la ficha que dice el contrato del que parten las pruebas de la página', function () {
@@ -434,12 +434,12 @@ describe('menú', function () {
 
         expect(restaurantPageProfile($this->get('/restaurants/la-ceiba'))['menu'])->toBe([
             ['name' => 'Platos fuertes (prueba)', 'dishes' => [
-                ['name' => 'Primero', 'description' => 'Descripción de ejemplo.', 'price' => 18500, 'sold_out_until' => null, 'groups' => []],
-                ['name' => 'Segundo', 'description' => 'Descripción de ejemplo.', 'price' => 22000, 'sold_out_until' => null, 'groups' => []],
+                ['name' => 'Primero', 'description' => 'Descripción de ejemplo.', 'price' => 18500, 'sold_out_until' => null, 'ingredients' => [], 'groups' => []],
+                ['name' => 'Segundo', 'description' => 'Descripción de ejemplo.', 'price' => 22000, 'sold_out_until' => null, 'ingredients' => [], 'groups' => []],
             ]],
             ['name' => 'Bebidas (prueba)', 'dishes' => [
-                ['name' => 'Jugo', 'description' => null, 'price' => 4000, 'sold_out_until' => null, 'groups' => []],
-                ['name' => 'Gaseosa', 'description' => null, 'price' => 3500, 'sold_out_until' => null, 'groups' => []],
+                ['name' => 'Jugo', 'description' => null, 'price' => 4000, 'sold_out_until' => null, 'ingredients' => [], 'groups' => []],
+                ['name' => 'Gaseosa', 'description' => null, 'price' => 3500, 'sold_out_until' => null, 'ingredients' => [], 'groups' => []],
             ]],
         ]);
     });
@@ -518,12 +518,12 @@ describe('menú', function () {
 
         expect(restaurantPageProfile($this->get('/restaurants/la-ceiba'))['menu'][0]['dishes'][0]['groups'])->toBe([
             ['name' => 'Proteína', 'kind' => 'choice', 'min' => 1, 'max' => 1, 'options' => [
-                ['name' => 'Res', 'price' => 0],
-                ['name' => 'Pollo', 'price' => 0],
+                ['name' => 'Res', 'price' => 0, 'ingredient' => null],
+                ['name' => 'Pollo', 'price' => 0, 'ingredient' => null],
             ]],
             ['name' => 'Adiciones', 'kind' => 'choice', 'min' => 0, 'max' => 2, 'options' => [
-                ['name' => 'Huevo', 'price' => 1500],
-                ['name' => 'Queso', 'price' => 2000],
+                ['name' => 'Huevo', 'price' => 1500, 'ingredient' => null],
+                ['name' => 'Queso', 'price' => 2000, 'ingredient' => null],
             ]],
         ]);
     });
@@ -542,7 +542,7 @@ describe('menú', function () {
 
         // El tope no pasa de las opciones que quedan.
         expect($groups)->toBe([
-            ['name' => 'Adiciones', 'kind' => 'choice', 'min' => 0, 'max' => 1, 'options' => [['name' => 'Huevo', 'price' => 1500]]],
+            ['name' => 'Adiciones', 'kind' => 'choice', 'min' => 0, 'max' => 1, 'options' => [['name' => 'Huevo', 'price' => 1500, 'ingredient' => null]]],
         ])
             ->and(json_encode($response->inertiaProps('restaurant'), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE))
             ->not->toContain('desactivada')->not->toContain('Grupo vacío');
@@ -574,9 +574,9 @@ describe('menú', function () {
 
         expect(restaurantPageProfile($this->get('/restaurants/la-ceiba'))['menu'][0]['dishes'][0]['groups'])->toBe([
             ['name' => 'Quitar', 'kind' => 'removal', 'min' => 0, 'max' => 3, 'options' => [
-                ['name' => 'Cebolla', 'price' => 0],
-                ['name' => 'Cilantro', 'price' => 0],
-                ['name' => 'Tomate', 'price' => 0],
+                ['name' => 'Cebolla', 'price' => 0, 'ingredient' => null],
+                ['name' => 'Cilantro', 'price' => 0, 'ingredient' => null],
+                ['name' => 'Tomate', 'price' => 0, 'ingredient' => null],
             ]],
         ]);
     });
@@ -672,9 +672,9 @@ test('hace las mismas consultas con un menú corto que con uno largo', function 
 
     // El restaurante y una por tabla: categorías, horario semanal, horarios
     // especiales, secciones, platos, grupos de opciones, opciones, zonas de
-    // domicilio y sus barrios.
-    expect($queries('corto'))->toBe(10)
-        ->and($queries('largo'))->toBe(10)
+    // domicilio, sus barrios y los ingredientes agotados (ADR 0033).
+    expect($queries('corto'))->toBe(11)
+        ->and($queries('largo'))->toBe(11)
         ->and(restaurantPageProfile($this->get('/restaurants/largo'))['menu'])->toHaveCount(6);
 });
 

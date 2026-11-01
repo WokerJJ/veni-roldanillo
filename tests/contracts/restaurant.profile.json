@@ -49,6 +49,7 @@
                     "description": "Con arroz y aguacate.",
                     "price": 18500,
                     "sold_out_until": null,
+                    "ingredients": [],
                     "groups": [
                         {
                             "name": "Proteína (prueba)",
@@ -56,8 +57,8 @@
                             "min": 1,
                             "max": 1,
                             "options": [
-                                { "name": "Res (prueba)", "price": 0 },
-                                { "name": "Pollo (prueba)", "price": 0 }
+                                { "name": "Res (prueba)", "price": 0, "ingredient": null },
+                                { "name": "Pollo (prueba)", "price": 0, "ingredient": null }
                             ]
                         },
                         {
@@ -66,8 +67,8 @@
                             "min": 0,
                             "max": 2,
                             "options": [
-                                { "name": "Huevo (prueba)", "price": 1500 },
-                                { "name": "Aguacate (prueba)", "price": 2000 }
+                                { "name": "Huevo (prueba)", "price": 1500, "ingredient": null },
+                                { "name": "Aguacate (prueba)", "price": 2000, "ingredient": null }
                             ]
                         },
                         {
@@ -76,13 +77,13 @@
                             "min": 0,
                             "max": 2,
                             "options": [
-                                { "name": "Cebolla (prueba)", "price": 0 },
-                                { "name": "Cilantro (prueba)", "price": 0 }
+                                { "name": "Cebolla (prueba)", "price": 0, "ingredient": null },
+                                { "name": "Cilantro (prueba)", "price": 0, "ingredient": null }
                             ]
                         }
                     ]
                 },
-                { "name": "Bandeja de prueba", "description": null, "price": 22000, "sold_out_until": "2026-10-07", "groups": [] }
+                { "name": "Bandeja de prueba", "description": null, "price": 22000, "sold_out_until": "2026-10-07", "ingredients": [], "groups": [] }
             ]
         },
         {
@@ -93,6 +94,7 @@
                     "description": "En agua o en leche.",
                     "price": 4000,
                     "sold_out_until": null,
+                    "ingredients": [],
                     "groups": [
                         {
                             "name": "Preparación (prueba)",
@@ -100,8 +102,8 @@
                             "min": 1,
                             "max": 1,
                             "options": [
-                                { "name": "En agua (prueba)", "price": 0 },
-                                { "name": "En leche (prueba)", "price": 500 }
+                                { "name": "En agua (prueba)", "price": 0, "ingredient": null },
+                                { "name": "En leche (prueba)", "price": 500, "ingredient": null }
                             ]
                         }
                     ]

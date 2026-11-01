@@ -46,6 +46,35 @@ export interface MenuOption {
     name: string;
     /** Recargo en pesos, sin decimales; 0 si no suma (y siempre 0 al quitar). */
     price: number;
+    /**
+     * Si la opción es un ingrediente agotado (#112, ADR 0033): su posición en
+     * `ingredients` del plato. Opcional: una ficha guardada antes no lo trae.
+     */
+    ingredient?: number | null;
+}
+
+/** El reemplazo por defecto de un ingrediente agotado. */
+export interface MenuSubstitute {
+    name: string;
+    /** Recargo en pesos por unidad, sin decimales. */
+    price: number;
+    /** Si el reemplazo también está agotado (hasta esta fecha, incluida), no se ofrece. */
+    sold_out_until: string | null;
+}
+
+/**
+ * Un ingrediente agotado que toca a un plato (#112, ADR 0033). Solo llegan
+ * los agotados desde hoy; si hoy sigue agotado lo calcula el dispositivo.
+ */
+export interface MenuIngredient {
+    name: string;
+    /** Sin él no se hace el plato: agotado, el plato no se puede pedir. */
+    essential: boolean;
+    /** Lo lleva el plato; si no, solo lo nombra una adición. */
+    in_dish: boolean;
+    /** No hay hasta esta fecha (`YYYY-MM-DD`), incluida. */
+    sold_out_until: string;
+    substitute: MenuSubstitute | null;
 }
 
 /**
@@ -73,6 +102,8 @@ export interface MenuDish {
      * dispositivo con el día de Colombia, como «abierto ahora».
      */
     sold_out_until: string | null;
+    /** Ingredientes agotados que lo tocan (ADR 0033). Opcional: una ficha guardada antes no lo trae. */
+    ingredients?: MenuIngredient[];
     /** Opciones, adiciones e ingredientes para quitar; vacía si el plato no tiene. */
     groups: MenuOptionGroup[];
 }
