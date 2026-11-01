@@ -213,6 +213,17 @@ Decidido en el [ADR 0025](adr/0025-panel-del-dueno-con-filament.md). Filament 5 
 
 Cuentas de ejemplo para desarrollo: `PanelOwnerSeeder` (README, «Desarrollo local»).
 
+#### Fotos de los platos y de las promociones (#113, [ADR 0034](adr/0034-fotos-de-platos-y-promociones.md))
+
+| Qué | Dónde | Cómo |
+| --- | --- | --- |
+| Tipos | `App\Enums\MediaKind` | Plato 1:1 en 160, 480 y 960 px; promoción 16:9 en 320, 640 y 1280 px. WebP con calidad 80 (`config/media.php`) |
+| Subida | `App\Filament\Owner\Support\MediaUpload`, `HandlesMediaUpload` | `FileUpload` con editor de recorte a la proporción, JPEG/PNG/WebP de hasta 8 MB y casilla de derechos. El original va al disco privado (`media-pending/`); solo se procesa el que guardó esa misma petición |
+| Revisión | `App\Support\Media\ImageInspector` | Tipo por contenido (finfo y `getimagesize`), dimensiones de la cabecera (hasta 8000 px y 40 MP; lado corto mínimo 480 px el plato, 360 la promoción), sin abrir la imagen |
+| Procesamiento | `App\Jobs\ProcessUploadedImage`, `ImageProcessor` | En la cola, con GD y exif: gira según el EXIF, recorta al centro, escala y codifica sin metadatos |
+| Almacenamiento | `App\Support\Media\MediaStore` | `MEDIA_DISK` (por defecto `public`): `media/<tipo>/<hash>-<ancho>.webp`; la columna (`dishes.photo_path`, `promotions.image_path`) guarda la clave. Reemplazar, quitar o borrar el registro borra las versiones anteriores |
+| Ficha | `RestaurantProfile`, `DishPhoto.vue`, `RestaurantPromotions.vue` | `photo` y las promociones vigentes con `src` y `srcset`; miniatura de 64 px (ícono si no hay foto), foto grande en el selector, `sizes`, `width`/`height`, carga diferida |
+
 ### Panel de administración
 
 Decidido en el [ADR 0027](adr/0027-panel-de-administracion.md). Panel `admin` en `/admin` (`app/Providers/Filament/AdminPanelProvider.php`), sin tenancy, solo para `users.role = admin`, con el login, el perfil de CSP y la autorización estricta del panel del dueño.
@@ -251,6 +262,7 @@ Lo registra el bundle (`resources/js/pwa/serviceWorker.ts`), sin script en líne
 | Navegaciones (HTML) | Solo red, con un plazo de 10 segundos; sin red o pasado el plazo, la página sin conexión del precache | Nada | El HTML depende de la cookie del idioma (ADR 0010), de la sesión y del token CSRF: guardarlo serviría una página de otra persona, de otro idioma o vencida. Con *navigation preload*, la petición sale mientras arranca el service worker, y el plazo también la cuenta. Es una función propia: generateSW solo acepta un plazo de red con network first, que guarda lo que responde |
 | El motor del mapa: `engine-….js` y `maplibre-gl-shared-….js` | Cache first | `veni-map-engine`, 4 entradas, 60 días | Más de 500 kB entre los dos. Aparte, con lugar para dos versiones: entre los demás chunks, cada compilación dejaría otro par guardado hasta vencer, y los íconos podrían sacarlos |
 | Lo demás de `/build/assets`: PMTiles (la biblioteca), el worker del mapa y su CSS, cada ícono, otras páginas (la ficha del restaurante) | Cache first | `veni-assets`, 120 entradas, 60 días | Llevan el hash del contenido: nunca cambian. Se guardan la primera vez que se piden |
+| Fotos de los platos y promociones (`/storage/media/*.webp`, mismo origen) | Cache first | `veni-media`, 60 entradas, 30 días | Del contenido, no de la app: nunca en el precache. Solo las ya vistas, con tope. El hash del contenido va en el nombre: una guardada nunca queda vieja ([ADR 0034](adr/0034-fotos-de-platos-y-promociones.md)) |
 | Fuentes (`/fonts/*.woff2`) | Stale-while-revalidate | `veni-fonts`, 8 entradas | No llevan hash (#2): no pueden ir a una caché que se tome como inmutable. Se usa la guardada y se revalida detrás, con el ETag que da Caddy |
 | Del origen de `VITE_MAP_STYLE_URL`, con la versión en la ruta (`/v0.2.0/`): estilos, glyphs y sprites | Cache first | `veni-map-release`, 60 entradas, 60 días | Una release publicada de veni-mapa no cambia |
 | Del mismo origen, sin versión: el estilo y la lista del sprite (`.json`) | Network first; lo guardado sale sin red o a los 3 segundos | `veni-map-style`, 12 entradas, 30 días | La demo de veni-mapa no es una versión fija (ADR 0007). Estos archivos dicen qué pedir y dónde está cada ícono: con uno viejo, un release nuevo se pintaría a medias |
