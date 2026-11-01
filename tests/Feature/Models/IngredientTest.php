@@ -10,6 +10,7 @@ use App\Support\BusinessDay;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
@@ -137,4 +138,34 @@ test('un ingrediente esencial agotado hoy deja el plato sin pedir; uno no esenci
     // Mañana vuelve solo.
     $this->travel(1)->days();
     expect(Dish::query()->withEssentialSoldOut()->findOrFail($dish->id)->orderableToday())->toBeTrue();
+});
+
+test('un esencial agotado con un reemplazo vigente no bloquea el plato; si el reemplazo también se agota, sí (EVA-003)', function () {
+    $restaurant = Restaurant::factory()->create();
+    $dish = ingredientDish($restaurant);
+    $cerdo = $restaurant->ingredients()->create(['name_es' => 'Cerdo']);
+    $res = $restaurant->ingredients()->create(['name_es' => 'Res', 'substitute_ingredient_id' => $cerdo->id, 'substitute_price_delta' => 1000]);
+    $dish->dishIngredients()->create(['ingredient_id' => $res->id, 'essential' => true]);
+
+    $res->setSoldOutToday(true);
+    expect($dish->refresh()->orderableToday())->toBeTrue()
+        ->and(Dish::query()->withEssentialSoldOut()->findOrFail($dish->id)->orderableToday())->toBeTrue();
+
+    $cerdo->setSoldOutToday(true);
+    expect($dish->refresh()->orderableToday())->toBeFalse()
+        ->and(Dish::query()->withEssentialSoldOut()->findOrFail($dish->id)->orderableToday())->toBeFalse();
+});
+
+test('dish_ingredient: el único (plato, ingrediente) se comprueba al confirmar, para poder intercambiar filas (BUG-013)', function () {
+    $constraint = DB::selectOne("SELECT condeferrable, condeferred FROM pg_constraint WHERE conname = 'dish_ingredient_dish_id_ingredient_id_unique'");
+
+    expect($constraint)->not->toBeNull()
+        ->and($constraint->condeferrable)->toBeTrue()
+        ->and($constraint->condeferred)->toBeTrue();
+});
+
+test('options.ingredient_id tiene índice: borrar un ingrediente no recorre todas las opciones (AUD-003)', function () {
+    $definitions = collect(DB::select("SELECT indexdef FROM pg_indexes WHERE tablename = 'options'"))->pluck('indexdef');
+
+    expect($definitions->contains(fn (string $definition): bool => str_contains($definition, '(ingredient_id)')))->toBeTrue();
 });

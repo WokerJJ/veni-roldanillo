@@ -151,15 +151,26 @@ class DishResource extends OwnerResource
                 IconColumn::make('available')->label(__('panel.dishes.available'))->boolean(),
             ])
             ->recordActions([
-                Action::make('toggleSoldOut')
-                    ->label(fn (Dish $record): string => self::isSoldOutToday($record)
-                        ? __('panel.dishes.back_in_stock')
-                        : __('panel.dishes.mark_sold_out'))
+                // Dos acciones con valor fijo, no un interruptor (BUG-014):
+                // tocar «Agotado hoy» desde una lista vieja no lo devuelve.
+                Action::make('markSoldOut')
+                    ->label(__('panel.dishes.mark_sold_out'))
                     ->icon('heroicon-o-no-symbol')
-                    ->color(fn (Dish $record): string => self::isSoldOutToday($record) ? 'success' : 'warning')
+                    ->color('warning')
+                    ->visible(fn (Dish $record): bool => ! self::isSoldOutToday($record))
                     ->authorize(fn (Dish $record): bool => Gate::allows('update', $record))
                     ->action(function (Dish $record): void {
-                        self::setSoldOutToday($record, ! self::isSoldOutToday($record));
+                        self::setSoldOutToday($record, true);
+                        OwnerResource::currentRestaurant()?->touchOwnerUpdate();
+                    }),
+                Action::make('backInStock')
+                    ->label(__('panel.dishes.back_in_stock'))
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->visible(fn (Dish $record): bool => self::isSoldOutToday($record))
+                    ->authorize(fn (Dish $record): bool => Gate::allows('update', $record))
+                    ->action(function (Dish $record): void {
+                        self::setSoldOutToday($record, false);
                         OwnerResource::currentRestaurant()?->touchOwnerUpdate();
                     }),
                 EditAction::make(),

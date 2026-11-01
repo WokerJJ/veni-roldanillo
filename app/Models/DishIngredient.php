@@ -26,6 +26,15 @@ class DishIngredient extends Model implements BelongsToRestaurant
 
     protected $table = 'dish_ingredient';
 
+    /**
+     * Cambiar los ingredientes de un plato es cambiar el plato: mueve su
+     * updated_at, que es la versión que mira el control optimista del panel
+     * (AUD-001, DetectsConcurrentEdits).
+     *
+     * @var list<string>
+     */
+    protected $touches = ['dish'];
+
     /** @var array<string, mixed> */
     protected $attributes = [
         'essential' => false,
