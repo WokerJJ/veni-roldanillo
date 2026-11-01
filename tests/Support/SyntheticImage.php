@@ -1,0 +1,66 @@
+<?php
+
+namespace Tests\Support;
+
+/**
+ * Imágenes de prueba hechas aquí mismo (#113): ni fotos de nadie ni archivos
+ * binarios en el repositorio.
+ *
+ * - png(): PNG en PHP puro (zlib y crc32), sin GD: sirve también donde GD no
+ *   está instalado. La mitad izquierda de un color y la derecha de otro, para
+ *   ver hacia dónde quedó el recorte.
+ * - jpegWithExif(): JPEG con GD y un bloque EXIF escrito a mano, con la
+ *   orientación y un texto que no debe aparecer en lo que se publica.
+ */
+final class SyntheticImage
+{
+    /**
+     * @param  array{int, int, int}  $left
+     * @param  array{int, int, int}  $right
+     */
+    public static function png(int $width, int $height, array $left = [200, 30, 30], array $right = [30, 30, 200]): string
+    {
+        $half = intdiv($width, 2);
+        $row = "\0".str_repeat(pack('C3', ...$left), $half).str_repeat(pack('C3', ...$right), $width - $half);
+
+        return "\x89PNG\r\n\x1a\n"
+            .self::chunk('IHDR', pack('NNCCCCC', $width, $height, 8, 2, 0, 0, 0))
+            .self::chunk('IDAT', (string) gzcompress(str_repeat($row, $height)))
+            .self::chunk('IEND', '');
+    }
+
+    /** Un PNG que solo trae la cabecera: getimagesize lee las dimensiones sin abrirlo. */
+    public static function pngHeaderOnly(int $width, int $height): string
+    {
+        return "\x89PNG\r\n\x1a\n".self::chunk('IHDR', pack('NNCCCCC', $width, $height, 8, 2, 0, 0, 0));
+    }
+
+    /** Un JPEG (con GD) con EXIF: orientación y una descripción con $marker. */
+    public static function jpegWithExif(int $width, int $height, int $orientation, string $marker): string
+    {
+        $image = imagecreatetruecolor($width, $height);
+        imagefilledrectangle($image, 0, 0, intdiv($width, 2) - 1, $height - 1, (int) imagecolorallocate($image, 200, 30, 30));
+        imagefilledrectangle($image, intdiv($width, 2), 0, $width - 1, $height - 1, (int) imagecolorallocate($image, 30, 30, 200));
+
+        ob_start();
+        imagejpeg($image, null, 90);
+        $jpeg = (string) ob_get_clean();
+
+        // TIFF big-endian: IFD0 con Orientation (0x0112) e ImageDescription (0x010E).
+        $text = $marker."\0";
+        $tiff = "MM\0\x2A".pack('N', 8)
+            .pack('n', 2)
+            .pack('nnNnn', 0x0112, 3, 1, $orientation, 0)
+            .pack('nnNN', 0x010E, 2, strlen($text), 8 + 2 + 24 + 4)
+            .pack('N', 0)
+            .$text;
+        $app1 = "Exif\0\0".$tiff;
+
+        return substr($jpeg, 0, 2)."\xFF\xE1".pack('n', strlen($app1) + 2).$app1.substr($jpeg, 2);
+    }
+
+    private static function chunk(string $type, string $data): string
+    {
+        return pack('N', strlen($data)).$type.$data.pack('N', crc32($type.$data));
+    }
+}

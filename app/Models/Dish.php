@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Enums\MediaKind;
 use App\Enums\RestaurantStatus;
+use App\Models\Concerns\HasMediaImage;
 use App\Models\Concerns\HasTranslatableFields;
 use App\Models\Concerns\OwnedByRestaurant;
 use App\Models\Contracts\BelongsToRestaurant;
@@ -50,13 +52,19 @@ use Laravel\Scout\Searchable;
  */
 #[Fillable([
     'menu_section_id', 'name_es', 'name_en', 'description_es', 'description_en',
-    'price', 'photo_path', 'tags', 'available', 'sold_out_until', 'position',
+    'price', 'tags', 'available', 'sold_out_until', 'position',
 ])]
 #[UsePolicy(RestaurantContentPolicy::class)]
 class Dish extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<DishFactory> */
-    use HasFactory, HasTranslatableFields, OwnedByRestaurant, Searchable;
+    use HasFactory, HasMediaImage, HasTranslatableFields, OwnedByRestaurant, Searchable;
+
+    /** La foto del plato, 1:1 (#113): photo_path guarda su clave, no un archivo. */
+    public static function mediaKind(): MediaKind
+    {
+        return MediaKind::Dish;
+    }
 
     /** @var array<string, mixed> */
     protected $attributes = [

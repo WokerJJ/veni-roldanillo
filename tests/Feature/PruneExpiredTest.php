@@ -4,6 +4,7 @@ use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /*
 | Retención de lo técnico (#23): la política de datos dice que la sesión
@@ -46,4 +47,16 @@ test('veni:prune-expired corre cada hora en un solo servidor', function () {
     expect($event)->toBeInstanceOf(Event::class)
         ->and($event?->expression)->toBe('0 * * * *')
         ->and($event?->onOneServer)->toBeTrue();
+});
+
+test('borra los originales de fotos que llevan más de un día sin procesar (#113)', function () {
+    Storage::fake('local');
+    $disk = Storage::disk('local');
+    $disk->put('media-pending/viejo.png', 'x');
+    touch($disk->path('media-pending/viejo.png'), now()->subDays(2)->getTimestamp());
+    $disk->put('media-pending/reciente.png', 'x');
+
+    $this->artisan('veni:prune-expired')->assertSuccessful();
+
+    expect($disk->allFiles('media-pending'))->toBe(['media-pending/reciente.png']);
 });

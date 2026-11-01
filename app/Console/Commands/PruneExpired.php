@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Support\Media\MediaStore;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -40,6 +41,21 @@ class PruneExpired extends Command
             ->delete();
 
         $this->components->info("Borradas: {$sessions} sesiones, {$cache} entradas de caché y {$locks} candados vencidos.");
+
+        // Originales de fotos que nunca llegaron a la cola (#113, ADR 0034):
+        // se guardan al validar el formulario, y si el guardado falla después
+        // quedan sin trabajo que los borre. Un día es más que cualquier cola.
+        $pending = MediaStore::pendingDisk();
+        $originals = 0;
+
+        foreach ($pending->files(MediaStore::PENDING_DIRECTORY) as $file) {
+            if ($pending->lastModified($file) <= $now - 86400) {
+                $pending->delete($file);
+                $originals++;
+            }
+        }
+
+        $this->components->info("Borrados: {$originals} originales de fotos sin procesar.");
 
         return self::SUCCESS;
     }
