@@ -26,4 +26,9 @@ class EditIngredient extends EditOwnerRecord
             array_filter(parent::getHeaderActions(), fn (mixed $action): bool => $action instanceof Action),
         );
     }
+
+    protected function constraintErrorField(?string $constraint): ?string
+    {
+        return IngredientResource::fieldForConstraint($constraint);
+    }
 }

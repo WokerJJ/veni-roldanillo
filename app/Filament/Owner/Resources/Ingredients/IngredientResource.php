@@ -9,6 +9,7 @@ use App\Filament\Owner\Resources\Ingredients\Pages\ListIngredients;
 use App\Filament\Owner\Support\Fields;
 use App\Models\Ingredient;
 use App\Support\BusinessDay;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
@@ -67,7 +68,20 @@ class IngredientResource extends OwnerResource
 
         return $schema->components([
             Section::make()->columns(2)->columnSpanFull()->schema([
-                Fields::text('name_es', __('panel.fields.name_es'), 80, required: true),
+                // Como el índice ingredients_restaurant_name_unique (sin
+                // mayúsculas), pero con su propio aviso (AUD-004).
+                Fields::text('name_es', __('panel.fields.name_es'), 80, required: true)
+                    ->rule(fn (?Ingredient $record): Closure => function (string $attribute, mixed $value, Closure $fail) use ($record, $restaurantId): void {
+                        $taken = Ingredient::query()
+                            ->where('restaurant_id', $restaurantId)
+                            ->whereRaw('lower(name_es) = lower(?)', [is_string($value) ? $value : ''])
+                            ->when($record !== null, fn (Builder $query) => $query->whereKeyNot($record?->getKey()))
+                            ->exists();
+
+                        if ($taken) {
+                            $fail(__('panel.ingredients.name_taken'));
+                        }
+                    }),
                 Fields::text('name_en', __('panel.fields.name_en'), 80),
                 Toggle::make('sold_out_today')
                     ->label(__('panel.ingredients.sold_out_today'))
@@ -110,18 +124,22 @@ class IngredientResource extends OwnerResource
                 TextColumn::make('dish_links_count')->label(__('panel.ingredients.dishes_count'))->counts('dishLinks'),
             ])
             ->recordActions([
-                Action::make('toggleSoldOut')
-                    ->label(fn (Ingredient $record): string => $record->isSoldOutToday()
-                        ? __('panel.ingredients.back_in_stock')
-                        : __('panel.ingredients.mark_sold_out'))
+                // Dos acciones con valor fijo, no un interruptor (BUG-014):
+                // tocar «Agotado hoy» desde una lista vieja no lo devuelve.
+                Action::make('markSoldOut')
+                    ->label(__('panel.ingredients.mark_sold_out'))
                     ->icon('heroicon-o-no-symbol')
-                    ->color(fn (Ingredient $record): string => $record->isSoldOutToday() ? 'success' : 'warning')
+                    ->color('warning')
+                    ->visible(fn (Ingredient $record): bool => ! $record->isSoldOutToday())
                     ->authorize(fn (Ingredient $record): bool => Gate::allows('update', $record))
-                    ->action(function (Ingredient $record): void {
-                        $record->setSoldOutToday(! $record->isSoldOutToday());
-                        // Cambia lo que muestra la ficha: «Actualizada el…».
-                        OwnerResource::currentRestaurant()?->touchOwnerUpdate();
-                    }),
+                    ->action(fn (Ingredient $record) => self::setSoldOutToday($record, true)),
+                Action::make('backInStock')
+                    ->label(__('panel.ingredients.back_in_stock'))
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->visible(fn (Ingredient $record): bool => $record->isSoldOutToday())
+                    ->authorize(fn (Ingredient $record): bool => Gate::allows('update', $record))
+                    ->action(fn (Ingredient $record) => self::setSoldOutToday($record, false)),
                 EditAction::make(),
             ]);
     }
@@ -133,6 +151,25 @@ class IngredientResource extends OwnerResource
             'create' => CreateIngredient::route('/create'),
             'edit' => EditIngredient::route('/{record}/edit'),
         ];
+    }
+
+    private static function setSoldOutToday(Ingredient $ingredient, bool $soldOut): void
+    {
+        $ingredient->setSoldOutToday($soldOut);
+        // Cambia lo que muestra la ficha: «Actualizada el…».
+        OwnerResource::currentRestaurant()?->touchOwnerUpdate();
+    }
+
+    /**
+     * El campo donde se avisa si la base rechaza el ingrediente (AUD-004):
+     * las restricciones del reemplazo, en el reemplazo; lo demás, en el
+     * nombre.
+     */
+    public static function fieldForConstraint(?string $constraint): string
+    {
+        return str_starts_with((string) $constraint, 'ingredients_substitute_')
+            ? 'data.substitute_ingredient_id'
+            : self::constraintErrorField();
     }
 
     /** El aviso antes de borrar: en cuántos platos y opciones está. */

@@ -65,16 +65,64 @@ test('sin reemplazo el recargo vuelve a cero', function () {
         ->and($tomate->substitute_price_delta)->toBe(0);
 });
 
-test('el interruptor de la lista marca y desmarca «agotado hoy»', function () {
+test('desde la lista, «Agotado hoy» y «Ya hay» son dos acciones, cada una cuando corresponde', function () {
     $restaurant = Restaurant::factory()->claimed()->create();
     $tomate = $restaurant->ingredients()->create(['name_es' => 'Tomate']);
     actInPanel(panelMember($restaurant), $restaurant);
 
-    Livewire::test(ListIngredients::class)->callTableAction('toggleSoldOut', $tomate);
+    Livewire::test(ListIngredients::class)
+        ->assertTableActionVisible('markSoldOut', $tomate)
+        ->assertTableActionHidden('backInStock', $tomate)
+        ->callTableAction('markSoldOut', $tomate);
     expect($tomate->refresh()->isSoldOutToday())->toBeTrue();
 
-    Livewire::test(ListIngredients::class)->callTableAction('toggleSoldOut', $tomate);
+    Livewire::test(ListIngredients::class)
+        ->assertTableActionHidden('markSoldOut', $tomate)
+        ->callTableAction('backInStock', $tomate);
     expect($tomate->refresh()->isSoldOutToday())->toBeFalse();
+});
+
+test('marcar «Agotado hoy» desde dos listas abiertas lo deja agotado, no lo devuelve (BUG-014)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+    $tomate = $restaurant->ingredients()->create(['name_es' => 'Tomate']);
+    actInPanel(panelMember($restaurant), $restaurant);
+
+    $first = Livewire::test(ListIngredients::class);
+    $second = Livewire::test(ListIngredients::class);
+
+    $first->callTableAction('markSoldOut', $tomate);
+    // La segunda lista, abierta antes, ya no ofrece «Agotado hoy»: el
+    // servidor vuelve a mirar el registro y no lo ejecuta ni lo devuelve.
+    $second->assertTableActionHidden('markSoldOut', $tomate);
+
+    expect($tomate->refresh()->isSoldOutToday())->toBeTrue();
+});
+
+test('un nombre repetido, sin importar mayúsculas, avisa en el campo; el propio al editar, no (AUD-004)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+    $tomate = $restaurant->ingredients()->create(['name_es' => 'Tomate']);
+    actInPanel(panelMember($restaurant), $restaurant);
+
+    Livewire::test(CreateIngredient::class)
+        ->fillForm(['name_es' => 'TOMATE'])
+        ->call('create')
+        ->assertHasFormErrors(['name_es' => __('panel.ingredients.name_taken')]);
+
+    expect($restaurant->ingredients()->count())->toBe(1);
+
+    Livewire::test(EditIngredient::class, ['record' => $tomate->getRouteKey()])
+        ->fillForm(['name_es' => 'tomate'])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($tomate->refresh()->name_es)->toBe('tomate');
+});
+
+test('si la base rechaza el reemplazo, el aviso sale en el campo del reemplazo (AUD-004)', function () {
+    expect(IngredientResource::fieldForConstraint('ingredients_substitute_same_restaurant'))->toBe('data.substitute_ingredient_id')
+        ->and(IngredientResource::fieldForConstraint('ingredients_substitute_valid'))->toBe('data.substitute_ingredient_id')
+        ->and(IngredientResource::fieldForConstraint('ingredients_restaurant_name_unique'))->toBe('data.name_es')
+        ->and(IngredientResource::fieldForConstraint(null))->toBe('data.name_es');
 });
 
 test('la lista no muestra los de otro restaurante y su edición no se abre', function () {
@@ -154,4 +202,70 @@ test('una opción se vincula a un ingrediente propio y no a uno ajeno', function
         ->assertHasNoTableActionErrors();
 
     expect(Option::query()->sole()->ingredient_id)->toBe($cebolla->id);
+});
+
+test('intercambiar dos ingredientes entre filas del plato guarda sin error (BUG-013)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+    $dish = panelDish($restaurant);
+    $arroz = $restaurant->ingredients()->create(['name_es' => 'Arroz']);
+    $tomate = $restaurant->ingredients()->create(['name_es' => 'Tomate']);
+    $first = $dish->dishIngredients()->create(['ingredient_id' => $arroz->id, 'essential' => true]);
+    $second = $dish->dishIngredients()->create(['ingredient_id' => $tomate->id, 'essential' => false]);
+    actInPanel(panelMember($restaurant), $restaurant);
+
+    Livewire::test(EditDish::class, ['record' => $dish->getRouteKey()])
+        ->set("data.dishIngredients.record-{$first->id}.ingredient_id", $tomate->id)
+        ->set("data.dishIngredients.record-{$second->id}.ingredient_id", $arroz->id)
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($first->refresh()->ingredient_id)->toBe($tomate->id)
+        ->and($second->refresh()->ingredient_id)->toBe($arroz->id);
+});
+
+test('cambiar solo los ingredientes cuenta como un cambio: la otra pestaña avisa y no pisa (AUD-001)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+    $dish = panelDish($restaurant);
+    $arroz = $restaurant->ingredients()->create(['name_es' => 'Arroz']);
+    $tomate = $restaurant->ingredients()->create(['name_es' => 'Tomate']);
+    actInPanel(panelMember($restaurant), $restaurant);
+
+    $first = Livewire::test(EditDish::class, ['record' => $dish->getRouteKey()]);
+    $second = Livewire::test(EditDish::class, ['record' => $dish->getRouteKey()]);
+
+    $this->travel(2)->seconds();
+    $first->set('data.dishIngredients', ['a' => ['ingredient_id' => $arroz->id, 'essential' => true]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $this->travel(2)->seconds();
+    $second->set('data.dishIngredients', ['b' => ['ingredient_id' => $tomate->id, 'essential' => false]])
+        ->call('save')
+        ->assertNotified(__('panel.errors.conflict'));
+
+    expect($dish->dishIngredients()->pluck('essential', 'ingredient_id')->all())->toBe([$arroz->id => true]);
+});
+
+test('cambiar solo los ingredientes dos veces desde la misma pestaña no da un conflicto falso (AUD-001)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+    $dish = panelDish($restaurant);
+    $arroz = $restaurant->ingredients()->create(['name_es' => 'Arroz']);
+    $tomate = $restaurant->ingredients()->create(['name_es' => 'Tomate']);
+    actInPanel(panelMember($restaurant), $restaurant);
+
+    $page = Livewire::test(EditDish::class, ['record' => $dish->getRouteKey()]);
+
+    $this->travel(2)->seconds();
+    $page->set('data.dishIngredients', ['a' => ['ingredient_id' => $arroz->id, 'essential' => true]])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    $this->travel(2)->seconds();
+    $link = $dish->dishIngredients()->sole();
+    $page->set("data.dishIngredients.record-{$link->id}.ingredient_id", $tomate->id)
+        ->call('save')
+        ->assertHasNoFormErrors()
+        ->assertNotNotified(__('panel.errors.conflict'));
+
+    expect($dish->dishIngredients()->pluck('ingredient_id')->all())->toBe([$tomate->id]);
 });
