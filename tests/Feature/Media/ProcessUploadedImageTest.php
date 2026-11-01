@@ -199,3 +199,14 @@ test('la ficha publica solo claves válidas, como URLs del disco', function () {
         ->and(MediaStore::published('media/promotions/0123456789abcdef0123', MediaKind::Dish))->toBeNull()
         ->and(MediaStore::published(null, MediaKind::Dish))->toBeNull();
 });
+
+test('con el disco en el mismo origen que la app, la URL va sin el origen', function () {
+    config(['app.url' => 'http://localhost:8000', 'filesystems.disks.public-real' => ['driver' => 'local', 'root' => storage_path('framework/testing/public-real'), 'url' => 'http://localhost:8000/storage'], 'media.disk' => 'public-real']);
+
+    expect(MediaStore::url('media/dishes/0123456789abcdef0123', 160))->toBe('/storage/media/dishes/0123456789abcdef0123-160.webp');
+
+    // De otro host (un S3 o una CDN), completa: la CSP suma ese origen.
+    config(['filesystems.disks.public-real.url' => 'https://fotos.example.test/veni']);
+    Storage::forgetDisk('public-real');
+    expect(MediaStore::url('media/dishes/0123456789abcdef0123', 160))->toBe('https://fotos.example.test/veni/media/dishes/0123456789abcdef0123-160.webp');
+});

@@ -3,6 +3,7 @@
 namespace App\Support\Media;
 
 use App\Enums\MediaKind;
+use App\Support\Origin;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -53,9 +54,18 @@ final class MediaStore
         return "{$key}-{$width}.webp";
     }
 
+    /**
+     * La URL de un ancho. Si el disco sirve desde el mismo origen que
+     * APP_URL (el disco `public`), sin el origen (`/storage/…`): vale igual
+     * con cualquier nombre con que se llegue a la app (127.0.0.1 o localhost
+     * en desarrollo) y la CSP la acepta como 'self'.
+     */
     public static function url(string $key, int $width): string
     {
-        return self::disk()->url(self::variantPath($key, $width));
+        $url = self::disk()->url(self::variantPath($key, $width));
+        $origin = Origin::fromUrl($url);
+
+        return $origin !== null && $origin === Origin::fromUrl(config('app.url')) ? substr($url, strlen($origin)) : $url;
     }
 
     /**
