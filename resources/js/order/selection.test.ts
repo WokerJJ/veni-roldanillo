@@ -57,7 +57,7 @@ function choose(dish: MenuDish, picks: [number, number][], extra: Partial<DishSe
 
 describe('emptySelection', () => {
     it('empieza sin nada elegido, una unidad y sin nota', () => {
-        expect(emptySelection(sancocho())).toEqual({ chosen: [[], [], []], note: '', quantity: 1 });
+        expect(emptySelection(sancocho())).toEqual({ chosen: [[], [], []], note: '', quantity: 1, declined: [] });
     });
 });
 

@@ -319,3 +319,43 @@ describe('RestaurantMenu: armar el pedido (#14)', () => {
         expect(document.activeElement).toBe(opener.element);
     });
 });
+
+describe('RestaurantMenu: ingredientes agotados hoy (ADR 0033)', () => {
+    function dish(name: string, ingredient: NonNullable<MenuSection['dishes'][number]['ingredients']>[number]): MenuSection['dishes'][number] {
+        return { name, description: null, price: 20000, sold_out_until: null, ingredients: [ingredient], groups: [] };
+    }
+
+    const SECTIONS: MenuSection[] = [
+        {
+            name: 'Platos fuertes (prueba)',
+            dishes: [
+                dish('Bandeja de prueba', { name: 'Fríjoles', essential: true, in_dish: true, sold_out_until: '2026-10-07', substitute: null }),
+                dish('Sancocho de prueba', { name: 'Cilantro', essential: false, in_dish: true, sold_out_until: '2026-10-07', substitute: null }),
+                dish('Arroz con pollo de prueba', { name: 'Tomate', essential: false, in_dish: true, sold_out_until: '2026-10-07', substitute: { name: 'Pepino', price: 500, sold_out_until: null } }),
+                dish('Ayer sin tomate', { name: 'Tomate', essential: true, in_dish: true, sold_out_until: '2026-10-06', substitute: null }),
+            ],
+        },
+    ];
+
+    it('muestra los tres casos y el esencial no se puede pedir', async () => {
+        const { dishes } = await mountMenu(SECTIONS, 'es', 'prueba-la-ceiba');
+        const [bandeja, sancocho, arroz, ayer] = dishes();
+
+        expect(bandeja?.get('[data-unavailable]').text()).toBe('No disponible hoy · sin Fríjoles');
+        expect(bandeja?.find('[data-choose]').exists()).toBe(false);
+        // Si no se puede pedir, no dice qué traería en lugar de qué.
+        expect(bandeja?.find('[data-ingredient-note]').exists()).toBe(false);
+        expect(sancocho?.get('[data-ingredient-note]').text()).toBe('Hoy sin Cilantro');
+        expect(sancocho?.find('[data-choose]').exists()).toBe(true);
+        expect(arroz?.get('[data-ingredient-note]').text()).toBe('Hoy con Pepino en lugar de Tomate');
+        expect(ayer?.find('[data-ingredient-note]').exists()).toBe(false);
+        expect(ayer?.find('[data-choose]').exists()).toBe(true);
+    });
+
+    it('en inglés', async () => {
+        const { dishes } = await mountMenu(SECTIONS, 'en', 'prueba-la-ceiba');
+
+        expect(dishes()[0]?.get('[data-unavailable]').text()).toBe('Unavailable today · no Fríjoles');
+        expect(dishes()[2]?.get('[data-ingredient-note]').text()).toBe('Today with Pepino instead of Tomate');
+    });
+});
