@@ -60,6 +60,26 @@ return [
         'cleared' => 'Done: the delay notice was cleared.',
         'active' => 'Active notice: :minutes min delay.',
     ],
+    'media' => [
+        'dishes' => [
+            'section' => 'Dish photo',
+            'help' => 'Square (:ratio). JPEG, PNG or WebP up to :mb MB. Choose the framing with the editor; on the page it looks like all the others.',
+        ],
+        'promotions' => [
+            'section' => 'Promotion image',
+            'help' => 'Landscape (:ratio). JPEG, PNG or WebP up to :mb MB. Choose the framing with the editor.',
+        ],
+        'rights' => 'I declare that I hold the rights to this image and authorize Vení to publish it on the page.',
+        'rights_help' => 'It must be yours or the restaurant’s (or you must have permission from whoever made it). It is published without camera data or location.',
+        'processing' => 'The image is being prepared: it will show on the page in a few seconds.',
+        'errors' => [
+            'type' => 'The file is not a JPEG, PNG or WebP image.',
+            'size' => 'The image is larger than :mb MB.',
+            'too_large' => 'The image is too large (over 8000 px per side or 40 megapixels).',
+            'too_small' => 'The image is too small: its short side must be at least :min px.',
+            'rights' => 'To publish the image, tick the rights declaration.',
+        ],
+    ],
     'sections' => [
         'label' => 'Section',
         'plural' => 'Sections',

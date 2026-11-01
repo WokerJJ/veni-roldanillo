@@ -62,6 +62,26 @@ return [
         'cleared' => 'Listo: se quitó el aviso de demora.',
         'active' => 'Aviso activo: demora de :minutes min.',
     ],
+    'media' => [
+        'dishes' => [
+            'section' => 'Foto del plato',
+            'help' => 'Cuadrada (:ratio). JPEG, PNG o WebP de hasta :mb MB. Elegí el encuadre con el editor; en la ficha se ve igual que las demás.',
+        ],
+        'promotions' => [
+            'section' => 'Imagen de la promoción',
+            'help' => 'Horizontal (:ratio). JPEG, PNG o WebP de hasta :mb MB. Elegí el encuadre con el editor.',
+        ],
+        'rights' => 'Declaro que tengo los derechos sobre esta imagen y autorizo a Vení a publicarla en la ficha.',
+        'rights_help' => 'Que sea tuya o del restaurante (o que tengas permiso de quien la hizo). Se publica sin los datos de la cámara ni la ubicación.',
+        'processing' => 'La imagen se está preparando: en unos segundos sale en la ficha.',
+        'errors' => [
+            'type' => 'El archivo no es una imagen JPEG, PNG o WebP.',
+            'size' => 'La imagen pesa más de :mb MB.',
+            'too_large' => 'La imagen es demasiado grande (más de 8000 px de lado o de 40 megapíxeles).',
+            'too_small' => 'La imagen es muy pequeña: el lado corto debe tener al menos :min px.',
+            'rights' => 'Para publicar la imagen, marcá la declaración de derechos.',
+        ],
+    ],
     'sections' => [
         'label' => 'Sección',
         'plural' => 'Secciones',

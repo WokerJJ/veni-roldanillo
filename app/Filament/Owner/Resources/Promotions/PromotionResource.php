@@ -2,11 +2,13 @@
 
 namespace App\Filament\Owner\Resources\Promotions;
 
+use App\Enums\MediaKind;
 use App\Filament\Owner\OwnerResource;
 use App\Filament\Owner\Resources\Promotions\Pages\CreatePromotion;
 use App\Filament\Owner\Resources\Promotions\Pages\EditPromotion;
 use App\Filament\Owner\Resources\Promotions\Pages\ListPromotions;
 use App\Filament\Owner\Support\Fields;
+use App\Filament\Owner\Support\MediaUpload;
 use App\Models\Promotion;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
@@ -39,6 +41,11 @@ class PromotionResource extends OwnerResource
         return __('panel.promotions.plural');
     }
 
+    public static function mediaKind(): MediaKind
+    {
+        return MediaKind::Promotion;
+    }
+
     public static function constraintErrorField(): string
     {
         return 'data.ends_at';
@@ -51,6 +58,7 @@ class PromotionResource extends OwnerResource
             Fields::text('title_en', __('panel.promotions.title_en'), 120),
             DateTimePicker::make('starts_at')->label(__('panel.promotions.starts_at'))->seconds(false)->required(),
             DateTimePicker::make('ends_at')->label(__('panel.promotions.ends_at'))->seconds(false)->required()->after('starts_at'),
+            MediaUpload::section(MediaKind::Promotion),
         ]);
     }
 

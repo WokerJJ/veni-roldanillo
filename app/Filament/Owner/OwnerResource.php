@@ -2,6 +2,7 @@
 
 namespace App\Filament\Owner;
 
+use App\Enums\MediaKind;
 use App\Models\Restaurant;
 use Filament\Facades\Filament;
 use Filament\Resources\Resource;
@@ -88,6 +89,15 @@ abstract class OwnerResource extends Resource
     public static function mutateFormData(array $data): array
     {
         return $data;
+    }
+
+    /**
+     * El tipo de imagen del registro (#113, ADR 0034), o null si no tiene: con
+     * él, las páginas de crear y editar aplican MediaUpload (HandlesMediaUpload).
+     */
+    public static function mediaKind(): ?MediaKind
+    {
+        return null;
     }
 
     /** El campo donde se avisa si la base rechaza el registro. */

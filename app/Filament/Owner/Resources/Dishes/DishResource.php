@@ -2,12 +2,14 @@
 
 namespace App\Filament\Owner\Resources\Dishes;
 
+use App\Enums\MediaKind;
 use App\Filament\Owner\OwnerResource;
 use App\Filament\Owner\Resources\Dishes\Pages\CreateDish;
 use App\Filament\Owner\Resources\Dishes\Pages\EditDish;
 use App\Filament\Owner\Resources\Dishes\Pages\ListDishes;
 use App\Filament\Owner\Resources\Dishes\RelationManagers\OptionGroupsRelationManager;
 use App\Filament\Owner\Support\Fields;
+use App\Filament\Owner\Support\MediaUpload;
 use App\Models\Dish;
 use App\Models\Ingredient;
 use App\Models\MenuSection;
@@ -101,6 +103,7 @@ class DishResource extends OwnerResource
                     ->helperText(__('panel.dishes.sold_out_help'))
                     ->afterStateHydrated(fn (Toggle $component, ?Dish $record) => $component->state(self::isSoldOutToday($record))),
             ]),
+            MediaUpload::section(MediaKind::Dish),
             Section::make(__('panel.ingredients.dish_section'))
                 ->description(__('panel.ingredients.dish_section_help'))
                 ->columnSpanFull()
@@ -199,6 +202,12 @@ class DishResource extends OwnerResource
     {
         return $dish?->sold_out_until !== null
             && $dish->sold_out_until->toDateString() >= BusinessDay::today()->toDateString();
+    }
+
+    /** La foto del plato, cuadrada (#113, ADR 0034). */
+    public static function mediaKind(): MediaKind
+    {
+        return MediaKind::Dish;
     }
 
     /**
