@@ -49,7 +49,15 @@
                     "description": "Con arroz y aguacate.",
                     "price": 18500,
                     "sold_out_until": null,
-                    "ingredients": [],
+                    "ingredients": [
+                        {
+                            "name": "Cebolla (prueba)",
+                            "essential": false,
+                            "in_dish": true,
+                            "sold_out_until": "2026-10-07",
+                            "substitute": { "name": "Cebollín (prueba)", "price": 500, "sold_out_until": null }
+                        }
+                    ],
                     "groups": [
                         {
                             "name": "Proteína (prueba)",
@@ -77,7 +85,7 @@
                             "min": 0,
                             "max": 2,
                             "options": [
-                                { "name": "Cebolla (prueba)", "price": 0, "ingredient": null },
+                                { "name": "Cebolla (prueba)", "price": 0, "ingredient": 0 },
                                 { "name": "Cilantro (prueba)", "price": 0, "ingredient": null }
                             ]
                         }

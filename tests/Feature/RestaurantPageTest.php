@@ -250,8 +250,16 @@ describe('lista blanca', function () {
         $extras = OptionGroup::factory()->for($sancocho)->create(['name_es' => 'Adiciones (prueba)', 'max_choices' => 2, 'position' => 1]);
         Option::factory()->for($extras)->create(['name_es' => 'Huevo (prueba)', 'price_delta' => 1500, 'position' => 0]);
         Option::factory()->for($extras)->create(['name_es' => 'Aguacate (prueba)', 'price_delta' => 2000, 'position' => 1]);
+        // El 7 no hay cebolla: el sancocho la lleva (no esencial) y se ofrece
+        // cebollín por $500; el «Quitar» de la cebolla la nombra (ADR 0033).
+        $cebollin = $restaurant->ingredients()->create(['name_es' => 'Cebollín (prueba)']);
+        $cebolla = $restaurant->ingredients()->create([
+            'name_es' => 'Cebolla (prueba)', 'sold_out_until' => '2026-10-07',
+            'substitute_ingredient_id' => $cebollin->id, 'substitute_price_delta' => 500,
+        ]);
+        $sancocho->dishIngredients()->create(['ingredient_id' => $cebolla->id, 'essential' => false]);
         $removal = OptionGroup::factory()->removal()->for($sancocho)->create(['name_es' => 'Quitar (prueba)', 'position' => 2]);
-        Option::factory()->for($removal)->create(['name_es' => 'Cebolla (prueba)', 'price_delta' => 0, 'position' => 0]);
+        Option::factory()->for($removal)->create(['name_es' => 'Cebolla (prueba)', 'price_delta' => 0, 'position' => 0, 'ingredient_id' => $cebolla->id]);
         Option::factory()->for($removal)->create(['name_es' => 'Cilantro (prueba)', 'price_delta' => 0, 'position' => 1]);
         // Una opción desactivada no sale en el contrato.
         Option::factory()->for($removal)->create(['name_es' => 'Tomate (prueba)', 'available' => false, 'position' => 2]);
