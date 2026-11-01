@@ -80,6 +80,27 @@ describe('locationUrl', () => {
 });
 
 describe('orderMessage', () => {
+    it('dice qué va con reemplazo y qué va sin un ingrediente que hoy no hay (ADR 0033), en los dos idiomas', () => {
+        const bandeja: OrderItem = {
+            dish: 'Bandeja de prueba',
+            unitPrice: 22500,
+            quantity: 1,
+            choices: [{ group: 'Proteína', name: 'Res', price: 0 }],
+            removed: ['Cebolla'],
+            missing: ['Cilantro'],
+            swaps: [{ name: 'Pepino', instead: 'Tomate', price: 500 }],
+            note: null,
+        };
+        const pickup = { ...details, mode: 'pickup' as const };
+
+        expect(orderMessage([bandeja], pickup, context, tEs, money).split('\n')[1]).toBe(
+            '• 1 × Bandeja de prueba + Res, Pepino en lugar de Tomate, sin Cebolla, sin Cilantro (no hay hoy) — $22500',
+        );
+        expect(orderMessage([bandeja], pickup, context, tEn, money).split('\n')[1]).toBe(
+            '• 1 × Bandeja de prueba + Res, Pepino instead of Tomate, without Cebolla, without Cilantro (out today) — $22500',
+        );
+    });
+
     it('arma el pedido a domicilio en español, en bloques legibles en WhatsApp', () => {
         expect(orderMessage([burger, soda], details, context, tEs, money)).toBe(
             [

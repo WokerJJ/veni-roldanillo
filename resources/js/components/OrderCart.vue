@@ -214,7 +214,15 @@ const lineKeys = computed(() => {
     const seen = new Map<string, number>();
 
     return items.value.map((item) => {
-        const signature = JSON.stringify([item.dish, item.unitPrice, item.note, item.removed, item.choices.map((choice) => [choice.group, choice.name, choice.price])]);
+        const signature = JSON.stringify([
+            item.dish,
+            item.unitPrice,
+            item.note,
+            item.removed,
+            item.choices.map((choice) => [choice.group, choice.name, choice.price]),
+            item.missing ?? [],
+            item.swaps ?? [],
+        ]);
         const repeated = seen.get(signature) ?? 0;
         seen.set(signature, repeated + 1);
 
@@ -222,9 +230,14 @@ const lineKeys = computed(() => {
     });
 });
 
-/** Lo que va debajo del nombre de una línea: opciones, lo quitado. */
+/** Lo que va debajo del nombre de una línea: opciones, reemplazos, lo quitado y lo que hoy no hay (ADR 0033). */
 function lineDetails(item: OrderItem): string {
-    return [...item.choices.map((choice) => choice.name), ...item.removed.map((name) => t('order.picker.remove_option', { name }))].join(' · ');
+    return [
+        ...item.choices.map((choice) => choice.name),
+        ...(item.swaps ?? []).map((swap) => t('order.picker.swap_accept', { substitute: swap.name, name: swap.instead })),
+        ...item.removed.map((name) => t('order.picker.remove_option', { name })),
+        ...(item.missing ?? []).map((name) => t('order.picker.missing_option', { name })),
+    ].join(' · ');
 }
 
 const feeText = computed(() => {

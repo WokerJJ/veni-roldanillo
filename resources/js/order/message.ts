@@ -48,12 +48,25 @@ export function locationUrl(location: Pick<SharedLocation, 'latitude' | 'longitu
     return `https://www.google.com/maps/search/?api=1&query=${location.latitude.toFixed(5)},${location.longitude.toFixed(5)}`;
 }
 
-/** «2 × Hamburguesa + Queso + Tocineta, sin Cebolla, Tomate — $ 49.000», con la nota debajo. */
+/**
+ * «2 × Hamburguesa + Queso + Tocineta, Pepino en lugar de Tomate, sin
+ * Cebolla, sin Lechuga (no hay hoy) — $ 49.000», con la nota debajo. Lo que
+ * hoy no hay (ADR 0033) va aparte de lo que la persona quitó: así el
+ * restaurante sabe que no fue un pedido suyo.
+ */
 function itemLines(item: OrderItem, t: Translate, money: FormatMoney): string[] {
     let dish = item.dish + item.choices.map((choice) => ` + ${choice.name}`).join('');
 
+    for (const swap of item.swaps ?? []) {
+        dish += `, ${t('order.message.swap', { name: swap.name, instead: swap.instead })}`;
+    }
+
     if (item.removed.length > 0) {
         dish += `, ${t('order.message.without', { names: item.removed.join(', ') })}`;
+    }
+
+    if (item.missing !== undefined && item.missing.length > 0) {
+        dish += `, ${t('order.message.missing', { names: item.missing.join(', ') })}`;
     }
 
     const lines = [t('order.message.line', { quantity: item.quantity, dish, price: money(item.unitPrice * item.quantity) })];
