@@ -267,12 +267,32 @@ describe('el menú', function () {
         $dish = panelDish($restaurant, ['sold_out_until' => null]);
         actInPanel(panelMember($restaurant), $restaurant);
 
-        Livewire::test(ListDishes::class)->callTableAction('toggleSoldOut', $dish);
+        Livewire::test(ListDishes::class)
+            ->assertTableActionHidden('backInStock', $dish)
+            ->callTableAction('markSoldOut', $dish);
         expect($dish->refresh()->sold_out_until?->toDateString())->toBe(BusinessDay::today()->toDateString())
             ->and($restaurant->refresh()->updated_by_owner_at)->not->toBeNull();
 
-        Livewire::test(ListDishes::class)->callTableAction('toggleSoldOut', $dish);
+        Livewire::test(ListDishes::class)
+            ->assertTableActionHidden('markSoldOut', $dish)
+            ->callTableAction('backInStock', $dish);
         expect($dish->refresh()->sold_out_until)->toBeNull();
+    });
+
+    test('marcar «Agotado hoy» desde dos listas abiertas lo deja agotado (BUG-014)', function () {
+        $restaurant = Restaurant::factory()->claimed()->create();
+        $dish = panelDish($restaurant, ['sold_out_until' => null]);
+        actInPanel(panelMember($restaurant), $restaurant);
+
+        $first = Livewire::test(ListDishes::class);
+        $second = Livewire::test(ListDishes::class);
+
+        $first->callTableAction('markSoldOut', $dish);
+        // La segunda lista, abierta antes, ya no ofrece «Agotado hoy»: el
+        // servidor vuelve a mirar el registro y no lo ejecuta ni lo devuelve.
+        $second->assertTableActionHidden('markSoldOut', $dish);
+
+        expect($dish->refresh()->sold_out_until?->toDateString())->toBe(BusinessDay::today()->toDateString());
     });
 
     test('crear una sección la cuelga del restaurante de la dirección y mueve «Actualizada el…»', function () {

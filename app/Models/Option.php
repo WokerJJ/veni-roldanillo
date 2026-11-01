@@ -14,8 +14,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Opción o adición; price_delta es el recargo en pesos enteros (0 si no suma).
+ *
+ * ingredient_id (#112, ADR 0033): si la opción es un ingrediente de la lista
+ * del restaurante (un «Quitar tomate» o una adición de aguacate), su «agotado
+ * hoy» la afecta. Un disparador de la base exige que sea del mismo
+ * restaurante que el plato.
  */
-#[Fillable(['name_es', 'name_en', 'price_delta', 'available', 'position'])]
+#[Fillable(['name_es', 'name_en', 'price_delta', 'available', 'position', 'ingredient_id'])]
 #[UsePolicy(RestaurantContentPolicy::class)]
 class Option extends Model implements BelongsToRestaurant
 {
@@ -48,6 +53,12 @@ class Option extends Model implements BelongsToRestaurant
     public function optionGroup(): BelongsTo
     {
         return $this->belongsTo(OptionGroup::class);
+    }
+
+    /** @return BelongsTo<Ingredient, $this> */
+    public function ingredient(): BelongsTo
+    {
+        return $this->belongsTo(Ingredient::class);
     }
 
     public function owningRestaurant(): Restaurant

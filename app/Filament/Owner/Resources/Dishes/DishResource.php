@@ -9,10 +9,12 @@ use App\Filament\Owner\Resources\Dishes\Pages\ListDishes;
 use App\Filament\Owner\Resources\Dishes\RelationManagers\OptionGroupsRelationManager;
 use App\Filament\Owner\Support\Fields;
 use App\Models\Dish;
+use App\Models\Ingredient;
 use App\Models\MenuSection;
 use App\Support\BusinessDay;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
@@ -28,6 +30,10 @@ use Illuminate\Validation\Rule;
 /**
  * Platos del menú, con su precio en pesos enteros, «agotado hoy» y sus
  * grupos de opciones (OptionGroupsRelationManager).
+ *
+ * Los ingredientes que lleva (#112, ADR 0033) van en el mismo formulario,
+ * como un repetidor de filas de dish_ingredient: cuál de la lista del
+ * restaurante y si es esencial. Tope: MAX_INGREDIENTS por plato.
  */
 class DishResource extends OwnerResource
 {
@@ -35,6 +41,9 @@ class DishResource extends OwnerResource
 
     /** Tope por restaurante (OwnerResource::canCreate, ADR 0025). */
     public const int MAX_PER_RESTAURANT = 200;
+
+    /** Ingredientes por plato: viajan en las props de la ficha si se agotan. */
+    public const int MAX_INGREDIENTS = 20;
 
     protected static ?string $model = Dish::class;
 
@@ -92,6 +101,37 @@ class DishResource extends OwnerResource
                     ->helperText(__('panel.dishes.sold_out_help'))
                     ->afterStateHydrated(fn (Toggle $component, ?Dish $record) => $component->state(self::isSoldOutToday($record))),
             ]),
+            Section::make(__('panel.ingredients.dish_section'))
+                ->description(__('panel.ingredients.dish_section_help'))
+                ->columnSpanFull()
+                ->schema([
+                    Repeater::make('dishIngredients')
+                        ->hiddenLabel()
+                        ->relationship('dishIngredients')
+                        ->maxItems(self::MAX_INGREDIENTS)
+                        ->defaultItems(0)
+                        ->addActionLabel(__('panel.ingredients.add'))
+                        ->columns(2)
+                        ->schema([
+                            // Solo los de este restaurante; las FK compuestas
+                            // de dish_ingredient lo aseguran también.
+                            Select::make('ingredient_id')
+                                ->label(__('panel.ingredients.label'))
+                                ->options(fn (): array => Ingredient::query()
+                                    ->where('restaurant_id', $restaurantId)
+                                    ->orderBy('name_es')->orderBy('id')
+                                    ->pluck('name_es', 'id')
+                                    ->all())
+                                ->rule(Rule::exists('ingredients', 'id')->where('restaurant_id', $restaurantId))
+                                ->distinct()
+                                ->disableOptionsWhenSelectedInSiblingRepeaterItems()
+                                ->required(),
+                            Toggle::make('essential')
+                                ->label(__('panel.ingredients.essential'))
+                                ->default(false)
+                                ->inline(false),
+                        ]),
+                ]),
         ]);
     }
 
@@ -111,15 +151,26 @@ class DishResource extends OwnerResource
                 IconColumn::make('available')->label(__('panel.dishes.available'))->boolean(),
             ])
             ->recordActions([
-                Action::make('toggleSoldOut')
-                    ->label(fn (Dish $record): string => self::isSoldOutToday($record)
-                        ? __('panel.dishes.back_in_stock')
-                        : __('panel.dishes.mark_sold_out'))
+                // Dos acciones con valor fijo, no un interruptor (BUG-014):
+                // tocar «Agotado hoy» desde una lista vieja no lo devuelve.
+                Action::make('markSoldOut')
+                    ->label(__('panel.dishes.mark_sold_out'))
                     ->icon('heroicon-o-no-symbol')
-                    ->color(fn (Dish $record): string => self::isSoldOutToday($record) ? 'success' : 'warning')
+                    ->color('warning')
+                    ->visible(fn (Dish $record): bool => ! self::isSoldOutToday($record))
                     ->authorize(fn (Dish $record): bool => Gate::allows('update', $record))
                     ->action(function (Dish $record): void {
-                        self::setSoldOutToday($record, ! self::isSoldOutToday($record));
+                        self::setSoldOutToday($record, true);
+                        OwnerResource::currentRestaurant()?->touchOwnerUpdate();
+                    }),
+                Action::make('backInStock')
+                    ->label(__('panel.dishes.back_in_stock'))
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->visible(fn (Dish $record): bool => self::isSoldOutToday($record))
+                    ->authorize(fn (Dish $record): bool => Gate::allows('update', $record))
+                    ->action(function (Dish $record): void {
+                        self::setSoldOutToday($record, false);
                         OwnerResource::currentRestaurant()?->touchOwnerUpdate();
                     }),
                 EditAction::make(),

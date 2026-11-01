@@ -63,6 +63,18 @@ describe('el carrito en el dispositivo', () => {
         expect(parseCart(wrap([]), NOW)).toBeNull();
     });
 
+    it('guarda lo que hoy no hay y los reemplazos; un carrito de antes, sin ellos, sigue sirviendo (ADR 0033)', () => {
+        const wrap = (data: unknown) => JSON.stringify({ v: 1, savedAt: NOW, data });
+        const today: OrderItem = { ...juice, missing: ['Hielo'], swaps: [{ name: 'Panela', instead: 'Azúcar', price: 300 }] };
+
+        saveCart('la-ceiba', [today], NOW);
+        expect(loadCart('la-ceiba', NOW)).toEqual([today]);
+        expect(parseCart(wrap([juice]), NOW)).toEqual([juice]);
+        expect(parseCart(wrap([{ ...juice, missing: 'Hielo' }]), NOW)).toBeNull();
+        expect(parseCart(wrap([{ ...juice, swaps: [{ name: 'Panela', price: 300 }] }]), NOW)).toBeNull();
+        expect(parseCart(wrap([{ ...juice, swaps: [{ name: 'Panela', instead: 'Azúcar', price: -1 }] }]), NOW)).toBeNull();
+    });
+
     it('deja la cantidad entre 1 y 20', () => {
         const raw = JSON.stringify({ v: 1, savedAt: NOW, data: [{ ...juice, quantity: 99 }] });
 

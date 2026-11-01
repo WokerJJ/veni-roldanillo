@@ -20,6 +20,7 @@ class DatabaseSeeder extends FictitiousSeeder
             NeighborhoodSeeder::class,
             UserSeeder::class,
             RestaurantSeeder::class,
+            IngredientSeeder::class,
             DailyMenuSeeder::class,
             PanelOwnerSeeder::class,
             PanelAdminSeeder::class,

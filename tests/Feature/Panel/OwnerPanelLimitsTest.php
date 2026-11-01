@@ -2,6 +2,7 @@
 
 use App\Filament\Owner\Resources\DeliveryZones\DeliveryZoneResource;
 use App\Filament\Owner\Resources\Dishes\DishResource;
+use App\Filament\Owner\Resources\Ingredients\IngredientResource;
 use App\Filament\Owner\Resources\MenuSections\MenuSectionResource;
 use App\Filament\Owner\Resources\Promotions\PromotionResource;
 use App\Filament\Owner\Resources\SpecialHours\SpecialHourResource;
@@ -23,6 +24,7 @@ test('cada recurso que crece con el dueño tiene su tope', function (string $res
     'promociones' => PromotionResource::class,
     'horarios especiales' => SpecialHourResource::class,
     'zonas' => DeliveryZoneResource::class,
+    'ingredientes' => IngredientResource::class,
 ]);
 
 test('con el tope de secciones lleno, no se crea otra: ni el botón ni la página', function () {

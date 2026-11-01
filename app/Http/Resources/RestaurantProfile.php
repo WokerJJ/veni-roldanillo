@@ -34,16 +34,20 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * specialHours, menuSections con sus dishes, los optionGroups de cada plato
  * con sus options, y deliveryZones con su neighborhood): las carga
  * RestaurantController en una consulta por tabla. De cada plato y de cada
- * opción necesita `available`: con él decide si sale.
+ * opción necesita `available`: con él decide si sale. De los ingredientes
+ * (#112, ADR 0033), solo los agotados desde hoy, con su reemplazo y los
+ * platos que los llevan (dishLinks).
  *
  * @phpstan-import-type WeeklyHours from PresentsSchedule
  *
  * @phpstan-type ProfileCategory array{slug: string, name: string}
  * @phpstan-type ProfileSpecialHours array{date: string, closed: bool, opens: string|null, closes: string|null, note: string|null}
  * @phpstan-type ProfileZone array{neighborhood: string, fee: int}
- * @phpstan-type ProfileOption array{name: string, price: int}
+ * @phpstan-type ProfileOption array{name: string, price: int, ingredient: int|null}
+ * @phpstan-type ProfileSubstitute array{name: string, price: int, sold_out_until: string|null}
+ * @phpstan-type ProfileIngredient array{name: string, essential: bool, in_dish: bool, sold_out_until: string, substitute: ProfileSubstitute|null}
  * @phpstan-type ProfileOptionGroup array{name: string, kind: string, min: int, max: int, options: list<ProfileOption>}
- * @phpstan-type ProfileDish array{name: string, description: string|null, price: int, sold_out_until: string|null, groups: list<ProfileOptionGroup>}
+ * @phpstan-type ProfileDish array{name: string, description: string|null, price: int, sold_out_until: string|null, ingredients: list<ProfileIngredient>, groups: list<ProfileOptionGroup>}
  * @phpstan-type ProfileSection array{name: string, dishes: list<ProfileDish>}
  * @phpstan-type Profile array{
  *     slug: string,
@@ -177,20 +181,112 @@ class RestaurantProfile extends JsonResource
                     // Lo que el dueño sacó del menú no se publica, aunque
                     // llegue cargado.
                     ->filter(fn (Dish $dish): bool => $dish->available)
-                    ->map(fn (Dish $dish): array => [
-                        'name' => (string) $dish->translated('name', $this->locale),
-                        'description' => $dish->translated('description', $this->locale),
-                        'price' => $dish->price,
-                        // «Agotado hoy» vale hasta esta fecha, incluida. Si
-                        // hoy está agotado lo dice el dispositivo, como
-                        // «abierto ahora»: la ficha puede quedar abierta de
-                        // un día para otro.
-                        'sold_out_until' => $dish->sold_out_until?->toDateString(),
-                        'groups' => $this->groups($dish),
-                    ])
+                    ->map(fn (Dish $dish): array => $this->dish($dish))
                     ->all()),
             ])
             ->all());
+    }
+
+    /**
+     * Un plato de la ficha.
+     *
+     * @return ProfileDish
+     */
+    private function dish(Dish $dish): array
+    {
+        [$ingredients, $positions] = $this->ingredients($dish);
+
+        return [
+            'name' => (string) $dish->translated('name', $this->locale),
+            'description' => $dish->translated('description', $this->locale),
+            'price' => $dish->price,
+            // «Agotado hoy» vale hasta esta fecha, incluida. Si
+            // hoy está agotado lo dice el dispositivo, como
+            // «abierto ahora»: la ficha puede quedar abierta de
+            // un día para otro.
+            'sold_out_until' => $dish->sold_out_until?->toDateString(),
+            'ingredients' => $ingredients,
+            'groups' => $this->groups($dish, $positions),
+        ];
+    }
+
+    /**
+     * Platos que lleva cada ingrediente agotado: id del ingrediente → id del
+     * plato → si es esencial. Se arma una vez por ficha.
+     *
+     * @var array<int, array<int, bool>>|null
+     */
+    private ?array $links = null;
+
+    /**
+     * Los ingredientes agotados que tocan a este plato (#112, ADR 0033): los
+     * que lleva (`in_dish`, con `essential`) y los que nombran sus opciones
+     * (una adición agotada; un «Quitar» cuenta como que lo lleva). Con la
+     * fecha hasta la que no hay: si hoy sigue agotado lo calcula el
+     * dispositivo. El reemplazo va con su recargo y su propia fecha: uno
+     * agotado no se ofrece. Devuelve también la posición de cada uno en la
+     * lista, que es lo que cada opción publica en `ingredient` (el id de la
+     * base no viaja).
+     *
+     * @return array{list<ProfileIngredient>, array<int, int>}
+     */
+    private function ingredients(Dish $dish): array
+    {
+        if (! $this->restaurant->relationLoaded('ingredients') || $this->restaurant->ingredients->isEmpty()) {
+            return [[], []];
+        }
+
+        if ($this->links === null) {
+            $this->links = [];
+
+            foreach ($this->restaurant->ingredients as $ingredient) {
+                foreach ($ingredient->dishLinks as $link) {
+                    $this->links[$ingredient->id][$link->dish_id] = $link->essential;
+                }
+            }
+        }
+
+        $named = [];
+        $removable = [];
+
+        foreach ($dish->optionGroups as $group) {
+            foreach ($group->options as $option) {
+                if ($option->available && $option->ingredient_id !== null) {
+                    $named[$option->ingredient_id] = true;
+
+                    if ($group->kind === OptionGroupKind::Removal) {
+                        $removable[$option->ingredient_id] = true;
+                    }
+                }
+            }
+        }
+
+        $entries = [];
+        $positions = [];
+
+        foreach ($this->restaurant->ingredients as $ingredient) {
+            $essential = $this->links[$ingredient->id][$dish->id] ?? null;
+
+            if (($essential === null && ! isset($named[$ingredient->id])) || $ingredient->sold_out_until === null) {
+                continue;
+            }
+
+            $substitute = $ingredient->substitute;
+            $positions[$ingredient->id] = count($entries);
+            $entries[] = [
+                'name' => (string) $ingredient->translated('name', $this->locale),
+                'essential' => $essential === true,
+                'in_dish' => $essential !== null || isset($removable[$ingredient->id]),
+                'sold_out_until' => $ingredient->sold_out_until->toDateString(),
+                'substitute' => $substitute === null ? null : [
+                    'name' => (string) $substitute->translated('name', $this->locale),
+                    'price' => $ingredient->substitute_price_delta,
+                    'sold_out_until' => $substitute->sold_out_until?->toDateString(),
+                ],
+            ];
+        }
+
+        return [$entries, $positions];
     }
 
     /**
@@ -203,9 +299,13 @@ class RestaurantProfile extends JsonResource
      * grupo obligatorio pide más de las que quedan, el plato no se puede
      * pedir y lo dice el dispositivo (resources/js/order/selection.ts).
      *
+     * Una opción que es un ingrediente agotado lleva en `ingredient` su
+     * posición en la lista `ingredients` del plato; las demás, null.
+     *
+     * @param  array<int, int>  $positions
      * @return list<ProfileOptionGroup>
      */
-    private function groups(Dish $dish): array
+    private function groups(Dish $dish, array $positions): array
     {
         $groups = [];
 
@@ -217,6 +317,7 @@ class RestaurantProfile extends JsonResource
                     'name' => (string) $option->translated('name', $this->locale),
                     // Quitar un ingrediente no cambia el precio.
                     'price' => $removal ? 0 : $option->price_delta,
+                    'ingredient' => $option->ingredient_id === null ? null : ($positions[$option->ingredient_id] ?? null),
                 ])
                 ->all());
 

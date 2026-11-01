@@ -6,6 +6,7 @@ use App\Enums\Locale;
 use App\Http\Resources\RestaurantProfile;
 use App\Models\Neighborhood;
 use App\Models\Restaurant;
+use App\Support\BusinessDay;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -42,8 +43,8 @@ class RestaurantController extends Controller
             abort(404);
         }
 
-        // Nueve consultas más, tenga el menú tres platos o trescientos: una
-        // por tabla. Es lo que hace $restaurant->load(), con las categorías y
+        // Diez consultas más (doce si hay ingredientes agotados), tenga el
+        // menú tres platos o trescientos: una por tabla. Es lo que hace $restaurant->load(), con las categorías y
         // el horario cargados igual que en el mapa (ver Restaurant).
         Restaurant::query()
             ->withPublicCategories()
@@ -71,8 +72,26 @@ class RestaurantController extends Controller
                 },
                 'menuSections.dishes.optionGroups.options' => function (Relation $options): void {
                     $options
-                        ->select(['id', 'option_group_id', 'name_es', 'name_en', 'price_delta', 'available', 'position'])
+                        ->select(['id', 'option_group_id', 'ingredient_id', 'name_es', 'name_en', 'price_delta', 'available', 'position'])
                         ->where('available', true);
+                },
+                // Solo los ingredientes agotados (#112, ADR 0033): los demás no
+                // cambian nada en la ficha. Desde hoy, en el día de Colombia; si
+                // siguen agotados lo decide el dispositivo, como con los platos.
+                // Su reemplazo y los platos que los llevan solo se consultan si
+                // hay alguno: sin agotados es una consulta más, no tres.
+                'ingredients' => function (Relation $ingredients): void {
+                    $ingredients
+                        ->select(['id', 'restaurant_id', 'name_es', 'name_en', 'sold_out_until', 'substitute_ingredient_id', 'substitute_price_delta'])
+                        ->where('sold_out_until', '>=', BusinessDay::today()->toDateString())
+                        ->orderBy('name_es')
+                        ->orderBy('id');
+                },
+                'ingredients.substitute' => function (Relation $substitutes): void {
+                    $substitutes->select(['id', 'name_es', 'name_en', 'sold_out_until']);
+                },
+                'ingredients.dishLinks' => function (Relation $links): void {
+                    $links->select(['id', 'dish_id', 'ingredient_id', 'essential']);
                 },
                 // Las zonas de domicilio con su costo, por orden alfabético del
                 // barrio (lo ordena la base, que sabe de tildes), y sus nombres.

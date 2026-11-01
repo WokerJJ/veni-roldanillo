@@ -116,12 +116,29 @@ describe('DishPicker', () => {
     it('si el plato se agota con el selector abierto, no agrega y lo anuncia', async () => {
         const { wrapper, added } = await mountPicker({ ...SANCOCHO, groups: [] });
 
-        await wrapper.setProps({ soldOut: true });
+        await wrapper.setProps({ unavailable: { reason: 'sold_out' } });
         await wrapper.get('form').trigger('submit');
         await flushPromises();
 
         expect(added()).toEqual([]);
         expect(wrapper.get('[role="alert"]').text()).toBe('Este plato se agotó: ya no se puede agregar.');
+    });
+
+    it('si se queda sin un ingrediente esencial con el selector abierto, dice cuál (EVA-004)', async () => {
+        const { wrapper, added } = await mountPicker({ ...SANCOCHO, groups: [] });
+
+        await wrapper.setProps({ unavailable: { reason: 'ingredient', name: 'Arroz (prueba)' } });
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+
+        expect(added()).toEqual([]);
+        expect(wrapper.get('[role="alert"]').text()).toBe('Hoy no hay Arroz (prueba): este plato ya no se puede agregar.');
+
+        await wrapper.setProps({ unavailable: { reason: 'options' } });
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+
+        expect(wrapper.get('[role="alert"]').text()).toBe('Este plato hoy no se puede pedir: ya no se puede agregar.');
     });
 
     it('arrastrar desde la hoja y soltar en el fondo no cierra', async () => {
@@ -235,5 +252,120 @@ describe('DishPicker', () => {
         expect(wrapper.text()).toContain('No Cebolla (prueba)');
         expect(addText()).toBe('Add · COP 18,500');
         expect(wrapper.get('[data-close]').attributes('aria-label')).toBe('Close');
+    });
+});
+
+describe('DishPicker: ingredientes agotados hoy (ADR 0033)', () => {
+    const TODAY = '2026-10-07';
+    const BANDEJA: MenuDish = {
+        ...SANCOCHO,
+        name: 'Bandeja de prueba',
+        ingredients: [
+            { name: 'Tomate (prueba)', essential: false, in_dish: true, sold_out_until: TODAY, substitute: { name: 'Pepino (prueba)', price: 500, sold_out_until: null } },
+            { name: 'Cebolla (prueba)', essential: false, in_dish: true, sold_out_until: TODAY, substitute: null },
+            { name: 'Aguacate (prueba)', essential: false, in_dish: false, sold_out_until: TODAY, substitute: null },
+        ],
+        groups: [
+            nth(SANCOCHO.groups, 0),
+            { ...nth(SANCOCHO.groups, 1), options: [{ name: 'Huevo (prueba)', price: 1500, ingredient: null }, { name: 'Aguacate (prueba)', price: 2000, ingredient: 2 }] },
+            { ...nth(SANCOCHO.groups, 2), options: [{ name: 'Cebolla (prueba)', price: 0, ingredient: 1 }, { name: 'Cilantro (prueba)', price: 0, ingredient: null }] },
+        ],
+    };
+
+    async function mountToday() {
+        const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
+        inertia.reset();
+        inertia.receiveFromServer('es', { replace: true });
+
+        const { default: DishPicker } = await import('./DishPicker.vue');
+
+        return mount(DishPicker, { props: { dish: BANDEJA, today: TODAY }, attachTo: document.body });
+    }
+
+    it('ofrece el reemplazo con su recargo, deja fija la cebolla y no deja elegir el aguacate', async () => {
+        const wrapper = await mountToday();
+        const swap = wrapper.get('[data-substitute]');
+
+        expect(swap.get('legend').text()).toBe('Hoy no hay Tomate (prueba)');
+        expect(plain(swap.get('[data-swap="accept"]').element.closest('label')?.textContent ?? '')).toContain('Pepino (prueba) en lugar de Tomate (prueba) · + $ 500');
+        expect((swap.get('[data-swap="accept"]').element as HTMLInputElement).checked).toBe(true);
+        expect(wrapper.get('[data-ingredient-note]').text()).toBe('Hoy sin Cebolla (prueba)');
+
+        const options = wrapper.findAll('[data-option]');
+        // Proteína (2), adiciones (2), quitar (2).
+        const aguacate = nth(options, 3).element as HTMLInputElement;
+        const cebolla = nth(options, 4).element as HTMLInputElement;
+
+        expect(aguacate.disabled).toBe(true);
+        expect(aguacate.checked).toBe(false);
+        expect(cebolla.disabled).toBe(true);
+        expect(cebolla.checked).toBe(true);
+        expect(wrapper.findAll('[data-out-today]')).toHaveLength(2);
+        expect(plain(wrapper.get('[data-add]').text())).toContain('$ 19.000');
+    });
+
+    it('agrega con el reemplazo aceptado y, si lo rechaza, sin nada', async () => {
+        const wrapper = await mountToday();
+
+        await nth(wrapper.findAll('[data-option]'), 0).setValue(true);
+        await wrapper.get('form').trigger('submit');
+        await wrapper.get('[data-swap="decline"]').setValue(true);
+        await wrapper.get('form').trigger('submit');
+
+        const added = (wrapper.emitted('add') ?? []).map(([item]) => item as OrderItem);
+
+        expect(added[0]).toMatchObject({ unitPrice: 19000, removed: [], missing: ['Cebolla (prueba)'], swaps: [{ name: 'Pepino (prueba)', instead: 'Tomate (prueba)', price: 500 }] });
+        expect(added[1]).toMatchObject({ unitPrice: 18500, removed: [], missing: ['Tomate (prueba)', 'Cebolla (prueba)'] });
+        expect(added[1]?.swaps).toBeUndefined();
+    });
+
+    async function mountWith(dish: MenuDish) {
+        const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
+        inertia.reset();
+        inertia.receiveFromServer('es', { replace: true });
+
+        const { default: DishPicker } = await import('./DishPicker.vue');
+
+        return mount(DishPicker, { props: { dish, today: TODAY }, attachTo: document.body });
+    }
+
+    it('un esencial con reemplazo va con el reemplazo: no ofrece pedirlo sin nada (EVA-003)', async () => {
+        const wrapper = await mountWith({
+            ...BANDEJA,
+            ingredients: [{ name: 'Res (prueba)', essential: true, in_dish: true, sold_out_until: TODAY, substitute: { name: 'Cerdo (prueba)', price: 1000, sold_out_until: null } }],
+            groups: [],
+        });
+        const swap = wrapper.get('[data-substitute]');
+
+        expect(swap.find('[data-swap="decline"]').exists()).toBe(false);
+        expect((swap.get('[data-swap="accept"]').element as HTMLInputElement).checked).toBe(true);
+        expect(swap.get('p').text()).toBe('Hoy va con el reemplazo.');
+
+        await wrapper.get('form').trigger('submit');
+
+        expect((wrapper.emitted('add') ?? []).map(([item]) => item as OrderItem)[0]).toMatchObject({
+            unitPrice: 19500,
+            swaps: [{ name: 'Cerdo (prueba)', instead: 'Res (prueba)', price: 1000 }],
+        });
+    });
+
+    it('con reemplazo, el «Quitar» de ese ingrediente no sale: decide el grupo del reemplazo (EVA-005)', async () => {
+        const wrapper = await mountWith({
+            ...BANDEJA,
+            ingredients: [{ name: 'Cebolla (prueba)', essential: false, in_dish: true, sold_out_until: TODAY, substitute: { name: 'Cebollín (prueba)', price: 0, sold_out_until: null } }],
+            groups: [nth(BANDEJA.groups, 0), { ...nth(BANDEJA.groups, 2), options: [{ name: 'Cebolla (prueba)', price: 0, ingredient: 0 }, { name: 'Cilantro (prueba)', price: 0, ingredient: null }] }],
+        });
+        const removal = nth(wrapper.findAll('[data-group]'), 1);
+
+        expect(removal.findAll('[data-option]')).toHaveLength(1);
+        expect(removal.text()).not.toContain('Cebolla');
+        expect(removal.text()).toContain('Cilantro (prueba)');
+        expect(wrapper.find('[data-out-today]').exists()).toBe(false);
+
+        await nth(wrapper.findAll('[data-option]'), 0).setValue(true);
+        await wrapper.get('[data-swap="decline"]').setValue(true);
+        await wrapper.get('form').trigger('submit');
+
+        expect((wrapper.emitted('add') ?? []).map(([item]) => item as OrderItem)[0]).toMatchObject({ removed: [], missing: ['Cebolla (prueba)'] });
     });
 });

@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Laravel\Scout\Searchable;
@@ -234,11 +235,67 @@ class Dish extends Model implements BelongsToRestaurant
         }
     }
 
-    /** ¿Se puede pedir hoy? En la carta y no «agotado hoy» (ADR 0018). */
+    /**
+     * ¿Se puede pedir hoy? En la carta, no «agotado hoy» (ADR 0018) y sin un
+     * ingrediente esencial agotado hoy (ADR 0033).
+     */
     public function orderableToday(): bool
     {
         return $this->available
-            && ($this->sold_out_until === null || $this->sold_out_until->toDateString() < BusinessDay::today()->toDateString());
+            && ($this->sold_out_until === null || $this->sold_out_until->toDateString() < BusinessDay::today()->toDateString())
+            && ! $this->lacksEssentialIngredientToday();
+    }
+
+    /**
+     * Si le falta hoy un ingrediente esencial sin reemplazo (EVA-003, ADR
+     * 0033): un esencial agotado con un reemplazo vigente se hace con el
+     * reemplazo. Con withEssentialSoldOut() ya viene en la consulta (una sola
+     * para todos los platos); si no, pregunta.
+     */
+    public function lacksEssentialIngredientToday(): bool
+    {
+        if (array_key_exists('essential_sold_out', $this->getAttributes())) {
+            return (bool) $this->getAttribute('essential_sold_out');
+        }
+
+        $ingredients = $this->ingredients()->getQuery();
+        self::blockingToday($ingredients);
+
+        return $ingredients->exists();
+    }
+
+    /**
+     * Agrega `essential_sold_out`: si al plato le falta hoy un ingrediente
+     * esencial sin reemplazo (lo lee orderableToday sin una consulta por plato).
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function withEssentialSoldOut(Builder $query): void
+    {
+        $query->withExists(['ingredients as essential_sold_out' => function (Builder $ingredients): void {
+            /** @var Builder<Ingredient> $ingredients */
+            self::blockingToday($ingredients);
+        }]);
+    }
+
+    /**
+     * Los ingredientes del plato que hoy lo dejan sin pedir: esenciales,
+     * agotados hoy y sin un reemplazo que hoy haya. Es la misma regla que
+     * aplica el dispositivo (resources/js/order/ingredients.ts).
+     *
+     * @param  Builder<Ingredient>  $ingredients
+     */
+    private static function blockingToday(Builder $ingredients): void
+    {
+        $today = BusinessDay::today()->toDateString();
+
+        $ingredients
+            ->where('dish_ingredient.essential', true)
+            ->where('ingredients.sold_out_until', '>=', $today)
+            ->whereDoesntHave('substitute', function (Builder $substitute) use ($today): void {
+                $substitute->where(fn (Builder $available) => $available->whereNull('sold_out_until')->orWhere('sold_out_until', '<', $today));
+            });
     }
 
     /** @return BelongsTo<Restaurant, $this> */
@@ -251,6 +308,26 @@ class Dish extends Model implements BelongsToRestaurant
     public function menuSection(): BelongsTo
     {
         return $this->belongsTo(MenuSection::class);
+    }
+
+    /**
+     * Los ingredientes que lleva (#112, ADR 0033), con `essential` en el pivote.
+     *
+     * @return BelongsToMany<Ingredient, $this>
+     */
+    public function ingredients(): BelongsToMany
+    {
+        return $this->belongsToMany(Ingredient::class, 'dish_ingredient')->withPivot('essential');
+    }
+
+    /**
+     * Las mismas filas como modelos propios: el repetidor del panel las edita.
+     *
+     * @return HasMany<DishIngredient, $this>
+     */
+    public function dishIngredients(): HasMany
+    {
+        return $this->hasMany(DishIngredient::class)->orderBy('id');
     }
 
     /** @return HasMany<OptionGroup, $this> */

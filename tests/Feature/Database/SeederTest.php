@@ -5,6 +5,8 @@ use App\Enums\RestaurantStatus;
 use App\Models\DailyMenu;
 use App\Models\DeliveryZone;
 use App\Models\Dish;
+use App\Models\DishIngredient;
+use App\Models\Ingredient;
 use App\Models\Neighborhood;
 use App\Models\Option;
 use App\Models\OptionGroup;
@@ -14,6 +16,7 @@ use App\Support\BusinessDay;
 use Database\Seeders\CategorySeeder;
 use Database\Seeders\DailyMenuSeeder;
 use Database\Seeders\DatabaseSeeder;
+use Database\Seeders\IngredientSeeder;
 use Database\Seeders\NeighborhoodSeeder;
 use Database\Seeders\PanelOwnerSeeder;
 use Database\Seeders\RestaurantSeeder;
@@ -265,4 +268,20 @@ test('el seeder deja almuerzos de hoy en Colombia en los ficticios, menos en uno
         ->and($lunches->pluck('restaurant_id'))->not->toContain($real->id)
         ->and($lunches->pluck('restaurant_id')->duplicates())->toBeEmpty()
         ->and($lunches)->toHaveCount(Restaurant::query()->where('is_fictitious', true)->count() - 1);
+});
+
+test('los ingredientes de ejemplo son de restaurantes ficticios, ninguno agotado, y la siembra no se repite (ADR 0033)', function () {
+    $this->seed(DatabaseSeeder::class);
+    $count = Ingredient::query()->count();
+
+    expect($count)->toBeGreaterThan(0)
+        ->and(Ingredient::query()->whereHas('restaurant', fn ($q) => $q->where('is_fictitious', false))->exists())->toBeFalse()
+        ->and(Ingredient::query()->whereNotNull('sold_out_until')->exists())->toBeFalse()
+        ->and(Ingredient::query()->where('name_es', 'not like', '%(prueba)')->exists())->toBeFalse()
+        ->and(DishIngredient::query()->where('essential', true)->exists())->toBeTrue()
+        ->and(Option::query()->whereNotNull('ingredient_id')->exists())->toBeTrue()
+        ->and(Ingredient::query()->whereNotNull('substitute_ingredient_id')->exists())->toBeTrue();
+
+    $this->seed(IngredientSeeder::class);
+    expect(Ingredient::query()->count())->toBe($count);
 });

@@ -6,8 +6,9 @@ import MenuDishLine from '@/components/MenuDishLine.vue';
 import { useI18n } from '@/composables/useI18n';
 import { useNow } from '@/composables/useNow';
 import { formatPesos } from '@/i18n/intl';
+import { blockingIngredient, ingredientEffects } from '@/order/ingredients';
 import type { OrderItem } from '@/order/selection';
-import { isOrderable, isSoldOut, MAX_QUANTITY } from '@/order/selection';
+import { isOrderable, isSoldOut, MAX_QUANTITY, unavailableReason } from '@/order/selection';
 import { useOrder } from '@/order/useOrder';
 import { businessDay } from '@/restaurants/openStatus';
 import type { MenuDish, MenuSection } from '@/restaurants/profile';
@@ -28,6 +29,10 @@ import type { MenuDish, MenuSection } from '@/restaurants/profile';
  * «Agregar» lo deja en el pedido del restaurante (useOrder), que mostrará y
  * enviará el carrito (#15). Un plato agotado, o con un grupo obligatorio sin
  * opciones suficientes, no se puede agregar.
+ *
+ * Los ingredientes agotados hoy (#112, ADR 0033) también se calculan aquí,
+ * con el mismo reloj: sin uno esencial, el plato sale «No disponible hoy ·
+ * sin X»; sin uno que no lo es, «Hoy sin X» u «Hoy con Y en lugar de X».
  */
 const { sections, slug = null } = defineProps<{ sections: readonly MenuSection[]; slug?: string | null }>();
 
@@ -59,9 +64,28 @@ function canOrder(dish: MenuDish): boolean {
     return order !== null && isOrderable(dish, today.value);
 }
 
-/** Ni agotado ni pedible: un grupo obligatorio se quedó sin opciones. */
+/** El ingrediente esencial que hoy no hay, o null. */
+function missingEssential(dish: MenuDish): string | null {
+    return blockingIngredient(dish, today.value);
+}
+
+/** Ni agotado ni pedible: le falta un ingrediente esencial o un grupo obligatorio se quedó sin opciones. */
 function unavailable(dish: MenuDish): boolean {
-    return order !== null && !soldOut(dish) && !isOrderable(dish, today.value);
+    return !soldOut(dish) && (missingEssential(dish) !== null || (order !== null && !isOrderable(dish, today.value)));
+}
+
+/** «Hoy sin X» o «Hoy con Y en lugar de X», por cada ingrediente no esencial que hoy no hay. */
+function todayNotes(dish: MenuDish): string[] {
+    return ingredientEffects(dish, today.value).flatMap((effect) => {
+        switch (effect.kind) {
+            case 'blocks':
+                return [];
+            case 'without':
+                return [t('restaurant.menu.today_without', { name: effect.name })];
+            case 'substitute':
+                return [t('restaurant.menu.today_swap', { substitute: effect.substitute, name: effect.name })];
+        }
+    });
 }
 
 async function open(dish: MenuDish, event: MouseEvent): Promise<void> {
@@ -128,10 +152,10 @@ const summary = computed(() => {
                         data-choose
                         @click="open(dish, $event)"
                     >
-                        <MenuDishLine :dish="dish" :sold-out="false" :unavailable="false" />
+                        <MenuDishLine :dish="dish" :sold-out="false" :unavailable="false" :notes="todayNotes(dish)" />
                     </button>
                     <div v-else class="flex items-start justify-between gap-4 py-3">
-                        <MenuDishLine :dish="dish" :sold-out="soldOut(dish)" :unavailable="unavailable(dish)" />
+                        <MenuDishLine :dish="dish" :sold-out="soldOut(dish)" :unavailable="unavailable(dish)" :without="missingEssential(dish)" :notes="soldOut(dish) || missingEssential(dish) !== null ? [] : todayNotes(dish)" />
                     </div>
                 </li>
             </ul>
@@ -139,6 +163,6 @@ const summary = computed(() => {
 
         <p role="status" class="sr-only" data-order-announcement>{{ announcement }}</p>
 
-        <DishPicker v-if="DishPicker && picking" :dish="picking" :sold-out="soldOut(picking)" @add="add" @close="close" />
+        <DishPicker v-if="DishPicker && picking" :dish="picking" :today="today" :unavailable="unavailableReason(picking, today)" @add="add" @close="close" />
     </section>
 </template>

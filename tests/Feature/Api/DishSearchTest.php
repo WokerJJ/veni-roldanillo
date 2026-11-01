@@ -2,11 +2,14 @@
 
 use App\Models\Category;
 use App\Models\Dish;
+use App\Models\Ingredient;
 use App\Models\MenuSection;
 use App\Models\Restaurant;
 use App\Providers\AppServiceProvider;
+use App\Support\BusinessDay;
 use App\Support\Search\DishSearch;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\TestResponse;
 use Laravel\Scout\EngineManager;
@@ -132,6 +135,55 @@ test('«agotado hoy» sale como no disponible, y el de otro día como disponible
 
     expect($dishes['Sancocho agotado']['available'])->toBeFalse()
         ->and($dishes['Sancocho de otro día']['available'])->toBeTrue();
+});
+
+/** Un plato que lleva `$ingredient`, esencial o no (#112, ADR 0033). */
+function dishWithIngredient(Dish $dish, Ingredient $ingredient, bool $essential): Dish
+{
+    $dish->dishIngredients()->create(['ingredient_id' => $ingredient->id, 'essential' => $essential]);
+
+    return $dish;
+}
+
+test('un ingrediente agotado hoy: esencial deja el plato no disponible; no esencial o con reemplazo vigente, disponible (EVA-001)', function () {
+    $restaurant = Restaurant::factory()->create();
+    $arroz = $restaurant->ingredients()->create(['name_es' => 'Arroz', 'sold_out_until' => BusinessDay::today()->toDateString()]);
+    $cerdo = $restaurant->ingredients()->create(['name_es' => 'Cerdo']);
+    $res = $restaurant->ingredients()->create(['name_es' => 'Res', 'sold_out_until' => BusinessDay::today()->toDateString(), 'substitute_ingredient_id' => $cerdo->id]);
+    dishWithIngredient(searchableDish($restaurant, 'Sopas', ['name_es' => 'Sancocho con arroz']), $arroz, essential: true);
+    dishWithIngredient(searchableDish($restaurant, 'Sopas', ['name_es' => 'Sancocho con arroz aparte']), $arroz, essential: false);
+    dishWithIngredient(searchableDish($restaurant, 'Sopas', ['name_es' => 'Sancocho de res']), $res, essential: true);
+
+    $dishes = collect(searchDishes('sancocho')->assertOk()->json('results.0.dishes'))->keyBy('name');
+
+    expect($dishes['Sancocho con arroz']['available'])->toBeFalse()
+        ->and($dishes['Sancocho con arroz aparte']['available'])->toBeTrue()
+        ->and($dishes['Sancocho de res']['available'])->toBeTrue();
+});
+
+test('las consultas no crecen con los platos: los ingredientes van en la misma consulta (EVA-001)', function () {
+    $restaurant = Restaurant::factory()->create();
+    $cerdo = $restaurant->ingredients()->create(['name_es' => 'Cerdo']);
+    $res = $restaurant->ingredients()->create(['name_es' => 'Res', 'sold_out_until' => BusinessDay::today()->toDateString(), 'substitute_ingredient_id' => $cerdo->id]);
+
+    foreach (range(1, 2) as $i) {
+        dishWithIngredient(searchableDish($restaurant, 'Sopas', ['name_es' => "Sancocho {$i}"]), $res, essential: true);
+    }
+
+    foreach (range(1, 5) as $i) {
+        dishWithIngredient(searchableDish($restaurant, 'Sopas', ['name_es' => "Ajiaco {$i}"]), $res, essential: true);
+    }
+
+    $queries = function (string $query): int {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        searchDishes($query)->assertOk();
+        DB::disableQueryLog();
+
+        return count(DB::getQueryLog());
+    };
+
+    expect($queries('ajiaco'))->toBe($queries('sancocho'));
 });
 
 test('tiene topes: restaurantes por respuesta y platos por restaurante', function () {

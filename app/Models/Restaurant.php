@@ -296,6 +296,16 @@ class Restaurant extends Model
         return $this->hasMany(Dish::class);
     }
 
+    /**
+     * La lista común de ingredientes (#112, ADR 0033).
+     *
+     * @return HasMany<Ingredient, $this>
+     */
+    public function ingredients(): HasMany
+    {
+        return $this->hasMany(Ingredient::class);
+    }
+
     /** @return HasMany<DailyMenu, $this> */
     public function dailyMenus(): HasMany
     {

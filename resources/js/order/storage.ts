@@ -2,7 +2,7 @@ import { isRecord, readItem, text, writeItem } from '@/device/localStore';
 
 import type { DeliveryMode } from './checkout';
 import { ADDRESS_MAX_LENGTH, NAME_MAX_LENGTH, NEIGHBORHOOD_MAX_LENGTH, REFERENCE_MAX_LENGTH } from './checkout';
-import type { ChosenOption, OrderItem } from './selection';
+import type { ChosenOption, OrderItem, Swap } from './selection';
 import { clampQuantity, NOTE_MAX_LENGTH } from './selection';
 
 /**
@@ -119,6 +119,9 @@ function parseItem(value: unknown): OrderItem | null {
     const choices = value.choices.map(parseChoice);
     const removed = value.removed.map((name) => text(name, MAX_NAME_LENGTH));
     const note = value.note === null ? null : text(value.note, NOTE_MAX_LENGTH);
+    // Lo que hoy no hay (ADR 0033): opcional, un carrito guardado antes no lo trae.
+    const missing = value.missing === undefined ? [] : Array.isArray(value.missing) ? value.missing.map((name) => text(name, MAX_NAME_LENGTH)) : [null];
+    const swaps = value.swaps === undefined ? [] : Array.isArray(value.swaps) ? value.swaps.map(parseSwap) : [null];
 
     if (
         dish === null ||
@@ -126,10 +129,15 @@ function parseItem(value: unknown): OrderItem | null {
         typeof value.quantity !== 'number' ||
         (value.note !== null && note === null) ||
         choices.some((choice) => choice === null) ||
-        removed.some((name) => name === null)
+        removed.some((name) => name === null) ||
+        missing.some((name) => name === null) ||
+        swaps.some((swap) => swap === null)
     ) {
         return null;
     }
+
+    const missingNames = missing.filter((name): name is string => name !== null);
+    const swapList = swaps.filter((swap): swap is Swap => swap !== null);
 
     return {
         dish,
@@ -137,8 +145,22 @@ function parseItem(value: unknown): OrderItem | null {
         quantity: clampQuantity(value.quantity),
         choices: choices.filter((choice): choice is ChosenOption => choice !== null),
         removed: removed.filter((name): name is string => name !== null),
+        ...(missingNames.length > 0 ? { missing: missingNames } : {}),
+        ...(swapList.length > 0 ? { swaps: swapList } : {}),
         note,
     };
+}
+
+function parseSwap(value: unknown): Swap | null {
+    if (!isRecord(value)) {
+        return null;
+    }
+
+    const name = text(value.name, MAX_NAME_LENGTH);
+    const instead = text(value.instead, MAX_NAME_LENGTH);
+    const cost = price(value.price);
+
+    return name === null || instead === null || cost === null ? null : { name, instead, price: cost };
 }
 
 /** El carrito guardado, si sigue vigente y tiene forma de carrito; si no, null. Una línea dañada lo descarta entero. */
