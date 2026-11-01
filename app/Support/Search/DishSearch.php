@@ -52,6 +52,8 @@ final class DishSearch
                     $dishes
                         ->select(['id', 'restaurant_id', 'menu_section_id', 'name_es', 'name_en', 'description_es', 'description_en', 'price', 'available', 'sold_out_until'])
                         ->indexable()
+                        // Un ingrediente esencial agotado hoy lo deja sin pedir (ADR 0033).
+                        ->withEssentialSoldOut()
                         ->with(['restaurant:id,slug,name', 'menuSection:id,name_es,name_en']);
                 })
                 ->get();
