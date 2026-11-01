@@ -400,3 +400,25 @@ test('un CSP_FRAME_ANCESTORS que no es una lista de orígenes detiene el arranqu
         unset($_SERVER['CSP_FRAME_ANCESTORS']);
     }
 })->throws(InvalidArgumentException::class, 'CSP_FRAME_ANCESTORS');
+
+describe('fotos de los platos (#113, ADR 0034)', function () {
+    test('con el disco public salen de la app: img-src no suma nada', function () {
+        config(['services.map.style_url' => null, 'services.map.routes_url' => '', 'media.disk' => 'public']);
+
+        expect(cspDirectives(cspPolicy($this->get('/')))['img-src'])->toBe(["'self'", 'data:', 'blob:']);
+    });
+
+    test('con un disco de otro host, img-src lo nombra (y nada más lo pide)', function () {
+        config([
+            'services.map.style_url' => null,
+            'services.map.routes_url' => '',
+            'media.disk' => 'media-cdn',
+            'filesystems.disks.media-cdn' => ['driver' => 'local', 'root' => storage_path('framework/testing/media-cdn'), 'url' => 'https://fotos.example.test/veni'],
+        ]);
+
+        $directives = cspDirectives(cspPolicy($this->get('/')));
+
+        expect($directives['img-src'])->toBe(["'self'", 'data:', 'blob:', 'https://fotos.example.test'])
+            ->and($directives['connect-src'])->toBe(["'self'"]);
+    });
+});

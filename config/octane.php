@@ -85,6 +85,9 @@ return [
     |   imagen se ve igual (img-src y los estilos que el navegador pone a su
     |   visor). Solo si el archivo existe: un 404 lo responde Laravel, con la
     |   política de la app.
+    | - public/storage/media: las fotos de los platos y promociones (#113,
+    |   ADR 0034). Cada versión lleva el hash de su contenido en el nombre:
+    |   una foto nueva es otra URL, así que se guardan un año sin revalidar.
     | - nosniff también para lo que no pasa por Laravel (assets, fuentes y lo
     |   que suban los dueños a storage); `?` lo pone solo si la respuesta no
     |   lo trae ya, para no repetirlo en las de Laravel (SetSecurityHeaders).
@@ -119,6 +122,12 @@ return [
                     file
                 }
                 header @veni_storage Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
+
+                @veni_media {
+                    path /storage/media/*
+                    file
+                }
+                header @veni_media Cache-Control "public, max-age=31536000, immutable"
 
                 header ?X-Content-Type-Options nosniff
                 CADDYFILE,
