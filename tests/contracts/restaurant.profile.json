@@ -49,6 +49,7 @@
                     "description": "Con arroz y aguacate.",
                     "price": 18500,
                     "sold_out_until": null,
+                    "photo": { "src": "/storage/media/dishes/0123456789abcdef0123-480.webp", "srcset": "/storage/media/dishes/0123456789abcdef0123-160.webp 160w, /storage/media/dishes/0123456789abcdef0123-480.webp 480w, /storage/media/dishes/0123456789abcdef0123-960.webp 960w" },
                     "ingredients": [
                         {
                             "name": "Cebolla (prueba)",
@@ -91,7 +92,7 @@
                         }
                     ]
                 },
-                { "name": "Bandeja de prueba", "description": null, "price": 22000, "sold_out_until": "2026-10-07", "ingredients": [], "groups": [] }
+                { "name": "Bandeja de prueba", "description": null, "price": 22000, "sold_out_until": "2026-10-07", "photo": null, "ingredients": [], "groups": [] }
             ]
         },
         {
@@ -102,6 +103,7 @@
                     "description": "En agua o en leche.",
                     "price": 4000,
                     "sold_out_until": null,
+                    "photo": null,
                     "ingredients": [],
                     "groups": [
                         {
@@ -118,5 +120,8 @@
                 }
             ]
         }
+    ],
+    "promotions": [
+        { "title": "Jugo gratis con el sancocho (prueba)", "ends_at": "2026-10-07T22:00:00-05:00", "image": { "src": "/storage/media/promotions/abcdefabcdefabcdef01-640.webp", "srcset": "/storage/media/promotions/abcdefabcdefabcdef01-320.webp 320w, /storage/media/promotions/abcdefabcdefabcdef01-640.webp 640w, /storage/media/promotions/abcdefabcdefabcdef01-1280.webp 1280w" } }
     ]
 }

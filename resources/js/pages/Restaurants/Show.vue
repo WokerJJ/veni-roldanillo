@@ -9,6 +9,7 @@ import RestaurantContact from '@/components/RestaurantContact.vue';
 import RestaurantDelivery from '@/components/RestaurantDelivery.vue';
 import RestaurantHours from '@/components/RestaurantHours.vue';
 import RestaurantMenu from '@/components/RestaurantMenu.vue';
+import RestaurantPromotions from '@/components/RestaurantPromotions.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import type { PageMeta } from '@/composables/useI18n';
 import { useI18n } from '@/composables/useI18n';
@@ -200,6 +201,8 @@ onBeforeUnmount(() => {
             </header>
 
             <RestaurantHours class="mt-8 border-t border-line pt-6" :hours="restaurant.hours" :special-hours="restaurant.special_hours" />
+
+            <RestaurantPromotions v-if="restaurant.promotions?.length" class="mt-8 border-t border-line pt-6" :promotions="restaurant.promotions" />
 
             <RestaurantMenu class="mt-8 border-t border-line pt-6" :sections="restaurant.menu" :slug="restaurant.slug" />
 

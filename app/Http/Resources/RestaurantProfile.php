@@ -11,6 +11,7 @@ use App\Models\Category;
 use App\Models\Dish;
 use App\Models\MenuSection;
 use App\Models\Option;
+use App\Models\Promotion;
 use App\Models\Restaurant;
 use App\Models\SpecialHour;
 use App\Support\BusinessDay;
@@ -36,7 +37,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * RestaurantController en una consulta por tabla. De cada plato y de cada
  * opción necesita `available`: con él decide si sale. De los ingredientes
  * (#112, ADR 0033), solo los agotados desde hoy, con su reemplazo y los
- * platos que los llevan (dishLinks).
+ * platos que los llevan (dishLinks). De las promociones, las vigentes
+ * (promotions), con image_path.
  *
  * @phpstan-import-type WeeklyHours from PresentsSchedule
  *
@@ -47,7 +49,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * @phpstan-type ProfileSubstitute array{name: string, price: int, sold_out_until: string|null}
  * @phpstan-type ProfileIngredient array{name: string, essential: bool, in_dish: bool, sold_out_until: string, substitute: ProfileSubstitute|null}
  * @phpstan-type ProfileOptionGroup array{name: string, kind: string, min: int, max: int, options: list<ProfileOption>}
- * @phpstan-type ProfileDish array{name: string, description: string|null, price: int, sold_out_until: string|null, ingredients: list<ProfileIngredient>, groups: list<ProfileOptionGroup>}
+ * @phpstan-type ProfileImage array{src: string, srcset: string}
+ * @phpstan-type ProfileDish array{name: string, description: string|null, price: int, sold_out_until: string|null, photo: ProfileImage|null, ingredients: list<ProfileIngredient>, groups: list<ProfileOptionGroup>}
+ * @phpstan-type ProfilePromotion array{title: string, ends_at: string, image: ProfileImage|null}
  * @phpstan-type ProfileSection array{name: string, dishes: list<ProfileDish>}
  * @phpstan-type Profile array{
  *     slug: string,
@@ -72,6 +76,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *     hours: list<WeeklyHours>,
  *     special_hours: list<ProfileSpecialHours>,
  *     menu: list<ProfileSection>,
+ *     promotions: list<ProfilePromotion>,
  * }
  */
 class RestaurantProfile extends JsonResource
@@ -143,6 +148,15 @@ class RestaurantProfile extends JsonResource
                 ])
                 ->all()),
             'menu' => $this->menu(),
+            // Las promociones vigentes, con su imagen 16:9 (#113): las carga
+            // RestaurantController ya filtradas por fecha.
+            'promotions' => array_values($restaurant->promotions
+                ->map(fn (Promotion $promotion): array => [
+                    'title' => (string) $promotion->translated('title', $this->locale),
+                    'ends_at' => $promotion->ends_at->timezone(BusinessDay::TIME_ZONE)->toIso8601String(),
+                    'image' => $promotion->publishedImage(),
+                ])
+                ->all()),
         ];
     }
 
@@ -205,6 +219,9 @@ class RestaurantProfile extends JsonResource
             // «abierto ahora»: la ficha puede quedar abierta de
             // un día para otro.
             'sold_out_until' => $dish->sold_out_until?->toDateString(),
+            // La foto 1:1 en tres anchos (#113, ADR 0034); null, el ícono.
+            // Solo las URLs: la clave de la columna no viaja.
+            'photo' => $dish->publishedImage(),
             'ingredients' => $ingredients,
             'groups' => $this->groups($dish, $positions),
         ];

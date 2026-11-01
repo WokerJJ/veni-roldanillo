@@ -359,3 +359,20 @@ describe('RestaurantMenu: ingredientes agotados hoy (ADR 0033)', () => {
         expect(dishes()[2]?.get('[data-ingredient-note]').text()).toBe('Today with Pepino instead of Tomate');
     });
 });
+
+describe('RestaurantMenu: fotos de los platos (#113)', () => {
+    it('cada plato lleva su miniatura del mismo tamaño; sin foto, el ícono', async () => {
+        const photo = { src: '/storage/media/dishes/0123456789abcdef0123-480.webp', srcset: '/storage/media/dishes/0123456789abcdef0123-160.webp 160w' };
+        const withPhoto: MenuSection[] = MENU.map((section, index) => ({
+            ...section,
+            dishes: section.dishes.map((dish, position) => (index === 0 && position === 0 ? { ...dish, photo } : dish)),
+        }));
+        const { dishes } = await mountMenu(withPhoto);
+
+        const kinds = dishes().map((dish) => dish.get('[data-photo]').attributes('data-photo'));
+        expect(kinds).toEqual(['image', 'placeholder', 'placeholder']);
+        expect(dishes().every((dish) => dish.get('[data-photo]').classes().includes('dish-photo-thumb'))).toBe(true);
+        // Junto al nombre y dentro del mismo botón: no se lee dos veces.
+        expect(dishes()[0]?.get('img').attributes('alt')).toBe('');
+    });
+});

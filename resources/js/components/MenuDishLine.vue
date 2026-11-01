@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import DishPhoto from '@/components/DishPhoto.vue';
 import { useI18n } from '@/composables/useI18n';
 import { formatPesos } from '@/i18n/intl';
 import type { MenuDish } from '@/restaurants/profile';
 
 /**
- * Lo que se ve de un plato en el menú: nombre, descripción, precio y, si
+ * Lo que se ve de un plato en el menú: la miniatura de su foto (o el ícono,
+ * #113), nombre, descripción, precio y, si
  * corresponde, «Agotado hoy» o «No disponible hoy» (con el ingrediente
  * esencial que falta, `without`) y los avisos de los ingredientes que hoy no
  * hay (`notes`, ADR 0033). RestaurantMenu lo pone dentro de un botón (si se
@@ -22,7 +24,8 @@ const { t, locale } = useI18n();
 </script>
 
 <template>
-    <span class="block min-w-0">
+    <DishPhoto :image="dish.photo" alt="" size="thumb" />
+    <span class="block min-w-0 flex-1">
         <span class="block font-semibold wrap-anywhere" :class="{ 'text-ink-muted': soldOut || unavailable }" data-name>{{ dish.name }}</span>
         <span v-if="dish.description" class="mt-0.5 block text-sm wrap-anywhere text-ink-muted" data-description>{{ dish.description }}</span>
         <span v-for="note in notes" :key="note" class="mt-0.5 block text-sm font-semibold wrap-anywhere" data-ingredient-note>{{ note }}</span>

@@ -43,7 +43,7 @@ class RestaurantController extends Controller
             abort(404);
         }
 
-        // Diez consultas más (doce si hay ingredientes agotados), tenga el
+        // Once consultas más (trece si hay ingredientes agotados), tenga el
         // menú tres platos o trescientos: una por tabla. Es lo que hace $restaurant->load(), con las categorías y
         // el horario cargados igual que en el mapa (ver Restaurant).
         Restaurant::query()
@@ -60,7 +60,7 @@ class RestaurantController extends Controller
                     $dishes
                         ->select([
                             'id', 'restaurant_id', 'menu_section_id', 'name_es', 'name_en',
-                            'description_es', 'description_en', 'price', 'available', 'sold_out_until', 'position',
+                            'description_es', 'description_en', 'price', 'photo_path', 'available', 'sold_out_until', 'position',
                         ])
                         ->where('available', true);
                 },
@@ -92,6 +92,16 @@ class RestaurantController extends Controller
                 },
                 'ingredients.dishLinks' => function (Relation $links): void {
                     $links->select(['id', 'dish_id', 'ingredient_id', 'essential']);
+                },
+                // Las promociones vigentes ahora, con su imagen (#113), de la
+                // que vence primero a la última.
+                'promotions' => function (Relation $promotions): void {
+                    $promotions
+                        ->select(['id', 'restaurant_id', 'title_es', 'title_en', 'starts_at', 'ends_at', 'image_path'])
+                        ->where('starts_at', '<=', now())
+                        ->where('ends_at', '>', now())
+                        ->orderBy('ends_at')
+                        ->orderBy('id');
                 },
                 // Las zonas de domicilio con su costo, por orden alfabético del
                 // barrio (lo ordena la base, que sabe de tildes), y sus nombres.

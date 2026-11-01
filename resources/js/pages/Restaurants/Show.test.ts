@@ -409,7 +409,7 @@ describe('Restaurants/Show', () => {
                 profile({ address: null, reference: null, phone: null, whatsapp: null, payment_methods: [], price_level: null }),
             );
 
-            expect(wrapper.findAll('h2').map((title) => title.text())).toEqual(['Horario', 'Menú', 'Domicilios']);
+            expect(wrapper.findAll('h2').map((title) => title.text())).toEqual(['Horario', 'Promociones', 'Menú', 'Domicilios']);
         });
     });
 
@@ -424,6 +424,7 @@ describe('Restaurants/Show', () => {
                 'H1 Restaurante de Prueba La Ceiba (ficticio)',
                 'H2 Horario',
                 'H3 Horarios especiales',
+                'H2 Promociones',
                 'H2 Menú',
                 'H3 Platos fuertes (prueba)',
                 'H3 Bebidas (prueba)',
@@ -553,5 +554,16 @@ describe('Restaurants/Show', () => {
 
             expect(wrapper.find('[data-hidden]').exists()).toBe(false);
         });
+    });
+});
+
+describe('Restaurants/Show: promociones (#113)', () => {
+    it('sin promociones vigentes (o de una ficha guardada antes) no hay sección', async () => {
+        for (const restaurant of [profile({ promotions: [] }), { ...profile(), promotions: undefined }]) {
+            const { wrapper } = await mountShow(restaurant);
+
+            expect(wrapper.findAll('h2').map((title) => title.text())).not.toContain('Promociones');
+            wrapper.unmount();
+        }
     });
 });
