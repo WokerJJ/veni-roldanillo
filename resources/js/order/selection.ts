@@ -154,6 +154,28 @@ export function isOrderable(dish: MenuDish, today: string): boolean {
     );
 }
 
+/** Por qué el plato hoy no se puede agregar (EVA-004). */
+export type UnavailableReason = { reason: 'sold_out' } | { reason: 'ingredient'; name: string } | { reason: 'options' };
+
+/**
+ * Por qué el plato hoy no se puede agregar, o `null` si se puede: está
+ * agotado, le falta un ingrediente esencial (cuál) o un grupo obligatorio se
+ * quedó sin opciones. Es lo mismo que isOrderable, con el motivo.
+ */
+export function unavailableReason(dish: MenuDish, today: string): UnavailableReason | null {
+    if (isSoldOut(dish, today)) {
+        return { reason: 'sold_out' };
+    }
+
+    const missing = blockingIngredient(dish, today);
+
+    if (missing !== null) {
+        return { reason: 'ingredient', name: missing };
+    }
+
+    return isOrderable(dish, today) ? null : { reason: 'options' };
+}
+
 /** Aceptar (true) o rechazar el reemplazo del ingrediente `index`. */
 export function setSubstitute(selection: DishSelection, index: number, accept: boolean): DishSelection {
     const declined = (selection.declined ?? []).filter((other) => other !== index);
@@ -243,7 +265,7 @@ function todaysChanges(dish: MenuDish, selection: DishSelection, today?: string)
     const swaps: Swap[] = [];
 
     for (const effect of today === undefined ? [] : ingredientEffects(dish, today)) {
-        if (effect.kind === 'substitute' && acceptsSubstitute(selection, effect.index)) {
+        if (effect.kind === 'substitute' && (effect.required || acceptsSubstitute(selection, effect.index))) {
             swaps.push({ name: effect.substitute, instead: effect.name, price: effect.price });
         } else if (effect.kind !== 'blocks') {
             missing.push(effect.name);

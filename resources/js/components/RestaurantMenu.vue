@@ -8,7 +8,7 @@ import { useNow } from '@/composables/useNow';
 import { formatPesos } from '@/i18n/intl';
 import { blockingIngredient, ingredientEffects } from '@/order/ingredients';
 import type { OrderItem } from '@/order/selection';
-import { isOrderable, isSoldOut, MAX_QUANTITY } from '@/order/selection';
+import { isOrderable, isSoldOut, MAX_QUANTITY, unavailableReason } from '@/order/selection';
 import { useOrder } from '@/order/useOrder';
 import { businessDay } from '@/restaurants/openStatus';
 import type { MenuDish, MenuSection } from '@/restaurants/profile';
@@ -163,6 +163,6 @@ const summary = computed(() => {
 
         <p role="status" class="sr-only" data-order-announcement>{{ announcement }}</p>
 
-        <DishPicker v-if="DishPicker && picking" :dish="picking" :today="today" :sold-out="!isOrderable(picking, today)" @add="add" @close="close" />
+        <DishPicker v-if="DishPicker && picking" :dish="picking" :today="today" :unavailable="unavailableReason(picking, today)" @add="add" @close="close" />
     </section>
 </template>

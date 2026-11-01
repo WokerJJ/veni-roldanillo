@@ -247,8 +247,10 @@ class Dish extends Model implements BelongsToRestaurant
     }
 
     /**
-     * Si le falta hoy un ingrediente esencial. Con withEssentialSoldOut() ya
-     * viene en la consulta (una sola para todos los platos); si no, pregunta.
+     * Si le falta hoy un ingrediente esencial sin reemplazo (EVA-003, ADR
+     * 0033): un esencial agotado con un reemplazo vigente se hace con el
+     * reemplazo. Con withEssentialSoldOut() ya viene en la consulta (una sola
+     * para todos los platos); si no, pregunta.
      */
     public function lacksEssentialIngredientToday(): bool
     {
@@ -256,15 +258,15 @@ class Dish extends Model implements BelongsToRestaurant
             return (bool) $this->getAttribute('essential_sold_out');
         }
 
-        return $this->ingredients()
-            ->wherePivot('essential', true)
-            ->where('ingredients.sold_out_until', '>=', BusinessDay::today()->toDateString())
-            ->exists();
+        $ingredients = $this->ingredients()->getQuery();
+        self::blockingToday($ingredients);
+
+        return $ingredients->exists();
     }
 
     /**
      * Agrega `essential_sold_out`: si al plato le falta hoy un ingrediente
-     * esencial (lo lee orderableToday sin una consulta por plato).
+     * esencial sin reemplazo (lo lee orderableToday sin una consulta por plato).
      *
      * @param  Builder<self>  $query
      */
@@ -272,10 +274,28 @@ class Dish extends Model implements BelongsToRestaurant
     protected function withEssentialSoldOut(Builder $query): void
     {
         $query->withExists(['ingredients as essential_sold_out' => function (Builder $ingredients): void {
-            $ingredients
-                ->where('dish_ingredient.essential', true)
-                ->where('ingredients.sold_out_until', '>=', BusinessDay::today()->toDateString());
+            /** @var Builder<Ingredient> $ingredients */
+            self::blockingToday($ingredients);
         }]);
+    }
+
+    /**
+     * Los ingredientes del plato que hoy lo dejan sin pedir: esenciales,
+     * agotados hoy y sin un reemplazo que hoy haya. Es la misma regla que
+     * aplica el dispositivo (resources/js/order/ingredients.ts).
+     *
+     * @param  Builder<Ingredient>  $ingredients
+     */
+    private static function blockingToday(Builder $ingredients): void
+    {
+        $today = BusinessDay::today()->toDateString();
+
+        $ingredients
+            ->where('dish_ingredient.essential', true)
+            ->where('ingredients.sold_out_until', '>=', $today)
+            ->whereDoesntHave('substitute', function (Builder $substitute) use ($today): void {
+                $substitute->where(fn (Builder $available) => $available->whereNull('sold_out_until')->orWhere('sold_out_until', '<', $today));
+            });
     }
 
     /** @return BelongsTo<Restaurant, $this> */

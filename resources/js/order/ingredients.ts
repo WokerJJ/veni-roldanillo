@@ -7,18 +7,25 @@ import type { MenuDish, MenuOption } from '@/restaurants/profile';
  * menú, así que un aviso se va solo a la medianoche aunque la ficha siga
  * abierta.
  *
- * - Esencial agotado: el plato no se puede pedir hoy («No disponible hoy · sin X»).
+ * - Esencial agotado con un reemplazo que hoy hay: «Hoy con Y en lugar de X»;
+ *   el plato sale con el reemplazo (suma el recargo), sin la opción de
+ *   pedirlo sin nada (EVA-003).
+ * - Esencial agotado sin reemplazo (o con el reemplazo también agotado): el
+ *   plato no se puede pedir hoy («No disponible hoy · sin X»).
  * - No esencial, sin reemplazo (o con el reemplazo también agotado): «Hoy sin X».
  * - No esencial con reemplazo: «Hoy con Y en lugar de X»; la persona lo
  *   acepta (suma el recargo) o lo pide sin nada.
  * - Una adición que es un ingrediente agotado no se puede elegir.
  */
 
-/** Lo que un ingrediente agotado le hace hoy a un plato. */
+/**
+ * Lo que un ingrediente agotado le hace hoy a un plato. Un reemplazo
+ * `required` es el de un esencial: va sí o sí, no se puede pedir sin nada.
+ */
 export type IngredientEffect =
     | { kind: 'blocks'; index: number; name: string }
     | { kind: 'without'; index: number; name: string }
-    | { kind: 'substitute'; index: number; name: string; substitute: string; price: number };
+    | { kind: 'substitute'; index: number; name: string; substitute: string; price: number; required: boolean };
 
 /** «Agotado hoy» vale hasta su fecha, incluida. */
 function outOn(until: string | null, today: string): boolean {
@@ -48,21 +55,33 @@ export function ingredientEffects(dish: MenuDish, today: string | undefined): In
             return [];
         }
 
-        if (ingredient.essential) {
-            return [{ kind: 'blocks', index, name: ingredient.name }];
-        }
-
         const substitute = ingredient.substitute;
 
         if (substitute !== null && !outOn(substitute.sold_out_until, today)) {
-            return [{ kind: 'substitute', index, name: ingredient.name, substitute: substitute.name, price: substitute.price }];
+            return [{ kind: 'substitute', index, name: ingredient.name, substitute: substitute.name, price: substitute.price, required: ingredient.essential }];
         }
 
-        return [{ kind: 'without', index, name: ingredient.name }];
+        return [{ kind: ingredient.essential ? 'blocks' : 'without', index, name: ingredient.name }];
     });
 }
 
-/** El primer ingrediente esencial que hoy no hay, o null: con uno, el plato no se puede pedir. */
+/** El primer ingrediente esencial que hoy no hay ni tiene reemplazo, o null: con uno, el plato no se puede pedir. */
 export function blockingIngredient(dish: MenuDish, today: string): string | null {
     return ingredientEffects(dish, today).find((effect) => effect.kind === 'blocks')?.name ?? null;
+}
+
+/**
+ * Si la opción `optionIndex` del grupo de quitar es un ingrediente que hoy
+ * va con reemplazo (EVA-005): esa decisión la toma el grupo del reemplazo,
+ * así que el selector no muestra el «Quitar X».
+ */
+export function isOptionSubstituted(dish: MenuDish, groupIndex: number, optionIndex: number, today: string | undefined): boolean {
+    const group = dish.groups[groupIndex];
+    const ingredient = group?.kind === 'removal' ? group.options[optionIndex]?.ingredient : undefined;
+
+    return (
+        ingredient !== undefined &&
+        ingredient !== null &&
+        ingredientEffects(dish, today).some((effect) => effect.kind === 'substitute' && effect.index === ingredient)
+    );
 }

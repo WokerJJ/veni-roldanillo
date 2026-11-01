@@ -4,8 +4,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useTemplate
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
 import { formatPesos } from '@/i18n/intl';
-import { ingredientEffects } from '@/order/ingredients';
-import type { GroupProblem, OrderItem } from '@/order/selection';
+import { ingredientEffects, isOptionSubstituted } from '@/order/ingredients';
+import type { GroupProblem, OrderItem, UnavailableReason } from '@/order/selection';
 import {
     acceptsSubstitute,
     clampQuantity,
@@ -37,15 +37,22 @@ import type { MenuDish, MenuOptionGroup } from '@/restaurants/profile';
  * queda centrado. Lo carga RestaurantMenu recién cuando se toca un plato:
  * no pesa en la ficha ni en el arranque.
  *
- * `soldOut` lo calcula el menú, con su reloj: si el plato se agota con el
- * selector abierto, «Agregar» ya no lo deja en el pedido y lo anuncia.
+ * `unavailable` lo calcula el menú, con su reloj (unavailableReason): si el
+ * plato se agota, se queda sin un ingrediente esencial o sin opciones con el
+ * selector abierto, «Agregar» ya no lo deja en el pedido y anuncia por qué.
  *
  * `today` (el día de Colombia del menú) trae los ingredientes agotados hoy
  * (ADR 0033): una adición agotada no se puede marcar, un «Quitar» de algo
  * que no hay queda marcado y fijo, y por cada reemplazo la persona elige
- * entre aceptarlo (suma su recargo) o pedir sin nada.
+ * entre aceptarlo (suma su recargo) o pedir sin nada; el de un esencial va
+ * sí o sí. El «Quitar» de un ingrediente con reemplazo no sale: lo decide el
+ * reemplazo.
  */
-const { dish, soldOut, today: day = null } = defineProps<{ dish: MenuDish; soldOut?: boolean; today?: string | null }>();
+const {
+    dish,
+    unavailable = null,
+    today: day = null,
+} = defineProps<{ dish: MenuDish; unavailable?: UnavailableReason | null; today?: string | null }>();
 /** El día del menú; sin día (null), el plato se arma sin mirar ingredientes. Función: sigue al prop. */
 function currentDay(): string | undefined {
     return day ?? undefined;
@@ -142,6 +149,23 @@ function onNote(event: Event): void {
     }
 }
 
+/** Un «Quitar» de algo que hoy va con reemplazo: no se muestra (lo decide el reemplazo). */
+function isSubstituted(groupIndex: number, optionIndex: number): boolean {
+    return isOptionSubstituted(dish, groupIndex, optionIndex, currentDay());
+}
+
+/** Lo que se anuncia si el plato ya no se puede agregar. */
+function unavailableText(reason: UnavailableReason): string {
+    switch (reason.reason) {
+        case 'sold_out':
+            return t('order.picker.sold_out');
+        case 'ingredient':
+            return t('order.picker.unavailable_ingredient', { name: reason.name });
+        case 'options':
+            return t('order.picker.unavailable');
+    }
+}
+
 function optionLabel(group: MenuOptionGroup, name: string): string {
     return group.kind === 'removal' ? t('order.picker.remove_option', { name }) : name;
 }
@@ -164,8 +188,8 @@ async function announce(text: string): Promise<void> {
 async function submit(event: Event): Promise<void> {
     event.preventDefault();
 
-    if (soldOut) {
-        await announce(t('order.picker.sold_out'));
+    if (unavailable !== null) {
+        await announce(unavailableText(unavailable));
 
         return;
     }
@@ -258,15 +282,17 @@ onBeforeUnmount(() => {
             <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
                 <fieldset v-for="effect in substitutes" :key="`swap-${effect.index}`" class="mt-4" :aria-describedby="`${id}-swap-hint-${effect.index}`" data-substitute>
                     <legend class="font-semibold">{{ t('order.picker.swap_legend', { name: effect.name }) }}</legend>
-                    <p :id="`${id}-swap-hint-${effect.index}`" class="text-sm text-ink-muted">{{ t('order.picker.swap_hint') }}</p>
+                    <p :id="`${id}-swap-hint-${effect.index}`" class="text-sm text-ink-muted">
+                        {{ effect.required ? t('order.picker.swap_required_hint') : t('order.picker.swap_hint') }}
+                    </p>
                     <ul class="mt-1 divide-y divide-line">
-                        <li v-for="accept in [true, false]" :key="String(accept)">
+                        <li v-for="accept in effect.required ? [true] : [true, false]" :key="String(accept)">
                             <label class="flex min-h-touch cursor-pointer items-center gap-3 py-1">
                                 <input
                                     type="radio"
                                     :name="`${id}-swap-${effect.index}`"
                                     class="dish-picker-check size-5 shrink-0"
-                                    :checked="acceptsSubstitute(selection, effect.index) === accept"
+                                    :checked="(effect.required || acceptsSubstitute(selection, effect.index)) === accept"
                                     :data-swap="accept ? 'accept' : 'decline'"
                                     @change="chooseSubstitute(effect.index, accept)"
                                 >
@@ -290,24 +316,26 @@ onBeforeUnmount(() => {
                     </p>
 
                     <ul class="mt-1 divide-y divide-line">
-                        <li v-for="(option, optionIndex) in group.options" :key="optionIndex">
-                            <label class="flex min-h-touch cursor-pointer items-center gap-3 py-1" :class="{ 'dish-picker-blocked': isBlocked(group, groupIndex, optionIndex) }">
-                                <input
-                                    :type="isSingleChoice(group) ? 'radio' : 'checkbox'"
-                                    :name="`${id}-group-${groupIndex}`"
-                                    class="dish-picker-check size-5 shrink-0"
-                                    :checked="isChosen(groupIndex, optionIndex)"
-                                    :disabled="isBlocked(group, groupIndex, optionIndex)"
-                                    data-option
-                                    @change="toggle(group, groupIndex, optionIndex)"
-                                >
-                                <span class="min-w-0 flex-1 wrap-anywhere">{{ optionLabel(group, option.name) }}</span>
-                                <span v-if="isLocked(groupIndex, optionIndex)" class="shrink-0 text-sm text-ink-muted" data-out-today>{{ t('order.picker.out_today') }}</span>
-                                <span v-else-if="group.kind === 'choice' && option.price > 0" class="shrink-0 text-sm tabular-nums text-ink-muted">
-                                    {{ t('order.picker.extra_price', { price: formatPesos(option.price, locale) }) }}
-                                </span>
-                            </label>
-                        </li>
+                        <template v-for="(option, optionIndex) in group.options" :key="optionIndex">
+                            <li v-if="!isSubstituted(groupIndex, optionIndex)">
+                                <label class="flex min-h-touch cursor-pointer items-center gap-3 py-1" :class="{ 'dish-picker-blocked': isBlocked(group, groupIndex, optionIndex) }">
+                                    <input
+                                        :type="isSingleChoice(group) ? 'radio' : 'checkbox'"
+                                        :name="`${id}-group-${groupIndex}`"
+                                        class="dish-picker-check size-5 shrink-0"
+                                        :checked="isChosen(groupIndex, optionIndex)"
+                                        :disabled="isBlocked(group, groupIndex, optionIndex)"
+                                        data-option
+                                        @change="toggle(group, groupIndex, optionIndex)"
+                                    >
+                                    <span class="min-w-0 flex-1 wrap-anywhere">{{ optionLabel(group, option.name) }}</span>
+                                    <span v-if="isLocked(groupIndex, optionIndex)" class="shrink-0 text-sm text-ink-muted" data-out-today>{{ t('order.picker.out_today') }}</span>
+                                    <span v-else-if="group.kind === 'choice' && option.price > 0" class="shrink-0 text-sm tabular-nums text-ink-muted">
+                                        {{ t('order.picker.extra_price', { price: formatPesos(option.price, locale) }) }}
+                                    </span>
+                                </label>
+                            </li>
+                        </template>
                     </ul>
                 </fieldset>
 

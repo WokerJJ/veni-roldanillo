@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { MenuDish, MenuIngredient } from '@/restaurants/profile';
 import { nth, present } from '@/testing/present';
 
-import { blockingIngredient, ingredientEffects, isIngredientOut, isOptionOut } from './ingredients';
+import { profile } from '@/testing/restaurants';
+
+import { blockingIngredient, ingredientEffects, isIngredientOut, isOptionOut, isOptionSubstituted } from './ingredients';
 import {
     acceptsSubstitute,
     addItem,
@@ -18,6 +20,7 @@ import {
     setSubstitute,
     toggleOption,
     toOrderItem,
+    unavailableReason,
     unitPrice,
 } from './selection';
 
@@ -124,7 +127,7 @@ describe('ingredientes agotados hoy', () => {
         const dish = bandeja([ingredient({ substitute: { name: 'Pepino', price: 500, sold_out_until: null } })]);
         const accepted = withProtein(dish);
 
-        expect(ingredientEffects(dish, TODAY)).toEqual([{ kind: 'substitute', index: 0, name: 'Tomate', substitute: 'Pepino', price: 500 }]);
+        expect(ingredientEffects(dish, TODAY)).toEqual([{ kind: 'substitute', index: 0, name: 'Tomate', substitute: 'Pepino', price: 500, required: false }]);
         expect(acceptsSubstitute(accepted, 0)).toBe(true);
         expect(unitPrice(dish, accepted, TODAY)).toBe(22500);
         expect(linePrice(dish, { ...accepted, quantity: 3 }, TODAY)).toBe(67500);
@@ -144,6 +147,70 @@ describe('ingredientes agotados hoy', () => {
         expect(unitPrice(dish, declined, TODAY)).toBe(22000);
         expect(toOrderItem(dish, declined, TODAY)?.missing).toEqual(['Tomate']);
         expect(acceptsSubstitute(setSubstitute(declined, 0, true), 0)).toBe(true);
+    });
+
+    it('esencial con un reemplazo vigente: el plato sale con el reemplazo, sin poder pedirlo sin nada (EVA-003)', () => {
+        const dish = bandeja([ingredient({ name: 'Res', essential: true, substitute: { name: 'Cerdo', price: 1000, sold_out_until: YESTERDAY } })]);
+        const selection = withProtein(dish);
+
+        expect(ingredientEffects(dish, TODAY)).toEqual([{ kind: 'substitute', index: 0, name: 'Res', substitute: 'Cerdo', price: 1000, required: true }]);
+        expect(blockingIngredient(dish, TODAY)).toBeNull();
+        expect(isOrderable(dish, TODAY)).toBe(true);
+        expect(unavailableReason(dish, TODAY)).toBeNull();
+
+        // Aunque una selección vieja lo traiga rechazado, va con el reemplazo.
+        const declined = setSubstitute(selection, 0, false);
+
+        for (const current of [selection, declined]) {
+            const item = toOrderItem(dish, current, TODAY);
+
+            expect(item?.swaps).toEqual([{ name: 'Cerdo', instead: 'Res', price: 1000 }]);
+            expect(item?.missing).toBeUndefined();
+            expect(item?.unitPrice).toBe(23000);
+        }
+    });
+
+    it('esencial con el reemplazo también agotado: el plato no se puede pedir (EVA-003)', () => {
+        const dish = bandeja([ingredient({ name: 'Res', essential: true, substitute: { name: 'Cerdo', price: 1000, sold_out_until: TODAY } })]);
+
+        expect(ingredientEffects(dish, TODAY)).toEqual([{ kind: 'blocks', index: 0, name: 'Res' }]);
+        expect(blockingIngredient(dish, TODAY)).toBe('Res');
+        expect(isOrderable(dish, TODAY)).toBe(false);
+        expect(unavailableReason(dish, TODAY)).toEqual({ reason: 'ingredient', name: 'Res' });
+    });
+
+    it('por qué no se puede pedir: agotado, un ingrediente o las opciones (EVA-004)', () => {
+        expect(unavailableReason(bandeja([]), TODAY)).toBeNull();
+        expect(unavailableReason({ ...bandeja([]), sold_out_until: TODAY }, TODAY)).toEqual({ reason: 'sold_out' });
+        expect(unavailableReason(bandeja([ingredient({ name: 'Fríjoles', essential: true })]), TODAY)).toEqual({ reason: 'ingredient', name: 'Fríjoles' });
+
+        const noProtein = bandeja([]);
+        noProtein.groups = noProtein.groups.map((group, index) => (index === 0 ? { ...group, options: [] } : group));
+
+        expect(unavailableReason(noProtein, TODAY)).toEqual({ reason: 'options' });
+    });
+
+    it('con reemplazo, el «Quitar» de ese ingrediente lo decide el reemplazo; sin reemplazo, no (EVA-005)', () => {
+        const swapped = bandeja([ingredient({ name: 'Cebolla', substitute: { name: 'Cebollín', price: 0, sold_out_until: null } })], { cebolla: 0 });
+        const without = bandeja([ingredient({ name: 'Cebolla' })], { cebolla: 0 });
+
+        expect(isOptionSubstituted(swapped, 2, 0, TODAY)).toBe(true);
+        expect(isOptionSubstituted(swapped, 2, 1, TODAY)).toBe(false);
+        expect(isOptionSubstituted(without, 2, 0, TODAY)).toBe(false);
+        expect(isOptionSubstituted(swapped, 2, 0, undefined)).toBe(false);
+    });
+
+    it('lee el contrato de la ficha: la cebolla agotada del sancocho va con cebollín y su «Quitar» la nombra (EVA-002)', () => {
+        const sancocho = present(nth(present(nth(profile().menu, 0)).dishes, 0));
+        const removal = sancocho.groups.findIndex((group) => group.kind === 'removal');
+
+        expect(ingredientEffects(sancocho, '2026-10-07')).toEqual([
+            { kind: 'substitute', index: 0, name: 'Cebolla (prueba)', substitute: 'Cebollín (prueba)', price: 500, required: false },
+        ]);
+        expect(present(nth(present(nth(sancocho.groups, removal)).options, 0)).ingredient).toBe(0);
+        expect(isOptionSubstituted(sancocho, removal, 0, '2026-10-07')).toBe(true);
+        // Al otro día ya hay: el plato no cambia.
+        expect(ingredientEffects(sancocho, '2026-10-08')).toEqual([]);
     });
 
     it('un reemplazo que también está agotado no se ofrece', () => {
