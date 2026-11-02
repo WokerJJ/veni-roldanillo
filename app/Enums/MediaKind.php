@@ -64,7 +64,7 @@ enum MediaKind: string
     public function widths(): array
     {
         return match ($this) {
-            self::Dish => [160, 480, 960],
+            self::Dish => [192, 480, 960],
             self::Promotion => [320, 640, 1280],
         };
     }

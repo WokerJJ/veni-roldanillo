@@ -15,7 +15,7 @@ enableAutoUnmount(afterEach);
 
 const PHOTO: ProfileImage = {
     src: '/storage/media/dishes/0123456789abcdef0123-480.webp',
-    srcset: '/storage/media/dishes/0123456789abcdef0123-160.webp 160w, /storage/media/dishes/0123456789abcdef0123-480.webp 480w, /storage/media/dishes/0123456789abcdef0123-960.webp 960w',
+    srcset: '/storage/media/dishes/0123456789abcdef0123-192.webp 192w, /storage/media/dishes/0123456789abcdef0123-480.webp 480w, /storage/media/dishes/0123456789abcdef0123-960.webp 960w',
 };
 
 async function receive(locale: 'es' | 'en' = 'es'): Promise<void> {

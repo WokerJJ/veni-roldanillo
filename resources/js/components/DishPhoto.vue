@@ -8,9 +8,9 @@ import type { ProfileImage } from '@/restaurants/profile';
  * (`large`, a lo ancho). Sin foto, el mismo cuadro con un ícono: el menú no
  * se mueve según quién subió foto y quién no.
  *
- * El servidor manda tres anchos (160, 480 y 960 px) en `srcset`; con `sizes`
- * el navegador pide solo el que le sirve (la miniatura, el de 160 en casi
- * cualquier pantalla). `width` y `height` reservan el lugar antes de que
+ * El servidor manda tres anchos (192, 480 y 960 px) en `srcset`; con `sizes`
+ * el navegador pide solo el que le sirve (la miniatura de 64 px, el de 192
+ * hasta en una pantalla de densidad 3). `width` y `height` reservan el lugar antes de que
  * llegue, `loading="lazy"` no la pide hasta que se acerca a la vista y
  * `decoding="async"` no frena el resto de la página.
  *

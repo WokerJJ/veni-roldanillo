@@ -362,7 +362,7 @@ describe('RestaurantMenu: ingredientes agotados hoy (ADR 0033)', () => {
 
 describe('RestaurantMenu: fotos de los platos (#113)', () => {
     it('cada plato lleva su miniatura del mismo tamaño; sin foto, el ícono', async () => {
-        const photo = { src: '/storage/media/dishes/0123456789abcdef0123-480.webp', srcset: '/storage/media/dishes/0123456789abcdef0123-160.webp 160w' };
+        const photo = { src: '/storage/media/dishes/0123456789abcdef0123-480.webp', srcset: '/storage/media/dishes/0123456789abcdef0123-192.webp 192w' };
         const withPhoto: MenuSection[] = MENU.map((section, index) => ({
             ...section,
             dishes: section.dishes.map((dish, position) => (index === 0 && position === 0 ? { ...dish, photo } : dish)),
