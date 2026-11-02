@@ -30,7 +30,8 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
  *   y sin marcarla no se guarda.
  *
  * El estado del campo es la clave de la imagen ya procesada (la vista previa
- * muestra su tamaño de tarjeta), una imagen recién subida o nada.
+ * muestra su tamaño de tarjeta), una imagen recién subida o nada. Lo que
+ * mostraba al abrir la página lo anota la página (rememberShownMedia).
  */
 final class MediaUpload
 {
@@ -73,9 +74,29 @@ final class MediaUpload
             ->live()
             // La clave no es un archivo del disco: no se revisa si existe.
             ->fetchFileInformation(false)
-            ->afterStateHydrated(function (FileUpload $component, ?Model $record) use ($kind): void {
+            ->afterStateHydrated(function (FileUpload $component, ?Model $record, Component $livewire) use ($kind): void {
                 $key = $record?->getAttribute($kind->column());
-                $component->rawState(MediaStore::isKey(is_string($key) ? $key : null, $kind) ? [(string) Str::uuid() => $key] : []);
+                $key = is_string($key) && MediaStore::isKey($key, $kind) ? $key : null;
+                $component->rawState($key !== null ? [(string) Str::uuid() => $key] : []);
+
+                // Lo que se ve al abrir: guardar con el campo vacío solo
+                // quita una imagen si había una (HandlesMediaUpload).
+                if ($livewire instanceof ReceivesMediaUploads) {
+                    $livewire->rememberShownMedia($key);
+                }
+            })
+            // Una foto subida que la cola todavía no publicó: la columna sigue
+            // con la anterior (o vacía) unos segundos.
+            ->helperText(function (?Model $record) use ($kind): ?string {
+                $id = $record?->getKey();
+
+                if (! is_int($id) || ! MediaStore::isProcessing($kind, $id)) {
+                    return null;
+                }
+
+                $text = __('panel.media.processing_field');
+
+                return is_string($text) ? $text : null;
             })
             ->getUploadedFileUsing(fn (string $file): ?array => MediaStore::isKey($file, $kind) ? [
                 'name' => basename($file).'.webp',

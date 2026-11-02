@@ -9,6 +9,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 /**
  * Dónde y con qué nombre quedan las imágenes (#113, ADR 0034).
@@ -90,19 +91,33 @@ final class MediaStore
      * Guarda las versiones y devuelve la clave nueva.
      *
      * @param  array<int, string>  $variants  WebP por ancho (ImageProcessor).
+     *
+     * @throws RuntimeException si el disco no guarda alguna (lleno, un S3 que
+     *                          responde que no): lo ya escrito se borra y la
+     *                          clave no se devuelve.
      */
     public static function store(MediaKind $kind, int $recordId, array $variants): string
     {
         // Los anchos van de menor a mayor: el último es el grande.
         $largest = (string) end($variants);
         $key = 'media/'.$kind->value.'/'.substr(hash('sha256', $recordId.':'.$largest), 0, 20);
+        $written = [];
 
         foreach ($variants as $width => $bytes) {
-            self::disk()->put(self::variantPath($key, $width), $bytes, [
+            $path = self::variantPath($key, $width);
+            $stored = self::disk()->put($path, $bytes, [
                 'visibility' => 'public',
                 'mimetype' => 'image/webp',
                 'CacheControl' => 'public, max-age=31536000, immutable',
             ]);
+
+            if ($stored === false) {
+                self::disk()->delete($written);
+
+                throw new RuntimeException("El disco de las imágenes no guardó la versión de {$width} px.");
+            }
+
+            $written[] = $path;
         }
 
         return $key;
@@ -119,7 +134,11 @@ final class MediaStore
         self::disk()->delete(array_map(fn (int $width): string => self::variantPath($key, $width), $kind->widths()));
     }
 
-    /** Guarda un original en el disco privado y devuelve su ruta ahí. */
+    /**
+     * Guarda un original en el disco privado y devuelve su ruta ahí.
+     *
+     * @throws RuntimeException si el disco no lo guarda.
+     */
     public static function keepPending(UploadedFile $file, string $mime): string
     {
         $extension = match ($mime) {
@@ -129,7 +148,12 @@ final class MediaStore
         };
 
         $path = self::PENDING_DIRECTORY.'/'.Str::uuid()->toString().'.'.$extension;
-        self::pendingDisk()->put($path, (string) file_get_contents($file->getRealPath()));
+
+        if (self::pendingDisk()->put($path, (string) file_get_contents($file->getRealPath())) === false) {
+            self::pendingDisk()->delete($path);
+
+            throw new RuntimeException('El disco privado no guardó el original.');
+        }
 
         return $path;
     }
@@ -155,6 +179,22 @@ final class MediaStore
 
     public static function isExpected(MediaKind $kind, int $recordId, string $pending): bool
     {
-        return Cache::get("media:{$kind->value}:{$recordId}") === $pending;
+        return self::expected($kind, $recordId) === $pending;
+    }
+
+    /** El último original enviado para ese registro, si se recuerda alguno. */
+    public static function expected(MediaKind $kind, int $recordId): ?string
+    {
+        $pending = Cache::get("media:{$kind->value}:{$recordId}");
+
+        return is_string($pending) ? $pending : null;
+    }
+
+    /** Si ese registro tiene un original esperando en la cola (el campo lo avisa). */
+    public static function isProcessing(MediaKind $kind, int $recordId): bool
+    {
+        $pending = self::expected($kind, $recordId);
+
+        return $pending !== null && self::pendingDisk()->exists($pending);
     }
 }

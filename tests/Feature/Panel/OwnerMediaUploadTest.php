@@ -13,6 +13,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\Support\SyntheticImage;
 
@@ -102,7 +103,7 @@ test('quitar la foto deja el plato sin foto y borra sus versiones', function () 
     $key = 'media/dishes/cccccccccccccccccccc';
     $dish->forceFill(['photo_path' => $key])->save();
 
-    foreach ([160, 480, 960] as $width) {
+    foreach ([192, 480, 960] as $width) {
         Storage::disk('public')->put(MediaStore::variantPath($key, $width), 'x');
     }
 
@@ -164,4 +165,88 @@ test('una promoción nueva con imagen la manda a la cola como 16:9', function ()
 
     $promotion = Promotion::query()->sole();
     Queue::assertPushed(ProcessUploadedImage::class, fn (ProcessUploadedImage $job): bool => $job->kind === MediaKind::Promotion && $job->recordId === $promotion->id);
+});
+
+describe('lo que mostraba el campo al abrirlo (BUG-013, AUD-017, AUD-018)', function () {
+    test('guardar el precio con una foto en cola no la cancela, y el campo dice que se está preparando', function () {
+        [, $dish] = ownerMediaDish();
+
+        Livewire::test(EditDish::class, ['record' => $dish->getRouteKey()])
+            ->fillForm(['image' => ownerMediaPng(), 'image_rights' => true])
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $pending = Storage::disk('local')->allFiles(MediaStore::PENDING_DIRECTORY)[0];
+
+        // La abre otra vez antes de que la cola termine: la columna sigue vacía.
+        Livewire::test(EditDish::class, ['record' => $dish->getRouteKey()])
+            ->assertSee(__('panel.media.processing_field'))
+            ->fillForm(['price' => 9000])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        expect(MediaStore::isExpected(MediaKind::Dish, $dish->id, $pending))->toBeTrue()
+            ->and($dish->refresh()->price)->toBe(9000);
+    });
+
+    test('con dos pestañas, la que se abrió antes de publicarse la foto no la borra al guardar', function () {
+        [, $dish] = ownerMediaDish();
+        $before = Livewire::test(EditDish::class, ['record' => $dish->getRouteKey()]);
+
+        // La cola publica la foto como lo hace ProcessUploadedImage: sin mover updated_at.
+        $key = 'media/dishes/ffffffffffffffffffff';
+        Dish::query()->whereKey($dish->id)->toBase()->update(['photo_path' => $key]);
+
+        foreach (MediaKind::Dish->widths() as $width) {
+            Storage::disk('public')->put(MediaStore::variantPath($key, $width), 'x');
+        }
+
+        $before->fillForm(['price' => 9000])->call('save')->assertHasNoFormErrors();
+
+        expect($dish->refresh()->photo_path)->toBe($key)
+            ->and(Storage::disk('public')->allFiles('media/dishes'))->toHaveCount(3);
+    });
+
+    test('quitarla borra la que está publicada al guardar, aunque la pestaña mostrara otra', function () {
+        [, $dish] = ownerMediaDish();
+        $dish->forceFill(['photo_path' => 'media/dishes/1111111111aaaaaaaaaa'])->save();
+        $page = Livewire::test(EditDish::class, ['record' => $dish->getRouteKey()]);
+
+        $newer = 'media/dishes/2222222222bbbbbbbbbb';
+        Dish::query()->whereKey($dish->id)->toBase()->update(['photo_path' => $newer]);
+
+        foreach (MediaKind::Dish->widths() as $width) {
+            Storage::disk('public')->put(MediaStore::variantPath($newer, $width), 'x');
+        }
+
+        $page->fillForm(['image' => null])->call('save')->assertHasNoFormErrors();
+
+        expect($dish->refresh()->photo_path)->toBeNull()
+            ->and(Storage::disk('public')->allFiles())->toBe([]);
+    });
+
+    test('el valor del campo al abrirlo no se puede cambiar desde el navegador', function () {
+        [, $dish] = ownerMediaDish();
+
+        Livewire::test(EditDish::class, ['record' => $dish->getRouteKey()])
+            ->set('shownMedia', 'media/dishes/ffffffffffffffffffff');
+    })->throws(CannotUpdateLockedPropertyException::class);
+});
+
+test('no se crea una promoción más si ya hay 10 vigentes o por venir (AUD-019)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+    actInPanel(panelMember($restaurant), $restaurant);
+    Promotion::factory()->for($restaurant)->count(Promotion::MAX_CURRENT)->create(['starts_at' => now()->subHour(), 'ends_at' => now()->addDay()]);
+    // Una vencida no cuenta.
+    Promotion::factory()->for($restaurant)->create(['starts_at' => now()->subDays(3), 'ends_at' => now()->subDays(2)]);
+
+    Livewire::test(CreatePromotion::class)
+        ->fillForm([
+            'title_es' => 'Una más (prueba)',
+            'starts_at' => now()->format('Y-m-d H:i'),
+            'ends_at' => now()->addDay()->format('Y-m-d H:i'),
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['ends_at']);
+
+    expect(Promotion::query()->count())->toBe(Promotion::MAX_CURRENT + 1);
 });
