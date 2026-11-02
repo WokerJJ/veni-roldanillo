@@ -37,6 +37,13 @@ test('un GIF es una imagen, pero no de los tipos que se aceptan', function () {
     expect(ImageInspector::inspect(imageInspectorFile($gif), MediaKind::Dish))->toBe(['ok' => false, 'error' => 'panel.media.errors.type']);
 });
 
+test('una WebP animada no pasa: GD publicaría solo el primer cuadro (BUG-015)', function () {
+    $animated = SyntheticImage::animatedWebpHeader(960, 960);
+
+    expect(getimagesizefromstring($animated)[2] ?? null)->toBe(IMAGETYPE_WEBP)
+        ->and(ImageInspector::inspect(imageInspectorFile($animated), MediaKind::Dish))->toBe(['ok' => false, 'error' => 'panel.media.errors.animated']);
+});
+
 test('rechaza por las dimensiones de la cabecera, sin abrir la imagen', function () {
     expect(ImageInspector::inspect(imageInspectorFile(SyntheticImage::pngHeaderOnly(9000, 600)), MediaKind::Dish)['error'] ?? null)->toBe('panel.media.errors.too_large')
         ->and(ImageInspector::inspect(imageInspectorFile(SyntheticImage::pngHeaderOnly(7000, 7000)), MediaKind::Dish)['error'] ?? null)->toBe('panel.media.errors.too_large')
@@ -58,6 +65,6 @@ test('rechaza lo que pesa más del tope', function () {
 });
 
 test('los tamaños de cada tipo mantienen su proporción', function () {
-    expect(array_map(fn (int $width): int => MediaKind::Dish->heightFor($width), MediaKind::Dish->widths()))->toBe([160, 480, 960])
+    expect(array_map(fn (int $width): int => MediaKind::Dish->heightFor($width), MediaKind::Dish->widths()))->toBe([192, 480, 960])
         ->and(array_map(fn (int $width): int => MediaKind::Promotion->heightFor($width), MediaKind::Promotion->widths()))->toBe([180, 360, 720]);
 });

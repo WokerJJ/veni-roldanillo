@@ -13,7 +13,8 @@ use RuntimeException;
  *
  * 1. Lo abre según el tipo que encontró ImageInspector.
  * 2. Si es un JPEG con orientación en el EXIF (las fotos del celular), lo
- *    gira: al volver a codificarlo ese dato se pierde.
+ *    gira o lo refleja (las ocho orientaciones): al volver a codificarlo ese
+ *    dato se pierde.
  * 3. Lo recorta al centro a la proporción del tipo. El panel ya manda el
  *    recorte que eligió el dueño; esto asegura la proporción aunque llegue
  *    otra cosa.
@@ -86,14 +87,23 @@ final class ImageProcessor
         $exif = @exif_read_data($path);
         $orientation = is_array($exif) && is_int($exif['Orientation'] ?? null) ? $exif['Orientation'] : 1;
 
+        // imagerotate gira en sentido antihorario. Las transpuestas (5 y 7)
+        // son un giro de 90° más el espejo horizontal.
         $rotated = match ($orientation) {
             3 => imagerotate($image, 180, 0),
-            6 => imagerotate($image, -90, 0),
-            8 => imagerotate($image, 90, 0),
+            5, 6 => imagerotate($image, -90, 0),
+            7, 8 => imagerotate($image, 90, 0),
             default => $image,
         };
+        $rotated = $rotated === false ? $image : $rotated;
 
-        return $rotated === false ? $image : $rotated;
+        match ($orientation) {
+            2, 5, 7 => imageflip($rotated, IMG_FLIP_HORIZONTAL),
+            4 => imageflip($rotated, IMG_FLIP_VERTICAL),
+            default => true,
+        };
+
+        return $rotated;
     }
 
     /** El recorte centrado más grande con la proporción del tipo. */

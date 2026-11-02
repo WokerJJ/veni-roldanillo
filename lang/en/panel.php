@@ -72,7 +72,11 @@ return [
         'rights' => 'I declare that I hold the rights to this image and authorize Vení to publish it on the page.',
         'rights_help' => 'It must be yours or the restaurant’s (or you must have permission from whoever made it). It is published without camera data or location.',
         'processing' => 'The image is being prepared: it will show on the page in a few seconds.',
+        'processing_field' => 'A new image is being prepared: in a few seconds it shows here and on the page.',
+        'failed' => 'We could not prepare your image',
+        'failed_body' => 'The page keeps the previous one. Try again with another JPEG, PNG or WebP.',
         'errors' => [
+            'animated' => 'Animated images are not accepted: upload a still photo.',
             'type' => 'The file is not a JPEG, PNG or WebP image.',
             'size' => 'The image is larger than :mb MB.',
             'too_large' => 'The image is too large (over 8000 px per side or 40 megapixels).',
@@ -137,8 +141,10 @@ return [
         'title' => 'Title',
         'title_es' => 'Title (Spanish)',
         'title_en' => 'Title (English, optional)',
+        'title_help' => 'If the image has text (a price, “2 for 1”), write it here too: it is what screen reader users hear.',
         'starts_at' => 'From',
         'ends_at' => 'Until',
+        'too_many' => 'You already have :max current or upcoming promotions: wait for one to end or change its dates.',
     ],
     'hours' => [
         'label' => 'Time slot',

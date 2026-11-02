@@ -11,6 +11,8 @@ namespace Tests\Support;
  *   ver hacia dónde quedó el recorte.
  * - jpegWithExif(): JPEG con GD y un bloque EXIF escrito a mano, con la
  *   orientación y un texto que no debe aparecer en lo que se publica.
+ * - jpegCornersWithExif(): lo mismo con una esquina de cada color.
+ * - animatedWebpHeader(): la cabecera de una WebP animada.
  */
 final class SyntheticImage
 {
@@ -42,6 +44,41 @@ final class SyntheticImage
         imagefilledrectangle($image, 0, 0, intdiv($width, 2) - 1, $height - 1, (int) imagecolorallocate($image, 200, 30, 30));
         imagefilledrectangle($image, intdiv($width, 2), 0, $width - 1, $height - 1, (int) imagecolorallocate($image, 30, 30, 200));
 
+        return self::withExif($image, $orientation, $marker);
+    }
+
+    /**
+     * Un JPEG cuadrado (con GD) con una esquina de cada color, para ver los
+     * espejos y las transposiciones: arriba a la izquierda rojo, arriba a la
+     * derecha verde, abajo a la izquierda azul y abajo a la derecha blanco.
+     */
+    public static function jpegCornersWithExif(int $side, int $orientation): string
+    {
+        $image = imagecreatetruecolor($side, $side);
+        $half = intdiv($side, 2);
+
+        foreach ([[0, 0, [200, 30, 30]], [$half, 0, [30, 200, 30]], [0, $half, [30, 30, 200]], [$half, $half, [230, 230, 230]]] as [$x, $y, $rgb]) {
+            imagefilledrectangle($image, $x, $y, $x + $half - 1, $y + $half - 1, (int) imagecolorallocate($image, ...$rgb));
+        }
+
+        return self::withExif($image, $orientation, 'esquinas');
+    }
+
+    /**
+     * La cabecera de una WebP animada (VP8X con la bandera de animación y un
+     * chunk ANIM): getimagesize lee el lienzo y finfo dice image/webp.
+     */
+    public static function animatedWebpHeader(int $width, int $height): string
+    {
+        $vp8x = 'VP8X'.pack('V', 10)."\x02\0\0\0".substr(pack('V', $width - 1), 0, 3).substr(pack('V', $height - 1), 0, 3);
+        $anim = 'ANIM'.pack('V', 6).pack('V', 0).pack('v', 0);
+        $body = 'WEBP'.$vp8x.$anim;
+
+        return 'RIFF'.pack('V', strlen($body)).$body;
+    }
+
+    private static function withExif(\GdImage $image, int $orientation, string $marker): string
+    {
         ob_start();
         imagejpeg($image, null, 90);
         $jpeg = (string) ob_get_clean();

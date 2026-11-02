@@ -49,6 +49,12 @@ final class ImageInspector
             return ['ok' => false, 'error' => 'panel.media.errors.type'];
         }
 
+        // Una WebP animada (VP8X con la bandera de animación): GD publicaría
+        // solo el primer cuadro, y abrirla entera no tiene por qué pasar.
+        if ($mime === 'image/webp' && self::isAnimatedWebp($path)) {
+            return ['ok' => false, 'error' => 'panel.media.errors.animated'];
+        }
+
         [$width, $height] = $info;
         $maxSide = config()->integer('media.max_side');
 
@@ -61,5 +67,13 @@ final class ImageInspector
         }
 
         return ['ok' => true, 'mime' => $mime, 'width' => $width, 'height' => $height];
+    }
+
+    /** RIFF….WEBPVP8X y, en el primer byte de banderas, el bit de animación (0x02). */
+    private static function isAnimatedWebp(string $path): bool
+    {
+        $header = (string) file_get_contents($path, length: 21);
+
+        return strlen($header) === 21 && substr($header, 12, 4) === 'VP8X' && (ord($header[20]) & 0x02) !== 0;
     }
 }

@@ -3,12 +3,16 @@
 namespace App\Jobs;
 
 use App\Enums\MediaKind;
+use App\Models\Contracts\BelongsToRestaurant;
 use App\Support\Media\ImageInspector;
 use App\Support\Media\ImageProcessor;
 use App\Support\Media\MediaStore;
+use Filament\Notifications\Notification;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -20,6 +24,12 @@ use Throwable;
  * versiones de la anterior y el original. Si mientras tanto el dueño subió
  * otra o la quitó (MediaStore::expect), este trabajo descarta lo suyo. Si el
  * registro ya no existe, también.
+ *
+ * Un original que no pasa la revisión o que GD no abre se descarta sin
+ * reintentos (volvería a fallar igual), y un trabajo que falla las tres
+ * veces (el disco, la base) borra el original: en los dos casos queda una
+ * línea en el registro (tipo, id y motivo, sin rutas) y una notificación en
+ * el panel a quienes lo administran (EVA-014).
  *
  * La columna se escribe con una consulta directa: no mueve updated_at (el
  * panel lo usa para avisar de ediciones en otra pestaña) ni reindexa en
@@ -49,42 +59,61 @@ class ProcessUploadedImage implements ShouldQueue
             return;
         }
 
-        // Una foto de 40 MP abierta en GD ocupa unos 160 MB: más que el
-        // límite por defecto de PHP. Solo en este proceso.
-        ini_set('memory_limit', '512M');
-
         $path = $pendingDisk->path($this->pending);
         $inspection = ImageInspector::inspect($path, $this->kind);
 
         if (! $inspection['ok']) {
-            $pendingDisk->delete($this->pending);
+            $this->discard('invalid');
 
             return;
         }
 
-        $key = MediaStore::store($this->kind, $this->recordId, ImageProcessor::variants($path, $inspection['mime'], $this->kind));
+        // Una foto de 40 MP abierta en GD ocupa unos 160 MB: más que el
+        // límite por defecto de PHP. Se sube solo mientras se procesa y se
+        // devuelve después: el worker atiende otros trabajos.
+        $memoryLimit = ini_get('memory_limit');
+        ini_set('memory_limit', '512M');
+
+        try {
+            $variants = ImageProcessor::variants($path, $inspection['mime'], $this->kind);
+        } catch (RuntimeException) {
+            $this->discard('unreadable');
+
+            return;
+        } finally {
+            ini_set('memory_limit', $memoryLimit);
+        }
+
+        // Si el disco no las guarda, lanza: el trabajo se reintenta y la
+        // columna y la imagen anterior siguen como estaban (BUG-014).
+        $key = MediaStore::store($this->kind, $this->recordId, $variants);
         $model = $this->kind->model();
         $column = $this->kind->column();
 
-        $previous = DB::transaction(function () use ($model, $column, $key): string|false|null {
+        /** @var array{applied: bool, current: ?string} $result */
+        $result = DB::transaction(function () use ($model, $column, $key): array {
             $row = $model::query()->whereKey($this->recordId)->lockForUpdate()->first([$column]);
+            $current = $row?->getAttribute($column);
+            $current = is_string($current) ? $current : null;
 
             // Se volvió a revisar con la fila bloqueada: otro original o un
             // «quitar foto» pudieron llegar mientras se procesaba.
             if ($row === null || ! MediaStore::isExpected($this->kind, $this->recordId, $this->pending)) {
-                return false;
+                return ['applied' => false, 'current' => $current];
             }
 
-            $previous = $row->getAttribute($column);
             $model::query()->whereKey($this->recordId)->toBase()->update([$column => $key]);
 
-            return is_string($previous) ? $previous : null;
+            return ['applied' => true, 'current' => $current];
         });
 
-        if ($previous === false) {
-            MediaStore::delete($key, $this->kind);
-        } elseif ($previous !== $key) {
-            MediaStore::delete($previous, $this->kind);
+        if (! $result['applied']) {
+            // La misma foto da la misma clave: si es la publicada, se queda (BUG-016).
+            if ($result['current'] !== $key) {
+                MediaStore::delete($key, $this->kind);
+            }
+        } elseif ($result['current'] !== $key) {
+            MediaStore::delete($result['current'], $this->kind);
         }
 
         // El recordatorio no se borra: si llegó otro original justo ahora, ya
@@ -96,5 +125,34 @@ class ProcessUploadedImage implements ShouldQueue
     public function failed(?Throwable $exception): void
     {
         MediaStore::pendingDisk()->delete($this->pending);
+        $this->report('failed');
+    }
+
+    /** Un original que no sirve: volvería a fallar igual, no se reintenta. */
+    private function discard(string $reason): void
+    {
+        MediaStore::pendingDisk()->delete($this->pending);
+        $this->report($reason);
+    }
+
+    private function report(string $reason): void
+    {
+        Log::info('No se pudo preparar una imagen subida.', ['kind' => $this->kind->value, 'id' => $this->recordId, 'reason' => $reason]);
+
+        $record = $this->kind->model()::query()->find($this->recordId);
+
+        if (! $record instanceof BelongsToRestaurant) {
+            return;
+        }
+
+        $members = $record->owningRestaurant()->members()->get();
+
+        if ($members->isNotEmpty()) {
+            Notification::make()
+                ->title(__('panel.media.failed'))
+                ->body(__('panel.media.failed_body'))
+                ->danger()
+                ->sendToDatabase($members);
+        }
     }
 }

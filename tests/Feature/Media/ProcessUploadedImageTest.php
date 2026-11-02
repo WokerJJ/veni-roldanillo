@@ -6,7 +6,12 @@ use App\Models\Dish;
 use App\Models\Promotion;
 use App\Support\Media\ImageProcessor;
 use App\Support\Media\MediaStore;
+use Illuminate\Database\Events\TransactionBeginning;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\Support\SyntheticImage;
@@ -53,7 +58,7 @@ test('un plato queda con tres WebP cuadradas y la clave en su columna; el origin
     expect(MediaStore::isKey($key, MediaKind::Dish))->toBeTrue()
         ->and(Storage::disk('local')->exists($pending))->toBeFalse();
 
-    foreach ([160, 480, 960] as $width) {
+    foreach ([192, 480, 960] as $width) {
         $bytes = (string) Storage::disk('public')->get(MediaStore::variantPath((string) $key, $width));
         $size = getimagesizefromstring($bytes);
 
@@ -127,7 +132,7 @@ test('al reemplazarla, se borran las versiones de la anterior', function () {
     $old = 'media/dishes/aaaaaaaaaaaaaaaaaaaa';
     $dish->forceFill(['photo_path' => $old])->save();
 
-    foreach ([160, 480, 960] as $width) {
+    foreach ([192, 480, 960] as $width) {
         Storage::disk('public')->put(MediaStore::variantPath($old, $width), 'vieja');
     }
 
@@ -180,7 +185,7 @@ test('borrar un plato borra sus versiones', function () {
     $key = 'media/dishes/bbbbbbbbbbbbbbbbbbbb';
     $dish->forceFill(['photo_path' => $key])->save();
 
-    foreach ([160, 480, 960] as $width) {
+    foreach ([192, 480, 960] as $width) {
         Storage::disk('public')->put(MediaStore::variantPath($key, $width), 'x');
     }
 
@@ -192,7 +197,7 @@ test('borrar un plato borra sus versiones', function () {
 test('la ficha publica solo claves válidas, como URLs del disco', function () {
     expect(MediaStore::published('media/dishes/0123456789abcdef0123', MediaKind::Dish))->toBe([
         'src' => '/storage/media/dishes/0123456789abcdef0123-480.webp',
-        'srcset' => '/storage/media/dishes/0123456789abcdef0123-160.webp 160w, /storage/media/dishes/0123456789abcdef0123-480.webp 480w, /storage/media/dishes/0123456789abcdef0123-960.webp 960w',
+        'srcset' => '/storage/media/dishes/0123456789abcdef0123-192.webp 192w, /storage/media/dishes/0123456789abcdef0123-480.webp 480w, /storage/media/dishes/0123456789abcdef0123-960.webp 960w',
     ])
         ->and(MediaStore::published('media-pending/x.png', MediaKind::Dish))->toBeNull()
         ->and(MediaStore::published('../../.env', MediaKind::Dish))->toBeNull()
@@ -210,3 +215,153 @@ test('con el disco en el mismo origen que la app, la URL va sin el origen', func
     Storage::forgetDisk('public-real');
     expect(MediaStore::url('media/dishes/0123456789abcdef0123', 160))->toBe('https://fotos.example.test/veni/media/dishes/0123456789abcdef0123-160.webp');
 });
+
+describe('cuando no se puede publicar (#113, BUG-014 a BUG-016)', function () use ($requiresGd) {
+    test('si el disco no guarda una versión, no se toca la columna, se borra lo escrito y la anterior sigue', function () {
+        $dish = Dish::factory()->create();
+        $old = 'media/dishes/aaaaaaaaaaaaaaaaaaaa';
+        $dish->forceFill(['photo_path' => $old])->save();
+        $fake = Storage::fake('public');
+        $fake->put(MediaStore::variantPath($old, 480), 'vieja');
+
+        // El segundo ancho no entra (disco lleno, un S3 que dice que no).
+        $calls = 0;
+        $disk = Mockery::mock($fake)->makePartial();
+        $disk->shouldReceive('put')->andReturnUsing(function (string $path, mixed $contents, mixed $options = []) use ($fake, &$calls): bool {
+            return ++$calls === 2 ? false : $fake->put($path, $contents, $options);
+        });
+        Storage::set('public', $disk);
+
+        $pending = processUploadedImagePending(SyntheticImage::png(960, 960));
+        MediaStore::expect(MediaKind::Dish, $dish->id, $pending);
+
+        expect(fn () => (new ProcessUploadedImage(MediaKind::Dish, $dish->id, $pending))->handle())->toThrow(RuntimeException::class);
+
+        expect($dish->refresh()->photo_path)->toBe($old)
+            ->and($fake->allFiles('media/dishes'))->toBe([MediaStore::variantPath($old, 480)])
+            // El original queda para el reintento.
+            ->and(Storage::disk('local')->exists($pending))->toBeTrue();
+    })->skip($requiresGd, 'Necesita GD con WebP.');
+
+    test('si el disco privado no guarda el original, falla en vez de devolver una ruta vacía', function () {
+        $fake = Storage::fake('local');
+        $disk = Mockery::mock($fake)->makePartial();
+        $disk->shouldReceive('put')->andReturn(false);
+        Storage::set('local', $disk);
+
+        $file = UploadedFile::fake()->createWithContent('plato.png', SyntheticImage::png(960, 960));
+
+        expect(fn () => MediaStore::keepPending($file, 'image/png'))->toThrow(RuntimeException::class)
+            ->and($fake->allFiles(MediaStore::PENDING_DIRECTORY))->toBe([]);
+    });
+
+    test('una imagen que no se puede abrir se descarta sin reintentos, queda en el registro y le avisa al dueño', function () {
+        $dish = Dish::factory()->create();
+        $owner = panelMember($dish->restaurant);
+        // La cabecera dice PNG de 960 × 960, pero no trae la imagen.
+        $pending = processUploadedImagePending(SyntheticImage::pngHeaderOnly(960, 960));
+        MediaStore::expect(MediaKind::Dish, $dish->id, $pending);
+        Log::spy();
+
+        (new ProcessUploadedImage(MediaKind::Dish, $dish->id, $pending))->handle();
+
+        expect($dish->refresh()->photo_path)->toBeNull()
+            ->and(Storage::disk('local')->exists($pending))->toBeFalse()
+            ->and($owner->notifications()->count())->toBe(1)
+            ->and($owner->notifications()->sole()->data['title'] ?? null)->toBe(__('panel.media.failed'));
+        Log::shouldHaveReceived('info')->withArgs(fn (string $message, array $context): bool => $context === ['kind' => 'dishes', 'id' => $dish->id, 'reason' => 'unreadable'])->once();
+    })->skip($requiresGd, 'Necesita GD con WebP.');
+
+    test('un original que no pasa la revisión también avisa, con su motivo', function () {
+        $dish = Dish::factory()->create();
+        $owner = panelMember($dish->restaurant);
+        $pending = processUploadedImagePending('no soy una imagen');
+        MediaStore::expect(MediaKind::Dish, $dish->id, $pending);
+        Log::spy();
+
+        (new ProcessUploadedImage(MediaKind::Dish, $dish->id, $pending))->handle();
+
+        expect($owner->notifications()->count())->toBe(1);
+        Log::shouldHaveReceived('info')->withArgs(fn (string $message, array $context): bool => $context === ['kind' => 'dishes', 'id' => $dish->id, 'reason' => 'invalid'])->once();
+    });
+
+    test('si falla las tres veces, borra el original, lo registra y avisa', function () {
+        $dish = Dish::factory()->create();
+        $owner = panelMember($dish->restaurant);
+        $pending = processUploadedImagePending(SyntheticImage::png(960, 960));
+        Log::spy();
+
+        (new ProcessUploadedImage(MediaKind::Dish, $dish->id, $pending))->failed(new RuntimeException('disco lleno'));
+
+        expect(Storage::disk('local')->exists($pending))->toBeFalse()
+            ->and($owner->notifications()->count())->toBe(1);
+        Log::shouldHaveReceived('info')->withArgs(fn (string $message, array $context): bool => $context === ['kind' => 'dishes', 'id' => $dish->id, 'reason' => 'failed'])->once();
+    });
+
+    test('un trabajo descartado no borra su clave si es la que ya está publicada', function () {
+        $dish = Dish::factory()->create();
+        $first = processUploadedImagePending(SyntheticImage::png(960, 960));
+        MediaStore::expect(MediaKind::Dish, $dish->id, $first);
+        (new ProcessUploadedImage(MediaKind::Dish, $dish->id, $first))->handle();
+        $key = (string) $dish->refresh()->photo_path;
+
+        // La misma foto otra vez da la misma clave. Pasa la primera revisión
+        // y, mientras se procesaba, el dueño subió otra: se descarta con la
+        // fila bloqueada.
+        $second = processUploadedImagePending(SyntheticImage::png(960, 960));
+        MediaStore::expect(MediaKind::Dish, $dish->id, $second);
+        Event::listen(TransactionBeginning::class, fn () => MediaStore::expect(MediaKind::Dish, $dish->id, 'media-pending/otro.png'));
+
+        (new ProcessUploadedImage(MediaKind::Dish, $dish->id, $second))->handle();
+
+        expect($dish->refresh()->photo_path)->toBe($key)
+            ->and(Storage::disk('public')->allFiles('media/dishes'))->toHaveCount(3);
+    })->skip($requiresGd, 'Necesita GD con WebP.');
+
+    test('el límite de memoria vuelve a ser el de antes', function () {
+        $dish = Dish::factory()->create();
+        $before = ini_get('memory_limit');
+        $pending = processUploadedImagePending(SyntheticImage::png(960, 960));
+        MediaStore::expect(MediaKind::Dish, $dish->id, $pending);
+
+        (new ProcessUploadedImage(MediaKind::Dish, $dish->id, $pending))->handle();
+
+        expect(ini_get('memory_limit'))->toBe($before);
+    })->skip($requiresGd, 'Necesita GD con WebP.');
+});
+
+test('aplica los espejos y las transposiciones del EXIF (2, 4, 5 y 7)', function (int $orientation, array $corners) {
+    $path = tempnam(sys_get_temp_dir(), 'veni-exif-');
+    file_put_contents($path, SyntheticImage::jpegCornersWithExif(960, $orientation));
+
+    $image = imagecreatefromstring(ImageProcessor::variants($path, 'image/jpeg', MediaKind::Dish)[480]);
+    /** @var GdImage $image */
+    $name = function (int $x, int $y) use ($image): string {
+        [$r, $g, $b] = processUploadedImageColor($image, $x, $y);
+
+        return match (true) {
+            $r > 150 && $g > 150 && $b > 150 => 'blanco',
+            $r > 150 => 'rojo',
+            $g > 150 => 'verde',
+            default => 'azul',
+        };
+    };
+
+    expect([$name(40, 40), $name(440, 40), $name(40, 440), $name(440, 440)])->toBe($corners);
+})->with([
+    'sin girar (1)' => [1, ['rojo', 'verde', 'azul', 'blanco']],
+    'espejo horizontal (2)' => [2, ['verde', 'rojo', 'blanco', 'azul']],
+    'espejo vertical (4)' => [4, ['azul', 'blanco', 'rojo', 'verde']],
+    'transpuesta (5)' => [5, ['rojo', 'azul', 'verde', 'blanco']],
+    'transversa (7)' => [7, ['blanco', 'verde', 'azul', 'rojo']],
+])->skip(fn (): bool => ! function_exists('imagewebp') || ! function_exists('exif_read_data'), 'Necesita GD con WebP y exif.');
+
+test('la base no acepta en las columnas otra cosa que una clave de su tipo (AUD-020)', function (string $model, string $column, string $value) {
+    $record = $model::factory()->create();
+
+    expect(fn () => $record->forceFill([$column => $value])->save())->toThrow(QueryException::class);
+})->with([
+    'una ruta en el plato' => [Dish::class, 'photo_path', '../../.env'],
+    'una clave de promoción en el plato' => [Dish::class, 'photo_path', 'media/promotions/0123456789abcdef0123'],
+    'un original en la promoción' => [Promotion::class, 'image_path', 'media-pending/11111111-1111-1111-1111-111111111111.png'],
+]);

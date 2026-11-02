@@ -74,7 +74,11 @@ return [
         'rights' => 'Declaro que tengo los derechos sobre esta imagen y autorizo a Vení a publicarla en la ficha.',
         'rights_help' => 'Que sea tuya o del restaurante (o que tengas permiso de quien la hizo). Se publica sin los datos de la cámara ni la ubicación.',
         'processing' => 'La imagen se está preparando: en unos segundos sale en la ficha.',
+        'processing_field' => 'Hay una imagen nueva preparándose: en unos segundos sale aquí y en la ficha.',
+        'failed' => 'No pudimos preparar tu foto',
+        'failed_body' => 'La ficha sigue con la anterior. Probá de nuevo con otra imagen JPEG, PNG o WebP.',
         'errors' => [
+            'animated' => 'No se aceptan imágenes animadas: subí una foto fija.',
             'type' => 'El archivo no es una imagen JPEG, PNG o WebP.',
             'size' => 'La imagen pesa más de :mb MB.',
             'too_large' => 'La imagen es demasiado grande (más de 8000 px de lado o de 40 megapíxeles).',
@@ -139,8 +143,10 @@ return [
         'title' => 'Título',
         'title_es' => 'Título (español)',
         'title_en' => 'Título (inglés, opcional)',
+        'title_help' => 'Si la imagen tiene texto (un precio, «2×1»), escribilo también aquí: es lo que escucha quien usa un lector de pantalla.',
         'starts_at' => 'Desde',
         'ends_at' => 'Hasta',
+        'too_many' => 'Ya tenés :max promociones vigentes o por venir: esperá a que termine una o cambiale las fechas.',
     ],
     'hours' => [
         'label' => 'Franja del horario',

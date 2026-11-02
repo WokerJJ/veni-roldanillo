@@ -30,6 +30,17 @@ test('el login del panel lleva el perfil «panel»: eval y atributos de estilo, 
         ->and($directives['frame-ancestors'])->toBe(["'none'"]);
 });
 
+test('el panel deja crear workers desde blob: (FilePond), y la ficha pública no (EVA-010)', function () {
+    // Sin public/hot: sin el servidor de Vite, que también los permite.
+    fakeViteManifest();
+
+    $panel = panelCspDirectives((string) $this->get('/panel/login')->assertOk()->headers->get('Content-Security-Policy'));
+    $public = panelCspDirectives((string) $this->get('/')->assertOk()->headers->get('Content-Security-Policy'));
+
+    expect($panel['worker-src'])->toBe(["'self'", 'blob:'])
+        ->and($public['worker-src'])->toBe(["'self'"]);
+});
+
 test('la política pública no cambia: sin eval ni atributos de estilo', function () {
     $this->withoutVite();
     $response = $this->get('/credits')->assertOk();
