@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.6.0...v0.7.0) (2026-11-02)
+
+
+### Funcionalidades
+
+* fotos de los platos e imágenes promocionales ([#113](https://github.com/WokerJJ/veni-roldanillo/issues/113)) ([#119](https://github.com/WokerJJ/veni-roldanillo/issues/119)) ([484d5f3](https://github.com/WokerJJ/veni-roldanillo/commit/484d5f38b9e17b2991536c842b2627e63354efa3))
+* ingredientes agotados hoy con reemplazo ([#112](https://github.com/WokerJJ/veni-roldanillo/issues/112)) ([#117](https://github.com/WokerJJ/veni-roldanillo/issues/117)) ([0373b96](https://github.com/WokerJJ/veni-roldanillo/commit/0373b963bc7dbf55a25df9b7c08337272f59df1f))
+
 ## [0.6.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.5.0...v0.6.0) (2026-10-31)
 
 
