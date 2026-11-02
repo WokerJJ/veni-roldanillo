@@ -132,6 +132,8 @@
     "restaurant.special_hours.title": "Special hours",
     "restaurant.menu.title": "Menu",
     "restaurant.menu.empty": "This restaurant hasn't added its menu yet.",
+    "restaurant.promotions.title": "Promotions",
+    "restaurant.promotions.until": "Until :date",
     "restaurant.menu.sold_out": "Sold out today",
     "restaurant.menu.unavailable": "Unavailable today",
     "restaurant.menu.unavailable_without": "Unavailable today · no :name",

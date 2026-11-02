@@ -109,6 +109,21 @@ export function runtimeCaching(env: Readonly<Record<string, string | undefined>>
             },
         },
         {
+            // Fotos de los platos y promociones (#113, ADR 0034). No van en el
+            // precache: son del contenido, no de la app, y cada restaurante
+            // suma las suyas. Solo las que ya se vieron, con tope: el hash del
+            // nombre hace que una guardada nunca quede vieja (una foto nueva es
+            // otra URL), y las 60 más recientes alcanzan para volver a una
+            // ficha con mala señal sin llenar el teléfono.
+            urlPattern: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith('/storage/media/') && url.pathname.endsWith('.webp'),
+            handler: 'CacheFirst',
+            options: {
+                cacheName: 'veni-media',
+                expiration: { maxEntries: 60, maxAgeSeconds: 30 * DAY, purgeOnQuotaError: true },
+                cacheableResponse: { statuses: [200] },
+            },
+        },
+        {
             // Sin hash en el nombre: se usa la guardada y se revalida detrás.
             urlPattern: ({ sameOrigin, url }) => sameOrigin && url.pathname.startsWith('/fonts/') && url.pathname.endsWith('.woff2'),
             handler: 'StaleWhileRevalidate',

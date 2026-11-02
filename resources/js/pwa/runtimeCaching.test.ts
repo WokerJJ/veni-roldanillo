@@ -237,6 +237,9 @@ describe('rutas del service worker', () => {
     it.each([
         ['un chunk del build', '/build/assets/Home-C0ffee12.js', 'CacheFirst', 'veni-assets'],
         ['una fuente', '/fonts/figtree-latin.woff2', 'StaleWhileRevalidate', 'veni-fonts'],
+        // Fotos de los platos (#113): con hash en el nombre, solo las ya vistas y con tope.
+        ['la foto de un plato', '/storage/media/dishes/0123456789abcdef0123-160.webp', 'CacheFirst', 'veni-media'],
+        ['la imagen de una promoción', '/storage/media/promotions/0123456789abcdef0123-640.webp', 'CacheFirst', 'veni-media'],
         // MapLibre: dos archivos de más de 500 kB entre los dos, en su propia caché.
         ['el motor del mapa', '/build/assets/engine-DSZWC3fb.js', 'CacheFirst', 'veni-map-engine'],
         ['lo que el motor comparte con su worker', '/build/assets/maplibre-gl-shared-BuIWY37F.js', 'CacheFirst', 'veni-map-engine'],
@@ -307,7 +310,7 @@ describe('rutas del service worker', () => {
 
         expect(routeFor(withoutMap, { url: `${MAP}/style/veni-claro-es.json` })).toBeUndefined();
         expect(routeFor(withoutMap, { url: `${MAP}/v0.2.0/style/veni-claro-es.json` })).toBeUndefined();
-        expect(withoutMap.map((route) => route.options?.cacheName)).toEqual([undefined, 'veni-map-engine', 'veni-assets', 'veni-fonts']);
+        expect(withoutMap.map((route) => route.options?.cacheName)).toEqual([undefined, 'veni-map-engine', 'veni-assets', 'veni-media', 'veni-fonts']);
     });
 
     it('el grafo de rutas guarda solo ese archivo: otro .json del mismo origen no entra en su caché', () => {

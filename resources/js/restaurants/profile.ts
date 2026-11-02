@@ -91,6 +91,25 @@ export interface MenuOptionGroup {
     options: MenuOption[];
 }
 
+/**
+ * Una imagen subida por el dueño (#113, ADR 0034): WebP en tres anchos, del
+ * mismo tamaño y proporción para todas (1:1 los platos, 16:9 las promociones).
+ */
+export interface ProfileImage {
+    /** El ancho de en medio, para un navegador sin srcset. */
+    src: string;
+    /** Los tres anchos, `url 160w, url 480w, …`. */
+    srcset: string;
+}
+
+/** Una promoción vigente, con su imagen 16:9. */
+export interface ProfilePromotion {
+    title: string;
+    /** Hasta cuándo vale (ISO-8601 con la zona de Colombia). */
+    ends_at: string;
+    image: ProfileImage | null;
+}
+
 export interface MenuDish {
     name: string;
     description: string | null;
@@ -102,6 +121,8 @@ export interface MenuDish {
      * dispositivo con el día de Colombia, como «abierto ahora».
      */
     sold_out_until: string | null;
+    /** La foto 1:1; null, el ícono. Opcional: una ficha guardada antes no la trae. */
+    photo?: ProfileImage | null;
     /** Ingredientes agotados que lo tocan (ADR 0033). Opcional: una ficha guardada antes no lo trae. */
     ingredients?: MenuIngredient[];
     /** Opciones, adiciones e ingredientes para quitar; vacía si el plato no tiene. */
@@ -154,4 +175,6 @@ export interface RestaurantProfile {
     special_hours: ProfileSpecialHours[];
     /** Secciones con platos, en el orden del restaurante. */
     menu: MenuSection[];
+    /** Las promociones vigentes (#113). Opcional: una ficha guardada antes no las trae. */
+    promotions?: ProfilePromotion[];
 }

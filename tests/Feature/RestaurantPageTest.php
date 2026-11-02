@@ -12,6 +12,7 @@ use App\Models\Neighborhood;
 use App\Models\OpeningHour;
 use App\Models\Option;
 use App\Models\OptionGroup;
+use App\Models\Promotion;
 use App\Models\Restaurant;
 use App\Models\SpecialHour;
 use App\Models\User;
@@ -19,6 +20,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -187,7 +189,7 @@ describe('lista blanca', function () {
             ->and(array_keys($profile))->toBe([
                 'slug', 'name', 'description', 'categories', 'fictitious', 'hidden', 'unverified', 'claimable', 'updated_on',
                 'owner_updated_on', 'delay_minutes', 'delay_until', 'price_level', 'address', 'reference', 'phone', 'whatsapp', 'payment_methods', 'delivery',
-                'hours', 'special_hours', 'menu',
+                'hours', 'special_hours', 'menu', 'promotions',
             ])
             ->and(array_keys($profile['categories'][0]))->toBe(['slug', 'name'])
             ->and(array_keys($profile['delivery']))->toBe(['available', 'notes', 'zones'])
@@ -195,7 +197,7 @@ describe('lista blanca', function () {
             ->and(array_keys($profile['hours'][0]))->toBe(['weekday', 'opens', 'closes'])
             ->and(array_keys($profile['special_hours'][0]))->toBe(['date', 'closed', 'opens', 'closes', 'note'])
             ->and(array_keys($profile['menu'][0]))->toBe(['name', 'dishes'])
-            ->and(array_keys($profile['menu'][0]['dishes'][0]))->toBe(['name', 'description', 'price', 'sold_out_until', 'ingredients', 'groups'])
+            ->and(array_keys($profile['menu'][0]['dishes'][0]))->toBe(['name', 'description', 'price', 'sold_out_until', 'photo', 'ingredients', 'groups'])
             ->and(array_keys($profile['menu'][0]['dishes'][0]['groups'][0]))->toBe(['name', 'kind', 'min', 'max', 'options'])
             ->and(array_keys($profile['menu'][0]['dishes'][0]['groups'][0]['options'][0]))->toBe(['name', 'price', 'ingredient']);
     });
@@ -240,7 +242,10 @@ describe('lista blanca', function () {
 
         $mains = MenuSection::factory()->for($restaurant)->create(['name_es' => 'Platos fuertes (prueba)', 'position' => 0]);
         $drinks = MenuSection::factory()->for($restaurant)->create(['name_es' => 'Bebidas (prueba)', 'position' => 1]);
-        $sancocho = Dish::factory()->for($mains)->create(['name_es' => 'Sancocho de prueba', 'description_es' => 'Con arroz y aguacate.', 'price' => 18500, 'position' => 0]);
+        // Las URLs de las imágenes salen del disco (#113): el falso las da
+        // relativas (/storage/…), sin depender de APP_URL.
+        Storage::fake('public');
+        $sancocho = Dish::factory()->for($mains)->create(['name_es' => 'Sancocho de prueba', 'description_es' => 'Con arroz y aguacate.', 'price' => 18500, 'position' => 0, 'photo_path' => 'media/dishes/0123456789abcdef0123']);
         Dish::factory()->for($mains)->create(['name_es' => 'Bandeja de prueba', 'description_es' => null, 'description_en' => null, 'price' => 22000, 'sold_out_until' => '2026-10-07', 'position' => 1]);
         $juice = Dish::factory()->for($drinks)->create(['name_es' => 'Jugo de prueba', 'description_es' => 'En agua o en leche.', 'price' => 4000, 'position' => 0]);
 
@@ -266,6 +271,11 @@ describe('lista blanca', function () {
         $preparation = OptionGroup::factory()->required()->for($juice)->create(['name_es' => 'Preparación (prueba)']);
         Option::factory()->for($preparation)->create(['name_es' => 'En agua (prueba)', 'price_delta' => 0, 'position' => 0]);
         Option::factory()->for($preparation)->create(['name_es' => 'En leche (prueba)', 'price_delta' => 500, 'position' => 1]);
+
+        // Vigente el 7 a las 12:30; la vencida y la que todavía no empieza no salen.
+        Promotion::factory()->for($restaurant)->create(['title_es' => 'Jugo gratis con el sancocho (prueba)', 'starts_at' => '2026-10-07 10:00:00', 'ends_at' => '2026-10-07 22:00:00', 'image_path' => 'media/promotions/abcdefabcdefabcdef01']);
+        Promotion::factory()->for($restaurant)->create(['title_es' => 'Vencida (prueba)', 'starts_at' => '2026-10-01 10:00:00', 'ends_at' => '2026-10-02 22:00:00']);
+        Promotion::factory()->for($restaurant)->create(['title_es' => 'Futura (prueba)', 'starts_at' => '2026-10-20 10:00:00', 'ends_at' => '2026-10-21 22:00:00']);
 
         // Miércoles 7: los horarios especiales del contrato caen en la ventana.
         $this->travelTo('2026-10-07 12:30:00');
@@ -442,12 +452,12 @@ describe('menú', function () {
 
         expect(restaurantPageProfile($this->get('/restaurants/la-ceiba'))['menu'])->toBe([
             ['name' => 'Platos fuertes (prueba)', 'dishes' => [
-                ['name' => 'Primero', 'description' => 'Descripción de ejemplo.', 'price' => 18500, 'sold_out_until' => null, 'ingredients' => [], 'groups' => []],
-                ['name' => 'Segundo', 'description' => 'Descripción de ejemplo.', 'price' => 22000, 'sold_out_until' => null, 'ingredients' => [], 'groups' => []],
+                ['name' => 'Primero', 'description' => 'Descripción de ejemplo.', 'price' => 18500, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'groups' => []],
+                ['name' => 'Segundo', 'description' => 'Descripción de ejemplo.', 'price' => 22000, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'groups' => []],
             ]],
             ['name' => 'Bebidas (prueba)', 'dishes' => [
-                ['name' => 'Jugo', 'description' => null, 'price' => 4000, 'sold_out_until' => null, 'ingredients' => [], 'groups' => []],
-                ['name' => 'Gaseosa', 'description' => null, 'price' => 3500, 'sold_out_until' => null, 'ingredients' => [], 'groups' => []],
+                ['name' => 'Jugo', 'description' => null, 'price' => 4000, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'groups' => []],
+                ['name' => 'Gaseosa', 'description' => null, 'price' => 3500, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'groups' => []],
             ]],
         ]);
     });
@@ -680,9 +690,10 @@ test('hace las mismas consultas con un menú corto que con uno largo', function 
 
     // El restaurante y una por tabla: categorías, horario semanal, horarios
     // especiales, secciones, platos, grupos de opciones, opciones, zonas de
-    // domicilio, sus barrios y los ingredientes agotados (ADR 0033).
-    expect($queries('corto'))->toBe(11)
-        ->and($queries('largo'))->toBe(11)
+    // domicilio, sus barrios, los ingredientes agotados (ADR 0033) y las
+    // promociones vigentes (#113).
+    expect($queries('corto'))->toBe(12)
+        ->and($queries('largo'))->toBe(12)
         ->and(restaurantPageProfile($this->get('/restaurants/largo'))['menu'])->toHaveCount(6);
 });
 
@@ -770,4 +781,17 @@ test('lleva las cabeceras de seguridad y la política de contenido pública', fu
         ->and((string) $response->headers->get('Content-Security-Policy'))->toContain("default-src 'self'")->toContain("frame-ancestors 'none'")
         // El HTML depende del idioma y de la sesión: ninguna caché compartida lo guarda.
         ->and((string) $response->headers->get('Cache-Control'))->not->toContain('public');
+});
+
+test('la ficha publica como máximo 10 promociones vigentes, las que vencen primero (AUD-019)', function () {
+    $restaurant = restaurantPageComplete();
+
+    foreach (range(1, 12) as $day) {
+        Promotion::factory()->for($restaurant)->create(['title_es' => "Promo {$day} (prueba)", 'starts_at' => now()->subHour(), 'ends_at' => now()->addDays($day)]);
+    }
+
+    $promotions = restaurantPageProfile($this->get('/restaurants/la-ceiba'))['promotions'];
+
+    expect($promotions)->toHaveCount(Promotion::MAX_CURRENT)
+        ->and($promotions[0]['title'])->toBe('Promo 1 (prueba)');
 });

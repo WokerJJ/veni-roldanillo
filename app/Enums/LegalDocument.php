@@ -24,9 +24,9 @@ enum LegalDocument: string
      * que aceptan los formularios de reclamo y retiro (ADR 0026), que guardan
      * este valor en `privacy_notice_version`.
      */
-    public const PRIVACY_VERSION = '0.4';
+    public const PRIVACY_VERSION = '0.5';
 
-    public const TERMS_VERSION = '0.2';
+    public const TERMS_VERSION = '0.3';
 
     public const REVIEWS_VERSION = '0.1';
 
@@ -43,8 +43,8 @@ enum LegalDocument: string
     public function effectiveDate(): CarbonImmutable
     {
         return CarbonImmutable::parse(match ($this) {
-            self::Privacy => '2026-10-31',
-            self::Terms => '2026-10-29',
+            self::Privacy => '2026-11-01',
+            self::Terms => '2026-11-01',
             self::Reviews => '2026-10-29',
         });
     }

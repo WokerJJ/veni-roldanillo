@@ -33,7 +33,9 @@ ARG GID=1000
 ENV TZ=America/Bogota \
     COMPOSER_HOME=/tmp/composer
 
-RUN install-php-extensions bcmath intl pcntl pdo_pgsql zip \
+# gd (con WebP, JPEG y PNG) y exif procesan las fotos que suben los dueños
+# (#113, ADR 0034): recorte, tamaños y orientación, sin servicios de pago.
+RUN install-php-extensions bcmath exif gd intl pcntl pdo_pgsql zip \
     && groupadd --gid "${GID}" app \
     && useradd --uid "${UID}" --gid app --create-home --shell /bin/bash app \
     # Caddy guarda certificados y configuración aquí: el usuario sin root debe poder escribir.

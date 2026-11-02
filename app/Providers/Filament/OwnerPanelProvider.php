@@ -73,6 +73,10 @@ class OwnerPanelProvider extends PanelProvider
      *   escribe en su HTML (colores, anchos). Los nonces no cubren atributos;
      *   los <style> siguen necesitando el nonce (las vistas de
      *   resources/views/vendor lo agregan donde Filament no lo pone).
+     * - worker-src blob:: el campo de las fotos (FilePond, #113) arma un
+     *   worker desde una URL blob para leer y achicar la imagen en el
+     *   navegador. Un blob lo crea un script de la página, que ya necesita
+     *   el nonce; la ficha pública sigue sin blob: en worker-src.
      *
      * El riesgo que queda: con eval, un atributo x-data o x-on que se colara
      * en el HTML se ejecutaría. Todo lo que escribe el panel pasa por el
@@ -82,7 +86,8 @@ class OwnerPanelProvider extends PanelProvider
     {
         return $policy
             ->with('script-src', "'unsafe-eval'")
-            ->with('style-src-attr', "'unsafe-inline'");
+            ->with('style-src-attr', "'unsafe-inline'")
+            ->with('worker-src', 'blob:');
     }
 
     public function panel(Panel $panel): Panel
@@ -94,6 +99,9 @@ class OwnerPanelProvider extends PanelProvider
             ->login(Login::class)
             ->profile(EditProfile::class)
             ->databaseTransactions()
+            // Avisos que deja la cola, como «no pudimos preparar tu foto» (#113).
+            ->databaseNotifications()
+            ->databaseNotificationsPolling('60s')
             ->brandName('Vení · Panel')
             ->favicon(asset('favicon.ico'))
             ->defaultAvatarProvider(InitialsAvatarProvider::class)

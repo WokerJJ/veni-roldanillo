@@ -6,6 +6,7 @@ use App\Support\ContentSecurityPolicy;
 use App\Support\ContentSecurityPolicyProfiles;
 use App\Support\FrameAncestors;
 use App\Support\MapOrigin;
+use App\Support\Media\MediaOrigin;
 use App\Support\Origin;
 use Closure;
 use Illuminate\Http\Request;
@@ -75,13 +76,17 @@ class SetContentSecurityPolicy
 
     private function publicPolicy(string $nonce, bool $reportOnly): ContentSecurityPolicy
     {
-        return new ContentSecurityPolicy(
+        $policy = new ContentSecurityPolicy(
             nonce: $nonce,
             mapOrigins: MapOrigin::configured(),
             devServer: $this->devServer(),
             reportOnly: $reportOnly,
             frameAncestors: FrameAncestors::configured(),
         );
+        // Las fotos de los platos, si vienen de otro host (MEDIA_DISK, #113).
+        $media = MediaOrigin::configured();
+
+        return $media === [] ? $policy : $policy->with('img-src', ...$media);
     }
 
     /**
