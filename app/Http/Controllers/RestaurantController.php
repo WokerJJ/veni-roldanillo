@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\Locale;
 use App\Http\Resources\RestaurantProfile;
 use App\Models\Neighborhood;
+use App\Models\Promotion;
 use App\Models\Restaurant;
 use App\Support\BusinessDay;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -94,14 +95,17 @@ class RestaurantController extends Controller
                     $links->select(['id', 'dish_id', 'ingredient_id', 'essential']);
                 },
                 // Las promociones vigentes ahora, con su imagen (#113), de la
-                // que vence primero a la última.
+                // que vence primero a la última, y como mucho
+                // Promotion::MAX_CURRENT (AUD-019; el límite es por
+                // restaurante aunque la carga sea de varios).
                 'promotions' => function (Relation $promotions): void {
                     $promotions
                         ->select(['id', 'restaurant_id', 'title_es', 'title_en', 'starts_at', 'ends_at', 'image_path'])
                         ->where('starts_at', '<=', now())
                         ->where('ends_at', '>', now())
                         ->orderBy('ends_at')
-                        ->orderBy('id');
+                        ->orderBy('id')
+                        ->limit(Promotion::MAX_CURRENT);
                 },
                 // Las zonas de domicilio con su costo, por orden alfabético del
                 // barrio (lo ordena la base, que sabe de tildes), y sus nombres.

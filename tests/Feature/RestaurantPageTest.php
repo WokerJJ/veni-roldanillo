@@ -782,3 +782,16 @@ test('lleva las cabeceras de seguridad y la política de contenido pública', fu
         // El HTML depende del idioma y de la sesión: ninguna caché compartida lo guarda.
         ->and((string) $response->headers->get('Cache-Control'))->not->toContain('public');
 });
+
+test('la ficha publica como máximo 10 promociones vigentes, las que vencen primero (AUD-019)', function () {
+    $restaurant = restaurantPageComplete();
+
+    foreach (range(1, 12) as $day) {
+        Promotion::factory()->for($restaurant)->create(['title_es' => "Promo {$day} (prueba)", 'starts_at' => now()->subHour(), 'ends_at' => now()->addDays($day)]);
+    }
+
+    $promotions = restaurantPageProfile($this->get('/restaurants/la-ceiba'))['promotions'];
+
+    expect($promotions)->toHaveCount(Promotion::MAX_CURRENT)
+        ->and($promotions[0]['title'])->toBe('Promo 1 (prueba)');
+});

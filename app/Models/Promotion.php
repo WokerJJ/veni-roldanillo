@@ -30,6 +30,12 @@ class Promotion extends Model implements BelongsToRestaurant
     /** @use HasFactory<PromotionFactory> */
     use HasFactory, HasMediaImage, HasTranslatableFields, OwnedByRestaurant;
 
+    /**
+     * Cuántas promociones vigentes publica la ficha, y cuántas vigentes o por
+     * venir deja tener el panel (AUD-019): la ficha no crece sin tope.
+     */
+    public const int MAX_CURRENT = 10;
+
     /** La imagen de la promoción, 16:9 (#113): image_path guarda su clave. */
     public static function mediaKind(): MediaKind
     {
