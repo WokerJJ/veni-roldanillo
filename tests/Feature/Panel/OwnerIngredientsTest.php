@@ -228,7 +228,7 @@ test('reordenar los ingredientes del plato guarda el orden, y la ficha los muest
     expect($dish->dishIngredients()->pluck('ingredient_id')->all())->toBe([$ajo->id, $arroz->id, $tomate->id])
         ->and($dish->ingredients()->pluck('ingredients.id')->all())->toBe([$ajo->id, $arroz->id, $tomate->id]);
 
-    $menu = $this->get("/restaurants/{$restaurant->slug}")->assertOk()->inertiaProps('restaurant.menu');
+    $menu = $this->withoutVite()->get("/restaurants/{$restaurant->slug}")->assertOk()->inertiaProps('restaurant.menu');
 
     expect(array_column($menu[0]['dishes'][0]['contains'], 'name'))->toBe(['Ajo', 'Arroz', 'Tomate'])
         // Lo vuelve a abrir en el mismo orden.
