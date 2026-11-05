@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { computed, onMounted, shallowRef, useId, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onMounted, shallowRef, useId, useTemplateRef, watch } from 'vue';
 
 import DishResults from '@/components/DishResults.vue';
 import Icon from '@/components/Icon.vue';
@@ -52,16 +52,34 @@ import { formatDistance } from '@/routing/directions';
  * final, «Guardado en este teléfono», que abre SavedOnDevice.vue (baja con
  * import() al tocarlo) para editar y borrar direcciones y favoritos.
  *
- * Al abrirse toma el foco en el título (o en «Almuerzos de hoy», con
+ * Con `autofocus`, al abrirse toma el foco en el título (o en «Almuerzos de hoy», con
  * `start`); quien la muestra la cierra con
  * `close` (el botón o Escape) y, al volver de un resumen, devuelve el foco al
  * botón de ese restaurante con `focusItem`.
+ *
+ * En el panel del celular la lista se abre y se cierra: lleva su botón de
+ * cerrar (`closable`) y toma el foco al montarse (`autofocus`). En la barra
+ * lateral de computador (ADR 0037) va siempre a la vista: sin cerrar, sin
+ * tomar el foco y con el buscador, los filtros y «Sugerime algo»
+ * fijos arriba (`pinnedFinder`): solo se desplaza lo de abajo. Como no se
+ * cierra, el orden no se fija: se pone al día cuando cambia quién está
+ * abierto o las distancias. El elegido (`selected`, desde la lista o desde el
+ * mapa) queda marcado con `aria-current` y una barra a la izquierda (no solo
+ * el fondo: WCAG 1.4.11), se desplaza a la vista y lleva debajo lo que la
+ * página ponga en el slot `selected` (su resumen, con `inRow`: la fila de
+ * arriba ya dice su nombre y su estado). Si el elegido no está entre las
+ * filas (llegó desde «Platos» o la búsqueda lo dejó afuera), el resumen va
+ * arriba de la lista y es ese el que se lleva a la vista.
  */
 const {
     restaurants: all,
     filters: given = null,
     start = 'heading',
     distances = null,
+    closable,
+    autofocus,
+    pinnedFinder,
+    selected = null,
 } = defineProps<{
     /** Todos los del mapa. */
     restaurants: readonly Restaurant[];
@@ -71,7 +89,17 @@ const {
     start?: 'heading' | 'lunches';
     /** Metros hasta cada restaurante, por slug, o null sin ubicación. */
     distances?: Readonly<Record<string, number>> | null;
+    /** Con su botón de cerrar (`close`); sin él, el orden sigue a quién está abierto y a las distancias. */
+    closable?: boolean;
+    /** Toma el foco al montarse (en el título o en «Almuerzos de hoy»). */
+    autofocus?: boolean;
+    /** El buscador, los filtros y «Sugerime algo» quedan fijos arriba: solo se desplaza lo de abajo. */
+    pinnedFinder?: boolean;
+    /** El slug del elegido, marcado en la lista, con su resumen (el slot `selected`) debajo. */
+    selected?: string | null;
 }>();
+
+defineSlots<{ selected?: (props: { restaurant: Restaurant; inRow: boolean }) => unknown }>();
 
 const emit = defineEmits<{
     select: [slug: string];
@@ -116,19 +144,18 @@ function ranking(): string[] {
     return [...details.value].sort((a, b) => Number(b.open) - Number(a.open) || a.meters - b.meters).map(({ restaurant }) => restaurant.slug);
 }
 
-/** Los slugs en el orden en que se muestran: fijo mientras la lista está abierta. */
+/** Los slugs en el orden en que se muestran: fijo mientras la lista está abierta (salvo la que no se cierra). */
 const order = shallowRef(ranking());
 let rankedByDistance = distances !== null;
+/** Quiénes están abiertos ahora: el orden de la que no se cierra cambia con esto, no con cada minuto. */
+const openNow = computed(() => details.value.flatMap(({ restaurant, open }) => (open ? [restaurant.slug] : [])).join());
 
-watch(
-    () => distances,
-    (current) => {
-        if (current !== null && !rankedByDistance) {
-            rankedByDistance = true;
-            order.value = ranking();
-        }
-    },
-);
+watch([openNow, () => distances], ([, current]) => {
+    if (!closable || (current !== null && !rankedByDistance)) {
+        rankedByDistance ||= current !== null;
+        order.value = ranking();
+    }
+});
 
 // Solo los que cumplen los filtros. Uno que no estaba al fijar el orden (la
 // lista se volvió a pedir) va al final.
@@ -180,6 +207,9 @@ const {
     },
 );
 
+/** Lo que se desplaza dentro de la lista. Posicionado: lo que es solo para el lector (`sr-only`, absoluto) se desplaza con él y no agranda la página. */
+const SCROLL = 'relative -mx-2 min-h-0 overflow-y-auto overscroll-contain px-2';
+
 const allSamples = computed(() => all.length > 0 && all.every(({ fictitious }) => fictitious));
 const categories = computed(() => categoriesOf(all, locale.value));
 
@@ -191,9 +221,28 @@ function suggest(): void {
     }
 }
 
+/** El elegido, si no está entre las filas: su resumen va arriba de la lista. */
+const selectedOutside = computed(() => (selected === null || rows.value.some(({ restaurant }) => restaurant.slug === selected) ? null : (all.find(({ slug }) => slug === selected) ?? null)));
+
+const outside = useTemplateRef<HTMLElement>('outside');
+
+// Otro elegido (desde la lista o desde el mapa), o el mismo que cambia de
+// lugar (la búsqueda lo sacó de las filas o lo devolvió): su resumen se
+// desplaza a la vista, debajo de su fila o arriba de la lista.
+watch(
+    () => [selected, selectedOutside.value] as const,
+    async ([slug]) => {
+        await nextTick();
+
+        if (slug !== null) {
+            (list.value?.querySelector(`li[data-row="${slug}"]`) ?? outside.value)?.scrollIntoView({ block: 'nearest' });
+        }
+    },
+);
+
 onMounted(() => {
     // Con «Almuerzos de hoy», el foco lo toma esa sección (TodaysLunches).
-    if (start === 'heading') {
+    if (start === 'heading' && autofocus) {
         heading.value?.focus({ preventScroll: true });
     }
 });
@@ -215,6 +264,7 @@ defineExpose({ focusItem });
                 {{ t('restaurants.list_title') }}
             </h2>
             <button
+                v-if="closable"
                 type="button"
                 class="-mt-1 -mr-2 inline-flex size-touch shrink-0 items-center justify-center rounded-full hover:bg-surface"
                 :aria-label="t('restaurants.close_list')"
@@ -224,12 +274,17 @@ defineExpose({ focusItem });
             </button>
         </div>
 
-        <!-- Todo lo de abajo del título se desplaza junto: con poco alto, el buscador no deja la lista sin lugar. -->
-        <div class="-mx-2 min-h-0 overflow-y-auto overscroll-contain px-2">
+        <!--
+            Todo lo de abajo del título se desplaza junto: con poco alto, el
+            buscador no deja la lista sin lugar. Con `pinnedFinder`, el
+            buscador y «Sugerime algo» quedan fijos y se desplaza lo de abajo.
+        -->
+        <div :class="pinnedFinder ? 'contents' : SCROLL">
             <RestaurantFilters :filters="filters" :categories="categories" @update:filters="emit('update:filters', $event)" />
 
             <!-- Con tres letras o más, los platos primero: si se buscó «sancocho», es lo que se quería ver. -->
             <DishResults
+                v-if="!pinnedFinder"
                 :query="filters.query"
                 :allowed="allowedForDishes"
                 @select="$emit('select', $event)"
@@ -251,78 +306,95 @@ defineExpose({ focusItem });
                 </button>
             </div>
 
-            <button
-                v-if="filtered && matching.length === 0"
-                type="button"
-                class="mt-2 inline-flex min-h-touch items-center rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco transition-colors hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
-                data-empty-clear
-                @click="emit('update:filters', { ...NO_FILTERS })"
-            >
-                {{ t('finder.clear') }}
-            </button>
+            <div :class="pinnedFinder ? `${SCROLL} mt-2 flex-1` : 'contents'" data-list-scroll>
+                <DishResults
+                    v-if="pinnedFinder"
+                    :query="filters.query"
+                    :allowed="allowedForDishes"
+                    @select="$emit('select', $event)"
+                    @clear-filters="emit('update:filters', { ...NO_FILTERS, query: filters.query })"
+                />
 
-            <TodaysLunches class="mt-2" :lunches="lunches" :filtered="filtered" :focus="start === 'lunches'" />
+                <button
+                    v-if="filtered && matching.length === 0"
+                    type="button"
+                    class="mt-2 inline-flex min-h-touch items-center rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco transition-colors hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                    data-empty-clear
+                    @click="emit('update:filters', { ...NO_FILTERS })"
+                >
+                    {{ t('finder.clear') }}
+                </button>
 
-            <!-- Con filtros no: lo que se ve abajo es lo que se buscó. -->
-            <section v-if="!filtered && favoriteRows.length > 0" class="mt-2" :aria-labelledby="`${headingId}-favorites`" data-favorites>
-                <h3 :id="`${headingId}-favorites`" class="font-semibold">{{ t('favorites.title') }}</h3>
-                <ul class="-mx-2">
-                    <li v-for="{ restaurant, status } in favoriteRows" :key="restaurant.slug">
+                <TodaysLunches class="mt-2" :lunches="lunches" :filtered="filtered" :focus="start === 'lunches'" />
+
+                <!-- Con filtros no: lo que se ve abajo es lo que se buscó. -->
+                <section v-if="!filtered && favoriteRows.length > 0" class="mt-2" :aria-labelledby="`${headingId}-favorites`" data-favorites>
+                    <h3 :id="`${headingId}-favorites`" class="font-semibold">{{ t('favorites.title') }}</h3>
+                    <ul class="-mx-2">
+                        <li v-for="{ restaurant, status } in favoriteRows" :key="restaurant.slug">
+                            <button
+                                type="button"
+                                class="flex min-h-touch w-full min-w-0 flex-col justify-center rounded-veni-sm px-2 py-1 text-left hover:bg-surface"
+                                :data-favorite-slug="restaurant.slug"
+                                @click="$emit('select', restaurant.slug)"
+                            >
+                                <span class="font-semibold">{{ restaurant.name }}</span>
+                                <span class="text-sm text-ink-muted">{{ status }}</span>
+                            </button>
+                        </li>
+                    </ul>
+                </section>
+
+                <p v-if="allSamples" class="mt-2 mb-1"><SampleDataBadge /></p>
+
+                <div v-if="selectedOutside" ref="outside" class="mt-2" data-selected-outside><slot name="selected" :restaurant="selectedOutside" :in-row="false" /></div>
+
+                <ul ref="list" class="-mx-2">
+                    <li v-for="{ restaurant, status, distance } in rows" :key="restaurant.slug" :data-row="restaurant.slug" class="flex flex-wrap items-center gap-1">
                         <button
                             type="button"
-                            class="flex min-h-touch w-full min-w-0 flex-col justify-center rounded-veni-sm px-2 py-1 text-left hover:bg-surface"
-                            :data-favorite-slug="restaurant.slug"
+                            class="flex min-h-touch min-w-0 flex-1 flex-col justify-center rounded-veni-sm px-2 py-1 text-left hover:bg-surface"
+                            :class="{ 'bg-surface shadow-[inset_4px_0_0_currentColor]': restaurant.slug === selected }"
+                            :aria-current="restaurant.slug === selected ? 'true' : undefined"
+                            :data-slug="restaurant.slug"
                             @click="$emit('select', restaurant.slug)"
                         >
-                            <span class="font-semibold">{{ restaurant.name }}</span>
-                            <span class="text-sm text-ink-muted">{{ status }}</span>
+                            <span class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <span class="font-semibold" data-name>{{ restaurant.name }}</span>
+                                <SampleDataBadge v-if="restaurant.fictitious && !allSamples" />
+                            </span>
+                            <span class="text-sm text-ink-muted">
+                                <span data-status>{{ status }}</span>
+                                <template v-if="distance"> · <span data-distance>{{ distance }}</span></template>
+                            </span>
                         </button>
+                        <!-- El ícono solo no dice nada: el nombre del enlace lleva el del restaurante. -->
+                        <Link
+                            :href="restaurantUrl(restaurant.slug)"
+                            class="inline-flex size-touch shrink-0 items-center justify-center rounded-full hover:bg-surface"
+                            :aria-label="t('restaurants.view_details_of', { name: restaurant.name })"
+                            :title="t('restaurants.view_details')"
+                        >
+                            <Icon name="chevron-derecha" />
+                        </Link>
+                        <div v-if="restaurant.slug === selected && !selectedOutside" class="basis-full px-2 pb-2" data-selected-summary>
+                            <slot name="selected" :restaurant="restaurant" :in-row="true" />
+                        </div>
                     </li>
                 </ul>
-            </section>
 
-            <p v-if="allSamples" class="mt-2 mb-1"><SampleDataBadge /></p>
-
-            <ul ref="list" class="-mx-2">
-                <li v-for="{ restaurant, status, distance } in rows" :key="restaurant.slug" class="flex items-center gap-1">
-                    <button
-                        type="button"
-                        class="flex min-h-touch min-w-0 flex-1 flex-col justify-center rounded-veni-sm px-2 py-1 text-left hover:bg-surface"
-                        :data-slug="restaurant.slug"
-                        @click="$emit('select', restaurant.slug)"
-                    >
-                        <span class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                            <span class="font-semibold" data-name>{{ restaurant.name }}</span>
-                            <SampleDataBadge v-if="restaurant.fictitious && !allSamples" />
-                        </span>
-                        <span class="text-sm text-ink-muted">
-                            <span data-status>{{ status }}</span>
-                            <template v-if="distance"> · <span data-distance>{{ distance }}</span></template>
-                        </span>
-                    </button>
-                    <!-- El ícono solo no dice nada: el nombre del enlace lleva el del restaurante. -->
-                    <Link
-                        :href="restaurantUrl(restaurant.slug)"
-                        class="inline-flex size-touch shrink-0 items-center justify-center rounded-full hover:bg-surface"
-                        :aria-label="t('restaurants.view_details_of', { name: restaurant.name })"
-                        :title="t('restaurants.view_details')"
-                    >
-                        <Icon name="chevron-derecha" />
-                    </Link>
-                </li>
-            </ul>
-
-            <!-- Direcciones y favoritos de este teléfono (#16): verlos, editarlos y borrarlos. -->
-            <button
-                ref="savedButton"
-                type="button"
-                class="mt-2 inline-flex min-h-touch items-center gap-2 rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
-                data-saved-open
-                @click="openManager"
-            >
-                <Icon name="corazon" :size="20" />
-                {{ t('saved.open') }}
-            </button>
+                <!-- Direcciones y favoritos de este teléfono (#16): verlos, editarlos y borrarlos. -->
+                <button
+                    ref="savedButton"
+                    type="button"
+                    class="mt-2 inline-flex min-h-touch items-center gap-2 rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
+                    data-saved-open
+                    @click="openManager"
+                >
+                    <Icon name="corazon" :size="20" />
+                    {{ t('saved.open') }}
+                </button>
+            </div>
         </div>
 
         <Manager v-if="managing" :restaurants="all" @close="closeManager" />
