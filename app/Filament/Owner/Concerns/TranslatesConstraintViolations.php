@@ -20,8 +20,11 @@ use Illuminate\Validation\ValidationException;
  */
 trait TranslatesConstraintViolations
 {
-    /** SQLSTATE de PostgreSQL: único, CHECK, EXCLUDE y FK. */
-    private const CONSTRAINT_VIOLATIONS = ['23505', '23514', '23P01', '23503'];
+    /**
+     * SQLSTATE de PostgreSQL: único, CHECK, EXCLUDE, FK y NOT NULL (un campo
+     * obligatorio que llegó vacío después de limpiarlo, AUD-021).
+     */
+    private const CONSTRAINT_VIOLATIONS = ['23505', '23514', '23P01', '23503', '23502'];
 
     /**
      * @template TResult

@@ -29,13 +29,15 @@ final class Fields
         return $required ? $field->required()->regex(self::NOT_BLANK) : $field;
     }
 
-    public static function longText(string $name, string $label, int $maxLength): Textarea
+    public static function longText(string $name, string $label, int $maxLength, bool $required = false): Textarea
     {
-        return Textarea::make($name)
+        $field = Textarea::make($name)
             ->label($label)
             ->rows(3)
             ->maxLength($maxLength)
             ->dehydrateStateUsing(fn (?string $state): ?string => self::clean($state));
+
+        return $required ? $field->required()->regex(self::NOT_BLANK) : $field;
     }
 
     public static function pesos(string $name, string $label, int $max = self::MAX_PRICE): TextInput
@@ -47,6 +49,12 @@ final class Fields
             ->minValue(0)
             ->maxValue($max)
             ->prefix('$');
+    }
+
+    /** Pesos enteros como se escriben en cada idioma: $13.000 o $13,000. */
+    public static function formatPesos(int $amount): string
+    {
+        return '$'.number_format($amount, 0, '', app()->getLocale() === 'en' ? ',' : '.');
     }
 
     public static function position(): TextInput
