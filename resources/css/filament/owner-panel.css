@@ -1,0 +1,30 @@
+/*
+ * Hoja propia del panel del dueño (#114, ADR 0035). Las vistas de Hoy, Mi
+ * carta y Estadísticas no tienen tema de Filament (sus clases de Tailwind no
+ * se compilan): lo que cambia con el modo oscuro va aquí, porque un estilo en
+ * línea no puede mirar la clase .dark.
+ *
+ * Se registra con FilamentAsset (OwnerPanelProvider::boot) y la publica
+ * `php artisan filament:assets` en public/css/app/, servida desde el mismo
+ * origen (style-src 'self' del perfil «panel»).
+ *
+ * Texto secundario con contraste 4.5:1 en los dos modos: gray-600 sobre el
+ * fondo claro y gray-400 sobre el oscuro (gray-500 no llegaba en el oscuro).
+ */
+.veni-muted {
+    color: var(--gray-600);
+}
+
+.dark .veni-muted {
+    color: var(--gray-400);
+}
+
+/* Separador entre filas: solo decorativo, no lleva texto. */
+.veni-divider {
+    border-top: 1px solid color-mix(in oklab, var(--gray-500) 20%, transparent);
+}
+
+/* Fondo del recuadro «Sin foto» de Mi carta. */
+.veni-placeholder {
+    background: color-mix(in oklab, var(--gray-500) 12%, transparent);
+}
