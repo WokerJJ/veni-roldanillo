@@ -320,23 +320,28 @@ class Dish extends Model implements BelongsToRestaurant
     }
 
     /**
-     * Los ingredientes que lleva (#112, ADR 0033), con `essential` en el pivote.
+     * Los ingredientes que lleva (#112, ADR 0033), con `essential` en el
+     * pivote, en el orden que les dio el dueño (AUD-026).
      *
      * @return BelongsToMany<Ingredient, $this>
      */
     public function ingredients(): BelongsToMany
     {
-        return $this->belongsToMany(Ingredient::class, 'dish_ingredient')->withPivot('essential');
+        return $this->belongsToMany(Ingredient::class, 'dish_ingredient')
+            ->withPivot('essential')
+            ->orderBy('dish_ingredient.position')
+            ->orderBy('dish_ingredient.id');
     }
 
     /**
-     * Las mismas filas como modelos propios: el repetidor del panel las edita.
+     * Las mismas filas como modelos propios: el repetidor del panel las edita
+     * y guarda su orden en position (AUD-026).
      *
      * @return HasMany<DishIngredient, $this>
      */
     public function dishIngredients(): HasMany
     {
-        return $this->hasMany(DishIngredient::class)->orderBy('id');
+        return $this->hasMany(DishIngredient::class)->orderBy('position')->orderBy('id');
     }
 
     /** @return HasMany<OptionGroup, $this> */

@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * plato al crearla, y las dos FK compuestas (plato e ingrediente con el mismo
  * restaurant_id) rechazan un ingrediente de otro restaurante en la base.
  */
-#[Fillable(['ingredient_id', 'essential'])]
+#[Fillable(['ingredient_id', 'essential', 'position'])]
 #[UsePolicy(RestaurantContentPolicy::class)]
 class DishIngredient extends Model implements BelongsToRestaurant
 {

@@ -112,6 +112,8 @@ class DishResource extends OwnerResource
                     Repeater::make('dishIngredients')
                         ->hiddenLabel()
                         ->relationship('dishIngredients')
+                        // Arrastrar una fila cambia el orden de los chips de la carta (AUD-026).
+                        ->orderColumn('position')
                         ->maxItems(self::MAX_INGREDIENTS)
                         ->defaultItems(0)
                         ->addActionLabel(__('panel.ingredients.add'))
