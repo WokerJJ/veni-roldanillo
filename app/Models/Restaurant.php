@@ -394,15 +394,15 @@ class Restaurant extends Model
      */
     public function announceDelay(int $minutes): void
     {
-        $this->forceFill([
+        $this->saveBesideProfile([
             'delay_minutes' => $minutes,
             'delay_until' => now()->addHours(self::DELAY_NOTICE_HOURS),
-        ])->save();
+        ]);
     }
 
     public function clearDelay(): void
     {
-        $this->forceFill(['delay_minutes' => null, 'delay_until' => null])->save();
+        $this->saveBesideProfile(['delay_minutes' => null, 'delay_until' => null]);
     }
 
     /**
@@ -411,6 +411,21 @@ class Restaurant extends Model
      */
     public function touchOwnerUpdate(): void
     {
-        $this->forceFill(['updated_by_owner_at' => now()])->save();
+        $this->saveBesideProfile(['updated_by_owner_at' => now()]);
+    }
+
+    /**
+     * Guarda columnas que no son del formulario de la ficha (la demora,
+     * «Actualizada el…») sin mover updated_at (AUD-023): updated_at es la
+     * versión que mira el control optimista de la ficha
+     * (DetectsConcurrentEdits), y avisar una demora o marcar un plato
+     * agotado desde Hoy no debe bloquear el guardado de la ficha abierta en
+     * otra pestaña.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function saveBesideProfile(array $attributes): void
+    {
+        static::withoutTimestamps(fn (): bool => $this->forceFill($attributes)->save());
     }
 }
