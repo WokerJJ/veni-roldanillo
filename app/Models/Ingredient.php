@@ -4,9 +4,9 @@ namespace App\Models;
 
 use App\Models\Concerns\HasTranslatableFields;
 use App\Models\Concerns\OwnedByRestaurant;
+use App\Models\Concerns\SoldOutToday;
 use App\Models\Contracts\BelongsToRestaurant;
 use App\Policies\RestaurantContentPolicy;
-use App\Support\BusinessDay;
 use Database\Factories\IngredientFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
@@ -37,7 +37,7 @@ use Illuminate\Support\Carbon;
 class Ingredient extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<IngredientFactory> */
-    use HasFactory, HasTranslatableFields, OwnedByRestaurant;
+    use HasFactory, HasTranslatableFields, OwnedByRestaurant, SoldOutToday;
 
     /** @var array<string, mixed> */
     protected $attributes = [
@@ -63,19 +63,6 @@ class Ingredient extends Model implements BelongsToRestaurant
     public function translatableFields(): array
     {
         return ['name'];
-    }
-
-    /** «Agotado hoy» en el día de Colombia. */
-    public function isSoldOutToday(): bool
-    {
-        return $this->sold_out_until !== null
-            && $this->sold_out_until->toDateString() >= BusinessDay::today()->toDateString();
-    }
-
-    /** Marca o quita «agotado hoy»: vence solo a la medianoche. */
-    public function setSoldOutToday(bool $soldOut): void
-    {
-        $this->forceFill(['sold_out_until' => $soldOut ? BusinessDay::today()->toDateString() : null])->save();
     }
 
     /** @return BelongsTo<Restaurant, $this> */

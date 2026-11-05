@@ -132,14 +132,21 @@ class IngredientResource extends OwnerResource
                     ->color('warning')
                     ->visible(fn (Ingredient $record): bool => ! $record->isSoldOutToday())
                     ->authorize(fn (Ingredient $record): bool => Gate::allows('update', $record))
-                    ->action(fn (Ingredient $record) => self::setSoldOutToday($record, true)),
+                    ->action(function (Ingredient $record): void {
+                        $record->setSoldOutToday(true);
+                        // Cambia lo que muestra la ficha: «Actualizada el…».
+                        OwnerResource::currentRestaurant()?->touchOwnerUpdate();
+                    }),
                 Action::make('backInStock')
                     ->label(__('panel.ingredients.back_in_stock'))
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
                     ->visible(fn (Ingredient $record): bool => $record->isSoldOutToday())
                     ->authorize(fn (Ingredient $record): bool => Gate::allows('update', $record))
-                    ->action(fn (Ingredient $record) => self::setSoldOutToday($record, false)),
+                    ->action(function (Ingredient $record): void {
+                        $record->setSoldOutToday(false);
+                        OwnerResource::currentRestaurant()?->touchOwnerUpdate();
+                    }),
                 EditAction::make(),
             ]);
     }
@@ -151,13 +158,6 @@ class IngredientResource extends OwnerResource
             'create' => CreateIngredient::route('/create'),
             'edit' => EditIngredient::route('/{record}/edit'),
         ];
-    }
-
-    private static function setSoldOutToday(Ingredient $ingredient, bool $soldOut): void
-    {
-        $ingredient->setSoldOutToday($soldOut);
-        // Cambia lo que muestra la ficha: «Actualizada el…».
-        OwnerResource::currentRestaurant()?->touchOwnerUpdate();
     }
 
     /**
