@@ -56,10 +56,23 @@ export interface MenuOption {
 /** El reemplazo por defecto de un ingrediente agotado. */
 export interface MenuSubstitute {
     name: string;
+    /** El nombre en español, del que sale su ícono (BUG-025); solo viaja si es otro que `name`. */
+    name_es?: string;
     /** Recargo en pesos por unidad, sin decimales. */
     price: number;
     /** Si el reemplazo también está agotado (hasta esta fecha, incluida), no se ofrece. */
     sold_out_until: string | null;
+}
+
+/**
+ * Un ingrediente que lleva el plato, para los chips de la carta (#115, ADR
+ * 0036): el nombre y, si hoy está agotado, su posición en `ingredients`.
+ */
+export interface MenuContent {
+    name: string;
+    /** El nombre en español, del que sale su ícono (BUG-025); solo viaja si es otro que `name`. */
+    name_es?: string;
+    ingredient: number | null;
 }
 
 /**
@@ -112,6 +125,8 @@ export interface ProfilePromotion {
 
 export interface MenuDish {
     name: string;
+    /** El nombre en español, del que sale el ícono sin foto (BUG-025); solo viaja si es otro que `name`. */
+    name_es?: string;
     description: string | null;
     /** En pesos, sin decimales. */
     price: number;
@@ -125,6 +140,8 @@ export interface MenuDish {
     photo?: ProfileImage | null;
     /** Ingredientes agotados que lo tocan (ADR 0033). Opcional: una ficha guardada antes no lo trae. */
     ingredients?: MenuIngredient[];
+    /** Lo que lleva, en el orden del dueño (ADR 0036). Opcional: una ficha guardada antes no lo trae. */
+    contains?: MenuContent[];
     /** Opciones, adiciones e ingredientes para quitar; vacía si el plato no tiene. */
     groups: MenuOptionGroup[];
 }

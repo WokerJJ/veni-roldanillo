@@ -3,6 +3,7 @@
 use App\Enums\Locale;
 use App\Enums\PaymentMethod;
 use App\Enums\RestaurantRole;
+use App\Filament\Owner\Resources\Dishes\DishResource;
 use App\Http\Resources\RestaurantProfile;
 use App\Models\Category;
 use App\Models\DeliveryZone;
@@ -197,7 +198,7 @@ describe('lista blanca', function () {
             ->and(array_keys($profile['hours'][0]))->toBe(['weekday', 'opens', 'closes'])
             ->and(array_keys($profile['special_hours'][0]))->toBe(['date', 'closed', 'opens', 'closes', 'note'])
             ->and(array_keys($profile['menu'][0]))->toBe(['name', 'dishes'])
-            ->and(array_keys($profile['menu'][0]['dishes'][0]))->toBe(['name', 'description', 'price', 'sold_out_until', 'photo', 'ingredients', 'groups'])
+            ->and(array_keys($profile['menu'][0]['dishes'][0]))->toBe(['name', 'description', 'price', 'sold_out_until', 'photo', 'ingredients', 'contains', 'groups'])
             ->and(array_keys($profile['menu'][0]['dishes'][0]['groups'][0]))->toBe(['name', 'kind', 'min', 'max', 'options'])
             ->and(array_keys($profile['menu'][0]['dishes'][0]['groups'][0]['options'][0]))->toBe(['name', 'price', 'ingredient']);
     });
@@ -262,6 +263,10 @@ describe('lista blanca', function () {
             'name_es' => 'Cebolla (prueba)', 'sold_out_until' => '2026-10-07',
             'substitute_ingredient_id' => $cebollin->id, 'substitute_price_delta' => 500,
         ]);
+        // Lleva arroz (hoy hay) y cebolla: los dos son chips de la carta, y
+        // la cebolla apunta a su lugar en la lista de agotados (ADR 0036).
+        $arroz = $restaurant->ingredients()->create(['name_es' => 'Arroz (prueba)', 'name_en' => 'Rice (test)']);
+        $sancocho->dishIngredients()->create(['ingredient_id' => $arroz->id, 'essential' => true]);
         $sancocho->dishIngredients()->create(['ingredient_id' => $cebolla->id, 'essential' => false]);
         $removal = OptionGroup::factory()->removal()->for($sancocho)->create(['name_es' => 'Quitar (prueba)', 'position' => 2]);
         Option::factory()->for($removal)->create(['name_es' => 'Cebolla (prueba)', 'price_delta' => 0, 'position' => 0, 'ingredient_id' => $cebolla->id]);
@@ -452,12 +457,12 @@ describe('menú', function () {
 
         expect(restaurantPageProfile($this->get('/restaurants/la-ceiba'))['menu'])->toBe([
             ['name' => 'Platos fuertes (prueba)', 'dishes' => [
-                ['name' => 'Primero', 'description' => 'Descripción de ejemplo.', 'price' => 18500, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'groups' => []],
-                ['name' => 'Segundo', 'description' => 'Descripción de ejemplo.', 'price' => 22000, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'groups' => []],
+                ['name' => 'Primero', 'description' => 'Descripción de ejemplo.', 'price' => 18500, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'contains' => [], 'groups' => []],
+                ['name' => 'Segundo', 'description' => 'Descripción de ejemplo.', 'price' => 22000, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'contains' => [], 'groups' => []],
             ]],
             ['name' => 'Bebidas (prueba)', 'dishes' => [
-                ['name' => 'Jugo', 'description' => null, 'price' => 4000, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'groups' => []],
-                ['name' => 'Gaseosa', 'description' => null, 'price' => 3500, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'groups' => []],
+                ['name' => 'Jugo', 'description' => null, 'price' => 4000, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'contains' => [], 'groups' => []],
+                ['name' => 'Gaseosa', 'description' => null, 'price' => 3500, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'contains' => [], 'groups' => []],
             ]],
         ]);
     });
@@ -690,11 +695,56 @@ test('hace las mismas consultas con un menú corto que con uno largo', function 
 
     // El restaurante y una por tabla: categorías, horario semanal, horarios
     // especiales, secciones, platos, grupos de opciones, opciones, zonas de
-    // domicilio, sus barrios, los ingredientes agotados (ADR 0033) y las
-    // promociones vigentes (#113).
-    expect($queries('corto'))->toBe(12)
-        ->and($queries('largo'))->toBe(12)
+    // domicilio, sus barrios, los ingredientes de los platos (los chips,
+    // ADR 0036), los ingredientes agotados (ADR 0033) y las promociones
+    // vigentes (#113). Con agotados, una más: su reemplazo (ver
+    // RestaurantIngredientsPageTest).
+    expect($queries('corto'))->toBe(13)
+        ->and($queries('largo'))->toBe(13)
         ->and(restaurantPageProfile($this->get('/restaurants/largo'))['menu'])->toHaveCount(6);
+});
+
+test('los props de una ficha larga, con el tope de ingredientes por plato, no pasan de 150 kB (AUD-028)', function () {
+    // El peor caso que permite el panel en ingredientes: 6 secciones de 6
+    // platos, cada uno con dos grupos de 6 opciones y los 20 ingredientes
+    // del tope (DishResource::MAX_INGREDIENTS), 5 de ellos agotados hoy con
+    // reemplazo. Todo eso viaja en el HTML de la primera visita (Inertia) y
+    // en cada visita sin recargar, también con datos móviles.
+    $restaurant = Restaurant::factory()->create(['slug' => 'largo']);
+    $substitute = $restaurant->ingredients()->create(['name_es' => 'Reemplazo de prueba', 'name_en' => 'Test substitute']);
+    $ingredients = collect(range(1, DishResource::MAX_INGREDIENTS))->map(fn (int $i) => $restaurant->ingredients()->create([
+        'name_es' => "Ingrediente de prueba {$i}",
+        'name_en' => "Test ingredient {$i}",
+        'sold_out_until' => $i <= 5 ? now('America/Bogota')->toDateString() : null,
+        'substitute_ingredient_id' => $i <= 5 ? $substitute->id : null,
+        'substitute_price_delta' => $i <= 5 ? 500 : 0,
+    ]));
+
+    foreach (range(1, 6) as $i) {
+        $dishes = Dish::factory()->count(6)->for(MenuSection::factory()->for($restaurant))->create();
+
+        foreach ($dishes as $dish) {
+            Option::factory()->count(6)->for(OptionGroup::factory()->for($dish))->create();
+            Option::factory()->count(6)->for(OptionGroup::factory()->removal()->for($dish))->create();
+
+            foreach ($ingredients as $position => $ingredient) {
+                $dish->dishIngredients()->create(['ingredient_id' => $ingredient->id, 'position' => $position]);
+            }
+        }
+    }
+
+    // En inglés es el caso más pesado: los ingredientes traducidos llevan
+    // también el nombre en español, del que sale su ícono (BUG-025).
+    $profile = restaurantPageProfile($this->get('/restaurants/largo?lang=en'));
+    $bytes = strlen((string) json_encode($profile, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+    // Medido al escribir la prueba (2026-11-05): unos 131 000 bytes de JSON
+    // en inglés y 105 000 en español, sin comprimir. El techo deja cerca de
+    // un 15 % para lo que se sume después; pasarlo es una decisión, no un
+    // accidente: bajar lo que viaja o subir el techo con su porqué.
+    expect($profile['menu'])->toHaveCount(6)
+        ->and($profile['menu'][0]['dishes'][0]['contains'])->toHaveCount(DishResource::MAX_INGREDIENTS)
+        ->and($bytes)->toBeLessThan(150_000);
 });
 
 test('una oculta no llega a consultar su contenido', function () {

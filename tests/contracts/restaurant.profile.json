@@ -59,6 +59,10 @@
                             "substitute": { "name": "Cebollín (prueba)", "price": 500, "sold_out_until": null }
                         }
                     ],
+                    "contains": [
+                        { "name": "Arroz (prueba)", "ingredient": null },
+                        { "name": "Cebolla (prueba)", "ingredient": 0 }
+                    ],
                     "groups": [
                         {
                             "name": "Proteína (prueba)",
@@ -92,7 +96,7 @@
                         }
                     ]
                 },
-                { "name": "Bandeja de prueba", "description": null, "price": 22000, "sold_out_until": "2026-10-07", "photo": null, "ingredients": [], "groups": [] }
+                { "name": "Bandeja de prueba", "description": null, "price": 22000, "sold_out_until": "2026-10-07", "photo": null, "ingredients": [], "contains": [], "groups": [] }
             ]
         },
         {
@@ -105,6 +109,7 @@
                     "sold_out_until": null,
                     "photo": null,
                     "ingredients": [],
+                    "contains": [],
                     "groups": [
                         {
                             "name": "Preparación (prueba)",

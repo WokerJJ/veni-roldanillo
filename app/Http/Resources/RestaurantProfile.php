@@ -9,12 +9,14 @@ use App\Enums\RestaurantStatus;
 use App\Http\Resources\Concerns\PresentsSchedule;
 use App\Models\Category;
 use App\Models\Dish;
+use App\Models\Ingredient;
 use App\Models\MenuSection;
 use App\Models\Option;
 use App\Models\Promotion;
 use App\Models\Restaurant;
 use App\Models\SpecialHour;
 use App\Support\BusinessDay;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -36,8 +38,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * con sus options, y deliveryZones con su neighborhood): las carga
  * RestaurantController en una consulta por tabla. De cada plato y de cada
  * opción necesita `available`: con él decide si sale. De los ingredientes
- * (#112, ADR 0033), solo los agotados desde hoy, con su reemplazo y los
- * platos que los llevan (dishLinks). De las promociones, las vigentes
+ * (#112, ADR 0033), solo los agotados desde hoy, con su reemplazo; de cada
+ * plato, los que lleva (ingredients, con `essential` en el pivote): dan los
+ * chips de #115 (ADR 0036) y dicen a qué platos toca cada agotado. De las promociones, las vigentes
  * (promotions), con image_path.
  *
  * @phpstan-import-type WeeklyHours from PresentsSchedule
@@ -46,11 +49,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * @phpstan-type ProfileSpecialHours array{date: string, closed: bool, opens: string|null, closes: string|null, note: string|null}
  * @phpstan-type ProfileZone array{neighborhood: string, fee: int}
  * @phpstan-type ProfileOption array{name: string, price: int, ingredient: int|null}
- * @phpstan-type ProfileSubstitute array{name: string, price: int, sold_out_until: string|null}
+ * @phpstan-type ProfileSubstitute array{name: string, name_es?: string, price: int, sold_out_until: string|null}
+ * @phpstan-type ProfileContent array{name: string, name_es?: string, ingredient: int|null}
  * @phpstan-type ProfileIngredient array{name: string, essential: bool, in_dish: bool, sold_out_until: string, substitute: ProfileSubstitute|null}
  * @phpstan-type ProfileOptionGroup array{name: string, kind: string, min: int, max: int, options: list<ProfileOption>}
  * @phpstan-type ProfileImage array{src: string, srcset: string}
- * @phpstan-type ProfileDish array{name: string, description: string|null, price: int, sold_out_until: string|null, photo: ProfileImage|null, ingredients: list<ProfileIngredient>, groups: list<ProfileOptionGroup>}
+ * @phpstan-type ProfileDish array{name: string, name_es?: string, description: string|null, price: int, sold_out_until: string|null, photo: ProfileImage|null, ingredients: list<ProfileIngredient>, contains: list<ProfileContent>, groups: list<ProfileOptionGroup>}
  * @phpstan-type ProfilePromotion array{title: string, ends_at: string, image: ProfileImage|null}
  * @phpstan-type ProfileSection array{name: string, dishes: list<ProfileDish>}
  * @phpstan-type Profile array{
@@ -211,7 +215,9 @@ class RestaurantProfile extends JsonResource
         [$ingredients, $positions] = $this->ingredients($dish);
 
         return [
-            'name' => (string) $dish->translated('name', $this->locale),
+            // Con el español si es otro: de él sale el ícono del plato sin
+            // foto (BUG-025, ADR 0036): «Hen soup» no nombra un sancocho.
+            ...$this->names($dish),
             'description' => $dish->translated('description', $this->locale),
             'price' => $dish->price,
             // «Agotado hoy» vale hasta esta fecha, incluida. Si
@@ -223,17 +229,25 @@ class RestaurantProfile extends JsonResource
             // Solo las URLs: la clave de la columna no viaja.
             'photo' => $dish->publishedImage(),
             'ingredients' => $ingredients,
+            'contains' => $this->contains($dish, $positions),
             'groups' => $this->groups($dish, $positions),
         ];
     }
 
     /**
-     * Platos que lleva cada ingrediente agotado: id del ingrediente → id del
-     * plato → si es esencial. Se arma una vez por ficha.
+     * El nombre en el idioma de la ficha y, solo si es otro, el español
+     * (`name_es`): de él saca el dispositivo el ícono (resources/js/icons/food.ts),
+     * así que el ícono no cambia con el idioma (BUG-025, ADR 0036). En una
+     * ficha en español no viaja: sería el mismo texto dos veces.
      *
-     * @var array<int, array<int, bool>>|null
+     * @return array{name: string, name_es?: string}
      */
-    private ?array $links = null;
+    private function names(Dish|Ingredient $model): array
+    {
+        $name = (string) $model->translated('name', $this->locale);
+
+        return $name === $model->name_es ? ['name' => $name] : ['name' => $name, 'name_es' => $model->name_es];
+    }
 
     /**
      * Los ingredientes agotados que tocan a este plato (#112, ADR 0033): los
@@ -253,13 +267,15 @@ class RestaurantProfile extends JsonResource
             return [[], []];
         }
 
-        if ($this->links === null) {
-            $this->links = [];
+        // Los que lleva el plato y si son esenciales salen del pivote de sus
+        // ingredientes, los mismos que dan los chips (AUD-027): no hace falta
+        // otra consulta por los platos de cada agotado.
+        $links = [];
 
-            foreach ($this->restaurant->ingredients as $ingredient) {
-                foreach ($ingredient->dishLinks as $link) {
-                    $this->links[$ingredient->id][$link->dish_id] = $link->essential;
-                }
+        if ($dish->relationLoaded('ingredients')) {
+            foreach ($dish->ingredients as $ingredient) {
+                $pivot = $ingredient->getRelation('pivot');
+                $links[$ingredient->id] = $pivot instanceof Pivot && (bool) $pivot->getAttribute('essential');
             }
         }
 
@@ -282,7 +298,7 @@ class RestaurantProfile extends JsonResource
         $positions = [];
 
         foreach ($this->restaurant->ingredients as $ingredient) {
-            $essential = $this->links[$ingredient->id][$dish->id] ?? null;
+            $essential = $links[$ingredient->id] ?? null;
 
             if (($essential === null && ! isset($named[$ingredient->id])) || $ingredient->sold_out_until === null) {
                 continue;
@@ -296,7 +312,7 @@ class RestaurantProfile extends JsonResource
                 'in_dish' => $essential !== null || isset($removable[$ingredient->id]),
                 'sold_out_until' => $ingredient->sold_out_until->toDateString(),
                 'substitute' => $substitute === null ? null : [
-                    'name' => (string) $substitute->translated('name', $this->locale),
+                    ...$this->names($substitute),
                     'price' => $ingredient->substitute_price_delta,
                     'sold_out_until' => $substitute->sold_out_until?->toDateString(),
                 ],
@@ -304,6 +320,29 @@ class RestaurantProfile extends JsonResource
         }
 
         return [$entries, $positions];
+    }
+
+    /**
+     * Lo que lleva el plato (#115, ADR 0036), en el orden del dueño: los
+     * chips de la carta. Solo el nombre (y el español, para el ícono) y, si hoy está agotado, su posición
+     * en `ingredients` (como `ingredient` en cada opción): qué le pasa lo
+     * dice esa lista. Sin el plato cargado con sus ingredientes, ninguno.
+     *
+     * @param  array<int, int>  $positions
+     * @return list<ProfileContent>
+     */
+    private function contains(Dish $dish, array $positions): array
+    {
+        if (! $dish->relationLoaded('ingredients')) {
+            return [];
+        }
+
+        return array_values($dish->ingredients
+            ->map(fn (Ingredient $ingredient): array => [
+                ...$this->names($ingredient),
+                'ingredient' => $positions[$ingredient->id] ?? null,
+            ])
+            ->all());
     }
 
     /**
