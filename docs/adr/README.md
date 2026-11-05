@@ -38,3 +38,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0032](0032-libreta-de-direcciones-y-favoritos-en-el-dispositivo.md) | Libreta de direcciones y favoritos en el dispositivo: una libreta para todos los restaurantes, «Recordar» la alimenta y los favoritos son solo slugs | Aceptada |
 | [0033](0033-ingredientes-agotados-hoy-y-reemplazos.md) | Ingredientes agotados hoy con reemplazo: una lista por restaurante, publicada solo cuando falta algo y aplicada en el dispositivo | Aceptada |
 | [0034](0034-fotos-de-platos-y-promociones.md) | Fotos de los platos (1:1) y de las promociones (16:9): procesadas en la cola con GD, tres anchos WebP sin metadatos y nombre por hash | Aceptada |
+| [0035](0035-panel-simple-del-dueno.md) | Panel simple del dueño: Hoy, Mi carta y Promociones por defecto, «Ver todo» recordado por cuenta y solo en la navegación | Aceptada |
