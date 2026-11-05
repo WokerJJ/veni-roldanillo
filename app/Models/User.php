@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\Locale;
+use App\Enums\PanelMode;
 use App\Enums\RestaurantRole;
 use App\Enums\UserRole;
 use Database\Factories\UserFactory;
@@ -32,9 +33,13 @@ use Illuminate\Support\Collection;
  * must_change_password tampoco es asignable: lo enciende la aprobación de un
  * reclamo (contraseña temporal) y lo apaga cambiarla en el perfil (#19).
  *
+ * panel_mode (#114, ADR 0035), tampoco: lo cambia solo «Ver todo» o «Volver
+ * al modo simple» del panel del dueño (switchPanelMode).
+ *
  * @property UserRole $role
  * @property Locale|null $locale
  * @property bool $must_change_password
+ * @property PanelMode $panel_mode
  */
 #[Fillable(['name', 'email', 'password', 'locale'])]
 #[Hidden(['password', 'remember_token'])]
@@ -46,6 +51,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     /** @var array<string, mixed> */
     protected $attributes = [
         'role' => 'user',
+        'panel_mode' => 'simple',
     ];
 
     /**
@@ -69,6 +75,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'role' => UserRole::class,
             'locale' => Locale::class,
             'must_change_password' => 'boolean',
+            'panel_mode' => PanelMode::class,
         ];
     }
 
@@ -82,6 +89,12 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     protected function email(): Attribute
     {
         return Attribute::make(set: fn (string $value): string => mb_strtolower(trim($value)));
+    }
+
+    /** Cambia el modo del panel del dueño y lo guarda en la cuenta (ADR 0035). */
+    public function switchPanelMode(PanelMode $mode): void
+    {
+        $this->forceFill(['panel_mode' => $mode])->save();
     }
 
     public function isAdmin(): bool

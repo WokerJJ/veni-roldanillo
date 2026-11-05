@@ -7,6 +7,7 @@ use App\Enums\RestaurantStatus;
 use App\Models\Concerns\HasMediaImage;
 use App\Models\Concerns\HasTranslatableFields;
 use App\Models\Concerns\OwnedByRestaurant;
+use App\Models\Concerns\SoldOutToday;
 use App\Models\Contracts\BelongsToRestaurant;
 use App\Policies\RestaurantContentPolicy;
 use App\Support\BusinessDay;
@@ -58,7 +59,7 @@ use Laravel\Scout\Searchable;
 class Dish extends Model implements BelongsToRestaurant
 {
     /** @use HasFactory<DishFactory> */
-    use HasFactory, HasMediaImage, HasTranslatableFields, OwnedByRestaurant, Searchable;
+    use HasFactory, HasMediaImage, HasTranslatableFields, OwnedByRestaurant, Searchable, SoldOutToday;
 
     /** La foto del plato, 1:1 (#113): photo_path guarda su clave, no un archivo. */
     public static function mediaKind(): MediaKind
@@ -250,7 +251,7 @@ class Dish extends Model implements BelongsToRestaurant
     public function orderableToday(): bool
     {
         return $this->available
-            && ($this->sold_out_until === null || $this->sold_out_until->toDateString() < BusinessDay::today()->toDateString())
+            && ! $this->isSoldOutToday()
             && ! $this->lacksEssentialIngredientToday();
     }
 

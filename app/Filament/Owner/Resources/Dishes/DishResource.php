@@ -6,6 +6,7 @@ use App\Enums\MediaKind;
 use App\Filament\Owner\OwnerResource;
 use App\Filament\Owner\Resources\Dishes\Pages\CreateDish;
 use App\Filament\Owner\Resources\Dishes\Pages\EditDish;
+use App\Filament\Owner\Resources\Dishes\Pages\EditDishBasics;
 use App\Filament\Owner\Resources\Dishes\Pages\ListDishes;
 use App\Filament\Owner\Resources\Dishes\RelationManagers\OptionGroupsRelationManager;
 use App\Filament\Owner\Support\Fields;
@@ -101,7 +102,7 @@ class DishResource extends OwnerResource
                 Toggle::make('sold_out_today')
                     ->label(__('panel.dishes.sold_out_today'))
                     ->helperText(__('panel.dishes.sold_out_help'))
-                    ->afterStateHydrated(fn (Toggle $component, ?Dish $record) => $component->state(self::isSoldOutToday($record))),
+                    ->afterStateHydrated(fn (Toggle $component, ?Dish $record) => $component->state($record?->isSoldOutToday() ?? false)),
             ]),
             MediaUpload::section(MediaKind::Dish),
             Section::make(__('panel.ingredients.dish_section'))
@@ -149,7 +150,7 @@ class DishResource extends OwnerResource
                 TextColumn::make('price')->label(__('panel.dishes.price'))->money('COP', decimalPlaces: 0)->sortable(),
                 IconColumn::make('sold_out_until')
                     ->label(__('panel.dishes.sold_out_today'))
-                    ->state(fn (Dish $record): bool => self::isSoldOutToday($record))
+                    ->state(fn (Dish $record): bool => $record->isSoldOutToday())
                     ->boolean(),
                 IconColumn::make('available')->label(__('panel.dishes.available'))->boolean(),
             ])
@@ -160,20 +161,20 @@ class DishResource extends OwnerResource
                     ->label(__('panel.dishes.mark_sold_out'))
                     ->icon('heroicon-o-no-symbol')
                     ->color('warning')
-                    ->visible(fn (Dish $record): bool => ! self::isSoldOutToday($record))
+                    ->visible(fn (Dish $record): bool => ! $record->isSoldOutToday())
                     ->authorize(fn (Dish $record): bool => Gate::allows('update', $record))
                     ->action(function (Dish $record): void {
-                        self::setSoldOutToday($record, true);
+                        $record->setSoldOutToday(true);
                         OwnerResource::currentRestaurant()?->touchOwnerUpdate();
                     }),
                 Action::make('backInStock')
                     ->label(__('panel.dishes.back_in_stock'))
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->visible(fn (Dish $record): bool => self::isSoldOutToday($record))
+                    ->visible(fn (Dish $record): bool => $record->isSoldOutToday())
                     ->authorize(fn (Dish $record): bool => Gate::allows('update', $record))
                     ->action(function (Dish $record): void {
-                        self::setSoldOutToday($record, false);
+                        $record->setSoldOutToday(false);
                         OwnerResource::currentRestaurant()?->touchOwnerUpdate();
                     }),
                 EditAction::make(),
@@ -191,17 +192,9 @@ class DishResource extends OwnerResource
             'index' => ListDishes::route('/'),
             'create' => CreateDish::route('/create'),
             'edit' => EditDish::route('/{record}/edit'),
+            // La edición corta de Mi carta (ADR 0035).
+            'basics' => EditDishBasics::route('/{record}/basics'),
         ];
-    }
-
-    /**
-     * «Agotado hoy» (ADR 0018): sold_out_until es el día de Colombia hasta el
-     * que no hay; a la medianoche el plato vuelve solo.
-     */
-    public static function isSoldOutToday(?Dish $dish): bool
-    {
-        return $dish?->sold_out_until !== null
-            && $dish->sold_out_until->toDateString() >= BusinessDay::today()->toDateString();
     }
 
     /** La foto del plato, cuadrada (#113, ADR 0034). */
@@ -224,10 +217,5 @@ class DishResource extends OwnerResource
         $data['sold_out_until'] = $soldOut ? BusinessDay::today()->toDateString() : null;
 
         return $data;
-    }
-
-    public static function setSoldOutToday(Dish $dish, bool $soldOut): void
-    {
-        $dish->forceFill(['sold_out_until' => $soldOut ? BusinessDay::today()->toDateString() : null])->save();
     }
 }

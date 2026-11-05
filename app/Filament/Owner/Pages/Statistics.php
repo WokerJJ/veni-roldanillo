@@ -2,13 +2,12 @@
 
 namespace App\Filament\Owner\Pages;
 
+use App\Filament\Owner\Concerns\ResolvesOwnerTenant;
+use App\Filament\Owner\Support\PanelNavigation;
 use App\Models\OrderIntent;
-use App\Models\Restaurant;
 use App\Support\OrderIntentStats;
-use Filament\Facades\Filament;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Support\Facades\Gate;
 use Livewire\Attributes\Url;
 
 /**
@@ -23,6 +22,8 @@ use Livewire\Attributes\Url;
  */
 class Statistics extends Page
 {
+    use ResolvesOwnerTenant;
+
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedChartBar;
 
     protected static ?int $navigationSort = 90;
@@ -44,16 +45,23 @@ class Statistics extends Page
         return __('panel.stats.heading');
     }
 
-    public static function canAccess(): bool
+    /** Solo con «Ver todo» (ADR 0035); la dirección sigue andando en el simple. */
+    public static function shouldRegisterNavigation(): bool
     {
-        $restaurant = Filament::getTenant();
-
-        return $restaurant instanceof Restaurant && Gate::allows('viewStatistics', $restaurant);
+        return parent::shouldRegisterNavigation() && PanelNavigation::isFull();
     }
 
-    public function setPeriod(int $days): void
+    protected static function tenantAbility(): string
     {
-        $this->days = $days;
+        return 'viewStatistics';
+    }
+
+    /** Llega del navegador: un valor que no es un entero da 404, no un 500. */
+    public function setPeriod(mixed $days): void
+    {
+        abort_unless(is_int($days) || (is_string($days) && ctype_digit($days)), 404);
+
+        $this->days = (int) $days;
     }
 
     public function period(): int
@@ -63,13 +71,7 @@ class Statistics extends Page
 
     public function stats(): OrderIntentStats
     {
-        $restaurant = Filament::getTenant();
-
-        if (! $restaurant instanceof Restaurant || Gate::denies('viewStatistics', $restaurant)) {
-            abort(403);
-        }
-
-        return OrderIntentStats::for($restaurant, $this->period());
+        return OrderIntentStats::for($this->restaurant(), $this->period());
     }
 
     public function retentionMonths(): int

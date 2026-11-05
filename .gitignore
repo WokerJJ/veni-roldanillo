@@ -12,6 +12,8 @@
 /public/css/filament/
 /public/js/filament/
 /public/fonts/filament/
+# La hoja propia del panel (ADR 0035): su fuente está en resources/css/filament.
+/public/css/app/
 
 # Entorno y secretos
 .env

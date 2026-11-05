@@ -5,13 +5,14 @@ namespace App\Filament\Owner\Pages;
 use App\Enums\PaymentMethod;
 use App\Filament\Concerns\DetectsConcurrentEdits;
 use App\Filament\Owner\Concerns\TranslatesConstraintViolations;
+use App\Filament\Owner\Support\DelayNoticeActions;
 use App\Filament\Owner\Support\Fields;
 use App\Models\Restaurant;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
-use Filament\Notifications\Notification;
 use Filament\Pages\Tenancy\EditTenantProfile;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -25,8 +26,9 @@ use Illuminate\Support\Facades\Gate;
  * status, plan, verified_at, is_fictitious ni updated_by_owner_at: no están
  * en el formulario y tampoco en $fillable de Restaurant.
  *
- * Arriba, el aviso de demora: «Demora de 40 min» con un toque, que se va
- * solo a las Restaurant::DELAY_NOTICE_HOURS horas.
+ * Arriba, el aviso de demora (DelayNoticeActions, el mismo de Hoy): «Demora
+ * de 40 min» con un toque, que se va solo a las
+ * Restaurant::DELAY_NOTICE_HOURS horas.
  *
  * Filament autoriza la página con RestaurantPolicy::update (canView).
  */
@@ -95,48 +97,19 @@ class EditRestaurantProfile extends EditTenantProfile
     }
 
     /**
+     * El aviso de demora, el mismo de Hoy (DelayNoticeActions), escrito al
+     * lado del formulario sin tragarse un cambio ajeno.
+     *
      * @return array<Action>
      */
     protected function getHeaderActions(): array
     {
+        $restaurant = fn (): Restaurant => $this->restaurant();
+        $write = fn (Closure $write) => $this->writeBesideForm($write);
+
         return [
-            Action::make('announceDelay')
-                ->label(__('panel.delay.announce'))
-                ->icon('heroicon-o-clock')
-                ->schema([
-                    Select::make('minutes')
-                        ->label(__('panel.delay.minutes'))
-                        ->options(collect(Restaurant::DELAY_NOTICE_OPTIONS)
-                            ->mapWithKeys(fn (int $minutes): array => [$minutes => __('panel.delay.option', ['minutes' => $minutes])])
-                            ->all())
-                        ->in(Restaurant::DELAY_NOTICE_OPTIONS)
-                        ->required(),
-                ])
-                ->modalDescription(__('panel.delay.help', ['hours' => Restaurant::DELAY_NOTICE_HOURS]))
-                ->action(function (array $data): void {
-                    $restaurant = $this->restaurant();
-                    $minutes = $data['minutes'] ?? null;
-                    abort_unless(is_numeric($minutes), 422);
-                    $this->writeBesideForm(function () use ($restaurant, $minutes): Restaurant {
-                        $restaurant->announceDelay((int) $minutes);
-
-                        return $restaurant;
-                    });
-                    Notification::make()->success()->title(__('panel.delay.announced'))->send();
-                }),
-            Action::make('clearDelay')
-                ->label(__('panel.delay.clear'))
-                ->color('gray')
-                ->visible(fn (): bool => $this->restaurant()->activeDelayMinutes() !== null)
-                ->action(function (): void {
-                    $this->writeBesideForm(function (): Restaurant {
-                        $restaurant = $this->restaurant();
-                        $restaurant->clearDelay();
-
-                        return $restaurant;
-                    });
-                    Notification::make()->success()->title(__('panel.delay.cleared'))->send();
-                }),
+            DelayNoticeActions::announce($restaurant, $write),
+            DelayNoticeActions::clear($restaurant, $write),
         ];
     }
 

@@ -3,6 +3,7 @@
 namespace App\Filament\Owner;
 
 use App\Enums\MediaKind;
+use App\Filament\Owner\Support\PanelNavigation;
 use App\Models\Restaurant;
 use Filament\Facades\Filament;
 use Filament\Resources\Resource;
@@ -39,6 +40,18 @@ abstract class OwnerResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->with('restaurant');
+    }
+
+    /**
+     * Si el recurso sale en la navegación del modo simple (#114, ADR 0035).
+     * En el simple solo se ven los que lo piden; en el completo, todos. Es
+     * solo la navegación: la dirección y la autorización no cambian.
+     */
+    protected static bool $inSimpleMode = false;
+
+    public static function shouldRegisterNavigation(): bool
+    {
+        return parent::shouldRegisterNavigation() && (static::$inSimpleMode || PanelNavigation::isFull());
     }
 
     public static function canViewAny(): bool

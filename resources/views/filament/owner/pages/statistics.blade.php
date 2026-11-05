@@ -17,8 +17,9 @@
 <x-filament-panels::page>
     {{-- Sin tema propio de Filament, las clases de Tailwind de esta vista no
          se compilan: el diseño va con estilos en línea (style-src-attr del
-         perfil «panel», ADR 0025) y las variables de color de Filament. --}}
-    <p style="color: var(--gray-500)">{{ __('panel.stats.intro') }}</p>
+         perfil «panel», ADR 0025), las variables de color de Filament y las
+         clases veni-* de la hoja del panel (el tono del modo oscuro). --}}
+    <p class="veni-muted">{{ __('panel.stats.intro') }}</p>
 
     <div role="group" aria-label="{{ __('panel.stats.period') }}" style="display: flex; flex-wrap: wrap; gap: 0.5rem">
         @foreach (\App\Support\OrderIntentStats::PERIODS as $option)
@@ -36,22 +37,22 @@
 
     <div style="display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr))">
         <x-filament::section>
-            <p style="color: var(--gray-500)">{{ __('panel.stats.current', ['days' => $days]) }}</p>
+            <p class="veni-muted">{{ __('panel.stats.current', ['days' => $days]) }}</p>
             <p style="font-size: 1.875rem; font-weight: 600; font-variant-numeric: tabular-nums" data-stat="current">{{ $stats->current }}</p>
-            <p style="color: var(--gray-500); margin-top: 0.25rem" data-stat="change" aria-live="polite">{{ $changeText }}</p>
+            <p class="veni-muted" style="margin-top: 0.25rem" data-stat="change" aria-live="polite">{{ $changeText }}</p>
         </x-filament::section>
         <x-filament::section>
-            <p style="color: var(--gray-500)">{{ __('panel.stats.previous', ['days' => $days]) }}</p>
+            <p class="veni-muted">{{ __('panel.stats.previous', ['days' => $days]) }}</p>
             <p style="font-size: 1.875rem; font-weight: 600; font-variant-numeric: tabular-nums" data-stat="previous">{{ $stats->previous }}</p>
         </x-filament::section>
         <x-filament::section>
             <dl style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem">
                 <div>
-                    <dt style="color: var(--gray-500)">{{ __('panel.stats.delivery') }}</dt>
+                    <dt class="veni-muted">{{ __('panel.stats.delivery') }}</dt>
                     <dd style="font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums" data-stat="delivery">{{ $stats->delivery }}</dd>
                 </div>
                 <div>
-                    <dt style="color: var(--gray-500)">{{ __('panel.stats.pickup') }}</dt>
+                    <dt class="veni-muted">{{ __('panel.stats.pickup') }}</dt>
                     <dd style="font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums" data-stat="pickup">{{ $stats->pickup }}</dd>
                 </div>
             </dl>
@@ -64,14 +65,14 @@
                  está el de la sección. --}}
             <caption style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0">{{ __('panel.stats.per_day') }}</caption>
             <thead>
-                <tr style="color: var(--gray-500); text-align: start">
+                <tr class="veni-muted" style="text-align: start">
                     <th scope="col" style="padding: 0.25rem 1rem 0.25rem 0; text-align: start; font-weight: 500">{{ __('panel.stats.day') }}</th>
                     <th scope="col" style="padding: 0.25rem 0; text-align: start; font-weight: 500">{{ __('panel.stats.clicks') }}</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (array_reverse($stats->perDay, true) as $date => $count)
-                    <tr style="border-top: 1px solid color-mix(in oklab, var(--gray-500) 20%, transparent)" data-day="{{ $date }}">
+                    <tr class="veni-divider" data-day="{{ $date }}">
                         <th scope="row" style="padding: 0.25rem 1rem 0.25rem 0; text-align: start; font-weight: 400; white-space: nowrap">
                             {{ \Carbon\CarbonImmutable::parse($date)->locale(app()->getLocale())->isoFormat('ddd D MMM') }}
                         </th>
@@ -87,5 +88,5 @@
         </table>
     </x-filament::section>
 
-    <p style="color: var(--gray-500); font-size: 0.75rem">{{ __('panel.stats.retention', ['months' => $this->retentionMonths()]) }}</p>
+    <p class="veni-muted" style="font-size: 0.75rem">{{ __('panel.stats.retention', ['months' => $this->retentionMonths()]) }}</p>
 </x-filament-panels::page>
