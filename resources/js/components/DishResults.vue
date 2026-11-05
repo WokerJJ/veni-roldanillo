@@ -5,6 +5,7 @@ import { computed, useId } from 'vue';
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
 import { formatPesos } from '@/i18n/intl';
+import { GENERIC_FOOD_ICON } from '@/icons/food';
 import { withinFilters } from '@/restaurants/dishSearch';
 import { restaurantUrl } from '@/restaurants/links';
 import { useDishSearch } from '@/restaurants/useDishSearch';
@@ -79,7 +80,10 @@ const message = computed(() => {
 
         <!-- Solo el texto se esconde del lector (ya lo oyó de la región de estado); los botones, no. -->
         <div v-else-if="status !== 'done' || count === 0" class="px-2 pb-2 text-sm text-ink-muted">
-            <p aria-hidden="true" data-dishes-message>{{ message }}</p>
+            <p aria-hidden="true" class="flex items-center gap-2" data-dishes-message>
+                <Icon v-if="status === 'done'" :name="GENERIC_FOOD_ICON" :size="20" class="shrink-0" />
+                {{ message }}
+            </p>
             <button
                 v-if="filteredOut"
                 type="button"

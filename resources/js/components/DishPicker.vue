@@ -285,7 +285,7 @@ onBeforeUnmount(() => {
                     La foto grande va dentro de lo que se desplaza: en un celular bajo no tapa las opciones (#113).
                     Sin foto no hay cuadro: el ícono ya está en el menú, y aquí solo empujaría las opciones hacia abajo.
                 -->
-                <DishPhoto v-if="dish.photo" class="mt-4" :image="dish.photo" :alt="dish.name" size="large" />
+                <DishPhoto v-if="dish.photo" class="mt-4" :image="dish.photo" :name="dish.name_es ?? dish.name" :alt="dish.name" size="large" />
                 <fieldset v-for="effect in substitutes" :key="`swap-${effect.index}`" class="mt-4" :aria-describedby="`${id}-swap-hint-${effect.index}`" data-substitute>
                     <legend class="font-semibold">{{ t('order.picker.swap_legend', { name: effect.name }) }}</legend>
                     <p :id="`${id}-swap-hint-${effect.index}`" class="text-sm text-ink-muted">

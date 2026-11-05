@@ -7,6 +7,7 @@ import Icon from '@/components/Icon.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import { useI18n } from '@/composables/useI18n';
 import { useNow } from '@/composables/useNow';
+import { categoryIcon } from '@/icons/food';
 import type { Restaurant } from '@/restaurants/api';
 import { restaurantUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
@@ -96,7 +97,8 @@ onMounted(() => {
             <p v-if="restaurant.fictitious" class="mb-2"><SampleDataBadge /></p>
 
             <ul v-if="restaurant.categories.length > 0" class="flex flex-wrap gap-1.5" :aria-label="t('restaurants.categories')">
-                <li v-for="category in restaurant.categories" :key="category.slug" class="rounded-full bg-surface px-2.5 py-0.5 text-sm">
+                <li v-for="category in restaurant.categories" :key="category.slug" class="inline-flex items-center gap-1 rounded-full bg-surface px-2.5 py-0.5 text-sm" :data-category="category.slug">
+                    <Icon :name="categoryIcon(category.slug)" :size="16" />
                     {{ category.name }}
                 </li>
             </ul>

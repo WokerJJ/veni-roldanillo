@@ -47,6 +47,8 @@ describe('RestaurantSummary', () => {
 
         expect(wrapper.get('h2').text()).toBe('Restaurante de Prueba La Ceiba (ficticio)');
         expect(wrapper.findAll('li').map((item) => item.text())).toEqual(['Comida típica']);
+        // Con su ícono (#115, ADR 0036), decorativo: el nombre ya está escrito.
+        expect(wrapper.get('[data-category="comida-tipica"] svg').attributes()).toMatchObject({ 'data-icon': 'bandeja-paisa', 'aria-hidden': 'true' });
         expect(status()).toBe('Abierto ahora · cierra a las 3:00 p. m.');
         expect(wrapper.get('[data-delivery]').text()).toBe('Hace domicilios');
     });

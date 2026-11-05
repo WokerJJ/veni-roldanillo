@@ -15,6 +15,7 @@ import type { PageMeta } from '@/composables/useI18n';
 import { useI18n } from '@/composables/useI18n';
 import { useNow } from '@/composables/useNow';
 import { formatDate } from '@/i18n/intl';
+import { categoryIcon } from '@/icons/food';
 import { mapUrl, restaurantUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
 import type { RestaurantProfile } from '@/restaurants/profile';
@@ -127,7 +128,8 @@ onBeforeUnmount(() => {
                 <p v-if="restaurant.fictitious" class="mt-2"><SampleDataBadge /></p>
 
                 <ul v-if="restaurant.categories.length > 0" class="mt-3 flex flex-wrap gap-1.5" :aria-label="t('restaurants.categories')">
-                    <li v-for="category in restaurant.categories" :key="category.slug" class="rounded-full bg-surface px-2.5 py-0.5 text-sm">
+                    <li v-for="category in restaurant.categories" :key="category.slug" class="inline-flex items-center gap-1 rounded-full bg-surface px-2.5 py-0.5 text-sm" :data-category="category.slug">
+                        <Icon :name="categoryIcon(category.slug)" :size="16" />
                         {{ category.name }}
                     </li>
                 </ul>
