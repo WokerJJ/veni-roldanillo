@@ -85,3 +85,47 @@ export function isOptionSubstituted(dish: MenuDish, groupIndex: number, optionIn
         ingredientEffects(dish, today).some((effect) => effect.kind === 'substitute' && effect.index === ingredient)
     );
 }
+
+/**
+ * Un chip de la carta (#115, ADR 0036): un ingrediente que lleva el plato y
+ * cómo está hoy. `missing`, que hoy no hay (sin reemplazo, o con el
+ * reemplazo también agotado); `swap`, que va con su reemplazo y el recargo
+ * por unidad (0 si no suma). `icon` es el nombre en español de lo que el
+ * chip dibuja (el reemplazo, en un `swap`): el ícono no cambia con el idioma
+ * (BUG-025).
+ */
+export type IngredientChip =
+    | { kind: 'present'; name: string; icon: string }
+    | { kind: 'missing'; name: string; icon: string }
+    | { kind: 'swap'; name: string; substitute: string; price: number; icon: string };
+
+/**
+ * Los chips del plato, en el orden del dueño, con el mismo criterio que
+ * `ingredientEffects` (sin `today`, todos como si hubiera). Vacío con una
+ * ficha guardada antes, que no trae `contains`.
+ */
+export function ingredientChips(dish: MenuDish, today: string | undefined): IngredientChip[] {
+    const effects = ingredientEffects(dish, today);
+
+    return (dish.contains ?? []).map(({ name, name_es, ingredient }): IngredientChip => {
+        const effect = ingredient === null ? undefined : effects.find((candidate) => candidate.index === ingredient);
+        const icon = name_es ?? name;
+
+        if (effect === undefined) {
+            return { kind: 'present', name, icon };
+        }
+
+        if (effect.kind !== 'substitute') {
+            return { kind: 'missing', name, icon };
+        }
+
+        const substitute = dish.ingredients?.[effect.index]?.substitute;
+
+        return { kind: 'swap', name, substitute: effect.substitute, price: effect.price, icon: substitute?.name_es ?? effect.substitute };
+    });
+}
+
+/** Si el ingrediente `index` de la lista de agotados ya se ve como chip: su aviso no se repite en texto aparte. */
+export function isShownAsChip(dish: MenuDish, index: number): boolean {
+    return (dish.contains ?? []).some((content) => content.ingredient === index);
+}

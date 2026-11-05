@@ -2,11 +2,14 @@
 import { computed, nextTick, ref, shallowRef, useId } from 'vue';
 
 import type DishPickerComponent from '@/components/DishPicker.vue';
+import Icon from '@/components/Icon.vue';
 import MenuDishLine from '@/components/MenuDishLine.vue';
 import { useI18n } from '@/composables/useI18n';
 import { useNow } from '@/composables/useNow';
 import { formatPesos } from '@/i18n/intl';
-import { blockingIngredient, ingredientEffects } from '@/order/ingredients';
+import { GENERIC_FOOD_ICON } from '@/icons/food';
+import type { IngredientChip } from '@/order/ingredients';
+import { blockingIngredient, ingredientChips, ingredientEffects, isShownAsChip } from '@/order/ingredients';
 import type { OrderItem } from '@/order/selection';
 import { isOrderable, isSoldOut, MAX_QUANTITY, unavailableReason } from '@/order/selection';
 import { useOrder } from '@/order/useOrder';
@@ -74,9 +77,16 @@ function unavailable(dish: MenuDish): boolean {
     return !soldOut(dish) && (missingEssential(dish) !== null || (order !== null && !isOrderable(dish, today.value)));
 }
 
-/** «Hoy sin X» o «Hoy con Y en lugar de X», por cada ingrediente no esencial que hoy no hay. */
+/**
+ * «Hoy sin X» o «Hoy con Y en lugar de X», por cada ingrediente no esencial
+ * que hoy no hay y no se ve como chip (#115): uno que solo nombra su «Quitar».
+ */
 function todayNotes(dish: MenuDish): string[] {
     return ingredientEffects(dish, today.value).flatMap((effect) => {
+        if (isShownAsChip(dish, effect.index)) {
+            return [];
+        }
+
         switch (effect.kind) {
             case 'blocks':
                 return [];
@@ -86,6 +96,11 @@ function todayNotes(dish: MenuDish): string[] {
                 return [t('restaurant.menu.today_swap', { substitute: effect.substitute, name: effect.name })];
         }
     });
+}
+
+/** Lo que lleva, como chips, con el mismo día que los avisos (ADR 0036). */
+function chips(dish: MenuDish): IngredientChip[] {
+    return ingredientChips(dish, today.value);
 }
 
 async function open(dish: MenuDish, event: MouseEvent): Promise<void> {
@@ -134,7 +149,10 @@ const summary = computed(() => {
     <section :aria-labelledby="headingId">
         <h2 :id="headingId" class="text-xl">{{ t('restaurant.menu.title') }}</h2>
 
-        <p v-if="sections.length === 0" class="mt-2 text-ink-muted" data-empty>{{ t('restaurant.menu.empty') }}</p>
+        <p v-if="sections.length === 0" class="mt-2 flex items-center gap-2 text-ink-muted" data-empty>
+            <Icon :name="GENERIC_FOOD_ICON" class="shrink-0" />
+            {{ t('restaurant.menu.empty') }}
+        </p>
 
         <p v-if="summary" class="mt-2 font-semibold" data-order-summary>{{ summary }}</p>
 
@@ -152,10 +170,10 @@ const summary = computed(() => {
                         data-choose
                         @click="open(dish, $event)"
                     >
-                        <MenuDishLine :dish="dish" :sold-out="false" :unavailable="false" :notes="todayNotes(dish)" />
+                        <MenuDishLine :dish="dish" :sold-out="false" :unavailable="false" :notes="todayNotes(dish)" :chips="chips(dish)" />
                     </button>
                     <div v-else class="flex items-start justify-between gap-4 py-3">
-                        <MenuDishLine :dish="dish" :sold-out="soldOut(dish)" :unavailable="unavailable(dish)" :without="missingEssential(dish)" :notes="soldOut(dish) || missingEssential(dish) !== null ? [] : todayNotes(dish)" />
+                        <MenuDishLine :dish="dish" :sold-out="soldOut(dish)" :unavailable="unavailable(dish)" :without="missingEssential(dish)" :notes="soldOut(dish) || missingEssential(dish) !== null ? [] : todayNotes(dish)" :chips="chips(dish)" />
                     </div>
                 </li>
             </ul>

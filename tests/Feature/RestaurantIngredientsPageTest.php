@@ -67,6 +67,13 @@ test('publica los agotados de hoy que tocan al plato, con su efecto y la posici�
         ['name' => 'Fríjoles', 'essential' => true, 'in_dish' => true, 'sold_out_until' => '2026-11-01', 'substitute' => null],
         ['name' => 'Tomate', 'essential' => false, 'in_dish' => true, 'sold_out_until' => '2026-11-01', 'substitute' => ['name' => 'Pepino', 'price' => 500, 'sold_out_until' => null]],
     ])
+        // Los chips (ADR 0036): lo que lleva, en el orden del dueño, con su
+        // lugar en la lista de agotados; la cebolla de ayer ya no apunta a nada.
+        ->and($published['contains'])->toBe([
+            ['name' => 'Fríjoles', 'ingredient' => 1],
+            ['name' => 'Tomate', 'ingredient' => 2],
+            ['name' => 'Cebolla', 'ingredient' => null],
+        ])
         ->and(array_column($published['groups'][0]['options'], 'ingredient'))->toBe([null, 0])
         ->and(array_column($published['groups'][1]['options'], 'ingredient'))->toBe([2, null]);
 });
@@ -80,10 +87,35 @@ test('sin agotados, cada plato lleva una lista vacía y las opciones, null', fun
     $published = profileDishes($restaurant)[0];
 
     expect($published['ingredients'])->toBe([])
+        ->and($published['contains'])->toBe([['name' => 'Tomate', 'ingredient' => null]])
         ->and($published['groups'][0]['options'][0]['ingredient'])->toBeNull();
 });
 
-test('los agotados suman dos consultas fijas, tenga el menú los ingredientes que tenga', function () {
+test('los chips van en el idioma de la ficha, con el nombre en español del que sale el ícono (BUG-025)', function () {
+    [$restaurant, $dish] = ingredientsRestaurant();
+    $tomate = $restaurant->ingredients()->create(['name_es' => 'Tomate', 'name_en' => 'Tomato']);
+    $ajo = $restaurant->ingredients()->create(['name_es' => 'Ajo', 'name_en' => null]);
+    // De otro plato del mismo restaurante: no es chip de este.
+    $restaurant->ingredients()->create(['name_es' => 'Maíz']);
+    $dish->dishIngredients()->create(['ingredient_id' => $tomate->id]);
+    $dish->dishIngredients()->create(['ingredient_id' => $ajo->id, 'essential' => true]);
+    $dish->update(['name_es' => 'Sancocho de gallina', 'name_en' => 'Hen soup']);
+
+    $menu = $this->get("/restaurants/{$restaurant->slug}?lang=en")->assertOk()->inertiaProps('restaurant.menu');
+
+    // El ícono no depende del idioma (BUG-025): el dispositivo lo busca por
+    // el nombre en español, el de los archivos de resources/icons/veni y el
+    // de los platos típicos. En español no viaja dos veces.
+    expect($menu[0]['dishes'][0]['contains'])->toBe([
+        ['name' => 'Tomato', 'name_es' => 'Tomate', 'ingredient' => null],
+        // Sin nombre en inglés, el de español, que ya dice el ícono.
+        ['name' => 'Ajo', 'ingredient' => null],
+    ])
+        ->and($menu[0]['dishes'][0]['name'])->toBe('Hen soup')
+        ->and($menu[0]['dishes'][0]['name_es'])->toBe('Sancocho de gallina');
+});
+
+test('los agotados suman una consulta fija, el reemplazo, tenga el menú los ingredientes que tenga (AUD-027)', function () {
     $queries = function (Restaurant $restaurant): int {
         DB::flushQueryLog();
         DB::enableQueryLog();
@@ -112,6 +144,8 @@ test('los agotados suman dos consultas fijas, tenga el menú los ingredientes qu
     $short = $seed('corto', 1);
     $long = $seed('largo', 6);
 
+    // Qué platos los llevan, y si son esenciales, sale del pivote de los
+    // ingredientes de cada plato (los chips), que ya se consultó.
     expect($queries($short))->toBe($queries($long))
-        ->and($queries($short))->toBe($queries($empty) + 2);
+        ->and($queries($short))->toBe($queries($empty) + 1);
 });

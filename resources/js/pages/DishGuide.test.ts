@@ -88,6 +88,18 @@ describe('Guía de platos típicos', () => {
         expect(wrapper.findAll('h3')).toHaveLength(4);
     });
 
+    it('cada plato lleva el ícono del típico si lo hay, y si no el genérico, sin que el lector lo lea (#115)', async () => {
+        const wrapper = await mountGuide();
+        const icons = wrapper.findAll('h3').map((heading) => [heading.text(), heading.get('svg').attributes('data-icon'), heading.get('svg').attributes('aria-hidden')]);
+
+        expect(icons).toEqual([
+            [expect.stringContaining('ancocho') as string, 'sancocho', 'true'],
+            ['Arroz atollado', 'veni/generico', 'true'],
+            ['Champús', 'veni/generico', 'true'],
+            ['Raro', 'veni/generico', 'true'],
+        ]);
+    });
+
     it('el índice enlaza cada sección y cada plato con anclas que existen y no se repiten', async () => {
         const wrapper = await mountGuide();
 

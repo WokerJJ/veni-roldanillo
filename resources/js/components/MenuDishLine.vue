@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import DishPhoto from '@/components/DishPhoto.vue';
+import IngredientChips from '@/components/IngredientChips.vue';
 import { useI18n } from '@/composables/useI18n';
 import { formatPesos } from '@/i18n/intl';
+import type { IngredientChip } from '@/order/ingredients';
 import type { MenuDish } from '@/restaurants/profile';
 
 /**
@@ -9,8 +11,9 @@ import type { MenuDish } from '@/restaurants/profile';
  * #113), nombre, descripción, precio y, si
  * corresponde, «Agotado hoy» o «No disponible hoy» (con el ingrediente
  * esencial que falta, `without`) y los avisos de los ingredientes que hoy no
- * hay (`notes`, ADR 0033). RestaurantMenu lo pone dentro de un botón (si se
- * puede pedir) o de un bloque (si no).
+ * hay (`notes`, ADR 0033) que no se ven como chip. Debajo del nombre, los
+ * chips de lo que lleva (`chips`, #115, ADR 0036). RestaurantMenu lo pone
+ * dentro de un botón (si se puede pedir) o de un bloque (si no).
  */
 const {
     dish,
@@ -18,15 +21,24 @@ const {
     unavailable,
     without = null,
     notes = [],
-} = defineProps<{ dish: MenuDish; soldOut: boolean; unavailable: boolean; without?: string | null; notes?: readonly string[] }>();
+    chips = [],
+} = defineProps<{
+    dish: MenuDish;
+    soldOut: boolean;
+    unavailable: boolean;
+    without?: string | null;
+    notes?: readonly string[];
+    chips?: readonly IngredientChip[];
+}>();
 
 const { t, locale } = useI18n();
 </script>
 
 <template>
-    <DishPhoto :image="dish.photo" alt="" size="thumb" />
+    <DishPhoto :image="dish.photo" :name="dish.name_es ?? dish.name" alt="" size="thumb" />
     <span class="block min-w-0 flex-1">
         <span class="block font-semibold wrap-anywhere" :class="{ 'text-ink-muted': soldOut || unavailable }" data-name>{{ dish.name }}</span>
+        <IngredientChips :chips="chips" />
         <span v-if="dish.description" class="mt-0.5 block text-sm wrap-anywhere text-ink-muted" data-description>{{ dish.description }}</span>
         <span v-for="note in notes" :key="note" class="mt-0.5 block text-sm font-semibold wrap-anywhere" data-ingredient-note>{{ note }}</span>
         <!-- Con el ingrediente que falta el aviso es largo: va aquí, donde puede partirse, y no junto al precio. -->

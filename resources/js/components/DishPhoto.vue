@@ -1,12 +1,19 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+
 import Icon from '@/components/Icon.vue';
+import { dishIcon } from '@/icons/food';
 import type { ProfileImage } from '@/restaurants/profile';
 
 /**
  * La foto cuadrada de un plato (#113, ADR 0034), del mismo tamaño para
  * todos: la miniatura del menú (`thumb`, 64 px) o la grande del selector
  * (`large`, a lo ancho). Sin foto, el mismo cuadro con un ícono: el menú no
- * se mueve según quién subió foto y quién no.
+ * se mueve según quién subió foto y quién no. El ícono sale del nombre del
+ * plato en español (`name`, el `name_es` de la ficha si viaja: BUG-025, #115,
+ * ADR 0036): el plato típico de colombia-icons si lo nombra («Sancocho de
+ * gallina»), si no el tazón genérico; así no cambia con el idioma. Es decorativo: el
+ * nombre ya está escrito al lado.
  *
  * El servidor manda tres anchos (192, 480 y 960 px) en `srcset`; con `sizes`
  * el navegador pide solo el que le sirve (la miniatura de 64 px, el de 192
@@ -21,7 +28,9 @@ import type { ProfileImage } from '@/restaurants/profile';
  * Los estilos van aquí y no con clases de Tailwind que nadie más usa: así
  * viajan con la ficha y no en la hoja de estilos del arranque.
  */
-const { image, alt, size } = defineProps<{ image: ProfileImage | null | undefined; alt: string; size: 'thumb' | 'large' }>();
+const { image, name, alt, size } = defineProps<{ image: ProfileImage | null | undefined; name: string; alt: string; size: 'thumb' | 'large' }>();
+
+const placeholder = computed(() => dishIcon(name));
 
 const SIZES = {
     thumb: '64px',
@@ -49,7 +58,7 @@ const SIZES = {
             class="dish-photo-image"
         >
         <span v-else class="dish-photo-image flex items-center justify-center text-ink-muted" aria-hidden="true">
-            <Icon name="sancocho" :size="size === 'thumb' ? 28 : 64" />
+            <Icon :name="placeholder" :size="size === 'thumb' ? 28 : 64" />
         </span>
     </span>
 </template>

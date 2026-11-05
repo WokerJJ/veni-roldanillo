@@ -277,6 +277,110 @@ describe('icons-sync --check', () => {
     });
 });
 
+describe('icons-sync --check con los íconos propios (ADR 0036)', () => {
+    const OWN = fileURLToPath(new URL('../resources/icons/veni', import.meta.url));
+
+    function checkOwn(own) {
+        const result = spawnSync(process.execPath, [SCRIPT, '--check', '--dir', VERSIONED, '--own', own], { encoding: 'utf8' });
+
+        return { status: result.status, stderr: result.stderr };
+    }
+
+    function ownCopy() {
+        const dir = mkdtempSync(path.join(tmpdir(), 'veni-own-icons-'));
+        temporary.push(dir);
+        cpSync(OWN, dir, { recursive: true });
+
+        return dir;
+    }
+
+    it('los propios versionados pasan la lista blanca, con el genérico de respaldo', () => {
+        expect(readdirSync(OWN)).toContain('generico.svg');
+        expect(checkOwn(OWN)).toEqual({ status: 0, stderr: '' });
+    });
+
+    it('rechaza un propio con algo que no es dibujo', () => {
+        const dir = ownCopy();
+        writeFileSync(path.join(dir, 'tomate.svg'), svg('<path d="M1 1h2" onclick="alert(1)" />'));
+
+        const { status, stderr } = checkOwn(dir);
+
+        expect(status).toBe(1);
+        expect(stderr).toContain('propios: tomate.svg: tiene atributos de evento (on…=)');
+    });
+
+    /** Un propio con la forma del set: trazo de 1,5 en currentColor y sin relleno. */
+    function ownSvg(body, rootAttributes = 'fill="none" stroke="currentColor" stroke-width="1.5"') {
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" ${rootAttributes}>
+  ${body}
+</svg>
+`;
+    }
+
+    /** Lo anota en la tabla del README de la copia, como pide la carpeta. */
+    function listInReadme(dir, file) {
+        writeFileSync(path.join(dir, 'README.md'), `${readFileSync(path.join(dir, 'README.md'), 'utf8')}
+| \`${file}\` | De prueba | Dibujado para este repositorio |
+`);
+    }
+
+    it('acepta un propio con la forma del set y anotado en el README (EVA-023, EVA-025)', () => {
+        const dir = ownCopy();
+        writeFileSync(path.join(dir, 'tomate.svg'), ownSvg('<path d="M1 1h2" /><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />'));
+        listInReadme(dir, 'tomate.svg');
+
+        expect(checkOwn(dir)).toEqual({ status: 0, stderr: '' });
+    });
+
+    it('rechaza un propio sin la forma del set: viewBox, relleno, color y grosor del trazo de la raíz (EVA-023)', () => {
+        const dir = ownCopy();
+        writeFileSync(path.join(dir, 'tomate.svg'), ownSvg('<path d="M1 1h2" />', 'fill="red" stroke="black"').replace('viewBox="0 0 24 24"', 'viewBox="0 0 48 48"'));
+        listInReadme(dir, 'tomate.svg');
+
+        const { status, stderr } = checkOwn(dir);
+
+        expect(status).toBe(1);
+        expect(stderr).toContain('propios: tomate.svg: el viewBox no es «0 0 24 24»');
+        expect(stderr).toContain('propios: tomate.svg: la raíz tiene que llevar fill="none" (tiene «red»)');
+        expect(stderr).toContain('propios: tomate.svg: la raíz tiene que llevar stroke="currentColor" (tiene «black»)');
+        expect(stderr).toContain('propios: tomate.svg: la raíz tiene que llevar stroke-width="1.5" (no lo tiene)');
+    });
+
+    it('rechaza un color fijo dentro del dibujo: solo none o currentColor (EVA-023)', () => {
+        const dir = ownCopy();
+        writeFileSync(path.join(dir, 'tomate.svg'), ownSvg('<path d="M1 1h2" fill="#e33" /><circle cx="12" cy="12" r="3" stroke="red" />'));
+        listInReadme(dir, 'tomate.svg');
+
+        const { status, stderr } = checkOwn(dir);
+
+        expect(status).toBe(1);
+        expect(stderr).toContain('propios: tomate.svg: fill="#e33" en <path>: dentro del dibujo solo valen none o currentColor');
+        expect(stderr).toContain('propios: tomate.svg: stroke="red" en <circle>: dentro del dibujo solo valen none o currentColor');
+    });
+
+    it('rechaza un propio que no figura en la tabla del README de la carpeta (EVA-025)', () => {
+        const dir = ownCopy();
+        writeFileSync(path.join(dir, 'tomate.svg'), ownSvg('<path d="M1 1h2" />'));
+
+        const { status, stderr } = checkOwn(dir);
+
+        expect(status).toBe(1);
+        expect(stderr).toContain('propios: tomate.svg: no figura en la tabla de README.md (anotalo con su origen)');
+    });
+
+    it('rechaza un nombre que la app no podría buscar y un archivo que no es SVG', () => {
+        const dir = ownCopy();
+        writeFileSync(path.join(dir, 'Limón.svg'), svg('<path d="M1 1h2" />'));
+        writeFileSync(path.join(dir, 'boceto.png'), 'no');
+
+        const { status, stderr } = checkOwn(dir);
+
+        expect(status).toBe(1);
+        expect(stderr).toContain('propios: Limón.svg: no es un ícono');
+        expect(stderr).toContain('propios: boceto.png: no es un ícono');
+    });
+});
+
 describe('icons-sync (sincronización)', () => {
     it('descarga lo que falta y completa el manifiesto', async () => {
         const dir = copyOfVersioned();

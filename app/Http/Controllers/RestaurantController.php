@@ -44,7 +44,7 @@ class RestaurantController extends Controller
             abort(404);
         }
 
-        // Once consultas más (trece si hay ingredientes agotados), tenga el
+        // Doce consultas más (trece si hay ingredientes agotados), tenga el
         // menú tres platos o trescientos: una por tabla. Es lo que hace $restaurant->load(), con las categorías y
         // el horario cargados igual que en el mapa (ver Restaurant).
         Restaurant::query()
@@ -76,11 +76,19 @@ class RestaurantController extends Controller
                         ->select(['id', 'option_group_id', 'ingredient_id', 'name_es', 'name_en', 'price_delta', 'available', 'position'])
                         ->where('available', true);
                 },
+                // Los ingredientes que lleva cada plato, solo el nombre y en el
+                // orden que les dio el dueño (dish_ingredient.position, y el
+                // id para desempatar: lo pone la relación, AUD-026): los chips
+                // de la carta (#115, ADR 0036). Una consulta, con el pivote.
+                'menuSections.dishes.ingredients' => function (Relation $ingredients): void {
+                    $ingredients->select(['ingredients.id', 'ingredients.name_es', 'ingredients.name_en']);
+                },
                 // Solo los ingredientes agotados (#112, ADR 0033): los demás no
                 // cambian nada en la ficha. Desde hoy, en el día de Colombia; si
                 // siguen agotados lo decide el dispositivo, como con los platos.
-                // Su reemplazo y los platos que los llevan solo se consultan si
-                // hay alguno: sin agotados es una consulta más, no tres.
+                // Su reemplazo solo se consulta si hay alguno: sin agotados es
+                // una consulta, no dos. Qué platos los llevan sale del pivote
+                // de menuSections.dishes.ingredients (AUD-027).
                 'ingredients' => function (Relation $ingredients): void {
                     $ingredients
                         ->select(['id', 'restaurant_id', 'name_es', 'name_en', 'sold_out_until', 'substitute_ingredient_id', 'substitute_price_delta'])
@@ -90,9 +98,6 @@ class RestaurantController extends Controller
                 },
                 'ingredients.substitute' => function (Relation $substitutes): void {
                     $substitutes->select(['id', 'name_es', 'name_en', 'sold_out_until']);
-                },
-                'ingredients.dishLinks' => function (Relation $links): void {
-                    $links->select(['id', 'dish_id', 'ingredient_id', 'essential']);
                 },
                 // Las promociones vigentes ahora, con su imagen (#113), de la
                 // que vence primero a la última, y como mucho

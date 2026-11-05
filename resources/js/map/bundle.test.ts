@@ -378,6 +378,15 @@ describe('presupuesto de descarga', () => {
         // hay qué sacar, se abre una decisión (un ADR) y recién entonces se
         // sube el presupuesto. No se sube para que entre. Los hashes de los
         // chunks que se piden con import() mueven unos pocos bytes.
+        //
+        // Con los íconos de comida y los chips de ingredientes (#115, ADR
+        // 0036): 82,27 antes y 82,374 después. Los propios, su mapa y la
+        // tabla de qué ícono lleva cada cosa bajan con la ficha, la lista y la
+        // guía; al arranque llegan el tipo nuevo de Icon (nada: es solo de
+        // TypeScript), la búsqueda en el mapa de los propios dentro de
+        // icons.ts y la lista de dependencias de los chunks nuevos. No había
+        // qué sacar del mismo tamaño: se decidió en el ADR, sin subir el
+        // presupuesto.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
@@ -420,6 +429,16 @@ describe('presupuesto de descarga', () => {
         expect(initial.some((chunk) => chunk.dynamicImports.includes(catalog.fileName))).toBe(true);
         // En el arranque quedan los íconos del layout, que no pueden llegar tarde.
         expect(initial.some((chunk) => has(chunk, /\/resources\/icons\/colombia\/(?:idioma|luna|sol)\.svg/))).toBe(true);
+    });
+
+    it('los íconos propios y la tabla de los de comida no bajan con el arranque (ADR 0036)', () => {
+        const initial = initialChunks();
+
+        expect(initial.filter((chunk) => has(chunk, /\/resources\/(?:icons\/veni\/|js\/icons\/(?:food|veni)\.ts$)/)).map((chunk) => chunk.fileName)).toEqual([]);
+        // El mapa de los propios va con el de colombia-icons (o en un chunk que ese pide), y el genérico es un chunk propio.
+        const catalog = loadedWith(chunkOf('/resources/js/icons/onDemand.ts'));
+        expect(catalog.some((chunk) => has(chunk, /\/resources\/js\/icons\/veni\.ts$/))).toBe(true);
+        expect(chunks.some((chunk) => has(chunk, /\/resources\/icons\/veni\/generico\.svg/) && !has(chunk, /\/resources\/js\//))).toBe(true);
     });
 
     it('la ficha de un restaurante no baja con el arranque: es un chunk aparte', () => {

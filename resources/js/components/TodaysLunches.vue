@@ -2,6 +2,7 @@
 import { Link } from '@inertiajs/vue3';
 import { onMounted, useTemplateRef } from 'vue';
 
+import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
 import { formatPesos } from '@/i18n/intl';
 import type { LunchOfTheDay } from '@/restaurants/finder';
@@ -41,7 +42,10 @@ onMounted(() => {
             {{ lunches.length > 0 ? t('lunches.title_count', { count: lunches.length }) : t('lunches.title') }}
         </summary>
 
-        <p v-if="lunches.length === 0" class="px-2 pb-2 text-sm text-ink-muted">{{ filtered ? t('lunches.none_filtered') : t('lunches.none') }}</p>
+        <p v-if="lunches.length === 0" class="flex items-center gap-2 px-2 pb-2 text-sm text-ink-muted" data-lunches-empty>
+            <Icon name="sancocho" :size="20" class="shrink-0" />
+            {{ filtered ? t('lunches.none_filtered') : t('lunches.none') }}
+        </p>
 
         <ul v-else>
             <li v-for="{ restaurant, lunch } in lunches" :key="restaurant.slug">

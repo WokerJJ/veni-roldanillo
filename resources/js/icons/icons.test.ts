@@ -13,7 +13,7 @@ vi.mock('@/icons/onDemand', () => {
         throw new TypeError('Failed to fetch dynamically imported module');
     }
 
-    return { onDemand: { './sancocho.svg': () => Promise.resolve('<svg viewBox="0 0 24 24"><path d="M1 1h22"/></svg>') } };
+    return { onDemand: { './sancocho.svg': () => Promise.resolve('<svg viewBox="0 0 24 24"><path d="M1 1h22"/></svg>') }, veniIcons: {} };
 });
 
 beforeEach(() => {

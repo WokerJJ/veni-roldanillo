@@ -204,6 +204,38 @@ test('una opción se vincula a un ingrediente propio y no a uno ajeno', function
     expect(Option::query()->sole()->ingredient_id)->toBe($cebolla->id);
 });
 
+test('reordenar los ingredientes del plato guarda el orden, y la ficha los muestra así (AUD-026)', function () {
+    $restaurant = Restaurant::factory()->claimed()->create();
+    $dish = panelDish($restaurant, ['available' => true, 'sold_out_until' => null]);
+    $arroz = $restaurant->ingredients()->create(['name_es' => 'Arroz']);
+    $tomate = $restaurant->ingredients()->create(['name_es' => 'Tomate']);
+    $ajo = $restaurant->ingredients()->create(['name_es' => 'Ajo']);
+    $first = $dish->dishIngredients()->create(['ingredient_id' => $arroz->id, 'essential' => true]);
+    $second = $dish->dishIngredients()->create(['ingredient_id' => $tomate->id]);
+    $third = $dish->dishIngredients()->create(['ingredient_id' => $ajo->id]);
+    actInPanel(panelMember($restaurant), $restaurant);
+
+    // Arrastrar en el repetidor es cambiar el orden de las filas del estado.
+    Livewire::test(EditDish::class, ['record' => $dish->getRouteKey()])
+        ->set('data.dishIngredients', [
+            "record-{$third->id}" => ['ingredient_id' => $ajo->id, 'essential' => false],
+            "record-{$first->id}" => ['ingredient_id' => $arroz->id, 'essential' => true],
+            "record-{$second->id}" => ['ingredient_id' => $tomate->id, 'essential' => false],
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($dish->dishIngredients()->pluck('ingredient_id')->all())->toBe([$ajo->id, $arroz->id, $tomate->id])
+        ->and($dish->ingredients()->pluck('ingredients.id')->all())->toBe([$ajo->id, $arroz->id, $tomate->id]);
+
+    $menu = $this->withoutVite()->get("/restaurants/{$restaurant->slug}")->assertOk()->inertiaProps('restaurant.menu');
+
+    expect(array_column($menu[0]['dishes'][0]['contains'], 'name'))->toBe(['Ajo', 'Arroz', 'Tomate'])
+        // Lo vuelve a abrir en el mismo orden.
+        ->and(array_keys(Livewire::test(EditDish::class, ['record' => $dish->getRouteKey()])->get('data.dishIngredients')))
+        ->toBe(["record-{$third->id}", "record-{$first->id}", "record-{$second->id}"]);
+});
+
 test('intercambiar dos ingredientes entre filas del plato guarda sin error (BUG-013)', function () {
     $restaurant = Restaurant::factory()->claimed()->create();
     $dish = panelDish($restaurant);

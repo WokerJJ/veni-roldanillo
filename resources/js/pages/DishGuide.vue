@@ -3,6 +3,7 @@ import { Head, Link } from '@inertiajs/vue3';
 
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
+import { dishIcon } from '@/icons/food';
 
 /**
  * La guía de platos típicos (#21): qué es cada plato o bebida del Valle,
@@ -106,7 +107,11 @@ const linkClass = 'inline-flex min-h-touch items-center underline underline-offs
                 :aria-labelledby="`${anchor(dish.id)}-titulo`"
                 :data-dish="dish.id"
             >
-                <h3 :id="`${anchor(dish.id)}-titulo`" class="text-lg">{{ dish.name }}</h3>
+                <!-- El ícono sale del id del plato (en español en los dos idiomas, ADR 0036) y es decorativo: el nombre va al lado. -->
+                <h3 :id="`${anchor(dish.id)}-titulo`" class="flex items-center gap-2 text-lg">
+                    <Icon :name="dishIcon(dish.id)" class="shrink-0 text-ink-muted" />
+                    {{ dish.name }}
+                </h3>
                 <p class="mt-2 max-w-prose">{{ dish.summary }}</p>
                 <dl class="mt-2 max-w-prose">
                     <dt class="font-semibold">{{ guide.labels.when }}</dt>

@@ -7,7 +7,16 @@ import type * as OnDemand from './onDemand';
  * Nombres de los íconos copiados de colombia-icons (ADR 0011): las claves de
  * «icons» del manifiesto. Agregar un ícono al manifiesto lo agrega al tipo.
  */
-export type IconName = keyof (typeof manifest)['icons'];
+export type ColombiaIconName = keyof (typeof manifest)['icons'];
+
+/**
+ * Los propios de Vení (resources/icons/veni, ADR 0036): `veni/` y el nombre
+ * del archivo. No tienen manifiesto, así que el tipo no sabe cuáles hay: los
+ * nombres salen de food.ts, que solo devuelve los que existen.
+ */
+export type VeniIconName = `veni/${string}`;
+
+export type IconName = ColombiaIconName | VeniIconName;
 
 /** Un SVG listo para pintar: los atributos de su raíz y el dibujo de adentro. */
 export interface IconArt {
@@ -32,7 +41,11 @@ const critical = import.meta.glob<string>('./{idioma,luna,sol}.svg', {
     import: 'default',
 });
 
-/** El mapa de los íconos bajo demanda, cuando ya se pidió. Si no bajó (sin red), se vuelve a pedir la próxima vez. */
+/**
+ * Los mapas de los íconos bajo demanda (los de colombia-icons y los propios),
+ * cuando ya se pidieron. Si no bajaron (sin red), se vuelven a pedir la
+ * próxima vez.
+ */
 let catalog: Promise<typeof OnDemand> | undefined;
 
 function onDemandCatalog(): Promise<typeof OnDemand> {
@@ -49,7 +62,11 @@ const SET_BY_COMPONENT = new Set(['xmlns', 'width', 'height']);
 
 const parsed = new Map<IconName, IconArt>();
 
-/** Clave del ícono en los dos mapas: su archivo, relativo a `base`. */
+/**
+ * Clave del ícono en los mapas: su archivo, relativo a `base`. Los propios
+ * tienen la carpeta adelante (`./veni/tomate.svg`): nunca chocan con uno de
+ * colombia-icons, aunque se llamen igual.
+ */
 function file(name: IconName): string {
     return `./${name}.svg`;
 }
@@ -100,7 +117,8 @@ export async function loadIcon(name: IconName): Promise<IconArt> {
         return ready;
     }
 
-    const load = (await onDemandCatalog()).onDemand[file(name)];
+    const maps = await onDemandCatalog();
+    const load = maps.onDemand[file(name)] ?? maps.veniIcons[file(name)];
 
     if (!load) {
         throw new Error(`No existe el ícono «${name}».`);

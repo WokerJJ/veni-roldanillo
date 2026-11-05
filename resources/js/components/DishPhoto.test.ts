@@ -28,7 +28,7 @@ describe('DishPhoto', () => {
     it('la miniatura pide el ancho que le sirve, reserva su lugar y espera a verse', async () => {
         await receive();
         const { default: DishPhoto } = await import('./DishPhoto.vue');
-        const img = mount(DishPhoto, { props: { image: PHOTO, alt: '', size: 'thumb' } }).get('img');
+        const img = mount(DishPhoto, { props: { image: PHOTO, name: 'Sancocho de prueba', alt: '', size: 'thumb' } }).get('img');
 
         expect(img.attributes()).toMatchObject({
             src: PHOTO.src,
@@ -45,7 +45,7 @@ describe('DishPhoto', () => {
     it('la grande lleva el nombre del plato como texto alternativo', async () => {
         await receive();
         const { default: DishPhoto } = await import('./DishPhoto.vue');
-        const img = mount(DishPhoto, { props: { image: PHOTO, alt: 'Sancocho de prueba', size: 'large' } }).get('img');
+        const img = mount(DishPhoto, { props: { image: PHOTO, name: 'Sancocho de prueba', alt: 'Sancocho de prueba', size: 'large' } }).get('img');
 
         expect(img.attributes('alt')).toBe('Sancocho de prueba');
         expect(img.attributes('sizes')).toBe('(min-width: 32rem) 28rem, 100vw');
@@ -55,7 +55,7 @@ describe('DishPhoto', () => {
     it('sin foto, el mismo cuadro con un ícono que el lector de pantalla no lee', async () => {
         await receive();
         const { default: DishPhoto } = await import('./DishPhoto.vue');
-        const wrapper = mount(DishPhoto, { props: { image: null, alt: '', size: 'thumb' } });
+        const wrapper = mount(DishPhoto, { props: { image: null, name: 'Jugo de prueba', alt: '', size: 'thumb' } });
         await flushPromises();
 
         expect(wrapper.find('img').exists()).toBe(false);
@@ -90,5 +90,15 @@ describe('RestaurantPromotions', () => {
         expect(first?.text()).toContain('Hasta el miércoles, 7 de octubre');
         expect(second?.find('img').exists()).toBe(false);
         expect(second?.text()).toContain('Sin imagen (prueba)');
+    });
+
+    it('sin foto, el ícono del plato típico si el nombre lo nombra, y si no el genérico (#115)', async () => {
+        await receive();
+        const { default: DishPhoto } = await import('./DishPhoto.vue');
+        const icon = (name: string) => mount(DishPhoto, { props: { image: null, name, alt: '', size: 'thumb' } }).get('svg').attributes('data-icon');
+
+        expect(icon('Sancocho de gallina')).toBe('sancocho');
+        expect(icon('Empanadas vallunas')).toBe('empanada');
+        expect(icon('Jugo de prueba')).toBe('veni/generico');
     });
 });

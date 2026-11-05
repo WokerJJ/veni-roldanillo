@@ -226,7 +226,7 @@ Cómo se numeran las versiones, qué necesita el servidor, qué secrets hacen fa
 
 ## Créditos
 
-- **Íconos:** [colombia-icons](https://github.com/Mteheran/colombia-icons), licencia MIT, © Miguel Teheran. Los que usa la app están copiados en [`resources/icons/colombia`](resources/icons/colombia) desde una versión fija, con su licencia ([ADR 0011](docs/adr/0011-iconos-colombia-icons.md)).
+- **Íconos:** [colombia-icons](https://github.com/Mteheran/colombia-icons), licencia MIT, © Miguel Teheran. Los que usa la app están copiados en [`resources/icons/colombia`](resources/icons/colombia) desde una versión fija, con su licencia ([ADR 0011](docs/adr/0011-iconos-colombia-icons.md)). Los de ingredientes y el genérico de respaldo son propios del proyecto, en [`resources/icons/veni`](resources/icons/veni) ([ADR 0036](docs/adr/0036-iconos-de-ingredientes-y-comida.md)).
 - **Panel del dueño:** [Filament](https://filamentphp.com) y [Livewire](https://livewire.laravel.com), licencia MIT ([ADR 0025](docs/adr/0025-panel-del-dueno-con-filament.md)).
 - **Mapa:** datos © colaboradores de [OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL), publicados como PMTiles por [veni-mapa](https://github.com/WokerJJ/veni-mapa). Se pinta con [MapLibre GL JS](https://maplibre.org/) y [PMTiles](https://github.com/protomaps/PMTiles), los dos con licencia BSD de 3 cláusulas.
 
