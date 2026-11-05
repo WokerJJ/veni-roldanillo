@@ -11,6 +11,10 @@
  *
  * El manifiesto (resources/icons/colombia/manifest.json) dice qué íconos se
  * copian y de qué versión; --dir apunta a otra carpeta (lo usan las pruebas).
+ *
+ * --check también valida los íconos propios del proyecto (resources/icons/veni,
+ * ADR 0036): no tienen origen ni manifiesto, pero pasan por la misma lista
+ * blanca, porque Icon los pinta igual, con v-html. --own apunta a otra carpeta.
  * Solo usa módulos de Node: no agrega dependencias.
  */
 import { createHash } from 'node:crypto';
@@ -20,6 +24,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const DEFAULT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../resources/icons/colombia');
+const DEFAULT_OWN_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../resources/icons/veni');
+/** Lo único que no es un ícono en la carpeta de los propios. */
+const OWN_EXTRA_FILES = new Set(['README.md']);
 const MANIFEST_FILE = 'manifest.json';
 const LICENSE_FILE = 'LICENSE';
 
@@ -354,6 +361,109 @@ function check(dir) {
     return problems;
 }
 
+/** Lo que la raíz de un propio tiene que llevar: la forma de los de colombia-icons (ADR 0036). */
+const OWN_ROOT_STYLE = { fill: 'none', stroke: 'currentColor', 'stroke-width': '1.5' };
+
+/** Dentro del dibujo, un relleno o un trazo solo puede apagarse o seguir el color del texto. */
+const OWN_PAINTS = new Set(['none', 'currentColor']);
+
+/**
+ * Los problemas de estilo de un propio (EVA-023): la lista blanca ya dice
+ * qué elementos y atributos valen; esto pide además que se vea como el resto
+ * del set (trazo de 1,5 en el color del texto, sin relleno) y que ningún
+ * color quede fijo, porque un color fijo no cambia con el tema oscuro.
+ *
+ * @param {string} svg
+ * @returns {string[]}
+ */
+function ownStyleProblems(svg) {
+    const problems = [];
+    const tags = (svg.match(/<[^>]*>/g) ?? []).map((tag) => TAG_SHAPE.exec(tag)).filter((match) => match !== null && match[1] === '');
+
+    tags.forEach(([, , name, rawAttributes], index) => {
+        const attributes = new Map([...rawAttributes.matchAll(/([\w:-]+)="([^"]*)"/g)].map(([, attribute, value]) => [attribute, value]));
+
+        if (index === 0) {
+            for (const [attribute, expected] of Object.entries(OWN_ROOT_STYLE)) {
+                const value = attributes.get(attribute);
+
+                if (value !== expected) {
+                    problems.push(`la raíz tiene que llevar ${attribute}="${expected}" (${value === undefined ? 'no lo tiene' : `tiene «${value}»`})`);
+                }
+            }
+
+            return;
+        }
+
+        for (const attribute of ['fill', 'stroke']) {
+            const value = attributes.get(attribute);
+
+            if (value !== undefined && !OWN_PAINTS.has(value)) {
+                problems.push(`${attribute}="${value}" en <${name}>: dentro del dibujo solo valen none o currentColor`);
+            }
+        }
+    });
+
+    return problems;
+}
+
+/**
+ * Los archivos anotados en la tabla del README de la carpeta (EVA-025): cada
+ * fila empieza por el nombre entre comillas invertidas, «| `tomate.svg` |».
+ *
+ * @param {string} dir
+ * @returns {Set<string>}
+ */
+function ownListed(dir) {
+    const readme = path.join(dir, 'README.md');
+
+    if (!existsSync(readme)) {
+        return new Set();
+    }
+
+    return new Set([...readFileSync(readme, 'utf8').matchAll(/^\|\s*`([^`]+\.svg)`\s*\|/gm)].map(([, file]) => file));
+}
+
+/**
+ * Los íconos propios (ADR 0036): cada archivo es un SVG con nombre de ícono
+ * (minúsculas y guiones: es la clave con la que la app lo busca) que pasa la
+ * lista blanca, tiene la forma del set (EVA-023) y está anotado, con su
+ * origen, en la tabla del README.md de la carpeta (EVA-025). Sin manifiesto
+ * ni sha256: no hay origen con el que comparar, y el archivo pasa por
+ * revisión como cualquier otro código.
+ *
+ * @param {string} dir
+ * @returns {string[]}
+ */
+function checkOwn(dir) {
+    if (!existsSync(dir)) {
+        return [];
+    }
+
+    const problems = [];
+    const listed = ownListed(dir);
+
+    for (const file of readdirSync(dir)) {
+        if (OWN_EXTRA_FILES.has(file)) {
+            continue;
+        }
+
+        if (!file.endsWith('.svg') || !ICON_NAME.test(file.slice(0, -'.svg'.length))) {
+            problems.push(`${file}: no es un ícono (nombre.svg, en minúsculas y con guiones)`);
+            continue;
+        }
+
+        const content = readFileSync(path.join(dir, file), 'utf8');
+        problems.push(...[...validateSvg(content), ...ownStyleProblems(content)].map((problem) => `${file}: ${problem}`));
+
+        if (!listed.has(file)) {
+            problems.push(`${file}: no figura en la tabla de README.md (anotalo con su origen)`);
+        }
+    }
+
+    return problems;
+}
+
 /**
  * Una petición a GitHub sin seguir redirecciones: lo que se copia sale de la
  * dirección pedida o de ninguna. api.github.com y raw.githubusercontent.com
@@ -573,13 +683,14 @@ async function main() {
             verify: { type: 'boolean', default: false },
             update: { type: 'boolean', default: false },
             dir: { type: 'string', default: DEFAULT_DIR },
+            own: { type: 'string', default: DEFAULT_OWN_DIR },
         },
     });
     const dir = path.resolve(values.dir);
     let problems;
 
     if (values.check) {
-        problems = check(dir);
+        problems = [...check(dir), ...checkOwn(path.resolve(values.own)).map((problem) => `propios: ${problem}`)];
 
         if (problems.length === 0) {
             const manifest = readManifest(dir);
