@@ -5,7 +5,7 @@ import type * as FakeInertia from '@/testing/inertia';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 
-async function mountLinks(props: { short?: boolean } = {}, locale: 'es' | 'en' = 'es') {
+async function mountLinks(props: { short?: boolean; inline?: boolean } = {}, locale: 'es' | 'en' = 'es') {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     inertia.reset();
     inertia.receiveFromServer(locale, { replace: true });
@@ -46,40 +46,37 @@ describe('LegalLinks', () => {
         expect(links.map((link) => link.attributes('href'))).toEqual(['/privacy', '/terms']);
     });
 
-    it('antes de la navegación, la guía de platos típicos: baja con este chunk, no con el arranque (#21)', async () => {
-        for (const short of [false, true]) {
-            const wrapper = await mountLinks({ short });
-            const guide = wrapper.get('[data-dish-guide-link]');
-
-            expect(guide.attributes('href')).toBe('/dishes');
-            expect(guide.text()).toBe('Guía de platos típicos');
-            expect(guide.element.closest('nav')).toBeNull();
-            wrapper.unmount();
-        }
-    });
-
-    it('la clase que le pongan va a los dos: el enlace de la guía y la navegación', async () => {
+    it('la clase y los demás atributos que le pongan van a la navegación', async () => {
         const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
         inertia.reset();
         inertia.receiveFromServer('es', { replace: true });
         const { default: LegalLinks } = await import('./LegalLinks.vue');
 
-        const wrapper = mount(LegalLinks, { props: { short: true }, attrs: { class: 'text-sm' } });
+        const wrapper = mount(LegalLinks, { props: { short: true }, attrs: { id: 'x', class: 'text-sm' } });
 
-        expect(wrapper.get('[data-dish-guide-link]').classes()).toContain('text-sm');
         expect(wrapper.get('nav').classes()).toContain('text-sm');
+        expect(wrapper.get('nav').attributes('id')).toBe('x');
     });
 
-    it('los demás atributos no se repiten en los dos: un id queda, como mucho, en uno', async () => {
-        const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
-        inertia.reset();
-        inertia.receiveFromServer('es', { replace: true });
-        const { default: LegalLinks } = await import('./LegalLinks.vue');
+    it('solo trae lo legal: la guía de platos y la navegación de la cabecera son otros componentes (DishGuideCard, MainNav)', async () => {
+        const wrapper = await mountLinks();
 
-        const wrapper = mount(LegalLinks, { attrs: { id: 'x', class: 'text-sm' } });
+        expect(wrapper.find('[data-dish-guide-link]').exists()).toBe(false);
+        expect(wrapper.find('[data-main-nav]').exists()).toBe(false);
+        expect(wrapper.findAll('a').every((link) => link.element.closest('nav[data-legal-links]') !== null)).toBe(true);
+    });
 
-        expect(wrapper.findAll('#x').length).toBeLessThanOrEqual(1);
-        expect(wrapper.get('nav').classes()).toContain('text-sm');
+    it('con `inline` (la línea chica de la barra lateral, ADR 0037): solo los dos documentos, con rótulos cortos, separados por «·» que el lector no lee', async () => {
+        const wrapper = await mountLinks({ short: true, inline: true });
+        const nav = wrapper.get('nav[data-legal-links]');
+
+        // El nombre accesible es el completo y contiene el rótulo que se ve (WCAG 2.5.3).
+        expect(nav.findAll('a').map((link) => [link.text(), link.attributes('aria-label'), link.attributes('href')])).toEqual([
+            ['Datos personales', 'Tratamiento de datos personales', '/privacy'],
+            ['Términos', 'Términos de uso', '/terms'],
+        ]);
+        expect(nav.findAll('[aria-hidden="true"]').map((dot) => dot.text())).toEqual(['·', '·']);
+        expect(nav.findAll('a').every((link) => link.classes().includes('min-h-touch'))).toBe(true);
     });
 
     it('en inglés', async () => {
@@ -87,6 +84,5 @@ describe('LegalLinks', () => {
 
         expect(wrapper.get('nav').attributes('aria-label')).toBe('Legal documents');
         expect(wrapper.get('[data-legal-link="terms"]').text()).toBe('Terms of use');
-        expect(wrapper.get('[data-dish-guide-link]').text()).toBe('Typical dishes guide');
     });
 });

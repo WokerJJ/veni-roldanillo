@@ -207,7 +207,10 @@ export default defineConfig(({ mode }) => ({
             input: ['resources/js/app.ts', ...OFFLINE_ENTRIES],
             refresh: true,
         }),
-        vue(),
+        // Sin los comentarios de las plantillas, como en producción: así
+        // también compila bundle.test.ts, que carga el compilador de Vue con
+        // NODE_ENV=test y los dejaría en el código que mide (ADR 0037).
+        vue({ template: { compilerOptions: { comments: false } } }),
         tailwindcss(),
         shareMapWorkerCode(),
         checkMapStyleUrl(),

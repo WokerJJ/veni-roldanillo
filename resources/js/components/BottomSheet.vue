@@ -13,7 +13,8 @@ import { useI18n } from '@/composables/useI18n';
  * (`v-model:snap`). Al costado (`side:`: desde 768 px, o acostado) la manija no se ve y el alto lo ponen las
  * clases de quien lo usa: el panel lateral de siempre.
  *
- * Con `docked` (el mapa no cargó) no flota: no hay manija ni alturas.
+ * Con `docked` no flota: no hay manija ni alturas. Lo usa el inicio cuando
+ * el mapa no cargó y, en computador, para la barra lateral fija (ADR 0037).
  * Lo de adentro se desplaza dentro del panel; la manija, no.
  */
 const props = defineProps<{ snap: SheetSnap; docked?: boolean }>();

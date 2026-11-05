@@ -20,7 +20,7 @@ async function mountList(
     const { default: RestaurantList } = await import('./RestaurantList.vue');
     const host = document.createElement('div');
     document.body.append(host);
-    const wrapper = mount(RestaurantList, { props: { restaurants, distances }, attachTo: host });
+    const wrapper = mount(RestaurantList, { props: { restaurants, distances, closable: true, autofocus: true }, attachTo: host });
 
     return {
         wrapper,

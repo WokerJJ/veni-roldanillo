@@ -24,7 +24,7 @@ export default defineComponent({
     },
     setup(props, { emit }) {
         const { map } = useMap();
-        /** La última ubicación, solo aquí y solo mientras la lista está abierta. */
+        /** La última ubicación, solo aquí y solo mientras la lista está a la vista: abierta en el celular o, en computador, siempre (la barra lateral, ADR 0037). */
         let here: [number, number] | null = null;
 
         function report(): void {

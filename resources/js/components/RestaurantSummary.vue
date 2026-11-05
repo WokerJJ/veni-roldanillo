@@ -31,10 +31,19 @@ import { openStatusText } from '@/restaurants/statusText';
  * Con la ruta abierta el resumen se reduce a una línea (#81): el nombre y un
  * solo botón de cerrar, que oculta la ruta (`closeDirections`) y devuelve el
  * resumen entero. El mapa queda a la vista.
+ *
+ * En la barra lateral de computador (ADR 0037) va debajo de la fila del
+ * restaurante (`inRow`), que ya dice su nombre y su estado: no se repiten a
+ * la vista, quedan para el lector de pantalla y el foco sigue yendo al
+ * encabezado. Ahí el resumen cambia de lugar cuando la búsqueda o un filtro
+ * sacan o devuelven su fila: si el foco está en un campo (el buscador, un
+ * filtro), no se lo quita.
  */
-const { restaurant, directionsOpen, routeOffline } = defineProps<{
+const { restaurant, directionsOpen, routeOffline, inRow } = defineProps<{
     restaurant: Restaurant;
     directionsOpen?: boolean;
+    /** Debajo de su fila en la lista, que ya muestra su nombre y su estado. */
+    inRow?: boolean;
     /** «Cómo llegar» no bajó (sin señal): en lugar del slot, el aviso y cómo pedirlo de nuevo. */
     routeOffline?: boolean;
 }>();
@@ -50,7 +59,9 @@ const status = computed(() => openStatus(restaurant, now.value));
 const statusText = computed(() => openStatusText(status.value, t, locale.value));
 
 onMounted(() => {
-    heading.value?.focus({ preventScroll: true });
+    if (!document.activeElement?.matches('input, select, textarea')) {
+        heading.value?.focus({ preventScroll: true });
+    }
 });
 </script>
 
@@ -62,7 +73,7 @@ onMounted(() => {
                 ref="heading"
                 tabindex="-1"
                 class="py-2 leading-tight focus:outline-none"
-                :class="directionsOpen ? 'truncate text-base' : 'text-lg md:text-xl'"
+                :class="inRow ? 'sr-only' : directionsOpen ? 'truncate text-base' : 'text-lg md:text-xl'"
             >
                 {{ restaurant.name }}
             </h2>
@@ -103,7 +114,7 @@ onMounted(() => {
                 </li>
             </ul>
 
-            <p class="mt-3 flex items-start gap-2 text-sm" :class="status.state === 'open' ? 'font-semibold' : 'text-ink-muted'" data-status>
+            <p class="mt-3 flex items-start gap-2 text-sm" :class="inRow ? 'sr-only' : status.state === 'open' ? 'font-semibold' : 'text-ink-muted'" data-status>
                 <Icon name="reloj" :size="20" class="shrink-0" />
                 <span>{{ statusText }}</span>
             </p>

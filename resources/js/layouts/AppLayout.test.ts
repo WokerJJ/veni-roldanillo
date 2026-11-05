@@ -75,6 +75,18 @@ describe('AppLayout', () => {
         expect((await mountLayout()).get('header > div').classes()).toEqual(expect.arrayContaining(['mx-auto', 'max-w-5xl']));
     });
 
+    it.each([false, true])('con immersive=%s la cabecera trae «Mapa · Guía de platos» desde 768 px, que baja aparte (ADR 0037)', async (immersive) => {
+        const wrapper = await mountLayout({ immersive });
+        await vi.dynamicImportSettled();
+        const nav = wrapper.get('header nav[data-main-nav]');
+
+        expect(nav.attributes('aria-label')).toBe('Secciones');
+        expect(nav.classes()).toEqual(expect.arrayContaining(['hidden', 'md:block']));
+        expect(nav.findAll('a').map((link) => link.attributes('href'))).toEqual(['/', '/dishes']);
+        // La dirección de mentira es el inicio.
+        expect(nav.get('a[aria-current="page"]').text()).toBe('Mapa');
+    });
+
     it.each([false, true])('con immersive=%s conserva la cabecera y el destino de «Saltar al contenido»', async (immersive) => {
         const wrapper = await mountLayout({ immersive });
 
