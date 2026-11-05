@@ -6,6 +6,7 @@ use App\Filament\Auth\EditProfile;
 use App\Filament\Owner\Auth\Login;
 use App\Filament\Owner\Pages\EditRestaurantProfile;
 use App\Filament\Owner\Support\InitialsAvatarProvider;
+use App\Filament\Owner\Support\PanelModeSwitch;
 use App\Http\Middleware\RequirePasswordChange;
 use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\UseContentSecurityPolicyProfile;
@@ -16,10 +17,11 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Support\Assets\Css;
 use Filament\Support\Colors\Color;
+use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -43,6 +45,9 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  *   colgado de él por la relación, nunca por un restaurant_id del cliente.
  *   Las Policies (RestaurantPolicy y RestaurantContentPolicy) autorizan
  *   además cada registro.
+ * - Modo simple por defecto (#114, ADR 0035): Hoy, Mi carta y Promociones
+ *   en la navegación; «Ver todo» muestra el resto. Es solo navegación: cada
+ *   página sigue en su dirección con la misma autorización.
  * - CSP: el perfil «panel» (ADR 0014 y 0025) parte de la política pública y
  *   le suma solo lo que Filament necesita, y solo en estas rutas
  *   (cspProfile()).
@@ -59,6 +64,19 @@ class OwnerPanelProvider extends PanelProvider
         $this->app->afterResolving(ContentSecurityPolicyProfiles::class, function (ContentSecurityPolicyProfiles $profiles): void {
             $profiles->register(self::CSP_PROFILE, self::cspProfile(...));
         });
+    }
+
+    /**
+     * La hoja propia del panel (resources/css/filament/owner-panel.css): el
+     * texto secundario de Hoy, Mi carta y Estadísticas con su tono en modo
+     * oscuro (EVA-017). La publica `php artisan filament:assets` (lo corren
+     * composer install y la imagen) y se sirve desde el mismo origen.
+     */
+    public function boot(): void
+    {
+        FilamentAsset::register([
+            Css::make('owner-panel', resource_path('css/filament/owner-panel.css')),
+        ]);
     }
 
     /**
@@ -113,10 +131,11 @@ class OwnerPanelProvider extends PanelProvider
             ->tenantProfile(EditRestaurantProfile::class)
             ->strictAuthorization()
             ->discoverResources(in: app_path('Filament/Owner/Resources'), for: 'App\Filament\Owner\Resources')
+            // Sin el tablero de Filament: la raíz del restaurante es Hoy
+            // (Pages\Today, #114, ADR 0035).
             ->discoverPages(in: app_path('Filament/Owner/Pages'), for: 'App\Filament\Owner\Pages')
-            ->pages([
-                Dashboard::class,
-            ])
+            // «Ver todo» / «Volver al modo simple», en el menú de la cuenta.
+            ->userMenuItems(PanelModeSwitch::actions())
             ->widgets([])
             ->middleware([
                 UseContentSecurityPolicyProfile::class.':'.self::CSP_PROFILE,

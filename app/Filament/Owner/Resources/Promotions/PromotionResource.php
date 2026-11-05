@@ -34,6 +34,9 @@ class PromotionResource extends OwnerResource
 
     protected static ?string $slug = 'promotions';
 
+    /** Una de las tres pantallas del modo simple (ADR 0035). */
+    protected static bool $inSimpleMode = true;
+
     public static function getModelLabel(): string
     {
         return __('panel.promotions.label');
