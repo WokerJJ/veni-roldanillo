@@ -40,3 +40,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0034](0034-fotos-de-platos-y-promociones.md) | Fotos de los platos (1:1) y de las promociones (16:9): procesadas en la cola con GD, tres anchos WebP sin metadatos y nombre por hash | Aceptada |
 | [0035](0035-panel-simple-del-dueno.md) | Panel simple del dueño: Hoy, Mi carta y Promociones por defecto, «Ver todo» recordado por cuenta y solo en la navegación | Aceptada |
 | [0036](0036-iconos-de-ingredientes-y-comida.md) | Íconos de comida e ingredientes: propios por nombre de archivo, bajo demanda, y chips de ingredientes en la carta | Aceptada |
+| [0037](0037-barra-lateral-en-computador.md) | La barra lateral en computador: la lista fija a la izquierda, el mapa al lado y lo que no hace falta al abrir fuera del arranque | Aceptada |
