@@ -151,6 +151,7 @@ describe('RestaurantMenu', () => {
             const { wrapper } = await mountMenu([], locale);
 
             expect(wrapper.get('[data-empty]').text()).toBe(text);
+            expect(wrapper.get('[data-empty] svg').attributes()).toMatchObject({ 'data-icon': 'veni/generico', 'aria-hidden': 'true' });
             expect(wrapper.find('h2').exists()).toBe(true);
             expect(wrapper.find('h3').exists()).toBe(false);
             expect(wrapper.find('ul').exists()).toBe(false);
@@ -374,5 +375,172 @@ describe('RestaurantMenu: fotos de los platos (#113)', () => {
         expect(dishes().every((dish) => dish.get('[data-photo]').classes().includes('dish-photo-thumb'))).toBe(true);
         // Junto al nombre y dentro del mismo botón: no se lee dos veces.
         expect(dishes()[0]?.get('img').attributes('alt')).toBe('');
+    });
+});
+
+describe('RestaurantMenu: chips de ingredientes (#115, ADR 0036)', () => {
+    const SECTIONS: MenuSection[] = [
+        {
+            name: 'Platos fuertes (prueba)',
+            dishes: [
+                {
+                    name: 'Arroz con pollo de prueba',
+                    description: null,
+                    price: 20000,
+                    sold_out_until: null,
+                    ingredients: [
+                        { name: 'Cilantro', essential: false, in_dish: true, sold_out_until: '2026-10-07', substitute: null },
+                        { name: 'Tomate', essential: false, in_dish: true, sold_out_until: '2026-10-07', substitute: { name: 'Pepino', price: 500, sold_out_until: null } },
+                    ],
+                    contains: [
+                        { name: 'Arroz', ingredient: null },
+                        { name: 'Cilantro', ingredient: 0 },
+                        { name: 'Tomate', ingredient: 1 },
+                    ],
+                    groups: [],
+                },
+            ],
+        },
+    ];
+
+    it('ícono y nombre de cada uno; el que falta, atenuado y dicho en texto; el reemplazo, resaltado con su recargo', async () => {
+        const { dishes } = await mountMenu(SECTIONS, 'es', 'prueba-la-ceiba');
+        const dish = nth(dishes(), 0);
+        const chips = dish.findAll('[data-ingredient-chip]');
+
+        expect(chips.map((chip) => chip.attributes('data-ingredient-chip'))).toEqual(['present', 'missing', 'swap']);
+        expect(chips.map((chip) => chip.text().replaceAll(/\s+/g, ' ').trim())).toEqual([
+            'Arroz,',
+            'Cilantro · no hay hoy,',
+            'Pepino en lugar de Tomate · +$ 500',
+        ]);
+        expect(nth(chips, 1).find('s').text()).toBe('Cilantro');
+        expect(nth(chips, 1).classes()).toContain('ingredient-chip-missing');
+        expect(nth(chips, 2).classes()).toContain('ingredient-chip-swap');
+        // Cada ícono es decorativo, con su texto al lado; el del reemplazo es el del reemplazo.
+        expect(chips.every((chip) => chip.get('svg').attributes('aria-hidden') === 'true')).toBe(true);
+        expect(nth(chips, 2).get('svg').attributes('data-icon')).toBe('veni/generico');
+        // Lo que ya dice un chip no se repite como aviso aparte.
+        expect(dish.find('[data-ingredient-note]').exists()).toBe(false);
+        // El botón del plato los nombra, con su encabezado y separados.
+        expect(dish.get('[data-choose]').text()).toContain('Ingredientes:');
+    });
+
+    it('en inglés', async () => {
+        const { dishes } = await mountMenu(SECTIONS, 'en', 'prueba-la-ceiba');
+        const chips = nth(dishes(), 0).findAll('[data-ingredient-chip]');
+
+        expect(nth(chips, 1).text()).toContain('out today');
+        expect(nth(chips, 2).text()).toContain('Pepino instead of Tomate');
+    });
+
+    it('una ficha guardada antes, sin `contains`, no muestra chips y sigue con sus avisos', async () => {
+        const [section] = SECTIONS;
+        const old: MenuSection[] = section ? [{ ...section, dishes: section.dishes.map(({ name, description, price, sold_out_until, ingredients = [], groups }) => ({ name, description, price, sold_out_until, ingredients, groups })) }] : [];
+        const { dishes } = await mountMenu(old, 'es', 'prueba-la-ceiba');
+
+        expect(nth(dishes(), 0).find('[data-ingredient-chips]').exists()).toBe(false);
+        expect(nth(dishes(), 0).findAll('[data-ingredient-note]').map((note) => note.text())).toEqual(['Hoy sin Cilantro', 'Hoy con Pepino en lugar de Tomate']);
+    });
+});
+
+describe('RestaurantMenu: chips en un plato que no se puede pedir y avisos que no son chip (EVA-024)', () => {
+    const RICE = { name: 'Arroz', essential: true, in_dish: true, sold_out_until: '2026-10-07', substitute: null };
+
+    it('agotado hoy, los chips siguen debajo del nombre, fuera del botón', async () => {
+        const { dishes } = await mountMenu([
+            {
+                name: 'Platos fuertes (prueba)',
+                dishes: [{ name: 'Bandeja de prueba', description: null, price: 22000, sold_out_until: '2026-10-07', ingredients: [], contains: [{ name: 'Fríjoles', ingredient: null }], groups: [] }],
+            },
+        ]);
+        const dish = nth(dishes(), 0);
+
+        expect(dish.find('[data-choose]').exists()).toBe(false);
+        expect(dish.find('[data-sold-out]').exists()).toBe(true);
+        expect(dish.findAll('[data-ingredient-chip]').map((chip) => chip.attributes('data-ingredient-chip'))).toEqual(['present']);
+    });
+
+    it('sin un esencial ni reemplazo, el chip dice que falta y el aviso del plato no se repite como nota', async () => {
+        const { dishes } = await mountMenu([
+            {
+                name: 'Platos fuertes (prueba)',
+                dishes: [
+                    {
+                        name: 'Arroz con pollo de prueba',
+                        description: null,
+                        price: 20000,
+                        sold_out_until: null,
+                        ingredients: [RICE],
+                        contains: [
+                            { name: 'Arroz', ingredient: 0 },
+                            { name: 'Pollo', ingredient: null },
+                        ],
+                        groups: [],
+                    },
+                ],
+            },
+        ]);
+        const dish = nth(dishes(), 0);
+
+        expect(dish.find('[data-choose]').exists()).toBe(false);
+        expect(dish.get('[data-unavailable]').text()).toContain('Arroz');
+        expect(dish.findAll('[data-ingredient-chip]').map((chip) => chip.attributes('data-ingredient-chip'))).toEqual(['missing', 'present']);
+        expect(dish.find('[data-ingredient-note]').exists()).toBe(false);
+    });
+
+    it('un «Quitar» que no está vinculado al plato (`in_dish: false`) sigue como aviso de texto, aunque haya chips', async () => {
+        const { dishes } = await mountMenu([
+            {
+                name: 'Platos fuertes (prueba)',
+                dishes: [
+                    {
+                        name: 'Sancocho de prueba',
+                        description: null,
+                        price: 18500,
+                        sold_out_until: null,
+                        // Solo lo nombra el «Quitar»: lo lleva, pero no está en `contains`.
+                        ingredients: [{ name: 'Cilantro', essential: false, in_dish: true, sold_out_until: '2026-10-07', substitute: null }],
+                        contains: [{ name: 'Yuca', ingredient: null }],
+                        groups: [{ name: 'Quitar (prueba)', kind: 'removal', min: 0, max: 1, options: [{ name: 'Cilantro', price: 0, ingredient: 0 }] }],
+                    },
+                ],
+            },
+        ]);
+        const dish = nth(dishes(), 0);
+
+        expect(dish.findAll('[data-ingredient-chip]').map((chip) => chip.text().trim())).toEqual(['Yuca']);
+        expect(dish.findAll('[data-ingredient-note]').map((note) => note.text())).toEqual(['Hoy sin Cilantro']);
+    });
+});
+
+describe('RestaurantMenu: el ícono no cambia con el idioma (BUG-025)', () => {
+    it('en inglés, el plato sin foto y los chips usan el ícono del nombre en español', async () => {
+        const { dishes } = await mountMenu(
+            [
+                {
+                    name: 'Main dishes (test)',
+                    dishes: [
+                        {
+                            name: 'Hen soup',
+                            name_es: 'Sancocho de gallina',
+                            description: null,
+                            price: 18500,
+                            sold_out_until: null,
+                            photo: null,
+                            ingredients: [],
+                            contains: [{ name: 'Rice', name_es: 'Arroz', ingredient: null }],
+                            groups: [],
+                        },
+                    ],
+                },
+            ],
+            'en',
+        );
+        const dish = nth(dishes(), 0);
+
+        expect(dish.get('[data-photo="placeholder"] svg').attributes('data-icon')).toBe('sancocho');
+        expect(dish.get('[data-name]').text()).toBe('Hen soup');
+        expect(dish.get('[data-ingredient-chip]').text().trim()).toBe('Rice');
     });
 });

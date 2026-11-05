@@ -5,7 +5,7 @@ import { nth, present } from '@/testing/present';
 
 import { profile } from '@/testing/restaurants';
 
-import { blockingIngredient, ingredientEffects, isIngredientOut, isOptionOut, isOptionSubstituted } from './ingredients';
+import { blockingIngredient, ingredientChips, ingredientEffects, isIngredientOut, isOptionOut, isOptionSubstituted, isShownAsChip } from './ingredients';
 import {
     acceptsSubstitute,
     addItem,
@@ -258,5 +258,76 @@ describe('ingredientes agotados hoy', () => {
         expect(sameLine(a, b)).toBe(false);
         expect(sameLine(a, { ...a, quantity: 4 })).toBe(true);
         expect(addItem([a], b)).toHaveLength(2);
+    });
+});
+
+describe('chips de ingredientes (#115, ADR 0036)', () => {
+    function withContents(dish: MenuDish, contains: NonNullable<MenuDish['contains']>): MenuDish {
+        return { ...dish, contains };
+    }
+
+    it('lo que hay, lo que hoy falta y el reemplazo con su recargo, en el orden del dueño', () => {
+        const dish = withContents(
+            bandeja([
+                ingredient({ name: 'Cebolla' }),
+                ingredient({ name: 'Tomate', substitute: { name: 'Pepino', price: 500, sold_out_until: null } }),
+            ]),
+            [
+                { name: 'Arroz', ingredient: null },
+                { name: 'Tomate', ingredient: 1 },
+                { name: 'Cebolla', ingredient: 0 },
+            ],
+        );
+
+        expect(ingredientChips(dish, TODAY)).toEqual([
+            { kind: 'present', name: 'Arroz', icon: 'Arroz' },
+            { kind: 'swap', name: 'Tomate', substitute: 'Pepino', price: 500, icon: 'Pepino' },
+            { kind: 'missing', name: 'Cebolla', icon: 'Cebolla' },
+        ]);
+        expect(isShownAsChip(dish, 0)).toBe(true);
+    });
+
+    it('un reemplazo también agotado deja el chip como faltante; el de ayer ya volvió', () => {
+        const dish = withContents(
+            bandeja([
+                ingredient({ name: 'Res', essential: true, substitute: { name: 'Cerdo', price: 1000, sold_out_until: TODAY } }),
+                ingredient({ name: 'Arroz', sold_out_until: YESTERDAY }),
+            ]),
+            [
+                { name: 'Res', ingredient: 0 },
+                { name: 'Arroz', ingredient: 1 },
+            ],
+        );
+
+        expect(ingredientChips(dish, TODAY)).toEqual([
+            { kind: 'missing', name: 'Res', icon: 'Res' },
+            { kind: 'present', name: 'Arroz', icon: 'Arroz' },
+        ]);
+    });
+
+    it('en inglés, el ícono sale del nombre en español, también el del reemplazo (BUG-025)', () => {
+        const dish = withContents(
+            bandeja([ingredient({ name: 'Tomato', substitute: { name: 'Cucumber', name_es: 'Pepino', price: 500, sold_out_until: null } })]),
+            [
+                { name: 'Rice', name_es: 'Arroz', ingredient: null },
+                { name: 'Tomato', name_es: 'Tomate', ingredient: 0 },
+                // Sin traducción no viaja: el nombre ya es el español.
+                { name: 'Ajo', ingredient: null },
+            ],
+        );
+
+        expect(ingredientChips(dish, TODAY)).toEqual([
+            { kind: 'present', name: 'Rice', icon: 'Arroz' },
+            { kind: 'swap', name: 'Tomato', substitute: 'Cucumber', price: 500, icon: 'Pepino' },
+            { kind: 'present', name: 'Ajo', icon: 'Ajo' },
+        ]);
+    });
+
+    it('sin `today` todo está; una ficha guardada antes no tiene chips', () => {
+        const dish = withContents(bandeja([ingredient()]), [{ name: 'Tomate', ingredient: 0 }]);
+
+        expect(ingredientChips(dish, undefined)).toEqual([{ kind: 'present', name: 'Tomate', icon: 'Tomate' }]);
+        expect(ingredientChips(bandeja([ingredient()]), TODAY)).toEqual([]);
+        expect(isShownAsChip(bandeja([ingredient()]), 0)).toBe(false);
     });
 });
