@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
-import type { Component, FunctionalComponent } from 'vue';
-import { h, onBeforeUnmount, shallowRef, useTemplateRef, watch } from 'vue';
+import type { FunctionalComponent } from 'vue';
+import { h, onBeforeUnmount, shallowRef, useTemplateRef } from 'vue';
 
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 import UpdatePrompt from '@/components/UpdatePrompt.vue';
+import type * as Links from '@/components/links';
 import { useI18n } from '@/composables/useI18n';
 import wordmark from '@brand/logo/veni-wordmark.svg';
 import wordmarkWhite from '@brand/logo/veni-wordmark-blanco.svg';
@@ -49,31 +50,30 @@ const stopFocusingContent = router.on('navigate', () => {
 onBeforeUnmount(stopFocusingContent);
 
 /*
-| Los documentos legales del pie (#23, ADR 0030) bajan aparte y solo cuando
-| hay pie: el layout viaja en el arranque y el inicio (inmersivo) no los
-| muestra; la bienvenida los pide con la lista. Si no bajan (sin señal), el
-| pie queda con los créditos, que sí van en el arranque.
+| La navegación de la cabecera («Mapa · Guía de platos», ADR 0037), la guía
+| de platos y los documentos legales del pie (#23, ADR 0030) bajan aparte, en
+| un solo chunk (components/links.ts): el layout viaja en el arranque y en él
+| no cabían. La navegación se ve desde 768 px; en el celular no entra al lado
+| del idioma y el tema, y la guía está en la bienvenida. Si no bajan (sin
+| señal), el pie queda con los créditos, que sí van en el arranque, y la
+| cabecera con el logo, que lleva al mapa.
 */
-const legalLinks = shallowRef<Component>();
-const LegalLinks: FunctionalComponent = (_props, { attrs }) => (legalLinks.value === undefined ? null : h(legalLinks.value, attrs));
+const links = shallowRef<typeof Links>();
+const lazy =
+    (part: keyof typeof Links): FunctionalComponent =>
+    (_props, { attrs }) =>
+        links.value === undefined ? null : h(links.value[part], attrs);
+const MainNav = lazy('MainNav');
+const DishGuideCard = lazy('DishGuideCard');
+const LegalLinks = lazy('LegalLinks');
 
-watch(
-    () => immersive,
-    (isImmersive) => {
-        if (isImmersive || legalLinks.value !== undefined) {
-            return;
-        }
-
-        import('@/components/LegalLinks.vue')
-            .then((module) => {
-                legalLinks.value = module.default;
-            })
-            .catch((error: unknown) => {
-                console.error('[layout] No se pudieron cargar los enlaces legales.', error);
-            });
-    },
-    { immediate: true },
-);
+import('@/components/links')
+    .then((module) => {
+        links.value = module;
+    })
+    .catch((error: unknown) => {
+        console.error('[layout] No se pudieron cargar los enlaces legales.', error);
+    });
 </script>
 
 <template>
@@ -103,6 +103,8 @@ watch(
                         class="hidden h-10 w-auto dark:block"
                     >
                 </Link>
+                <!-- «Mapa · Guía de platos», con la sección actual marcada: baja con los documentos legales. -->
+                <MainNav class="hidden grow md:block" />
                 <div class="flex items-center gap-2">
                     <LocaleSwitcher />
                     <ThemeToggle />
@@ -122,6 +124,7 @@ watch(
                     <Link href="/credits" class="inline-flex min-h-touch items-center underline" data-credits>
                         {{ t('credits.link') }}
                     </Link>
+                    <DishGuideCard link />
                     <LegalLinks />
                 </div>
             </div>
