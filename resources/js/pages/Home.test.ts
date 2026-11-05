@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import type { Restaurant } from '@/restaurants/api';
 import { NO_FILTERS } from '@/restaurants/filterParams';
 import type * as FakeInertia from '@/testing/inertia';
+import { desktopWidth, phoneWidth, stubMedia } from '@/testing/media';
 import { EL_GUADUAL, LA_CEIBA, restaurant, stubRestaurantsFetch } from '@/testing/restaurants';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
@@ -415,6 +416,7 @@ describe('Home', () => {
             const { panel } = await mountHome({ locale, answer: [restaurant({ slug: 'la-real', fictitious: false }), LA_CEIBA] });
 
             expect(panel().get('[data-sample]').text()).toBe(text);
+            expect(panel().findAll('[data-sample]')).toHaveLength(1);
         });
 
         it('si ninguno lo es, no lo dice', async () => {
@@ -487,6 +489,22 @@ describe('Home', () => {
 
             return listImport;
         }
+
+        it('aunque no bajen, la bienvenida del celular dice «Datos de ejemplo» en su lugar de siempre (ADR 0022)', async () => {
+            failListImport(Number.POSITIVE_INFINITY);
+            const { panel } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+
+            await vi.waitFor(
+                () => {
+                    expect(panel().find('[data-panel-offline]').exists()).toBe(true);
+                },
+                { timeout: IMPORT_TIMEOUT },
+            );
+            const badge = panel().get('[data-sample]');
+            expect(badge.text()).toBe('Datos de ejemplo');
+            // Al lado de «Ver la lista», como siempre.
+            expect(badge.element.parentElement?.querySelector('button')?.textContent.trim()).toBe('Ver la lista');
+        });
 
         it('lo dice, y «Reintentar» los vuelve a pedir', async () => {
             const listImport = failListImport(1);
@@ -1131,5 +1149,275 @@ describe('Home', () => {
             expect(lunches.get('a[data-lunch]').attributes('href')).toBe('/restaurants/prueba-la-ceiba');
             expect(lunches.get('[data-price]').text().replaceAll(' ', ' ')).toBe('$ 14.000');
         });
+    });
+});
+
+/*
+| En computador (desde 1024 px, ADR 0037): barra lateral fija con la lista
+| siempre abierta y el mapa al lado. matchMedia dice que sí, y la prueba
+| puede cambiar el ancho en caliente (testing/media.ts).
+*/
+describe('Home en computador', () => {
+    let media: ReturnType<typeof stubMedia>;
+
+    beforeEach(() => {
+        media = stubMedia(desktopWidth);
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    /** Cambia el ancho de la ventana y espera a que el inicio se acomode. */
+    async function resize(width: (query: string) => boolean) {
+        media.change(width);
+        await vi.dynamicImportSettled();
+        await flushPromises();
+    }
+
+    const activeIn = (element: Element) => element.contains(document.activeElement) && document.activeElement !== document.body;
+
+    it('el panel es una barra fija con nombre (una región), antes del mapa, y el mapa ocupa el resto sin nada encima', async () => {
+        const { wrapper, panel, map } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+
+        expect(panel().attributes('role')).toBe('region');
+        expect(panel().attributes('aria-label')).toBe('Dónde comer');
+        expect(panel().classes()).toEqual(expect.arrayContaining(['max-w-sm', 'shrink-0']));
+        expect(panel().classes()).not.toContain('absolute');
+        // Sin manija ni alturas: no flota.
+        expect(panel().find('[data-sheet-handle]').exists()).toBe(false);
+        expect(panel().attributes('data-sheet')).toBeUndefined();
+        expect(wrapper.get('inertia-head + div').classes()).toContain('flex');
+        expect(wrapper.getComponent({ name: 'MapView' }).props('overlay')).toBeNull();
+        // El foco recorre la barra antes que el mapa.
+        expect(panel().element.compareDocumentPosition(map().element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('muestra el título, el subtítulo y la lista con el buscador, sin «Ver la lista» y sin llevarse el foco', async () => {
+        const { wrapper, panel, listButton, items } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+
+        expect(wrapper.get('h1').text()).toBe('Vení, comamos en Roldanillo');
+        expect(wrapper.get('h1').classes()).not.toContain('sr-only');
+        expect(panel().text()).toContain('Mirá los menús con precios y horarios');
+        expect(listButton()).toBeUndefined();
+        expect(panel().find('input').exists()).toBe(true);
+        expect(items()).toHaveLength(2);
+        expect(panel().find('[data-suggest]').exists()).toBe(true);
+        expect(document.activeElement).toBe(document.body);
+    });
+
+    it('arriba, fijos, el título, el subtítulo, la tarjeta de la guía, el buscador y «Sugerime algo»; en el medio, lo único que se desplaza; abajo, la línea chica', async () => {
+        const { panel } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        const before = (first: string, second: string) =>
+            Boolean(panel().get(first).element.compareDocumentPosition(panel().get(second).element) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+        // La tarjeta compacta va justo después del subtítulo y antes de «Restaurantes».
+        const card = panel().get('a[data-dish-guide-card]');
+        expect(card.attributes('href')).toBe('/dishes');
+        expect(before('h1', 'a[data-dish-guide-card]')).toBe(true);
+        expect(before('a[data-dish-guide-card]', 'h2')).toBe(true);
+        expect(before('a[data-dish-guide-card]', 'input[type="search"]')).toBe(true);
+        expect(panel().get('h2').text()).toBe('Restaurantes');
+
+        // Lo que se desplaza: los almuerzos, las filas y lo guardado. El buscador, «Sugerime algo», la tarjeta y el pie, no.
+        const scroller = panel().get('[data-list-scroll]');
+        expect(scroller.classes()).toEqual(expect.arrayContaining(['min-h-0', 'flex-1', 'overflow-y-auto']));
+        expect(scroller.findAll('button[data-slug]')).toHaveLength(2);
+        expect(scroller.find('details[data-lunches]').exists()).toBe(true);
+        for (const fixed of ['input[type="search"]', '[data-suggest]', '[data-dish-guide-card]', '[data-sidebar-footer]']) {
+            expect(scroller.element.contains(panel().get(fixed).element)).toBe(false);
+        }
+        // La lista se lleva el alto que sobra: el pie queda abajo.
+        expect(panel().get('section[aria-labelledby]').classes()).toEqual(expect.arrayContaining(['min-h-0', 'flex-1']));
+
+        const footer = panel().get('[data-sidebar-footer]');
+        expect(footer.element.parentElement?.lastElementChild).toBe(footer.element);
+        expect(footer.classes()).toEqual(expect.arrayContaining(['text-xs', 'shrink-0', 'mt-auto']));
+        expect(footer.findAll('a').map((link) => link.attributes('href'))).toEqual(['/credits', '/privacy', '/terms']);
+        expect(footer.get('[data-credits]').text()).toBe('Créditos');
+        expect(footer.get('[data-credits]').attributes('aria-label')).toBe('Créditos y datos de OpenStreetMap');
+        // La guía ya está en la tarjeta: no se repite como enlace chico.
+        expect(panel().find('[data-dish-guide-link]').exists()).toBe(false);
+    });
+
+    it('con unos 40 restaurantes, la lista los trae todos dentro de la parte que se desplaza', async () => {
+        const many = Array.from({ length: 40 }, (_, index) => restaurant({ slug: `prueba-${String(index)}`, name: `Restaurante de Prueba ${String(index)} (ficticio)` }));
+        const { panel } = await mountHome({ answer: many });
+
+        expect(panel().get('[data-list-scroll]').findAll('button[data-slug]')).toHaveLength(40);
+        expect(panel().get('[data-sidebar-footer]').element.closest('[data-list-scroll]')).toBeNull();
+    });
+
+    it('tocar un marcador marca su fila en la lista y abre su resumen debajo; elegir en la lista lo elige en el mapa', async () => {
+        const { tapOnMap, layer, items, wrapper } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+
+        await tapOnMap(EL_GUADUAL.slug);
+        const row = wrapper.get(`li[data-row="${EL_GUADUAL.slug}"]`);
+        expect(row.get(`button[data-slug="${EL_GUADUAL.slug}"]`).attributes('aria-current')).toBe('true');
+        expect(row.get('[role="dialog"]').text()).toContain(EL_GUADUAL.name);
+        expect(layer().props('selected')).toBe(EL_GUADUAL.slug);
+
+        await items().find((item) => item.attributes('data-slug') === LA_CEIBA.slug)?.trigger('click');
+        await flushPromises();
+        expect(layer().props('selected')).toBe(LA_CEIBA.slug);
+        expect(wrapper.findAll('[role="dialog"]')).toHaveLength(1);
+        expect(wrapper.find(`li[data-row="${LA_CEIBA.slug}"] [role="dialog"]`).exists()).toBe(true);
+    });
+
+    it('debajo de su fila, el resumen no repite el nombre ni el estado a la vista: quedan para el lector, con el foco en su encabezado', async () => {
+        const { items, wrapper } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+
+        await items()[0]?.trigger('click');
+        await flushPromises();
+        const dialog = wrapper.get(`li[data-row="${LA_CEIBA.slug}"] [role="dialog"]`);
+
+        expect(dialog.get('h2').text()).toBe(LA_CEIBA.name);
+        expect(dialog.get('h2').classes()).toContain('sr-only');
+        expect(dialog.get('[data-status]').classes()).toContain('sr-only');
+        expect(document.activeElement).toBe(dialog.get('h2').element);
+    });
+
+    it('con un elegido, escribir en el buscador o cambiar un filtro no le quita el foco al campo (el resumen real cambia de lugar)', async () => {
+        const { tapOnMap, panel, wrapper } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        await tapOnMap(EL_GUADUAL.slug);
+
+        const search = panel().get('input[type="search"]');
+        (search.element as HTMLInputElement).focus();
+        await search.setValue('ceiba');
+        await flushPromises();
+        // El Guadual ya no está entre las filas: su resumen sube arriba de la lista.
+        expect(wrapper.find('[data-selected-outside] [role="dialog"]').exists()).toBe(true);
+        expect(document.activeElement).toBe(search.element);
+
+        await search.setValue('');
+        await flushPromises();
+        expect(wrapper.find(`li[data-row="${EL_GUADUAL.slug}"] [role="dialog"]`).exists()).toBe(true);
+        expect(document.activeElement).toBe(search.element);
+
+        const open = panel().get('input[data-filter="open"]');
+        (open.element as HTMLInputElement).focus();
+        await open.setValue(true);
+        await flushPromises();
+        expect(wrapper.find('[data-selected-outside] [role="dialog"]').exists()).toBe(true);
+        expect(document.activeElement).toBe(open.element);
+    });
+
+    it('cerrar el resumen devuelve el foco a la fila; Escape no cierra la lista', async () => {
+        const { items, pressEscape, wrapper } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+
+        await items()[0]?.trigger('click');
+        await flushPromises();
+        const slug = items()[0]?.attributes('data-slug');
+        await pressEscape();
+
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+        expect((document.activeElement as HTMLElement | null)?.dataset.slug).toBe(slug);
+
+        await pressEscape();
+        expect(items()).toHaveLength(2);
+    });
+
+    it('Escape no cierra la lista que venía abierta del celular: al volver al celular sigue abierta', async () => {
+        media.change(phoneWidth);
+        const { listButton, items, pressEscape, panel } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        await listButton()?.trigger('click');
+        await flushPromises();
+        expect(panel().find('button[aria-label="Cerrar la lista"]').exists()).toBe(true);
+
+        await resize(desktopWidth);
+        await pressEscape();
+        expect(items()).toHaveLength(2);
+
+        await resize(phoneWidth);
+        expect(panel().find('button[aria-label="Cerrar la lista"]').exists()).toBe(true);
+        expect(items()).toHaveLength(2);
+    });
+
+    it('al pasar al celular en caliente, con un elegido y un filtro: siguen los dos, el resumen abre y el foco no cae en <body>', async () => {
+        const { items, layer, panel, wrapper, pressEscape } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        await items()[0]?.trigger('click');
+        await flushPromises();
+        const open = panel().get('input[data-filter="delivery"]');
+        (open.element as HTMLInputElement).focus();
+        await open.setValue(true);
+        await flushPromises();
+
+        await resize(phoneWidth);
+
+        expect(panel().attributes('role')).toBeUndefined();
+        expect(layer().props('selected')).toBe(LA_CEIBA.slug);
+        expect(layer().props('filters')).toEqual(expect.objectContaining({ delivery: true }));
+        const dialog = panel().get('[role="dialog"]');
+        expect(dialog.get('h2').classes()).not.toContain('sr-only');
+        expect(activeIn(panel().element)).toBe(true);
+
+        // Con filtros, cerrar el resumen vuelve a la lista (filtrada), no a la bienvenida.
+        await pressEscape();
+        expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+        expect(panel().find('button[aria-label="Cerrar la lista"]').exists()).toBe(true);
+    });
+
+    it('al volver al celular con filtros y sin elegido, abre la lista con el foco en su título', async () => {
+        const { panel } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        const search = panel().get('input[type="search"]');
+        (search.element as HTMLInputElement).focus();
+        await search.setValue('ceiba');
+        await flushPromises();
+
+        await resize(phoneWidth);
+
+        expect(panel().find('button[aria-label="Cerrar la lista"]').exists()).toBe(true);
+        expect((panel().get('input[type="search"]').element as HTMLInputElement).value).toBe('ceiba');
+        expect(document.activeElement).toBe(panel().get('section[aria-labelledby] h2').element);
+    });
+
+    it('al pasar del celular al computador, el foco que estaba en el panel va al buscador, o a la fila del elegido', async () => {
+        media.change(phoneWidth);
+        const { listButton, panel, items, wrapper } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        await listButton()?.trigger('click');
+        await flushPromises();
+
+        await resize(desktopWidth);
+        expect(document.activeElement).toBe(panel().get('input[type="search"]').element);
+
+        // Con un elegido (desde la lista del celular), a su fila, con la ruta pedida intacta.
+        await resize(phoneWidth);
+        await items()[1]?.trigger('click');
+        await flushPromises();
+        await panel().get('button[data-directions]').trigger('click');
+        await flushPromises();
+
+        await resize(desktopWidth);
+        const row = wrapper.get(`li[data-row="${EL_GUADUAL.slug}"]`);
+        expect(row.find('[data-close-directions]').exists()).toBe(true);
+        // En su fila: su botón, o el panel de la ruta que va debajo.
+        expect(activeIn(row.element)).toBe(true);
+    });
+
+    it('si el foco no estaba en el panel (en el mapa), no lo mueve', async () => {
+        const { map } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        const outside = document.createElement('button');
+        map().element.append(outside);
+        outside.focus();
+
+        await resize(phoneWidth);
+        expect(document.activeElement).toBe(outside);
+    });
+
+    it('con el mapa caído, la barra y el aviso del mapa quedan lado a lado', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        engine.fails = true;
+        const { panel, wrapper, map } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        await vi.dynamicImportSettled();
+        await flushPromises();
+
+        expect(map().find('[role="alert"]').exists()).toBe(true);
+        const page = wrapper.get('inertia-head + div');
+        expect(page.classes()).toContain('flex');
+        expect(page.classes()).not.toContain('flex-col');
+        expect(panel().attributes('role')).toBe('region');
+        expect(panel().classes()).toEqual(expect.arrayContaining(['max-w-sm', 'shrink-0']));
+        expect(wrapper.getComponent({ name: 'MapView' }).classes()).toEqual(expect.arrayContaining(['min-w-0', 'flex-1']));
+        expect(wrapper.getComponent({ name: 'MapView' }).classes()).not.toContain('min-h-56');
     });
 });

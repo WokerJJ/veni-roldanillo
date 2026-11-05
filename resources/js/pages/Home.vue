@@ -5,10 +5,12 @@ import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, use
 
 import BottomSheet from '@/components/BottomSheet.vue';
 import Icon from '@/components/Icon.vue';
+import type * as Links from '@/components/links';
 import MapView from '@/components/MapView.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import type { SheetSnap } from '@/components/sheet';
 import { useI18n } from '@/composables/useI18n';
+import { DESKTOP_QUERY, useMediaQuery } from '@/composables/useMediaQuery';
 // Solo los tipos: buscar, filtrar y sortear bajan con la lista (ADR 0028).
 import type { Filters } from '@/restaurants/filterParams';
 import type * as Finder from '@/restaurants/finder';
@@ -37,7 +39,7 @@ const RouteDirections: FunctionalComponent = (_props, { attrs }) => (routeParts.
 | tanto el panel sigue con la bienvenida; si no bajan, lo dice y deja
 | volver a pedirlos.
 */
-const panelParts = shallowRef<{ summary: Component; list: Component; distances: Component; welcome: Component; legal: Component } | null>(null);
+const panelParts = shallowRef<{ summary: Component; list: Component; distances: Component; welcome: Component; links: typeof Links; sidebar: Component } | null>(null);
 let loadingPanelParts = false;
 const panelPartsFailed = ref(false);
 
@@ -47,7 +49,10 @@ const list = shallowRef<{ focusItem: (slug: string) => void } | null>(null);
 const RestaurantList: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.list, { ...attrs, ref: list }) : null);
 const RestaurantDistances: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.distances, attrs) : null);
 const WelcomeActions: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.welcome, attrs) : null);
-const LegalLinks: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.legal, attrs) : null);
+const LegalLinks: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.links.LegalLinks, attrs) : null);
+const DishGuideCard: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.links.DishGuideCard, attrs) : null);
+/** Lo de la barra lateral de computador (ADR 0037): la lista con el resumen del elegido. */
+const HomeSidebar: FunctionalComponent = (_props, { attrs, slots }) => (panelParts.value ? h(panelParts.value.sidebar, { ...attrs, ref: list }, slots) : null);
 
 /*
 | La búsqueda y los filtros (#12, ADR 0028) viven en la dirección, como el
@@ -102,13 +107,21 @@ function loadPanelParts(): void {
         import('@/components/RestaurantList.vue'),
         import('@/components/RestaurantDistances.vue'),
         import('@/components/WelcomeActions.vue'),
-        import('@/components/LegalLinks.vue'),
+        import('@/components/links'),
         import('@/restaurants/finder'),
+        import('@/components/HomeSidebar.vue'),
     ])
-        .then(([summary, list, distances, welcome, legal, finderModule]) => {
+        .then(([summary, list, distances, welcome, links, finderModule, sidebar]) => {
             finder.value = finderModule;
             filters.value ??= finderModule.filtersFromUrl(page.url);
-            panelParts.value = { summary: summary.default, list: list.default, distances: distances.default, welcome: welcome.default, legal: legal.default };
+            panelParts.value = {
+                summary: summary.default,
+                list: list.default,
+                distances: distances.default,
+                welcome: welcome.default,
+                links,
+                sidebar: sidebar.default,
+            };
         })
         .catch((error: unknown) => {
             // Sin señal y sin la PWA guardada: se vuelve a pedir con «Reintentar», al tocar un restaurante o con «Ver la lista».
@@ -141,6 +154,27 @@ defineOptions({ layout: { immersive: true } });
 
 const { t } = useI18n();
 const { status, restaurants, retry } = useRestaurants();
+/**
+ * En computador (desde 1024 px, ADR 0037) el panel no flota: es una barra
+ * lateral fija con el título, la lista con su buscador siempre a la vista, la
+ * tarjeta de la guía y una línea con los créditos y los documentos, y el mapa
+ * ocupa el resto. El resumen del elegido va dentro de la lista, debajo de su
+ * fila. Por debajo, el panel de abajo o el lateral de siempre (ADR 0022).
+ *
+ * La barra es el mismo panel (BottomSheet) con `docked`, una región con
+ * nombre: sin manija ni alturas, a todo el alto y antes del mapa en el
+ * documento, así el foco la recorre primero. No se desplaza entera: arriba,
+ * fijos, el título, el subtítulo, la tarjeta de la guía y el buscador con los
+ * filtros y «Sugerime algo»; en el medio, lo único que se desplaza (la lista:
+ * almuerzos, filas, favoritos); abajo, la línea chica del pie. El mapa no
+ * lleva nada encima (`overlay` null): la cámara usa todo su ancho y MapLibre
+ * sigue el tamaño de su contenedor al cambiar de diseño. Cuántos hay lo dice
+ * la lista; «Ver la lista» y los botones de la bienvenida no se muestran,
+ * porque la lista ya está a la vista. Lo que no hace falta para el primer
+ * pintado (la lista, el resumen y la tarjeta de la guía) baja aparte, con la
+ * lista (HomeSidebar.vue y components/links.ts).
+ */
+const desktop = useMediaQuery(DESKTOP_QUERY);
 
 /** Slug del restaurante con el resumen abierto. */
 const selectedSlug = ref<string | null>(null);
@@ -171,11 +205,45 @@ const routeState = ref<RouteState>({ status: 'locating' });
 const routeAttempt = ref(0);
 
 const selected = computed(() => restaurants.value.find(({ slug }) => slug === selectedSlug.value) ?? null);
+/** La lista está a la vista: abierta en el panel, o siempre en la barra lateral. */
+const listShown = computed(() => listOpen.value || desktop.value);
 const directionsOpen = computed(() => selected.value !== null && directionsFor.value === selected.value.slug);
 /** Sin mapa no hay ubicación ni dónde dibujar: el panel solo ofrece las otras apps. */
 const shownRouteState = computed<RouteState>(() => (mapFailed.value ? { status: 'unavailable' } : routeState.value));
 const hasRestaurants = computed(() => status.value === 'ready' && restaurants.value.length > 0);
 const hasSampleData = computed(() => restaurants.value.some(({ fictitious }) => fictitious));
+
+/**
+ * Cómo va el panel: la barra lateral de computador (`sidebar`), antes del
+ * mapa y sin flotar cuando el mapa no cargó en el celular (`docked`, su
+ * aviso lo taparía: van en una columna que se desplaza si no entran los dos),
+ * o flotando encima del mapa (`floating`): el panel de abajo en un celular
+ * vertical (`sheet:`, ADR 0022), que deja libre la franja de la atribución de
+ * OpenStreetMap y se corre encima del aviso de versión nueva, o al costado
+ * (`side:`), arriba a la izquierda, sin pasar del alto del mapa.
+ */
+const layout = computed(() => (desktop.value ? 'sidebar' : mapFailed.value ? 'docked' : 'floating'));
+const LAYOUTS = {
+    sidebar: {
+        page: 'flex',
+        sheet: 'w-full max-w-sm shrink-0 bg-canvas shadow-lg',
+        map: 'min-w-0 flex-1',
+        footer: 'mt-auto flex shrink-0 flex-wrap items-center gap-x-2 pt-2 text-xs text-ink-muted',
+    },
+    docked: {
+        page: 'flex flex-col overflow-y-auto',
+        sheet: 'mx-3 mt-3 shrink-0 rounded-veni-md border border-line bg-canvas/95 shadow-lg md:mx-4 md:mt-4 md:w-[calc(100%_-_2rem)] md:max-w-sm',
+        map: 'min-h-56',
+        footer: 'contents',
+    },
+    floating: {
+        page: '',
+        sheet: 'absolute inset-x-2 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-(--sheet-height) rounded-veni-md border border-line bg-canvas/95 shadow-lg side:inset-x-auto side:top-4 side:bottom-auto side:left-4 side:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] side:w-[calc(100%_-_2rem)] side:max-w-sm',
+        map: '',
+        footer: 'contents',
+    },
+} as const;
+const classes = computed(() => LAYOUTS[layout.value]);
 
 /** Lo que dice la región de estado: cargando, cuántos hay o que todavía no hay. */
 const statusMessage = computed(() => {
@@ -260,7 +328,7 @@ async function closeSummary(): Promise<void> {
     selectedSlug.value = null;
     await nextTick();
 
-    if (openedFromList && listOpen.value && list.value) {
+    if (openedFromList && listShown.value && list.value) {
         // Al botón de ese restaurante en la lista; si ya no está, a su título.
         list.value.focusItem(slug);
     } else {
@@ -329,7 +397,7 @@ function onKeydown(event: KeyboardEvent): void {
 
     if (selectedSlug.value !== null) {
         void closeSummary();
-    } else if (listOpen.value) {
+    } else if (listOpen.value && !desktop.value) {
         void closeList();
     }
 }
@@ -419,7 +487,7 @@ watch(selected, (restaurant) => {
 });
 
 // Cerrada la lista, sus distancias se olvidan: la próxima vez se calculan de nuevo.
-watch(listOpen, (open) => {
+watch(listShown, (open) => {
     if (!open) {
         distances.value = null;
     }
@@ -429,6 +497,34 @@ watch(listOpen, (open) => {
 watch(restaurants, (current) => {
     if (current.length === 0) {
         listOpen.value = false;
+    }
+});
+
+// Al cruzar 1024 px (girar la tableta, agrandar la ventana) lo de adentro del
+// panel se vuelve a montar y el foco caería en <body>. Quedan el elegido, los
+// filtros y la ruta; si el foco estaba en el panel, va a lo equivalente: la
+// fila del elegido o el buscador en la barra; en el celular, el resumen o la
+// lista lo toman al montarse, y si no, «Ver la lista». Con filtros, el
+// celular abre la lista: es lo que se estaba mirando.
+watch(desktop, async (wide) => {
+    // El mismo panel en los dos diseños: cambia lo de adentro.
+    const root = panel.value;
+    const hadFocus = root?.contains(document.activeElement) === true;
+
+    if (!wide && hasRestaurants.value && filters.value !== null && finder.value?.hasFilters(filters.value)) {
+        listOpen.value = true;
+    }
+
+    await nextTick();
+
+    if (!hadFocus || (!wide && (selected.value || listOpen.value))) {
+        return;
+    }
+
+    if (wide && selectedSlug.value !== null && list.value) {
+        list.value.focusItem(selectedSlug.value);
+    } else {
+        (root.querySelector<HTMLElement>('input[type="search"]') ?? listButton.value ?? statusRegion.value)?.focus();
     }
 });
 
@@ -446,40 +542,28 @@ onBeforeUnmount(() => {
 <template>
     <Head :title="t('home.title')" />
 
-    <div class="absolute inset-0" :class="{ 'flex flex-col overflow-y-auto': mapFailed }">
+    <div class="absolute inset-0" :class="classes.page">
         <!--
             Panel sobre el mapa (va antes en el documento: el título se lee
             primero). Muestra la bienvenida con el estado de los restaurantes,
-            la lista o el resumen del restaurante elegido. En un celular
-            vertical (`sheet:`) es un panel de abajo con tres alturas (BottomSheet.vue,
-            ADR 0022) que deja libre la franja de la atribución de
-            OpenStreetMap (la misma holgura que el aviso de versión nueva) y,
-            si ese aviso se ve, se corre encima de él (UpdatePrompt.vue).
-            Al costado (`side:`: desde 768 px, o desde 480 con poco alto) queda arriba a la izquierda, sin tocar los botones
-            de zoom, con el mismo margen que la cabecera, y nunca pasa del
-            alto del mapa: lo de adentro se desplaza.
-
-            Si el mapa no carga, su aviso lo ocupa entero y taparía el panel,
-            que tiene la lista: la alternativa al mapa. Ahí el panel deja de
-            flotar y va antes del mapa, en una columna que se desplaza si no
-            entran los dos.
+            la lista o el resumen del restaurante elegido. Cómo va (abajo, al
+            costado, en una columna sin mapa o como barra lateral) lo dice
+            `layout`, en el script.
         -->
         <BottomSheet
             ref="sheet"
             v-model:snap="sheetSnap"
-            :docked="mapFailed"
-            class="z-10 rounded-veni-md border border-line bg-canvas/95 shadow-lg"
-            :class="
-                mapFailed
-                    ? 'mx-3 mt-3 shrink-0 md:mx-4 md:mt-4 md:w-[calc(100%_-_2rem)] md:max-w-sm'
-                    : 'absolute inset-x-2 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-(--sheet-height) side:inset-x-auto side:top-4 side:bottom-auto side:left-4 side:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] side:w-[calc(100%_-_2rem)] side:max-w-sm'
-            "
+            :docked="layout !== 'floating'"
+            :role="desktop ? 'region' : undefined"
+            :aria-label="desktop ? t('home.sidebar_label') : undefined"
+            class="z-10"
+            :class="classes.sheet"
         >
             <!-- El título de la página sigue en el documento aunque el panel muestre otra cosa. -->
-            <h1 :class="panelParts && (selected || listOpen) ? 'sr-only' : 'text-lg md:text-2xl'">{{ t('home.heading') }}</h1>
+            <h1 :class="!desktop && panelParts && (selected || listOpen) ? 'sr-only' : 'text-lg md:text-2xl'">{{ t('home.heading') }}</h1>
 
             <RestaurantSummary
-                v-if="selected && panelParts"
+                v-if="selected && panelParts && !desktop"
                 :key="selected.slug"
                 :restaurant="selected"
                 :directions-open="directionsOpen"
@@ -499,7 +583,9 @@ onBeforeUnmount(() => {
             </RestaurantSummary>
 
             <RestaurantList
-                v-else-if="listOpen && panelParts"
+                v-else-if="listOpen && panelParts && !desktop"
+                closable
+                autofocus
                 :restaurants="restaurants"
                 :filters="filters"
                 :start="listStart"
@@ -517,14 +603,21 @@ onBeforeUnmount(() => {
                 -->
                 <p class="mt-1 text-sm text-ink-muted" :class="{ 'sheet:hidden': hasRestaurants }">{{ t('home.intro') }}</p>
 
-                <div class="mt-3 border-t border-line pt-3 text-sm" :class="{ 'sheet:mt-0 sheet:border-0 sheet:pt-0': hasRestaurants }">
+                <!-- La guía de platos típicos, en una línea, antes de la lista. -->
+                <DishGuideCard v-if="desktop" class="mt-3 shrink-0" />
+
+                <div class="text-sm" :class="[desktop && hasRestaurants ? 'contents' : 'mt-3 border-t border-line pt-3', { 'sheet:mt-0 sheet:border-0 sheet:pt-0': hasRestaurants }]">
                     <!-- Siempre en la página: el lector de pantalla anuncia cuando cambia. -->
                     <p
                         ref="statusRegion"
                         role="status"
                         tabindex="-1"
                         class="focus:outline-none"
-                        :class="{ 'sr-only': status === 'error', 'sheet:sr-only': hasRestaurants, 'motion-safe:animate-pulse': status === 'loading' }"
+                        :class="{
+                            'sr-only': status === 'error' || (desktop && hasRestaurants),
+                            'sheet:sr-only': hasRestaurants,
+                            'motion-safe:animate-pulse': status === 'loading',
+                        }"
                         :aria-busy="status === 'loading'"
                     >
                         {{ statusMessage }}
@@ -541,7 +634,7 @@ onBeforeUnmount(() => {
                         </button>
                     </div>
 
-                    <div v-else-if="hasRestaurants" class="mt-2 flex flex-wrap items-center gap-2">
+                    <div v-else-if="hasRestaurants && !desktop" class="mt-2 flex flex-wrap items-center gap-2">
                         <button
                             ref="listButton"
                             type="button"
@@ -575,12 +668,46 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
+                <HomeSidebar
+                    v-if="desktop && hasRestaurants"
+                    class="min-h-0 flex-1"
+                    :restaurants="restaurants"
+                    :filters="filters"
+                    :distances="distances"
+                    :selected="selected"
+                    :directions-open="directionsOpen"
+                    :route-offline="routeParts === null && routeState.status === 'offline'"
+                    @update:filters="filters = $event"
+                    @select="selectFromList"
+                    @close="closeSummary"
+                    @directions="openDirections"
+                    @close-directions="closeDirections"
+                    @retry-directions="retryDirections"
+                >
+                    <RouteDirections
+                        v-if="selected"
+                        :state="shownRouteState"
+                        :profile="profile"
+                        :destination="selected.coordinates"
+                        @profile="profile = $event"
+                        @retry="retryDirections"
+                    />
+                </HomeSidebar>
+
                 <!-- El inicio no tiene pie: los créditos de OpenStreetMap (ADR 0021) van en la bienvenida. -->
-                <Link href="/credits" class="mt-1 inline-flex min-h-touch items-center self-start text-sm text-ink-muted underline" data-credits>
-                    {{ t('credits.link') }}
-                </Link>
-                <!-- Y los documentos legales (#23), que bajan con la lista. -->
-                <LegalLinks short class="text-sm text-ink-muted" />
+                <div :class="classes.footer" data-sidebar-footer>
+                    <Link
+                        href="/credits"
+                        class="inline-flex min-h-touch items-center self-start text-ink-muted underline"
+                        :class="{ 'mt-1 text-sm': !desktop }"
+                        :aria-label="desktop ? t('credits.link') : undefined"
+                        data-credits
+                    >
+                        {{ desktop ? t('credits.link_short') : t('credits.link') }}
+                    </Link>
+                    <DishGuideCard v-if="!desktop" link class="text-sm text-ink-muted" />
+                    <LegalLinks short :inline="desktop" :class="{ 'text-sm text-ink-muted': !desktop }" />
+                </div>
             </template>
         </BottomSheet>
 
@@ -589,10 +716,10 @@ onBeforeUnmount(() => {
             con menos del que necesita. Con mapa, el panel va encima: al
             ubicarse, la cámara deja la ubicación fuera de él.
         -->
-        <MapView ref="mapView" :overlay="mapFailed ? null : panel" :class="{ 'min-h-56': mapFailed }" @status="mapFailed = $event === 'error'">
+        <MapView ref="mapView" :overlay="layout === 'floating' ? panel : null" :class="classes.map" @status="mapFailed = $event === 'error'">
             <RestaurantsOnMap :restaurants="restaurants" :filters="filters" :selected="selectedSlug" @select="selectFromMap" />
             <!-- Las distancias de la lista: la ubicación queda dentro, solo salen los metros. -->
-            <RestaurantDistances v-if="listOpen" :restaurants="restaurants" @distances="distances = $event" />
+            <RestaurantDistances v-if="listShown" :restaurants="restaurants" @distances="distances = $event" />
             <RouteLayer
                 v-if="directionsOpen && selected"
                 :key="selected.slug"

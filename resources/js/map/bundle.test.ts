@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import process from 'node:process';
@@ -309,6 +309,20 @@ describe('página sin conexión', () => {
 | en el mismo cambio que lo justifica.
 */
 describe('presupuesto de descarga', () => {
+    it('se mide como compila `npm run build`: ningún chunk del arranque trae los comentarios de las plantillas', () => {
+        const vueFiles = new Set(initialChunks().flatMap((chunk) => chunk.moduleIds.map(normalize).filter((id) => id.endsWith('.vue') && !id.includes('/node_modules/'))));
+        // La primera línea de cada comentario de las plantillas de esos componentes.
+        const comments = [...vueFiles].flatMap((file) => {
+            const source = readFileSync(file, 'utf8');
+            const template = source.slice(source.indexOf('<template>'));
+
+            return [...template.matchAll(/<!--([\s\S]*?)-->/g)].map(([, text = '']) => text.trim().split('\n')[0]?.trim() ?? '').filter((line) => line.length > 0);
+        });
+
+        expect(comments.length).toBeGreaterThan(0);
+        expect(comments.filter((line) => initialChunks().some((chunk) => chunk.code.includes(line)))).toEqual([]);
+    });
+
     it('el arranque (entrada, página de inicio y sus estilos) no pasa de 83 kB comprimidos', () => {
         // Medido al fijarlo en 80: 70 kB (Vue e Inertia son casi todo). Con
         // los restaurantes sobre el mapa (#9) llegó a 79, y con la ficha (#13),
@@ -387,18 +401,48 @@ describe('presupuesto de descarga', () => {
         // icons.ts y la lista de dependencias de los chunks nuevos. No había
         // qué sacar del mismo tamaño: se decidió en el ADR, sin subir el
         // presupuesto.
+        //
+        // Con la barra lateral de computador (#83, ADR 0037): 82,374 antes y
+        // 82,684 después. Hecha como primero salió (la lista, el resumen y la
+        // tarjeta en Home.vue, la navegación de la cabecera en el layout y un
+        // <component :is> para el <aside>) medía 83,655. Se sacó del arranque,
+        // antes de sumar: «Datos de ejemplo» de la bienvenida pasó a
+        // WelcomeActions (−0,21: su chunk dejó la lista de dependencias), la
+        // lista, el resumen y la tarjeta de la barra bajan con la lista
+        // (HomeSidebar.vue), la navegación baja con los documentos legales
+        // (LegalLinks) y el <aside> es el panel con rol `complementary`, sin
+        // el componente dinámico de Vue (−0,18). Al arranque llegan el
+        // matchMedia, las clases del diseño y lo que carga lo demás.
+        //
+        // Hasta acá estas cifras incluían los comentarios de las plantillas:
+        // el compilador de Vue se cargaba con NODE_ENV=test y los dejaba en
+        // el código, y `npm run build` no. Desde la revisión de #83
+        // vite.config.ts los quita siempre (la prueba de arriba lo vigila) y
+        // la cifra es la que viaja: 82,684 con comentarios eran 80,678 sin
+        // ellos. Con las correcciones de esa revisión, 81,194 (+0,516): vuelve
+        // «Datos de ejemplo» a la bienvenida del celular, en el arranque como
+        // antes (+0,217: se ve aunque no baje la lista), y suman el foco al
+        // cambiar de diseño, el mapa de clases de los tres diseños y el chunk
+        // que agrupa la navegación, la guía y los documentos
+        // (components/links.ts). No se sacó otra cosa: queda en el ADR 0037,
+        // sin subir el presupuesto. Las cifras de arriba se comparan entre sí,
+        // no con las de ahora.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
     it('el resumen y la lista (con sus distancias, la búsqueda, los filtros, los almuerzos y los platos) no bajan con el arranque: el inicio los pide con import() apenas monta', () => {
         const initial = initialChunks();
         const panels =
-            /\/resources\/js\/(?:components\/(?:Restaurant(?:Summary|List|Distances|Filters)|TodaysLunches|WelcomeActions|DishResults)\.vue|restaurants\/(?:openStatus|statusText|distance|finder|filterParams|dishSearch|useDishSearch)\.ts)$/;
+            /\/resources\/js\/(?:components\/(?:Restaurant(?:Summary|List|Distances|Filters)|TodaysLunches|WelcomeActions|DishResults|HomeSidebar)\.vue|restaurants\/(?:openStatus|statusText|distance|finder|filterParams|dishSearch|useDishSearch)\.ts)$/;
 
         expect(initial.filter((chunk) => has(chunk, panels))).toEqual([]);
-        expect(chunkOf('/resources/js/pages/Home.vue').dynamicImports).toEqual(
-            expect.arrayContaining([chunkOf('/resources/js/components/RestaurantSummary.vue').fileName, chunkOf('/resources/js/components/RestaurantList.vue').fileName]),
-        );
+        // La barra lateral (ADR 0037) los importa: pueden quedar en un mismo chunk, que el inicio pide con import().
+        const home = chunkOf('/resources/js/pages/Home.vue');
+        for (const component of ['RestaurantSummary', 'RestaurantList', 'HomeSidebar']) {
+            const chunk = chunks.find((candidate) => has(candidate, new RegExp(`/resources/js/components/${component}[.]vue$`)));
+
+            expect(chunk && home.dynamicImports.includes(chunk.fileName)).toBe(true);
+        }
     });
 
     it('los restaurantes sobre el mapa no bajan con el arranque: el inicio pide su capa con import() apenas monta, junto con el motor', () => {
