@@ -44,9 +44,12 @@ async function mountHours(props: { hours?: WeeklyHours[]; specialHours?: Profile
 
     return {
         wrapper,
-        /** Las filas de la semana: el día y lo que dice de sus horas. */
-        week: () => wrapper.findAll('tbody tr').map((row) => [plain(row.get('th span').text()), lines(row.get('td'))]),
-        today: () => wrapper.findAll('tr[aria-current="date"]'),
+        /** Los grupos de la semana: los días como se ven («Lun–Sáb») y lo que dicen de sus horas. */
+        week: () => wrapper.findAll('tbody tr').map((row) => [plain(row.get('[data-days]').text()), lines(row.get('td'))]),
+        /** Lo que oye el lector en cada grupo: «lunes a sábado». */
+        spoken: () => wrapper.findAll('tbody th .sr-only').map((cell) => cell.text()),
+        /** La línea de hoy, como se lee. */
+        today: () => plain(wrapper.get('[data-today]').text()),
         /** Los horarios especiales: la fecha, las horas y la nota. */
         special: () =>
             wrapper
@@ -69,103 +72,132 @@ afterEach(() => {
 });
 
 describe('RestaurantHours', () => {
-    it('muestra la semana de lunes a domingo, con las franjas de cada día', async () => {
-        const { week } = await mountHours();
-
-        expect(week()).toEqual([
-            ['lunes', '11:00 a. m. – 3:00 p. m. / 6:00 p. m. – 10:00 p. m.'],
-            ['martes', '11:00 a. m. – 3:00 p. m. / 6:00 p. m. – 10:00 p. m.'],
-            ['miércoles', '11:00 a. m. – 3:00 p. m. / 6:00 p. m. – 10:00 p. m.'],
-            ['jueves', '11:00 a. m. – 3:00 p. m. / 6:00 p. m. – 10:00 p. m.'],
-            ['viernes', '11:00 a. m. – 3:00 p. m. / 6:00 p. m. – 10:00 p. m.'],
-            ['sábado', '11:00 a. m. – 3:00 p. m. / 6:00 p. m. – 10:00 p. m.'],
-            ['domingo', '11:00 a. m. – 4:00 p. m.'],
-        ]);
-    });
-
-    it('en inglés salen los días, las horas y los textos', async () => {
-        const { wrapper, week } = await mountHours({ hours: [{ weekday: 1, opens: '11:00', closes: '15:00' }] }, 'en');
-
-        expect(wrapper.get('h2').text()).toBe('Opening hours');
-        expect(week().slice(0, 3)).toEqual([
-            ['Monday', '11:00 AM – 3:00 PM'],
-            ['Tuesday', 'Closed'],
-            ['Wednesday', 'Closed'],
-        ]);
-        expect(wrapper.get('[data-today]').text()).toBe('Today');
-    });
-
-    it('el día que no abre dice «Cerrado»', async () => {
-        const { week } = await mountHours({ hours: [{ weekday: 5, opens: '18:00', closes: '02:00' }] });
-
-        expect(week()).toEqual([
-            ['lunes', 'Cerrado'],
-            ['martes', 'Cerrado'],
-            ['miércoles', 'Cerrado'],
-            ['jueves', 'Cerrado'],
-            // La franja que pasa la medianoche va en el día en que empieza.
-            ['viernes', '6:00 p. m. – 2:00 a. m.'],
-            ['sábado', 'Cerrado'],
-            ['domingo', 'Cerrado'],
-        ]);
-    });
-
-    describe('el día de hoy', () => {
-        it('va resaltado y marcado como la fecha actual, y es uno solo', async () => {
+    describe('hoy, a la vista', () => {
+        it('dice solo el horario de hoy, con los turnos partidos en una línea', async () => {
             const { today } = await mountHours();
 
-            expect(today()).toHaveLength(1);
-            expect(today()[0]?.get('th span').text()).toBe('miércoles');
-            expect(today()[0]?.get('[data-today]').text()).toBe('Hoy');
-            expect(today()[0]?.classes()).toContain('bg-surface');
+            expect(today()).toBe('Hoy 11:00 a. m. – 3:00 p. m. · 6:00 p. m. – 10:00 p. m.');
         });
 
-        it('no depende solo del color: lo dice con una palabra', async () => {
-            const { wrapper } = await mountHours();
+        it('en inglés', async () => {
+            const { today, wrapper } = await mountHours({}, 'en');
 
-            expect(wrapper.findAll('[data-today]')).toHaveLength(1);
+            expect(today()).toBe('Today 11:00 AM – 3:00 PM · 6:00 PM – 10:00 PM');
+            expect(wrapper.get('h2').text()).toBe('Opening hours');
+            expect(wrapper.get('summary').text()).toBe('See the week');
+        });
+
+        it('si hoy no abre, dice «Cerrado»', async () => {
+            const { today } = await mountHours({ hours: [{ weekday: 5, opens: '18:00', closes: '02:00' }] });
+
+            expect(today()).toBe('Hoy Cerrado');
         });
 
         it('es el día en Colombia, no el del reloj UTC', async () => {
             // Miércoles 7 a las 20:00 en Colombia: en UTC ya es jueves 8.
             vi.setSystemTime(new Date('2026-10-08T01:00:00Z'));
-            const { today } = await mountHours();
+            const { today } = await mountHours({ hours: [{ weekday: 3, opens: '18:00', closes: '22:00' }] });
 
-            expect(today()[0]?.get('th span').text()).toBe('miércoles');
+            expect(today()).toBe('Hoy 6:00 p. m. – 10:00 p. m.');
         });
 
         it('si la página queda abierta hasta la medianoche, pasa al día siguiente', async () => {
             vi.setSystemTime(new Date('2026-10-07T23:59:40-05:00'));
-            const { today } = await mountHours();
-            expect(today()[0]?.get('th span').text()).toBe('miércoles');
+            const { today } = await mountHours({ hours: [{ weekday: 3, opens: '18:00', closes: '22:00' }] });
+            expect(today()).toBe('Hoy 6:00 p. m. – 10:00 p. m.');
 
             // El reloj de la página avanza cada medio minuto.
             await vi.advanceTimersByTimeAsync(30_000);
 
-            expect(today()[0]?.get('th span').text()).toBe('jueves');
+            expect(today()).toBe('Hoy Cerrado');
         });
 
-        it('con un horario especial hoy, la fila de hoy muestra ese: es el que vale', async () => {
+        it('con un horario especial hoy, muestra ese, con su nota: es el que vale', async () => {
             const closed = await mountHours({ specialHours: [closedOn('2026-10-07', 'Festivo de prueba')] });
-            expect(closed.week()[2]).toEqual(['miércoles', 'Cerrado']);
-            // Los demás días siguen con el de la semana.
-            expect(closed.week()[3]).toEqual(['jueves', '11:00 a. m. – 3:00 p. m. / 6:00 p. m. – 10:00 p. m.']);
+            expect(closed.today()).toBe('Hoy Cerrado · Festivo de prueba');
+            // No se repite en la lista de los que vienen.
+            expect(closed.wrapper.find('[data-special]').exists()).toBe(false);
             closed.wrapper.unmount();
 
             const shorter = await mountHours({ specialHours: [openOn('2026-10-07', '12:00', '14:00')] });
-            expect(shorter.week()[2]).toEqual(['miércoles', '12:00 p. m. – 2:00 p. m.']);
+            expect(shorter.today()).toBe('Hoy 12:00 p. m. – 2:00 p. m.');
         });
 
-        it('un horario especial de otro día no cambia la fila de hoy ni la de ese día', async () => {
-            const { week } = await mountHours({ specialHours: [closedOn('2026-10-08')] });
+        it('un horario especial de otro día no cambia el de hoy', async () => {
+            const { today } = await mountHours({ specialHours: [closedOn('2026-10-08')] });
 
-            expect(week()[2]).toEqual(['miércoles', '11:00 a. m. – 3:00 p. m. / 6:00 p. m. – 10:00 p. m.']);
-            expect(week()[3]).toEqual(['jueves', '11:00 a. m. – 3:00 p. m. / 6:00 p. m. – 10:00 p. m.']);
+            expect(today()).toBe('Hoy 11:00 a. m. – 3:00 p. m. · 6:00 p. m. – 10:00 p. m.');
+        });
+
+        it('al volver la pestaña del fondo, hoy se pone al día sin esperar al reloj', async () => {
+            const { today } = await mountHours({ hours: [{ weekday: 5, opens: '18:00', closes: '22:00' }] });
+            expect(today()).toBe('Hoy Cerrado');
+
+            vi.setSystemTime(new Date('2026-10-09T08:00:00-05:00'));
+            document.dispatchEvent(new Event('visibilitychange'));
+            await flushPromises();
+
+            expect(today()).toBe('Hoy 6:00 p. m. – 10:00 p. m.');
+        });
+    });
+
+    describe('«Ver semana»', () => {
+        it('arranca plegada: un <details> que el navegador abre con el teclado y anuncia', async () => {
+            const { wrapper } = await mountHours();
+            const details = wrapper.get('details');
+
+            expect(details.attributes('open')).toBeUndefined();
+            expect(details.element.firstElementChild?.tagName).toBe('SUMMARY');
+            expect(wrapper.get('summary').text()).toBe('Ver semana');
+            expect(wrapper.get('summary').classes()).toContain('min-h-touch');
+        });
+
+        it('junta los días seguidos con el mismo horario', async () => {
+            const { week } = await mountHours();
+
+            expect(week()).toEqual([
+                ['Lun–Sáb', '11:00 a. m. – 3:00 p. m. / 6:00 p. m. – 10:00 p. m.'],
+                ['Dom', '11:00 a. m. – 4:00 p. m.'],
+            ]);
+        });
+
+        it('el lector oye los días completos, no las abreviaturas', async () => {
+            const { wrapper, spoken } = await mountHours();
+
+            expect(spoken()).toEqual(['lunes a sábado', 'domingo']);
+            expect(wrapper.get('[data-days]').attributes('aria-hidden')).toBe('true');
+        });
+
+        it('los días que no abren dicen «Cerrado», juntos si van seguidos', async () => {
+            const { week } = await mountHours({ hours: [{ weekday: 5, opens: '18:00', closes: '02:00' }] });
+
+            expect(week()).toEqual([
+                ['Lun–Jue', 'Cerrado'],
+                // La franja que pasa la medianoche va en el día en que empieza.
+                ['Vie', '6:00 p. m. – 2:00 a. m.'],
+                ['Sáb–Dom', 'Cerrado'],
+            ]);
+        });
+
+        it('en inglés', async () => {
+            const { week, spoken } = await mountHours({ hours: [{ weekday: 1, opens: '11:00', closes: '15:00' }] }, 'en');
+
+            expect(week()).toEqual([
+                ['Mon', '11:00 AM – 3:00 PM'],
+                ['Tue–Sun', 'Closed'],
+            ]);
+            expect(spoken()).toEqual(['Monday', 'Tuesday to Sunday']);
+        });
+
+        it('la semana es el horario de siempre: un especial de hoy no la cambia', async () => {
+            const { week } = await mountHours({ specialHours: [closedOn('2026-10-07')] });
+
+            expect(week()[0]).toEqual(['Lun–Sáb', '11:00 a. m. – 3:00 p. m. / 6:00 p. m. – 10:00 p. m.']);
         });
     });
 
     describe('horarios especiales', () => {
-        it('lista los que vienen, con la fecha, las horas y la nota', async () => {
+        it('van dentro de «Ver semana», que lo avisa, con la fecha, las horas y la nota', async () => {
             const { wrapper, special } = await mountHours({
                 specialHours: [
                     closedOn('2026-10-12', 'Festivo de prueba'),
@@ -174,7 +206,8 @@ describe('RestaurantHours', () => {
                 ],
             });
 
-            expect(wrapper.get('h3').text()).toBe('Horarios especiales');
+            expect(wrapper.get('summary').text()).toBe('Ver semana y horarios especiales');
+            expect(wrapper.get('details h3').text()).toBe('Horarios especiales');
             expect(special()).toEqual([
                 ['lunes, 12 de octubre', 'Cerrado', 'Festivo de prueba'],
                 ['miércoles, 14 de octubre', '12:00 p. m. – 2:00 p. m. / 5:00 p. m. – 9:00 p. m.', 'Horario de prueba'],
@@ -184,14 +217,15 @@ describe('RestaurantHours', () => {
         it('en inglés salen las fechas y los textos', async () => {
             const { wrapper, special } = await mountHours({ specialHours: [closedOn('2026-10-12', 'Test holiday')] }, 'en');
 
+            expect(wrapper.get('summary').text()).toBe('See the week and special hours');
             expect(wrapper.get('h3').text()).toBe('Special hours');
             expect(special()).toEqual([['Monday, October 12', 'Closed', 'Test holiday']]);
         });
 
-        it('el de ayer no sale: ya pasó', async () => {
-            const { special } = await mountHours({ specialHours: [closedOn('2026-10-06'), closedOn('2026-10-07')] });
+        it('el de ayer no sale (ya pasó) y el de hoy va en la línea de hoy', async () => {
+            const { special } = await mountHours({ specialHours: [closedOn('2026-10-06'), closedOn('2026-10-07'), closedOn('2026-10-08')] });
 
-            expect(special().map(([date]) => date)).toEqual(['miércoles, 7 de octubre']);
+            expect(special().map(([date]) => date)).toEqual(['jueves, 8 de octubre']);
         });
 
         it('sin ninguno que venga, no deja el título solo', async () => {
@@ -199,6 +233,7 @@ describe('RestaurantHours', () => {
 
             expect(wrapper.find('h3').exists()).toBe(false);
             expect(wrapper.find('[data-special]').exists()).toBe(false);
+            expect(wrapper.get('summary').text()).toBe('Ver semana');
         });
     });
 
@@ -206,44 +241,43 @@ describe('RestaurantHours', () => {
         it.each([
             ['es', 'Todavía no tenemos el horario de este restaurante. Mejor confirmá antes de ir.'],
             ['en', "We don't have this restaurant's opening hours yet. It's best to check before you go."],
-        ] as const)('en %s lo dice, en vez de una semana entera de «Cerrado»', async (locale, text) => {
+        ] as const)('en %s lo dice, sin línea de hoy ni una semana entera de «Cerrado»', async (locale, text) => {
             const { wrapper } = await mountHours({ hours: [] }, locale);
 
             expect(wrapper.get('[data-empty]').text()).toBe(text);
+            expect(wrapper.find('[data-today]').exists()).toBe(false);
+            expect(wrapper.find('details').exists()).toBe(false);
+        });
+
+        it('los horarios especiales que haya se siguen viendo, sin la tabla de la semana', async () => {
+            const { wrapper, special } = await mountHours({ hours: [], specialHours: [openOn('2026-10-12', '12:00', '16:00')] });
+
+            expect(special()).toEqual([['lunes, 12 de octubre', '12:00 p. m. – 4:00 p. m.', null]]);
             expect(wrapper.find('table').exists()).toBe(false);
         });
 
-        it('los horarios especiales que haya se siguen viendo', async () => {
-            const { special } = await mountHours({ hours: [], specialHours: [openOn('2026-10-12', '12:00', '16:00')] });
+        it('con un especial hoy, ese sí se dice', async () => {
+            const { today } = await mountHours({ hours: [], specialHours: [openOn('2026-10-07', '12:00', '16:00')] });
 
-            expect(special()).toEqual([['lunes, 12 de octubre', '12:00 p. m. – 4:00 p. m.', null]]);
+            expect(today()).toBe('Hoy 12:00 p. m. – 4:00 p. m.');
         });
     });
 
     describe('accesibilidad', () => {
-        it('es una sección con título de segundo nivel, y la tabla lleva ese nombre', async () => {
+        it('es una sección con título de segundo nivel (para el lector), y la tabla lleva ese nombre', async () => {
             const { wrapper } = await mountHours();
             const id = wrapper.get('h2').attributes('id');
 
             expect(wrapper.get('h2').text()).toBe('Horario');
+            expect(wrapper.get('h2').classes()).toContain('sr-only');
             expect(wrapper.get('section').attributes('aria-labelledby')).toBe(id);
             expect(wrapper.get('table').attributes('aria-labelledby')).toBe(id);
         });
 
-        it('cada día es el encabezado de su fila', async () => {
+        it('cada grupo de días es el encabezado de su fila', async () => {
             const { wrapper } = await mountHours();
 
-            expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(7);
-        });
-
-        it('al volver la pestaña del fondo, hoy se pone al día sin esperar al reloj', async () => {
-            const { today } = await mountHours();
-
-            vi.setSystemTime(new Date('2026-10-09T08:00:00-05:00'));
-            document.dispatchEvent(new Event('visibilitychange'));
-            await flushPromises();
-
-            expect(today()[0]?.get('th span').text()).toBe('viernes');
+            expect(wrapper.findAll('tbody th[scope="row"]')).toHaveLength(2);
         });
     });
 });

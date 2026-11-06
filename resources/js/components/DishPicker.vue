@@ -447,7 +447,7 @@ onBeforeUnmount(() => {
     accent-color: var(--color-veni-ciruela);
 }
 
-:global([data-theme='dark']) .dish-picker-check {
+[data-theme='dark'] .dish-picker-check {
     accent-color: var(--color-veni-mango);
 }
 

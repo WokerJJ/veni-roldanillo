@@ -964,7 +964,7 @@ onBeforeUnmount(() => {
     accent-color: var(--color-veni-ciruela);
 }
 
-:global([data-theme='dark']) .order-cart-check {
+[data-theme='dark'] .order-cart-check {
     accent-color: var(--color-veni-mango);
 }
 

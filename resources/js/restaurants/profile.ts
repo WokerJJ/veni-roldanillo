@@ -29,6 +29,29 @@ export const PAYMENT_METHOD_KEYS: Readonly<Record<PaymentMethod, TranslationKey>
     card: 'restaurant.payment.card',
 };
 
+/** Los medios de pago que esta versión de la app sabe nombrar, en su orden. */
+export function knownPaymentMethods(methods: readonly PaymentMethod[]): PaymentMethod[] {
+    return methods.filter((method) => method in PAYMENT_METHOD_KEYS);
+}
+
+/**
+ * Si hay algo que mostrar en «Ubicación y contacto»: sin nada, la sección no
+ * sale, ni su enlace en la navegación de la ficha (EVA-035). Una sola regla
+ * para RestaurantContact y la ficha.
+ */
+export function hasContactInfo(
+    restaurant: Pick<RestaurantProfile, 'address' | 'reference' | 'phone' | 'whatsapp' | 'payment_methods' | 'price_level'>,
+): boolean {
+    return (
+        restaurant.address !== null ||
+        restaurant.reference !== null ||
+        restaurant.phone !== null ||
+        restaurant.whatsapp !== null ||
+        knownPaymentMethods(restaurant.payment_methods).length > 0 ||
+        restaurant.price_level !== null
+    );
+}
+
 /** Un horario especial con la nota del restaurante («Festivo»), en el idioma de la página. */
 export interface ProfileSpecialHours extends SpecialHours {
     note: string | null;

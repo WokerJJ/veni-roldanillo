@@ -427,6 +427,11 @@ describe('presupuesto de descarga', () => {
         // (components/links.ts). No se sacó otra cosa: queda en el ADR 0037,
         // sin subir el presupuesto. Las cifras de arriba se comparan entre sí,
         // no con las de ahora.
+        //
+        // Con la ficha en dos columnas (#125, ADR 0038), 81,163: su diseño es
+        // CSS propio de la ficha y no suma utilidades. Con su revisión,
+        // 81,171 (+0,009): la cabecera y el pie del layout pasan de
+        // max-w-5xl a max-w-6xl, al ancho de la ficha.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
