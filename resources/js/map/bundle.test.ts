@@ -427,6 +427,18 @@ describe('presupuesto de descarga', () => {
         // (components/links.ts). No se sacó otra cosa: queda en el ADR 0037,
         // sin subir el presupuesto. Las cifras de arriba se comparan entre sí,
         // no con las de ahora.
+        //
+        // Con los filtros de la barra en lo que se desplaza y sin la tarjeta
+        // de la guía (#130, ADR 0037): 81,188 antes y 81,165 después. Hecho
+        // primero con v-show y un <component :is> medía 81,611: sus ayudantes
+        // (vShow, withDirectives, resolveDynamicComponent) viven con Vue en la
+        // entrada aunque solo los use la lista. El panel se oculta con
+        // `hidden` y los controles son un componente (FilterControls), sin
+        // componente dinámico. En la revisión de #130 el buscador pasó a su
+        // propio componente (RestaurantSearch), «Quitar filtros» a lo fijo,
+        // junto a cuántos hay, y el botón sumó un chevron (un ícono, que baja
+        // aparte): 81,165 antes y 81,177 después (81,164 con «Quitar
+        // filtros» al lado de «Filtros», que partía la fila en dos).
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
