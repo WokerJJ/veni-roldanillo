@@ -69,10 +69,11 @@ describe('AppLayout', () => {
         const immersive = (await mountLayout({ immersive: true })).get('header > div');
         // 46 px del selector de idioma y 2 arriba y abajo; desde 768 px, 8.
         expect(immersive.classes()).toEqual(expect.arrayContaining(['px-4', 'py-0.5', 'md:py-2']));
-        expect(immersive.classes()).not.toContain('max-w-5xl');
+        expect(immersive.classes()).not.toContain('max-w-6xl');
 
-        // Las demás páginas siguen centradas.
-        expect((await mountLayout()).get('header > div').classes()).toEqual(expect.arrayContaining(['mx-auto', 'max-w-5xl']));
+        // Las demás páginas siguen centradas, al ancho de la ficha en dos columnas (ADR 0038): el logo queda sobre el nombre.
+        expect((await mountLayout()).get('header > div').classes()).toEqual(expect.arrayContaining(['mx-auto', 'max-w-6xl']));
+        expect((await mountLayout()).get('footer > div').classes()).toEqual(expect.arrayContaining(['mx-auto', 'max-w-6xl']));
     });
 
     it.each([false, true])('con immersive=%s la cabecera trae «Mapa · Guía de platos» desde 768 px, que baja aparte (ADR 0037)', async (immersive) => {

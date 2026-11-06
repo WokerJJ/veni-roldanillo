@@ -104,10 +104,14 @@ async function close(): Promise<void> {
  * de la barra del sistema. El espaciador deja que lo último de la ficha no
  * quede tapado. CSS propio de la ficha, no utilidades nuevas de Tailwind (el
  * CSS de Tailwind baja con el arranque).
+ *
+ * En computador la ficha dice dónde va (--order-bar-inset-inline, Show.vue):
+ * sobre la columna del menú, sin cruzar la de la derecha (ADR 0038). Ese
+ * tramo mide menos de 48 rem: el ancho máximo no lo corre.
  */
 .order-bar {
     position: fixed;
-    inset-inline: 0;
+    inset-inline: var(--order-bar-inset-inline, 0);
     bottom: 0;
     z-index: 10;
     margin-inline: auto;
