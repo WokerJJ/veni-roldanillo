@@ -58,7 +58,7 @@ describe('LegalLinks', () => {
         expect(wrapper.get('nav').attributes('id')).toBe('x');
     });
 
-    it('solo trae lo legal: la guía de platos y la navegación de la cabecera son otros componentes (DishGuideCard, MainNav)', async () => {
+    it('solo trae lo legal: la guía de platos y la navegación de la cabecera son otros componentes (DishGuideLink, MainNav)', async () => {
         const wrapper = await mountLinks();
 
         expect(wrapper.find('[data-dish-guide-link]').exists()).toBe(false);
