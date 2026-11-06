@@ -25,7 +25,7 @@ async function receive(locale: 'es' | 'en' = 'es'): Promise<void> {
 }
 
 describe('DishPhoto', () => {
-    it('la miniatura pide el ancho que le sirve, reserva su lugar y espera a verse', async () => {
+    it('la miniatura pide el ancho que le sirve (96 px desde 1024 px, #126), reserva su lugar y espera a verse', async () => {
         await receive();
         const { default: DishPhoto } = await import('./DishPhoto.vue');
         const img = mount(DishPhoto, { props: { image: PHOTO, name: 'Sancocho de prueba', alt: '', size: 'thumb' } }).get('img');
@@ -33,7 +33,7 @@ describe('DishPhoto', () => {
         expect(img.attributes()).toMatchObject({
             src: PHOTO.src,
             srcset: PHOTO.srcset,
-            sizes: '64px',
+            sizes: '(min-width: 1024px) 96px, 64px',
             width: '64',
             height: '64',
             alt: '',
@@ -48,7 +48,7 @@ describe('DishPhoto', () => {
         const img = mount(DishPhoto, { props: { image: PHOTO, name: 'Sancocho de prueba', alt: 'Sancocho de prueba', size: 'large' } }).get('img');
 
         expect(img.attributes('alt')).toBe('Sancocho de prueba');
-        expect(img.attributes('sizes')).toBe('(min-width: 32rem) 28rem, 100vw');
+        expect(img.attributes('sizes')).toBe('(min-width: 32rem) 30rem, calc(100vw - 2rem)');
         expect([img.attributes('width'), img.attributes('height')]).toEqual(['480', '480']);
     });
 

@@ -3,7 +3,7 @@
 - Estado: aceptada
 - Fecha: 2026-11-01
 - Precisa: ADR 0013 (imagen versionada: `storage/app` en un volumen), ADR 0014 (CSP), ADR 0015 (qué guarda la PWA), ADR 0018 (la ficha por lista blanca), ADR 0025 (panel del dueño en Filament) y ADR 0030 (documentos legales versionados).
-- Afecta a: `config/media.php`, `App\Enums\MediaKind`, `App\Support\Media\{ImageInspector, ImageProcessor, MediaStore, MediaOrigin}`, `App\Jobs\ProcessUploadedImage`, `App\Models\Concerns\HasMediaImage`, `dishes.photo_path`, `promotions.image_path`, `App\Filament\Owner\Support\MediaUpload`, `HandlesMediaUpload`, `RestaurantProfile`, `tests/contracts/restaurant.profile.json`, `DishPhoto.vue`, `RestaurantPromotions.vue`, `runtimeCaching.ts`, `config/octane.php`, `Dockerfile` y `ci.yml`.
+- Afecta a: `config/media.php`, `App\Enums\MediaKind`, `App\Support\Media\{ImageInspector, ImageProcessor, MediaStore, MediaOrigin}`, `App\Jobs\ProcessUploadedImage`, `App\Models\Concerns\HasMediaImage`, `dishes.photo_path`, `promotions.image_path`, `App\Filament\Owner\Support\MediaUpload`, `HandlesMediaUpload`, `RestaurantProfile`, `tests/contracts/restaurant.profile.json`, `DishPhoto.vue`, `DishPicker.vue`, `DishPhotoViewer.vue`, `useModalDialog.ts`, `RestaurantPromotions.vue`, `runtimeCaching.ts`, `config/octane.php`, `Dockerfile` y `ci.yml`.
 
 ## Contexto
 
@@ -46,3 +46,15 @@ Una foto del celular de un dueño trae problemas que no se ven: pesa varios MB, 
 - Un borrado en cascada desde la base (el restaurante entero) no pasa por los eventos del modelo: sus fotos quedan en el disco, sin enlace. Con el id dentro del hash no se reutilizan; si se vuelve un problema, un comando que compare el disco con las columnas.
 - Con un disco S3 de otro origen el service worker no las guarda (solo guarda lo del mismo origen) y la caché del navegador depende de los encabezados del bucket (`CacheControl` se manda al subir).
 - La promoción sin imagen sale con solo su título; el editor de recorte de Filament carga cropper.js solo en el panel, no en la app.
+
+## Foto grande en el detalle (#126, 2026-11-06)
+
+El usuario pidió que la persona vea mejor cada plato y eligió la foto grande en el detalle. Esta sección precisa lo que se ve; el procesamiento, los tamaños publicados y la CSP no cambian.
+
+- **En el detalle** (`DishPicker`), la foto va arriba, dentro de lo que se desplaza, como botón («Ver la foto de … en grande») con `alt` del nombre del plato en la imagen. `sizes` sigue el ancho real de la hoja: `(min-width: 32rem) 30rem, calc(100vw - 2rem)`. Para que el diálogo no se alargue por la foto, su lado tiene un tope de `45dvh`: a 1440 × 900 mide 405 px y las opciones empiezan dentro de la pantalla; a 390 × 844 mide 358 px y el diálogo sigue en el 90 % de la altura, con «Agregar» siempre visible.
+- **Ampliada** (`DishPhotoViewer`, en el chunk del selector): otro `<dialog>` modal encima, con nombre («Foto de …»), la foto cuadrada lo más grande que entra (`sizes="(min-aspect-ratio: 1/1) 100vh, 100vw"`, así un computador o un celular de densidad 2 o 3 pide la de 960) y un «Cerrar» de 44 px. Se cierra con Escape (solo ella, no el selector), con «Cerrar» o con un toque en el fondo, fuera de la foto, que también haya empezado ahí (como el fondo del selector: arrastrar desde la foto y soltar afuera no la cierra); Tab no saca el foco y al cerrar vuelve a la foto. Ocupa la ventana con `inset: 0` y no `100vw`, que incluye la barra de desplazamiento. Usa los colores del tema y su aparición se anima solo sin `prefers-reduced-motion`.
+- **Sin foto**, el detalle muestra ahora el ícono del plato (#115) del tamaño de la miniatura, sin ampliar: reemplaza lo que decía arriba («la foto grande solo si la hay»). Ocupa 64 o 96 px, no un cuadro del ancho de la hoja, así que no empuja las opciones.
+- **La miniatura de la carta** mide 96 px desde 1024 px (la ficha en dos columnas, ADR 0038) y sigue en 64 px en el celular; `sizes` es `(min-width: 1024px) 96px, 64px`. Con 96 px en densidad 2 alcanza la de 192; en densidad 3 el navegador pide la de 480.
+- **Los dos diálogos comparten `useModalDialog`** (`resources/js/composables/useModalDialog.ts`): abre con `showModal()` (o el atributo `open` sin él), cierra al desmontar, cancela Escape y avisa con `onDismiss`, y también avisa con el `close` nativo. El `v-if` de quien lo abre es la fuente de verdad, pero el navegador puede cerrar un `<dialog>` por su cuenta (Escape sin `cancel`, o un `close()`): sin escuchar ese `close` el componente seguía montado con el diálogo cerrado y la foto ya no se podía reabrir. `OrderCart.vue` y `SavedOnDevice.vue` siguen con su código propio y pasan al composable en la revisión final de código.
+- Todo va en `<style scoped>` y en chunks que se cargan al tocar un plato: el arranque no cambia (81,18 kB con gzip, el tope sigue en 83).
+

@@ -153,6 +153,8 @@
     "restaurant.menu.ingredient_swap": ":substitute en lugar de :name",
     "restaurant.menu.ingredient_swap_price": ":substitute en lugar de :name · +:price",
     "order.picker.close": "Cerrar",
+    "order.picker.photo_zoom": "Ver la foto de :name en grande",
+    "order.picker.photo_viewer": "Foto de :name",
     "order.picker.required": "Obligatorio",
     "order.picker.optional": "Opcional",
     "order.picker.choose_one": "Elegí 1",
