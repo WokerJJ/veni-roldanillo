@@ -458,7 +458,7 @@ onBeforeUnmount(() => {
     accent-color: var(--color-veni-ciruela);
 }
 
-:global([data-theme='dark']) .saved-check {
+[data-theme='dark'] .saved-check {
     accent-color: var(--color-veni-mango);
 }
 </style>
