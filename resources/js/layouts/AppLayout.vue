@@ -64,7 +64,7 @@ const lazy =
     (_props, { attrs }) =>
         links.value === undefined ? null : h(links.value[part], attrs);
 const MainNav = lazy('MainNav');
-const DishGuideCard = lazy('DishGuideCard');
+const DishGuideLink = lazy('DishGuideLink');
 const LegalLinks = lazy('LegalLinks');
 
 import('@/components/links')
@@ -124,7 +124,7 @@ import('@/components/links')
                     <Link href="/credits" class="inline-flex min-h-touch items-center underline" data-credits>
                         {{ t('credits.link') }}
                     </Link>
-                    <DishGuideCard link />
+                    <DishGuideLink />
                     <LegalLinks />
                 </div>
             </div>
