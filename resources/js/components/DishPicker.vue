@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useTemplateRef } from 'vue';
+import { computed, nextTick, onMounted, ref, useId, useTemplateRef } from 'vue';
 
 import DishPhoto from '@/components/DishPhoto.vue';
+import DishPhotoViewer from '@/components/DishPhotoViewer.vue';
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
+import { useModalDialog } from '@/composables/useModalDialog';
 import { formatPesos } from '@/i18n/intl';
 import { ingredientEffects, isOptionSubstituted } from '@/order/ingredients';
 import type { GroupProblem, OrderItem, UnavailableReason } from '@/order/selection';
@@ -32,8 +34,9 @@ import type { MenuDish, MenuOptionGroup } from '@/restaurants/profile';
  * el pedido; si falta algo, lo dice en cada grupo, lo anuncia y lleva el foco
  * al primero que falta.
  *
- * Es un <dialog> nativo abierto con showModal(): el navegador encierra el
- * foco, deja el resto de la página inerte y cierra con Escape. En un celular
+ * Es un <dialog> nativo abierto con showModal() (useModalDialog): el
+ * navegador encierra el foco, deja el resto de la página inerte y cierra con
+ * Escape; si lo cierra por su cuenta, también avisa (EVA-047). En un celular
  * vertical sale de abajo, como el panel del mapa (ADR 0022); desde 768 px
  * queda centrado. Lo carga RestaurantMenu recién cuando se toca un plato:
  * no pesa en la ficha ni en el arranque.
@@ -48,6 +51,10 @@ import type { MenuDish, MenuOptionGroup } from '@/restaurants/profile';
  * entre aceptarlo (suma su recargo) o pedir sin nada; el de un esencial va
  * sí o sí. El «Quitar» de un ingrediente con reemplazo no sale: lo decide el
  * reemplazo.
+ *
+ * Arriba, la foto grande del plato (#126): al tocarla se amplía a pantalla
+ * completa (DishPhotoViewer, otro diálogo encima de este) y al cerrar el foco
+ * vuelve a ella. Sin foto, el ícono del plato más chico y sin ampliar.
  */
 const {
     dish,
@@ -65,6 +72,9 @@ const { t, locale } = useI18n();
 const id = useId();
 const dialog = useTemplateRef<HTMLDialogElement>('dialog');
 const title = useTemplateRef<HTMLElement>('title');
+const zoomButton = useTemplateRef<HTMLButtonElement>('zoom');
+/** La foto a pantalla completa, abierta o no. */
+const zoomed = ref(false);
 
 const selection = ref(emptySelection(dish));
 /** Los errores se muestran después del primer intento de agregar, no antes. */
@@ -210,6 +220,17 @@ async function submit(event: Event): Promise<void> {
     dialog.value?.querySelector<HTMLInputElement>(`[data-group="${String(first)}"] input:not(:disabled)`)?.focus();
 }
 
+/** Idempotente: «Cerrar» y el close nativo del visor pueden llegar los dos (EVA-047). */
+async function closeZoom(): Promise<void> {
+    if (!zoomed.value) {
+        return;
+    }
+
+    zoomed.value = false;
+    await nextTick();
+    zoomButton.value?.focus();
+}
+
 function onPointerDown(event: PointerEvent): void {
     pressedOnBackdrop = event.target === dialog.value;
 }
@@ -228,37 +249,20 @@ function onClick(event: MouseEvent): void {
     }
 }
 
-function onCancel(event: Event): void {
-    event.preventDefault();
-    emit('close');
-}
-
-onMounted(() => {
-    const element = dialog.value;
-
-    if (element === null) {
-        return;
-    }
-
-    if (typeof element.showModal === 'function') {
-        element.showModal();
-    } else {
-        element.setAttribute('open', '');
-    }
-
-    // El foco en el título: el lector de pantalla dice qué plato se abrió.
-    title.value?.focus();
+useModalDialog(dialog, {
+    onDismiss: () => {
+        emit('close');
+    },
 });
 
-onBeforeUnmount(() => {
-    if (dialog.value?.open === true && typeof dialog.value.close === 'function') {
-        dialog.value.close();
-    }
+onMounted(() => {
+    // El foco en el título: el lector de pantalla dice qué plato se abrió.
+    title.value?.focus();
 });
 </script>
 
 <template>
-    <dialog ref="dialog" class="dish-picker text-ink" :aria-labelledby="`${id}-title`" data-dish-picker @cancel="onCancel" @pointerdown="onPointerDown" @click="onClick">
+    <dialog ref="dialog" class="dish-picker text-ink" :aria-labelledby="`${id}-title`" data-dish-picker @pointerdown="onPointerDown" @click="onClick">
         <form class="flex min-h-0 flex-1 flex-col" novalidate @submit="submit">
             <header class="dish-picker-header flex items-start justify-between gap-3 border-b border-line">
                 <div class="min-w-0">
@@ -282,10 +286,22 @@ onBeforeUnmount(() => {
 
             <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
                 <!--
-                    La foto grande va dentro de lo que se desplaza: en un celular bajo no tapa las opciones (#113).
-                    Sin foto no hay cuadro: el ícono ya está en el menú, y aquí solo empujaría las opciones hacia abajo.
+                    La foto grande va dentro de lo que se desplaza y con un alto tope: en un celular bajo no tapa
+                    las opciones ni alarga el diálogo (#113, #126). Tocarla la amplía. Sin foto, el ícono del plato
+                    en su lugar, del tamaño de la miniatura: no empuja las opciones y no se amplía.
                 -->
-                <DishPhoto v-if="dish.photo" class="mt-4" :image="dish.photo" :name="dish.name_es ?? dish.name" :alt="dish.name" size="large" />
+                <button
+                    v-if="dish.photo"
+                    ref="zoom"
+                    type="button"
+                    class="dish-picker-zoom mt-4"
+                    :aria-label="t('order.picker.photo_zoom', { name: dish.name })"
+                    data-zoom
+                    @click="zoomed = true"
+                >
+                    <DishPhoto :image="dish.photo" :name="dish.name_es ?? dish.name" :alt="dish.name" size="large" />
+                </button>
+                <DishPhoto v-else class="dish-picker-icon mt-4" :image="null" :name="dish.name_es ?? dish.name" alt="" size="thumb" />
                 <fieldset v-for="effect in substitutes" :key="`swap-${effect.index}`" class="mt-4" :aria-describedby="`${id}-swap-hint-${effect.index}`" data-substitute>
                     <legend class="font-semibold">{{ t('order.picker.swap_legend', { name: effect.name }) }}</legend>
                     <p :id="`${id}-swap-hint-${effect.index}`" class="text-sm text-ink-muted">
@@ -399,6 +415,7 @@ onBeforeUnmount(() => {
 
             <p role="alert" class="sr-only" data-announcement>{{ announcement }}</p>
         </form>
+        <DishPhotoViewer v-if="zoomed && dish.photo" :image="dish.photo" :name="dish.name" @close="closeZoom" />
     </dialog>
 </template>
 
@@ -441,6 +458,23 @@ onBeforeUnmount(() => {
 
 .dish-picker-footer {
     padding: 0.75rem 1rem;
+}
+
+/* La foto: un botón del ancho de la hoja, con tope de alto para no alargar el diálogo. */
+.dish-picker-zoom {
+    display: block;
+    width: 100%;
+    max-width: 45dvh;
+    margin-inline: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0.75rem;
+    background: none;
+    cursor: zoom-in;
+}
+
+.dish-picker-icon {
+    margin-inline: auto;
 }
 
 .dish-picker-check {

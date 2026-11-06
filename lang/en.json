@@ -154,6 +154,8 @@
     "restaurant.menu.ingredient_swap": ":substitute instead of :name",
     "restaurant.menu.ingredient_swap_price": ":substitute instead of :name · +:price",
     "order.picker.close": "Close",
+    "order.picker.photo_zoom": "View the photo of :name full size",
+    "order.picker.photo_viewer": "Photo of :name",
     "order.picker.required": "Required",
     "order.picker.optional": "Optional",
     "order.picker.choose_one": "Choose 1",

@@ -369,3 +369,146 @@ describe('DishPicker: ingredientes agotados hoy (ADR 0033)', () => {
         expect((wrapper.emitted('add') ?? []).map(([item]) => item as OrderItem)[0]).toMatchObject({ removed: [], missing: ['Cebolla (prueba)'] });
     });
 });
+
+describe('DishPicker: la foto grande del plato (#126)', () => {
+    const PHOTO = {
+        src: '/storage/media/dishes/0123456789abcdef0123-480.webp',
+        srcset: '/storage/media/dishes/0123456789abcdef0123-192.webp 192w, /storage/media/dishes/0123456789abcdef0123-480.webp 480w, /storage/media/dishes/0123456789abcdef0123-960.webp 960w',
+    };
+    const WITH_PHOTO: MenuDish = { ...SANCOCHO, photo: PHOTO };
+
+    async function openViewer() {
+        const picker = await mountPicker(WITH_PHOTO);
+        await picker.wrapper.get('[data-zoom]').trigger('click');
+        await flushPromises();
+
+        return { ...picker, viewer: () => picker.wrapper.find('[data-photo-viewer]') };
+    }
+
+    it('arriba del detalle, la foto con los tres anchos, el nombre como texto alternativo y un botón que dice que la amplía', async () => {
+        const { wrapper } = await mountPicker(WITH_PHOTO);
+        const zoom = wrapper.get('[data-zoom]');
+        const img = zoom.get('img');
+
+        expect(zoom.element.tagName).toBe('BUTTON');
+        expect(zoom.attributes('aria-label')).toBe('Ver la foto de Sancocho de prueba en grande');
+        expect(img.attributes()).toMatchObject({
+            srcset: PHOTO.srcset,
+            sizes: '(min-width: 32rem) 30rem, calc(100vw - 2rem)',
+            alt: 'Sancocho de prueba',
+            width: '480',
+            height: '480',
+            decoding: 'async',
+        });
+        // Va dentro de lo que se desplaza, antes de las opciones: no alarga el diálogo.
+        expect(zoom.element.closest('.overflow-y-auto')).not.toBeNull();
+        expect(zoom.element.compareDocumentPosition(wrapper.get('fieldset').element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('al tocarla abre la vista a pantalla completa, con nombre, la foto grande y el foco en «Cerrar»', async () => {
+        const { viewer } = await openViewer();
+        const dialog = viewer();
+
+        expect(dialog.element.tagName).toBe('DIALOG');
+        expect((dialog.element as HTMLDialogElement).open).toBe(true);
+        expect(dialog.attributes('aria-label')).toBe('Foto de Sancocho de prueba');
+        expect(dialog.get('img').attributes()).toMatchObject({ srcset: PHOTO.srcset, sizes: '(min-aspect-ratio: 1/1) 100vh, 100vw', alt: 'Sancocho de prueba' });
+        expect(document.activeElement).toBe(dialog.get('[data-viewer-close]').element);
+        expect(dialog.get('[data-viewer-close]').attributes('aria-label')).toBe('Cerrar');
+    });
+
+    it('Escape cierra la vista y no el detalle, y el foco vuelve a la foto', async () => {
+        const { wrapper, viewer } = await openViewer();
+        viewer().element.dispatchEvent(new Event('cancel', { cancelable: true }));
+        await flushPromises();
+
+        expect(viewer().exists()).toBe(false);
+        expect(wrapper.emitted('close')).toBeUndefined();
+        expect(wrapper.get('dialog').element.open).toBe(true);
+        expect(document.activeElement).toBe(wrapper.get('[data-zoom]').element);
+    });
+
+    it('«Cerrar» y un toque fuera de la foto la cierran; un toque en la foto, no', async () => {
+        const { wrapper, viewer } = await openViewer();
+
+        await viewer().get('img').trigger('click');
+        expect(viewer().exists()).toBe(true);
+
+        await viewer().get('[data-viewer-close]').trigger('click');
+        await flushPromises();
+        expect(viewer().exists()).toBe(false);
+        expect(document.activeElement).toBe(wrapper.get('[data-zoom]').element);
+
+        await wrapper.get('[data-zoom]').trigger('click');
+        await flushPromises();
+        await viewer().trigger('pointerdown');
+        await viewer().trigger('click');
+        await flushPromises();
+        expect(viewer().exists()).toBe(false);
+        expect(wrapper.emitted('close')).toBeUndefined();
+    });
+
+    it('un click que no empezó en el fondo de la vista (arrastrar desde la foto y soltar afuera) no la cierra (BUG-042)', async () => {
+        const { viewer } = await openViewer();
+
+        await viewer().trigger('click');
+        expect(viewer().exists()).toBe(true);
+
+        await viewer().get('img').trigger('pointerdown');
+        await viewer().trigger('click');
+        expect(viewer().exists()).toBe(true);
+    });
+
+    it('si el navegador cierra la vista por su cuenta (close nativo), se desmonta y la foto la vuelve a abrir (EVA-047)', async () => {
+        const { wrapper, viewer } = await openViewer();
+
+        (viewer().element as HTMLDialogElement).close();
+        await flushPromises();
+        expect(viewer().exists()).toBe(false);
+        expect(wrapper.emitted('close')).toBeUndefined();
+        expect(document.activeElement).toBe(wrapper.get('[data-zoom]').element);
+
+        await wrapper.get('[data-zoom]').trigger('click');
+        await flushPromises();
+        expect(viewer().exists()).toBe(true);
+        expect((viewer().element as HTMLDialogElement).open).toBe(true);
+
+        viewer().element.dispatchEvent(new Event('close'));
+        await flushPromises();
+        expect(viewer().exists()).toBe(false);
+    });
+
+    it('si el navegador cierra el selector por su cuenta (close nativo), avisa que se cerró (EVA-047)', async () => {
+        const { wrapper } = await mountPicker(WITH_PHOTO);
+
+        wrapper.get('dialog').element.close();
+
+        expect(wrapper.emitted('close')).toHaveLength(1);
+    });
+
+    it('Tab no saca el foco de la vista', async () => {
+        const { viewer } = await openViewer();
+        const close = viewer().get('[data-viewer-close]').element;
+        document.body.focus();
+
+        const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+        viewer().element.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(close);
+    });
+
+    it('sin foto, el ícono del plato más chico y sin ampliar', async () => {
+        const { wrapper } = await mountPicker(SANCOCHO);
+        await flushPromises();
+        const icon = wrapper.get('[data-photo="placeholder"]');
+
+        expect(wrapper.find('[data-zoom]').exists()).toBe(false);
+        expect(icon.classes()).toContain('dish-photo-thumb');
+        expect(icon.get('svg').attributes('data-icon')).toBe('sancocho');
+        expect(icon.element.closest('button')).toBeNull();
+
+        await icon.trigger('click');
+        expect(wrapper.find('[data-photo-viewer]').exists()).toBe(false);
+    });
+});
