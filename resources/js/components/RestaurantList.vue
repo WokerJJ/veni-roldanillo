@@ -3,14 +3,17 @@ import { Link } from '@inertiajs/vue3';
 import { computed, nextTick, onMounted, shallowRef, useId, useTemplateRef, watch } from 'vue';
 
 import DishResults from '@/components/DishResults.vue';
+import FilterControls from '@/components/FilterControls.vue';
 import Icon from '@/components/Icon.vue';
 import RestaurantFilters from '@/components/RestaurantFilters.vue';
+import RestaurantSearch from '@/components/RestaurantSearch.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import TodaysLunches from '@/components/TodaysLunches.vue';
 import { useI18n } from '@/composables/useI18n';
 import { useLazyDialog } from '@/composables/useLazyDialog';
 import type { Restaurant } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
+import { activeFilterCount } from '@/restaurants/filterCount';
 import { hasFilters, NO_FILTERS } from '@/restaurants/filterParams';
 import { categoriesOf, filterRestaurants } from '@/restaurants/finder';
 import { restaurantUrl } from '@/restaurants/links';
@@ -60,8 +63,11 @@ import { formatDistance } from '@/routing/directions';
  * En el panel del celular la lista se abre y se cierra: lleva su botón de
  * cerrar (`closable`) y toma el foco al montarse (`autofocus`). En la barra
  * lateral de computador (ADR 0037) va siempre a la vista: sin cerrar, sin
- * tomar el foco y con el buscador, los filtros y «Sugerime algo»
- * fijos arriba (`pinnedFinder`): solo se desplaza lo de abajo. Como no se
+ * tomar el foco y con el buscador (RestaurantSearch), «Sugerime algo»,
+ * «Quitar filtros» y el botón de los filtros fijos arriba (`pinnedFinder`):
+ * solo se desplaza lo de abajo, que empieza con el panel de los filtros
+ * (FilterControls) cuando está abierto (#130: fijo, le quitaba casi todo el
+ * alto a las filas). Como no se
  * cierra, el orden no se fija: se pone al día cuando cambia quién está
  * abierto o las distancias. El elegido (`selected`, desde la lista o desde el
  * mapa) queda marcado con `aria-current` y una barra a la izquierda (no solo
@@ -93,7 +99,7 @@ const {
     closable?: boolean;
     /** Toma el foco al montarse (en el título o en «Almuerzos de hoy»). */
     autofocus?: boolean;
-    /** El buscador, los filtros y «Sugerime algo» quedan fijos arriba: solo se desplaza lo de abajo. */
+    /** El buscador, «Sugerime algo» y el botón de los filtros quedan fijos arriba; el panel de los filtros va con lo que se desplaza. */
     pinnedFinder?: boolean;
     /** El slug del elegido, marcado en la lista, con su resumen (el slot `selected`) debajo. */
     selected?: string | null;
@@ -213,6 +219,32 @@ const SCROLL = 'relative -mx-2 min-h-0 overflow-y-auto overscroll-contain px-2';
 const allSamples = computed(() => all.length > 0 && all.every(({ fictitious }) => fictitious));
 const categories = computed(() => categoriesOf(all, locale.value));
 
+/** Los filtros de la barra (#130): su botón queda fijo y su panel, al principio de lo que se desplaza. */
+const panelId = useId();
+const toggleId = `${panelId}-toggle`;
+const scroller = useTemplateRef<HTMLElement>('scroller');
+const filtersToggle = useTemplateRef<HTMLButtonElement>('filtersToggle');
+const activeFilters = computed(() => activeFilterCount(filters.value));
+// Abierto al montar si ya hay alguno puesto, como el <details> del celular.
+// Se oculta con `hidden` y no con v-show: su directiva viajaría con el arranque.
+const filtersOpen = shallowRef(activeFilters.value > 0);
+
+/** Abrir vuelve arriba lo que se desplaza, donde está el panel; el foco se queda en el botón. */
+function toggleFilters(): void {
+    filtersOpen.value = !filtersOpen.value;
+
+    if (filtersOpen.value && scroller.value) {
+        scroller.value.scrollTop = 0;
+    }
+}
+
+/** «Quitar filtros» de la barra desaparece al pulsarlo: el foco pasa al botón «Filtros», justo debajo. */
+async function clearFilters(): Promise<void> {
+    emit('update:filters', { ...NO_FILTERS });
+    await nextTick();
+    filtersToggle.value?.focus();
+}
+
 function suggest(): void {
     const slug = pick();
 
@@ -228,11 +260,17 @@ const outside = useTemplateRef<HTMLElement>('outside');
 
 // Otro elegido (desde la lista o desde el mapa), o el mismo que cambia de
 // lugar (la búsqueda lo sacó de las filas o lo devolvió): su resumen se
-// desplaza a la vista, debajo de su fila o arriba de la lista.
+// desplaza a la vista, debajo de su fila o arriba de la lista. Si lo movió
+// un filtro con el foco en el panel de la barra, no: la lista se iría de
+// debajo del control que se está usando.
 watch(
     () => [selected, selectedOutside.value] as const,
-    async ([slug]) => {
+    async ([slug], [previous]) => {
         await nextTick();
+
+        if (slug === previous && document.activeElement?.closest('[data-filters-panel]')) {
+            return;
+        }
 
         if (slug !== null) {
             (list.value?.querySelector(`li[data-row="${slug}"]`) ?? outside.value)?.scrollIntoView({ block: 'nearest' });
@@ -280,7 +318,8 @@ defineExpose({ focusItem });
             buscador y «Sugerime algo» quedan fijos y se desplaza lo de abajo.
         -->
         <div :class="pinnedFinder ? 'contents' : SCROLL">
-            <RestaurantFilters :filters="filters" :categories="categories" @update:filters="emit('update:filters', $event)" />
+            <RestaurantSearch v-if="pinnedFinder" :filters="filters" @update:filters="emit('update:filters', $event)" />
+            <RestaurantFilters v-else :filters="filters" :categories="categories" @update:filters="emit('update:filters', $event)" />
 
             <!-- Con tres letras o más, los platos primero: si se buscó «sancocho», es lo que se quería ver. -->
             <DishResults
@@ -293,7 +332,25 @@ defineExpose({ focusItem });
 
             <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <!-- Se ve enseguida; el lector lo oye de la región de abajo, medio segundo después de dejar de teclear. -->
-                <p class="text-sm" aria-hidden="true" data-count>{{ message }}</p>
+                <!--
+                    En la barra, cuántos hay va en su propia línea y, con algo
+                    puesto (también solo la búsqueda), «Quitar filtros» a su
+                    lado: fuera del panel, se ve aunque esté cerrado, y en la
+                    fila de abajo «Sugerime algo» y «Filtros» siguen juntos.
+                -->
+                <div :class="pinnedFinder ? 'flex basis-full items-center justify-between gap-2' : 'contents'">
+                    <p class="text-sm" aria-hidden="true" data-count>{{ message }}</p>
+                    <button
+                        v-if="pinnedFinder && hasFilters(filters)"
+                        type="button"
+                        class="inline-flex min-h-touch shrink-0 items-center gap-2 rounded-full border border-line px-4 text-sm font-semibold hover:bg-surface"
+                        data-clear-filters
+                        @click="clearFilters"
+                    >
+                        <Icon name="cerrar" :size="20" />
+                        {{ t('finder.clear') }}
+                    </button>
+                </div>
                 <p role="status" class="sr-only" data-count-status>{{ announced }}</p>
                 <button
                     type="button"
@@ -304,9 +361,39 @@ defineExpose({ focusItem });
                     <Icon name="estrella" :size="20" />
                     {{ t('finder.suggest') }}
                 </button>
+                <!-- En la barra, el último de lo fijo: el siguiente en el foco es su panel, arriba de lo que se desplaza. El chevron dice si está abierto. -->
+                <button
+                    v-if="pinnedFinder"
+                    :id="toggleId"
+                    ref="filtersToggle"
+                    type="button"
+                    class="inline-flex min-h-touch items-center gap-2 rounded-full border px-4 font-semibold transition-colors hover:bg-surface"
+                    :class="activeFilters > 0 ? 'border-current' : 'border-line'"
+                    :aria-expanded="filtersOpen"
+                    :aria-controls="panelId"
+                    data-filters-toggle
+                    @click="toggleFilters"
+                >
+                    <Icon name="filtro" :size="20" />
+                    {{ activeFilters > 0 ? t('finder.filters_active', { count: activeFilters }) : t('finder.filters') }}
+                    <Icon :name="filtersOpen ? 'chevron-arriba' : 'chevron-abajo'" :size="20" />
+                </button>
             </div>
 
-            <div :class="pinnedFinder ? `${SCROLL} mt-2 flex-1` : 'contents'" data-list-scroll>
+            <div ref="scroller" :class="pinnedFinder ? `${SCROLL} mt-2 flex-1` : 'contents'" data-list-scroll>
+                <FilterControls
+                    v-if="pinnedFinder"
+                    :id="panelId"
+                    :hidden="!filtersOpen"
+                    role="group"
+                    :aria-labelledby="toggleId"
+                    stacked
+                    class="pb-2"
+                    :filters="filters"
+                    :categories="categories"
+                    data-filters-panel
+                    @update:filters="emit('update:filters', $event)"
+                />
                 <DishResults
                     v-if="pinnedFinder"
                     :query="filters.query"
