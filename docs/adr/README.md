@@ -41,3 +41,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0035](0035-panel-simple-del-dueno.md) | Panel simple del dueño: Hoy, Mi carta y Promociones por defecto, «Ver todo» recordado por cuenta y solo en la navegación | Aceptada |
 | [0036](0036-iconos-de-ingredientes-y-comida.md) | Íconos de comida e ingredientes: propios por nombre de archivo, bajo demanda, y chips de ingredientes en la carta | Aceptada |
 | [0037](0037-barra-lateral-en-computador.md) | La barra lateral en computador: la lista fija a la izquierda, el mapa al lado y lo que no hace falta al abrir fuera del arranque | Aceptada |
+| [0038](0038-ficha-en-dos-columnas-y-horario-compacto.md) | La ficha en dos columnas en computador, el horario compacto y lo importante primero en el celular | Aceptada |
