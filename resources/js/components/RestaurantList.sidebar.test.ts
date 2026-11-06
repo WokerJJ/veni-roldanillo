@@ -71,7 +71,7 @@ describe('RestaurantList en la barra lateral', () => {
         expect(document.activeElement).toBe(outside);
     });
 
-    it('con `pinnedFinder` el buscador, los filtros y «Sugerime algo» quedan fijos: solo se desplaza lo de abajo (almuerzos, filas, guardado)', async () => {
+    it('con `pinnedFinder` el buscador, el botón de los filtros y «Sugerime algo» quedan fijos: solo se desplaza lo de abajo (el panel de los filtros, almuerzos, filas, guardado)', async () => {
         const { wrapper } = await mountInSidebar();
         const scroller = wrapper.get('[data-list-scroll]');
 
@@ -79,6 +79,9 @@ describe('RestaurantList en la barra lateral', () => {
         expect(scroller.classes()).toEqual(expect.arrayContaining(['relative', 'min-h-0', 'flex-1', 'overflow-y-auto']));
         expect(scroller.find('input[type="search"]').exists()).toBe(false);
         expect(scroller.find('[data-suggest]').exists()).toBe(false);
+        expect(scroller.find('[data-filters-toggle]').exists()).toBe(false);
+        expect(scroller.find('[data-filters-panel]').exists()).toBe(true);
+        expect(wrapper.find('details[data-filters]').exists()).toBe(false);
         expect(wrapper.find('input[type="search"]').exists()).toBe(true);
         expect(wrapper.find('[data-suggest]').exists()).toBe(true);
         expect(scroller.find('details[data-lunches]').exists()).toBe(true);
@@ -86,6 +89,151 @@ describe('RestaurantList en la barra lateral', () => {
         expect(scroller.find('[data-saved-open]').exists()).toBe(true);
         // Lo único que se desplaza: ningún ancestro del buscador dentro de la lista tiene su propio scroll.
         expect(wrapper.findAll('.overflow-y-auto')).toHaveLength(1);
+    });
+
+    it('«Filtros» abre su panel arriba de lo que se desplaza, sin agrandar lo fijo: aria-expanded, aria-controls y de vuelta arriba (#130)', async () => {
+        const { wrapper } = await mountInSidebar();
+        const toggle = wrapper.get<HTMLButtonElement>('button[data-filters-toggle]');
+        const scroller = wrapper.get<HTMLElement>('[data-list-scroll]');
+        const panel = wrapper.get<HTMLElement>('[data-filters-panel]');
+
+        // Cerrado al montar, sin filtros puestos; el panel existe para que aria-controls apunte a algo.
+        expect(toggle.text()).toBe('Filtros');
+        expect(toggle.classes()).toContain('min-h-touch');
+        expect(toggle.attributes('aria-expanded')).toBe('false');
+        expect(toggle.attributes('aria-controls')).toBe(panel.attributes('id'));
+        expect(panel.element.hidden).toBe(true);
+        // El último de lo fijo: lo siguiente en el orden del foco es el panel.
+        expect(scroller.element.firstElementChild).toBe(panel.element);
+        expect(Boolean(wrapper.get('[data-suggest]').element.compareDocumentPosition(toggle.element) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+
+        // jsdom no desplaza: el valor queda escrito como en un navegador con la lista bajada.
+        Object.defineProperty(scroller.element, 'scrollTop', { value: 300, writable: true });
+        toggle.element.focus();
+        await toggle.trigger('click');
+
+        expect(toggle.attributes('aria-expanded')).toBe('true');
+        expect(panel.element.hidden).toBe(false);
+        expect(scroller.element.scrollTop).toBe(0);
+        expect(document.activeElement).toBe(toggle.element);
+        for (const control of ['open', 'delivery', 'price', 'category']) {
+            expect(scroller.element.contains(wrapper.get(`[data-filter="${control}"]`).element)).toBe(true);
+        }
+        expect(scroller.element.contains(wrapper.get('input[type="search"]').element)).toBe(false);
+
+        await toggle.trigger('click');
+        expect(toggle.attributes('aria-expanded')).toBe('false');
+        expect(panel.element.hidden).toBe(true);
+    });
+
+    it('con filtros puestos, el botón los cuenta (también para el lector, en su nombre) y el panel empieza abierto', async () => {
+        const { wrapper } = await mountInSidebar({ filters: { ...NO_FILTERS, open: true, price: 2 } });
+        const toggle = wrapper.get('button[data-filters-toggle]');
+
+        expect(toggle.text()).toBe('Filtros (2)');
+        expect(toggle.attributes('aria-expanded')).toBe('true');
+        expect(wrapper.get<HTMLElement>('[data-filters-panel]').element.hidden).toBe(false);
+
+        await wrapper.setProps({ filters: { ...NO_FILTERS, open: true } });
+        expect(toggle.text()).toBe('Filtros (1)');
+    });
+
+    it('el buscador es RestaurantSearch y los controles, FilterControls apilados: sin el <details> del celular (#130)', async () => {
+        const { wrapper } = await mountInSidebar();
+
+        expect(wrapper.findComponent({ name: 'RestaurantFilters' }).exists()).toBe(false);
+        expect(wrapper.getComponent({ name: 'RestaurantSearch' }).find('input[type="search"]').exists()).toBe(true);
+        const controls = wrapper.getComponent({ name: 'FilterControls' });
+        expect(controls.props('stacked')).toBe(true);
+        expect(controls.element).toBe(wrapper.get('[data-filters-panel]').element);
+    });
+
+    it('cambiar el precio en el panel emite el filtro y el botón pasa a contarlo', async () => {
+        const { wrapper } = await mountInSidebar();
+        const toggle = wrapper.get('button[data-filters-toggle]');
+        await toggle.trigger('click');
+
+        await wrapper.get('[data-filters-panel] [data-filter="price"]').setValue('2');
+        const emitted = wrapper.emitted<[Filters]>('update:filters') ?? [];
+        expect(emitted.at(-1)).toEqual([{ ...NO_FILTERS, price: 2 }]);
+
+        await wrapper.setProps({ filters: emitted.at(-1)?.[0] ?? null });
+        expect(toggle.text()).toBe('Filtros (1)');
+    });
+
+    it('«Quitar filtros» se ve en lo fijo aunque el panel esté cerrado, también con solo la búsqueda, y el panel no lo repite', async () => {
+        const { wrapper } = await mountInSidebar({ filters: { ...NO_FILTERS, query: 'sancocho' } });
+        const panel = wrapper.get<HTMLElement>('[data-filters-panel]');
+        expect(panel.element.hidden).toBe(true);
+
+        expect(wrapper.findAll('[data-clear-filters]')).toHaveLength(1);
+        const clear = wrapper.get('[data-clear-filters]');
+        expect(clear.element.closest('[hidden]')).toBeNull();
+        expect(wrapper.get('[data-list-scroll]').element.contains(clear.element)).toBe(false);
+
+        await clear.trigger('click');
+        expect(wrapper.emitted('update:filters')).toEqual([[NO_FILTERS]]);
+
+        // Sin nada puesto, no está.
+        await wrapper.setProps({ filters: NO_FILTERS });
+        expect(wrapper.find('[data-clear-filters]').exists()).toBe(false);
+    });
+
+    it('tras «Quitar filtros» el foco va al botón «Filtros»: el que se pulsó desaparece', async () => {
+        const { wrapper } = await mountInSidebar({ filters: { ...NO_FILTERS, delivery: true } });
+        const clear = wrapper.get<HTMLButtonElement>('[data-clear-filters]');
+        clear.element.focus();
+
+        await clear.trigger('click');
+        await wrapper.setProps({ filters: NO_FILTERS });
+        await flushPromises();
+
+        expect(wrapper.find('[data-clear-filters]').exists()).toBe(false);
+        expect(document.activeElement).toBe(wrapper.get('button[data-filters-toggle]').element);
+    });
+
+    it('el botón «Filtros» muestra si está abierto (el chevron) y nombra al panel, un grupo', async () => {
+        const { wrapper } = await mountInSidebar();
+        const toggle = wrapper.get('button[data-filters-toggle]');
+        const panel = wrapper.get('[data-filters-panel]');
+        const chevron = () =>
+            wrapper
+                .findAllComponents({ name: 'Icon' })
+                .filter((icon) => toggle.element.contains(icon.element as Element))
+                .map((icon) => icon.props('name') as string)
+                .at(-1);
+
+        expect(panel.attributes('role')).toBe('group');
+        expect(toggle.attributes('id')).toBeTruthy();
+        expect(panel.attributes('aria-labelledby')).toBe(toggle.attributes('id'));
+        expect(chevron()).toBe('chevron-abajo');
+
+        await toggle.trigger('click');
+        expect(chevron()).toBe('chevron-arriba');
+    });
+
+    it('con el foco en el panel, un filtro que saca al elegido de las filas (o lo devuelve) no desplaza la lista', async () => {
+        const scroll = vi.fn();
+        Element.prototype.scrollIntoView = scroll;
+        // A las 12:30 El Guadual está cerrado: «Abierto ahora» lo saca de las filas.
+        const { wrapper } = await mountInSidebar({ selected: EL_GUADUAL.slug });
+        await wrapper.get('button[data-filters-toggle]').trigger('click');
+        wrapper.get<HTMLInputElement>('[data-filters-panel] [data-filter="open"]').element.focus();
+        scroll.mockClear();
+
+        await wrapper.setProps({ filters: { ...NO_FILTERS, open: true } });
+        await flushPromises();
+        expect(wrapper.find('[data-selected-outside]').exists()).toBe(true);
+
+        await wrapper.setProps({ filters: NO_FILTERS });
+        await flushPromises();
+        expect(wrapper.find('[data-selected-outside]').exists()).toBe(false);
+        expect(scroll).not.toHaveBeenCalled();
+
+        // Otro elegido sí se lleva a la vista, aunque el foco siga en el panel.
+        await wrapper.setProps({ selected: LA_CEIBA.slug });
+        await flushPromises();
+        expect(scroll).toHaveBeenCalledTimes(1);
     });
 
     it('marca al elegido con aria-current y una marca que no es solo de color, y pone su resumen debajo de su fila', async () => {

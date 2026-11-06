@@ -146,7 +146,7 @@ describe('Home', () => {
         expect(credits.text()).toBe('Créditos y datos de OpenStreetMap');
     });
 
-    it('la bienvenida enlaza la guía de platos típicos, que baja con la lista (#21)', async () => {
+    it('la bienvenida enlaza la guía de platos típicos, que baja con la lista (#21): en el celular la cabecera no muestra su navegación (#130)', async () => {
         const { wrapper } = await mountHome({ locale: 'en' });
         await vi.dynamicImportSettled();
 
@@ -1206,27 +1206,25 @@ describe('Home en computador', () => {
         expect(document.activeElement).toBe(document.body);
     });
 
-    it('arriba, fijos, el título, el subtítulo, la tarjeta de la guía, el buscador y «Sugerime algo»; en el medio, lo único que se desplaza; abajo, la línea chica', async () => {
+    it('arriba, fijos, el título, el subtítulo, el buscador, «Sugerime algo» y el botón de los filtros; en el medio, lo único que se desplaza (con el panel de los filtros); abajo, la línea chica', async () => {
         const { panel } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
         const before = (first: string, second: string) =>
             Boolean(panel().get(first).element.compareDocumentPosition(panel().get(second).element) & Node.DOCUMENT_POSITION_FOLLOWING);
 
-        // La tarjeta compacta va justo después del subtítulo y antes de «Restaurantes».
-        const card = panel().get('a[data-dish-guide-card]');
-        expect(card.attributes('href')).toBe('/dishes');
-        expect(before('h1', 'a[data-dish-guide-card]')).toBe(true);
-        expect(before('a[data-dish-guide-card]', 'h2')).toBe(true);
-        expect(before('a[data-dish-guide-card]', 'input[type="search"]')).toBe(true);
+        expect(before('h1', 'h2')).toBe(true);
+        expect(before('h2', 'input[type="search"]')).toBe(true);
         expect(panel().get('h2').text()).toBe('Restaurantes');
 
-        // Lo que se desplaza: los almuerzos, las filas y lo guardado. El buscador, «Sugerime algo», la tarjeta y el pie, no.
+        // Lo que se desplaza: el panel de los filtros, los almuerzos, las filas y lo guardado. El buscador, «Sugerime algo», el botón de los filtros y el pie, no.
         const scroller = panel().get('[data-list-scroll]');
         expect(scroller.classes()).toEqual(expect.arrayContaining(['min-h-0', 'flex-1', 'overflow-y-auto']));
         expect(scroller.findAll('button[data-slug]')).toHaveLength(2);
         expect(scroller.find('details[data-lunches]').exists()).toBe(true);
-        for (const fixed of ['input[type="search"]', '[data-suggest]', '[data-dish-guide-card]', '[data-sidebar-footer]']) {
+        for (const fixed of ['input[type="search"]', '[data-suggest]', '[data-filters-toggle]', '[data-sidebar-footer]']) {
             expect(scroller.element.contains(panel().get(fixed).element)).toBe(false);
         }
+        // El panel de los filtros (#130): al principio de lo que se desplaza, no en lo fijo.
+        expect(scroller.element.firstElementChild).toBe(panel().get('[data-filters-panel]').element);
         // La lista se lleva el alto que sobra: el pie queda abajo.
         expect(panel().get('section[aria-labelledby]').classes()).toEqual(expect.arrayContaining(['min-h-0', 'flex-1']));
 
@@ -1236,8 +1234,18 @@ describe('Home en computador', () => {
         expect(footer.findAll('a').map((link) => link.attributes('href'))).toEqual(['/credits', '/privacy', '/terms']);
         expect(footer.get('[data-credits]').text()).toBe('Créditos');
         expect(footer.get('[data-credits]').attributes('aria-label')).toBe('Créditos y datos de OpenStreetMap');
-        // La guía ya está en la tarjeta: no se repite como enlace chico.
-        expect(panel().find('[data-dish-guide-link]').exists()).toBe(false);
+        // La guía de platos va solo en la navegación de la cabecera (#130): ni tarjeta ni enlace en la barra.
+        expect(panel().find('a[href="/dishes"]').exists()).toBe(false);
+    });
+
+    it('abierto con un filtro en la dirección (?open=1), el panel de los filtros empieza abierto y el botón lo cuenta (#130)', async () => {
+        const { panel } = await mountHome({ url: '/?open=1', answer: [LA_CEIBA, EL_GUADUAL] });
+        const toggle = panel().get('button[data-filters-toggle]');
+
+        expect(toggle.text()).toBe('Filtros (1)');
+        expect(toggle.attributes('aria-expanded')).toBe('true');
+        expect(panel().get<HTMLElement>('[data-filters-panel]').element.hidden).toBe(false);
+        expect(panel().get<HTMLInputElement>('[data-filters-panel] [data-filter="open"]').element.checked).toBe(true);
     });
 
     it('con unos 40 restaurantes, la lista los trae todos dentro de la parte que se desplaza', async () => {

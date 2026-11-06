@@ -50,7 +50,7 @@ const RestaurantList: FunctionalComponent = (_props, { attrs }) => (panelParts.v
 const RestaurantDistances: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.distances, attrs) : null);
 const WelcomeActions: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.welcome, attrs) : null);
 const LegalLinks: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.links.LegalLinks, attrs) : null);
-const DishGuideCard: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.links.DishGuideCard, attrs) : null);
+const DishGuideLink: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.links.DishGuideLink, attrs) : null);
 /** Lo de la barra lateral de computador (ADR 0037): la lista con el resumen del elegido. */
 const HomeSidebar: FunctionalComponent = (_props, { attrs, slots }) => (panelParts.value ? h(panelParts.value.sidebar, { ...attrs, ref: list }, slots) : null);
 
@@ -156,23 +156,24 @@ const { t } = useI18n();
 const { status, restaurants, retry } = useRestaurants();
 /**
  * En computador (desde 1024 px, ADR 0037) el panel no flota: es una barra
- * lateral fija con el título, la lista con su buscador siempre a la vista, la
- * tarjeta de la guía y una línea con los créditos y los documentos, y el mapa
+ * lateral fija con el título, la lista con su buscador siempre a la vista y
+ * una línea con los créditos y los documentos, y el mapa
  * ocupa el resto. El resumen del elegido va dentro de la lista, debajo de su
  * fila. Por debajo, el panel de abajo o el lateral de siempre (ADR 0022).
  *
  * La barra es el mismo panel (BottomSheet) con `docked`, una región con
  * nombre: sin manija ni alturas, a todo el alto y antes del mapa en el
  * documento, así el foco la recorre primero. No se desplaza entera: arriba,
- * fijos, el título, el subtítulo, la tarjeta de la guía y el buscador con los
- * filtros y «Sugerime algo»; en el medio, lo único que se desplaza (la lista:
- * almuerzos, filas, favoritos); abajo, la línea chica del pie. El mapa no
+ * fijos, el título, el subtítulo y el buscador con «Sugerime algo» y el botón
+ * de los filtros; en el medio, lo único que se desplaza (la lista: el panel
+ * de los filtros si está abierto, almuerzos, filas, favoritos); abajo, la línea chica del pie. El mapa no
  * lleva nada encima (`overlay` null): la cámara usa todo su ancho y MapLibre
  * sigue el tamaño de su contenedor al cambiar de diseño. Cuántos hay lo dice
  * la lista; «Ver la lista» y los botones de la bienvenida no se muestran,
  * porque la lista ya está a la vista. Lo que no hace falta para el primer
- * pintado (la lista, el resumen y la tarjeta de la guía) baja aparte, con la
- * lista (HomeSidebar.vue y components/links.ts).
+ * pintado (la lista y el resumen) baja aparte, con la lista (HomeSidebar.vue
+ * y components/links.ts). La guía de platos va en la navegación de la
+ * cabecera (#130); en el celular, que no la muestra, en la bienvenida.
  */
 const desktop = useMediaQuery(DESKTOP_QUERY);
 
@@ -603,9 +604,6 @@ onBeforeUnmount(() => {
                 -->
                 <p class="mt-1 text-sm text-ink-muted" :class="{ 'sheet:hidden': hasRestaurants }">{{ t('home.intro') }}</p>
 
-                <!-- La guía de platos típicos, en una línea, antes de la lista. -->
-                <DishGuideCard v-if="desktop" class="mt-3 shrink-0" />
-
                 <div class="text-sm" :class="[desktop && hasRestaurants ? 'contents' : 'mt-3 border-t border-line pt-3', { 'sheet:mt-0 sheet:border-0 sheet:pt-0': hasRestaurants }]">
                     <!-- Siempre en la página: el lector de pantalla anuncia cuando cambia. -->
                     <p
@@ -705,7 +703,7 @@ onBeforeUnmount(() => {
                     >
                         {{ desktop ? t('credits.link_short') : t('credits.link') }}
                     </Link>
-                    <DishGuideCard v-if="!desktop" link class="text-sm text-ink-muted" />
+                    <DishGuideLink v-if="!desktop" class="text-sm text-ink-muted" />
                     <LegalLinks short :inline="desktop" :class="{ 'text-sm text-ink-muted': !desktop }" />
                 </div>
             </template>

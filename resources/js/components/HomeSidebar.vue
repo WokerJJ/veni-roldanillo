@@ -9,11 +9,12 @@ import type { Filters } from '@/restaurants/filterParams';
 /**
  * Lo de la barra lateral de computador (ADR 0037) que no hace falta para el
  * primer pintado: la lista siempre abierta (sin cerrar ni tomar el foco), con
- * el buscador, los filtros y «Sugerime algo» fijos arriba y lo demás (los
- * almuerzos, las filas, los favoritos) en la única parte que se desplaza, y
- * el resumen del elegido debajo de su fila. Baja con la lista, fuera del
- * arranque; el título, el subtítulo, la tarjeta de la guía, el estado y la
- * línea de los créditos los pone el inicio (Home.vue).
+ * el buscador, «Sugerime algo», «Quitar filtros» y el botón de los filtros
+ * fijos arriba y lo demás (el panel de los filtros, los almuerzos, las filas,
+ * los favoritos) en la única parte que se desplaza, y el resumen del elegido
+ * debajo de su fila. Baja con la lista, fuera del arranque; el título, el
+ * subtítulo, el estado y la línea de los créditos los pone el inicio
+ * (Home.vue).
  *
  * El slot es lo de «Cómo llegar» que va dentro del resumen (RouteDirections,
  * que baja aparte al pedir la primera ruta).
