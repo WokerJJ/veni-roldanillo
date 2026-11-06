@@ -152,31 +152,53 @@ function span(offset: number, opens: string | null, closes: string | null): Span
     return [offset * DAY + from, offset * DAY + (until > from ? until : until + DAY)];
 }
 
+/** Mediodía en UTC del día `offset` desde hoy: sumar días no cruza ningún cambio de fecha. */
+function dayAt(today: LocalNow, offset: number): Date {
+    return new Date(Date.UTC(today.year, today.month - 1, today.day + offset, 12));
+}
+
+/** Las franjas de una fecha: las de su horario especial, que reemplaza al semanal (un «cerrado», ninguna), o las de la semana. */
+function slotsOn(schedule: Schedule, date: Date): readonly (WeeklyHours | SpecialHours)[] {
+    const iso = date.toISOString().slice(0, 10);
+    const special = schedule.special_hours.filter((entry) => entry.date === iso);
+
+    if (special.length > 0) {
+        return special.some((entry) => entry.closed) ? [] : special;
+    }
+
+    return schedule.hours.filter((entry) => entry.weekday === date.getUTCDay());
+}
+
+/**
+ * El día cuyo horario vale en el instante `now`, con las reglas de
+ * openStatus: ayer, mientras siga abierta una franja de ayer que pasa la
+ * medianoche (de 18:00 a 02:00, a las 00:30), y si no, hoy. Es el día de la
+ * línea «Hoy» de la ficha: así no dice «Cerrado» mientras el estado dice
+ * «Abierto» (BUG-034).
+ */
+export function serviceDay(schedule: Schedule, now: Date): BusinessDay {
+    const today = localNow(now);
+    const yesterday = dayAt(today, -1);
+    const lateShift = slotsOn(schedule, yesterday).some((entry) => {
+        const open = span(-1, entry.opens, entry.closes);
+
+        return open !== null && today.minutes < open[1];
+    });
+
+    return lateShift ? { date: yesterday.toISOString().slice(0, 10), weekday: yesterday.getUTCDay() } : businessDay(now);
+}
+
 /**
  * Si un restaurante está abierto en el instante `now`, y cuándo cambia.
  * `now` es un instante (un `Date`): la zona del dispositivo no cuenta.
  */
 export function openStatus(schedule: Schedule, now: Date): OpenStatus {
-    if (schedule.hours.length === 0 && schedule.special_hours.length === 0) {
-        return { state: 'unknown' };
-    }
-
     const today = localNow(now);
     const spans: Span[] = [];
 
     // Desde ayer: una franja de ayer puede seguir abierta pasada la medianoche.
     for (let offset = -1; offset <= DAYS_AHEAD; offset += 1) {
-        // Mediodía en UTC: sumar días no cruza ningún cambio de fecha.
-        const date = new Date(Date.UTC(today.year, today.month - 1, today.day + offset, 12));
-        const iso = date.toISOString().slice(0, 10);
-        const special = schedule.special_hours.filter((entry) => entry.date === iso);
-        const slots =
-            special.length > 0
-                ? // Un «cerrado» deja la fecha sin franjas.
-                  special.some((entry) => entry.closed)
-                    ? []
-                    : special.map((entry) => span(offset, entry.opens, entry.closes))
-                : schedule.hours.filter((entry) => entry.weekday === date.getUTCDay()).map((entry) => span(offset, entry.opens, entry.closes));
+        const slots = slotsOn(schedule, dayAt(today, offset)).map((entry) => span(offset, entry.opens, entry.closes));
 
         spans.push(...slots.filter((slot) => slot !== null));
     }
@@ -201,6 +223,19 @@ export function openStatus(schedule: Schedule, now: Date): OpenStatus {
 
         return { daysAhead, weekday: (((today.weekday + daysAhead) % 7) + 7) % 7, time: timeOf(((minutes % DAY) + DAY) % DAY) };
     };
+
+    // Sin horario semanal, solo se sabe lo que dicen los horarios especiales:
+    // sin uno de hoy ni una franja que no haya terminado, no se afirma que esté
+    // cerrado, aunque haya alguno más adelante (BUG-035).
+    const todayIso = dayAt(today, 0).toISOString().slice(0, 10);
+
+    if (
+        schedule.hours.length === 0 &&
+        !schedule.special_hours.some((entry) => entry.date === todayIso) &&
+        !merged.some(([, until]) => until > today.minutes)
+    ) {
+        return { state: 'unknown' };
+    }
 
     const current = merged.find(([from, until]) => from <= today.minutes && today.minutes < until);
 
