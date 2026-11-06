@@ -4,7 +4,7 @@ import { computed, useId } from 'vue';
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
 import type { RestaurantProfile } from '@/restaurants/profile';
-import { PAYMENT_METHOD_KEYS } from '@/restaurants/profile';
+import { hasContactInfo, knownPaymentMethods, PAYMENT_METHOD_KEYS } from '@/restaurants/profile';
 
 /**
  * Dónde queda un restaurante y cómo hablarle (#13): la dirección con su
@@ -26,17 +26,9 @@ const headingId = useId();
 const PRICE_LEVELS = 4;
 
 /** Un medio de pago que esta versión de la app todavía no conoce no se muestra como una clave suelta. */
-const payments = computed(() => restaurant.payment_methods.filter((method) => method in PAYMENT_METHOD_KEYS));
+const payments = computed(() => knownPaymentMethods(restaurant.payment_methods));
 
-const hasAny = computed(
-    () =>
-        restaurant.address !== null ||
-        restaurant.reference !== null ||
-        restaurant.phone !== null ||
-        restaurant.whatsapp !== null ||
-        payments.value.length > 0 ||
-        restaurant.price_level !== null,
-);
+const hasAny = computed(() => hasContactInfo(restaurant));
 
 /** Un solo número: dígitos con espacios, guiones y paréntesis, y un `+` al principio. */
 const SINGLE_PHONE = /^\s*\+?(?:[\s()-]*\d)+[\s()-]*$/;

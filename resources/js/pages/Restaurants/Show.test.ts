@@ -1,8 +1,9 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { RestaurantProfile } from '@/restaurants/profile';
+import type { PaymentMethod, RestaurantProfile } from '@/restaurants/profile';
 import type * as FakeInertia from '@/testing/inertia';
+import { desktopWidth, phoneWidth, stubMedia } from '@/testing/media';
 import { profile } from '@/testing/restaurants';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
@@ -25,7 +26,7 @@ async function mountShow(restaurant: RestaurantProfile = profile(), locale: 'es'
         inertia,
         wrapper,
         // El espacio que no parte la línea de «3:00 p. m.» se compara como uno común.
-        status: () => wrapper.get('header [data-status]').text().replaceAll(' ', ' '),
+        status: () => wrapper.get('[data-status]').text().replaceAll(' ', ' '),
     };
 }
 
@@ -33,6 +34,8 @@ enableAutoUnmount(afterEach);
 
 beforeEach(() => {
     vi.resetModules();
+    // Un celular, salvo que la prueba diga otra cosa (ADR 0038).
+    stubMedia(phoneWidth);
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     // Miércoles 7 de octubre de 2026, 12:30 en Colombia: La Ceiba (11 a 15) está abierta.
     vi.setSystemTime(new Date('2026-10-07T12:30:00-05:00'));
@@ -40,6 +43,7 @@ beforeEach(() => {
 
 afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     document.body.replaceChildren();
 });
 
@@ -96,13 +100,21 @@ describe('Restaurants/Show', () => {
         expect(wrapper.find('header ul').exists()).toBe(false);
     });
 
-    it('muestra la descripción, y sin descripción no deja el hueco', async () => {
-        const described = await mountShow();
-        expect(described.wrapper.get('header [data-description]').text()).toBe('Ficha de ejemplo para desarrollo. No corresponde a un negocio real.');
+    it('muestra la descripción antes del menú, y sin descripción no deja el hueco', async () => {
+        const described = await mountShow(profile({ fictitious: false, description: 'Comida de la casa desde 1990.' }));
+        expect(described.wrapper.get('.ficha-main > [data-description]').text()).toBe('Comida de la casa desde 1990.');
+        expect(described.wrapper.findAll('.ficha-main > [data-description], [data-ficha-footer] > [data-description]')).toHaveLength(1);
         described.wrapper.unmount();
 
         const bare = await mountShow(profile({ description: null }));
-        expect(bare.wrapper.find('header [data-description]').exists()).toBe(false);
+        expect(bare.wrapper.find('.ficha-main > [data-description], [data-ficha-footer] > [data-description]').exists()).toBe(false);
+    });
+
+    it('la descripción de una ficha de ejemplo es su aviso: va al pie, no arriba (#125)', async () => {
+        const { wrapper } = await mountShow();
+
+        expect(wrapper.get('[data-ficha-footer] > [data-description]').text()).toBe('Ficha de ejemplo para desarrollo. No corresponde a un negocio real.');
+        expect(wrapper.find('.ficha-main > [data-description]').exists()).toBe(false);
     });
 
     it('marca los datos de ejemplo, y solo esos', async () => {
@@ -207,6 +219,22 @@ describe('Restaurants/Show', () => {
             expect(status()).toBe('Horario sin confirmar');
         });
 
+        it('sin horario semanal, un horario especial que viene no lo da por cerrado (BUG-035)', async () => {
+            const { status } = await mountShow(
+                profile({ hours: [], special_hours: [{ date: '2026-10-12', closed: true, opens: null, closes: null, note: 'Festivo de prueba' }] }),
+            );
+
+            expect(status()).toBe('Horario sin confirmar');
+        });
+
+        it('sin horario semanal, un horario especial de hoy que abre sí dice «Abierto»', async () => {
+            const { status } = await mountShow(
+                profile({ hours: [], special_hours: [{ date: '2026-10-07', closed: false, opens: '12:00', closes: '14:00', note: null }] }),
+            );
+
+            expect(status()).toBe('Abierto ahora · cierra a las 2:00 p. m.');
+        });
+
         it('se pone al día solo cuando pasa la hora de cierre', async () => {
             const { status } = await mountShow();
 
@@ -218,12 +246,32 @@ describe('Restaurants/Show', () => {
     });
 
     describe('horario', () => {
-        it('muestra la semana con el día de hoy resaltado', async () => {
-            const { wrapper } = await mountShow();
+        it('a la vista, solo el de hoy; la semana, agrupada, se despliega con «Ver semana» (#125, #82)', async () => {
+            const { wrapper } = await mountShow(profile({ special_hours: [] }));
             const hours = wrapper.getComponent({ name: 'RestaurantHours' });
 
-            expect(hours.findAll('tbody tr')).toHaveLength(7);
-            expect(hours.get('tr[aria-current="date"] th span').text()).toBe('miércoles');
+            expect(hours.get('[data-today]').text().replace(/\s+/g, ' ')).toBe('Hoy 11:00 a. m. – 3:00 p. m.');
+            expect(hours.get('details summary').text()).toBe('Ver semana');
+            expect(hours.get('details').attributes('open')).toBeUndefined();
+            // La Ceiba abre igual los siete días: una sola fila.
+            expect(hours.findAll('details tbody tr').map((row) => row.get('[data-days]').text())).toEqual(['Lun–Dom']);
+        });
+
+        it('pasada la medianoche, con el turno de anoche abierto, «Hoy» es el de ese turno: no contradice el estado (BUG-034)', async () => {
+            vi.setSystemTime(new Date('2026-10-08T00:30:00-05:00'));
+            const { wrapper, status } = await mountShow(profile({ hours: [{ weekday: 3, opens: '18:00', closes: '02:00' }], special_hours: [] }));
+
+            expect(status()).toBe('Abierto ahora · cierra a las 2:00 a. m.');
+            expect(wrapper.get('[data-today]').text().replace(/\s+/g, ' ')).toBe('Hoy 6:00 p. m. – 2:00 a. m.');
+        });
+
+        it('el estado va dentro de la sección «Horario», antes de la línea de hoy (EVA-039)', async () => {
+            const { wrapper } = await mountShow();
+            const status = wrapper.get('[data-status]').element;
+            const section = status.closest('section');
+
+            expect(section?.querySelector('h2')?.textContent).toBe('Horario');
+            expect(status.compareDocumentPosition(wrapper.get('[data-today]').element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         });
 
         it('le pasa los horarios especiales con su nota', async () => {
@@ -381,14 +429,14 @@ describe('Restaurants/Show', () => {
         it('si hace domicilios lo dice arriba y muestra a qué barrios lleva', async () => {
             const { wrapper } = await mountShow();
 
-            expect(wrapper.get('header [data-delivery]').text()).toBe('Hace domicilios');
+            expect(wrapper.get('[data-aside] [data-delivery]').text()).toBe('Hace domicilios');
             expect(wrapper.getComponent({ name: 'RestaurantDelivery' }).findAll('[data-zone]')).toHaveLength(2);
         });
 
         it('si no hace domicilios, no dice nada de domicilios', async () => {
             const { wrapper } = await mountShow(profile({ delivery: { available: false, notes: null, zones: [] } }));
 
-            expect(wrapper.find('header [data-delivery]').exists()).toBe(false);
+            expect(wrapper.find('[data-delivery]').exists()).toBe(false);
             expect(wrapper.findComponent({ name: 'RestaurantDelivery' }).exists()).toBe(false);
         });
     });
@@ -428,9 +476,9 @@ describe('Restaurants/Show', () => {
                 'H2 Menú',
                 'H3 Platos fuertes (prueba)',
                 'H3 Bebidas (prueba)',
+                'H2 Ubicación y contacto',
                 'H2 Domicilios',
                 'H3 Barrios y costo del domicilio',
-                'H2 Ubicación y contacto',
             ]);
         });
     });
@@ -569,5 +617,240 @@ describe('Restaurants/Show: promociones (#113)', () => {
             expect(wrapper.findAll('h2').map((title) => title.text())).not.toContain('Promociones');
             wrapper.unmount();
         }
+    });
+});
+
+describe('Restaurants/Show: dos columnas en computador y lo importante primero en el celular (#125, #82)', () => {
+    /** Las partes de la ficha en el orden del documento: la cabecera, lo de un vistazo y la columna principal. */
+    const order = (wrapper: Awaited<ReturnType<typeof mountShow>>['wrapper']) =>
+        [...wrapper.get('.ficha-grid').element.children].map((child) => child.className.split(' ')[0]);
+
+    describe('en el celular', () => {
+        it('van primero el estado, el horario de hoy y «Cómo llegar»; después el menú, y al final contacto y domicilios, en el orden de computador', async () => {
+            const { wrapper } = await mountShow();
+            const aside = wrapper.get('[data-aside]');
+            const titles = wrapper.get('.ficha-main').findAll('h2').map((title) => title.text());
+
+            expect(order(wrapper)).toEqual(['ficha-head', 'ficha-aside', 'ficha-main']);
+            expect(aside.find('[data-status]').exists()).toBe(true);
+            expect(aside.find('[data-today]').exists()).toBe(true);
+            expect(aside.find('[data-directions]').exists()).toBe(true);
+            expect(aside.find('[data-favorite]').exists()).toBe(true);
+            expect(titles).toEqual(['Promociones', 'Menú', 'Ubicación y contacto', 'Domicilios']);
+        });
+
+        it.each([
+            ['es', 'En esta ficha', ['Promociones', 'Menú', 'Ubicación y contacto', 'Domicilios']],
+            ['en', 'On this page', ['Promotions', 'Menu', 'Location and contact', 'Delivery']],
+        ] as const)('en %s, una navegación con nombre lleva a cada sección de abajo, con enlaces de 44 px, y el foco va a la sección (EVA-040)', async (locale, label, texts) => {
+            const { wrapper } = await mountShow(profile(), locale);
+            const nav = wrapper.get('nav[data-sections]');
+            const links = nav.findAll('a');
+
+            expect(nav.attributes('aria-label')).toBe(label);
+            expect(links.map((link) => link.text())).toEqual(texts);
+            for (const link of links) {
+                const target = (link.attributes('href') ?? '').slice(1);
+
+                expect(link.classes()).toContain('min-h-touch');
+                expect(document.getElementById(target)?.querySelector('h2')).not.toBeNull();
+                // Un enlace a un ancla solo mueve el foco si el destino lo puede recibir.
+                expect(document.getElementById(target)?.getAttribute('tabindex')).toBe('-1');
+            }
+        });
+
+        it('la navegación solo lleva las secciones que hay, y con una sola no sale', async () => {
+            const some = await mountShow(profile({ delivery: { available: false, notes: null, zones: [] }, promotions: [] }));
+            expect(some.wrapper.findAll('nav[data-sections] a').map((link) => link.text())).toEqual(['Menú', 'Ubicación y contacto']);
+            some.wrapper.unmount();
+
+            const none = await mountShow(
+                profile({
+                    delivery: { available: false, notes: null, zones: [] },
+                    promotions: [],
+                    address: null,
+                    reference: null,
+                    phone: null,
+                    whatsapp: null,
+                    payment_methods: [],
+                    price_level: null,
+                }),
+            );
+            expect(none.wrapper.find('nav[data-sections]').exists()).toBe(false);
+        });
+
+        it('un medio de pago que la app no conoce no cuenta como contacto: no lleva a una sección que no sale (BUG-037)', async () => {
+            const { wrapper } = await mountShow(
+                profile({ address: null, reference: null, phone: null, whatsapp: null, price_level: null, payment_methods: ['bitcoin' as PaymentMethod] }),
+            );
+
+            expect(wrapper.findAll('nav[data-sections] a').map((link) => link.text())).toEqual(['Promociones', 'Menú', 'Domicilios']);
+            expect(wrapper.find('#ficha-contacto').exists()).toBe(false);
+        });
+
+        it('la columna de lo de un vistazo es parte de la página: ni región ni foco propio (EVA-038)', async () => {
+            const { wrapper } = await mountShow();
+            const aside = wrapper.get('[data-aside]');
+
+            expect(aside.attributes('tabindex')).toBeUndefined();
+            expect(aside.attributes('role')).toBeUndefined();
+            expect(aside.attributes('aria-label')).toBeUndefined();
+        });
+    });
+
+    describe('en computador (desde 1024 px)', () => {
+        it.each([
+            ['es', 'Datos del restaurante'],
+            ['en', 'Restaurant details'],
+        ] as const)('en %s, la columna fija se alcanza con el teclado para desplazarla: una región con nombre (EVA-038)', async (locale, label) => {
+            stubMedia(desktopWidth);
+            const { wrapper } = await mountShow(profile(), locale);
+            const aside = wrapper.get('[data-aside]');
+
+            expect(aside.attributes('tabindex')).toBe('0');
+            expect(aside.attributes('role')).toBe('region');
+            expect(aside.attributes('aria-label')).toBe(label);
+        });
+
+        it('al cruzar los 1024 px, el foco que estaba en el contacto o los domicilios sigue en lo mismo (BUG-036)', async () => {
+            const media = stubMedia(phoneWidth);
+            const { wrapper } = await mountShow();
+            (wrapper.get('.ficha-main [data-whatsapp] a').element as HTMLElement).focus();
+
+            media.change(desktopWidth);
+            await flushPromises();
+            expect(document.activeElement).toBe(wrapper.get('[data-aside] [data-whatsapp] a').element);
+
+            media.change(phoneWidth);
+            await flushPromises();
+            expect(document.activeElement).toBe(wrapper.get('.ficha-main [data-whatsapp] a').element);
+
+            document.getElementById('ficha-domicilios')?.focus();
+            media.change(desktopWidth);
+            await flushPromises();
+            expect(document.activeElement).toBe(wrapper.get('[data-aside] #ficha-domicilios').element);
+        });
+
+        it('al salir de la ficha deja de escuchar el ancho de la ventana', async () => {
+            const media = stubMedia(phoneWidth);
+            const { wrapper } = await mountShow();
+            const desktopListeners = () => [...media.listeners.values()].filter((query) => query === '(min-width: 64rem)');
+            expect(desktopListeners()).toHaveLength(1);
+
+            wrapper.unmount();
+
+            expect(desktopListeners()).toEqual([]);
+        });
+
+        it('lo de un vistazo, el contacto y los domicilios van en la columna de la derecha, antes del menú en el documento', async () => {
+            stubMedia(desktopWidth);
+            const { wrapper } = await mountShow();
+            const aside = wrapper.get('[data-aside]');
+
+            expect(order(wrapper)).toEqual(['ficha-head', 'ficha-aside', 'ficha-main']);
+            expect(aside.findAll('h2').map((title) => title.text())).toEqual(['Horario', 'Ubicación y contacto', 'Domicilios']);
+            expect(aside.find('[data-whatsapp]').exists()).toBe(true);
+            expect(aside.find('[data-payments]').exists()).toBe(true);
+            expect(wrapper.get('.ficha-main').findAll('h2').map((title) => title.text())).toEqual(['Promociones', 'Menú']);
+        });
+
+        it('usa el mismo corte que el inicio (DESKTOP_QUERY, ADR 0037)', async () => {
+            const media = stubMedia(phoneWidth);
+            await mountShow();
+            const { DESKTOP_QUERY } = await import('@/composables/useMediaQuery');
+
+            expect(media.matchMedia).toHaveBeenCalledWith(DESKTOP_QUERY);
+        });
+
+        it('no lleva la navegación del celular ni repite «Hace domicilios»: la sección está al lado', async () => {
+            stubMedia(desktopWidth);
+            const { wrapper } = await mountShow();
+
+            expect(wrapper.find('nav[data-sections]').exists()).toBe(false);
+            expect(wrapper.find('[data-delivery]').exists()).toBe(false);
+        });
+
+        it('al cambiar el ancho de la ventana, el contacto y los domicilios cambian de columna', async () => {
+            const media = stubMedia(phoneWidth);
+            const { wrapper } = await mountShow();
+            expect(wrapper.find('[data-aside] [data-whatsapp]').exists()).toBe(false);
+
+            media.change(desktopWidth);
+            await flushPromises();
+            expect(wrapper.find('[data-aside] [data-whatsapp]').exists()).toBe(true);
+            expect(wrapper.findAll('[data-whatsapp]')).toHaveLength(1);
+
+            media.change(phoneWidth);
+            await flushPromises();
+            expect(wrapper.find('.ficha-main [data-whatsapp]').exists()).toBe(true);
+        });
+
+        it('los encabezados siguen en orden', async () => {
+            stubMedia(desktopWidth);
+            const { wrapper } = await mountShow();
+
+            expect(wrapper.findAll('h1, h2').map((heading) => `${heading.element.tagName} ${heading.text()}`)).toEqual([
+                'H1 Restaurante de Prueba La Ceiba (ficticio)',
+                'H2 Horario',
+                'H2 Ubicación y contacto',
+                'H2 Domicilios',
+                'H2 Promociones',
+                'H2 Menú',
+            ]);
+        });
+    });
+
+    describe('cabecera compacta y pie de la ficha', () => {
+        it('la cabecera lleva solo el nombre, el rótulo de ejemplo y el tipo de comida', async () => {
+            const { wrapper } = await mountShow(profile({ unverified: true, claimable: true }));
+            const header = wrapper.get('header');
+
+            expect(header.find('h1').exists()).toBe(true);
+            expect(header.find('[data-sample]').exists()).toBe(true);
+            expect(header.find('[data-category]').exists()).toBe(true);
+            for (const notice of ['[data-unverified]', '[data-claim]', '[data-removal]', '[data-description]', '[data-status]']) {
+                expect(header.find(notice).exists()).toBe(false);
+            }
+        });
+
+        it('«Información sin verificar», «¿Es tu negocio?» y «Pedir que retiren esta ficha» van al pie, después del menú', async () => {
+            const { wrapper } = await mountShow(profile({ unverified: true, claimable: true }));
+            const footer = wrapper.get('[data-ficha-footer]');
+
+            expect(footer.find('[data-unverified]').exists()).toBe(true);
+            expect(footer.find('[data-claim]').exists()).toBe(true);
+            expect(footer.find('[data-removal]').exists()).toBe(true);
+            expect(wrapper.get('.ficha-grid').element.compareDocumentPosition(footer.element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        });
+
+        it('«Actualizada por el restaurante» también va al pie', async () => {
+            const { wrapper } = await mountShow(profile({ unverified: false, owner_updated_on: '2026-10-05' }));
+
+            expect(wrapper.find('[data-ficha-footer] [data-owner-updated]').exists()).toBe(true);
+        });
+    });
+
+    describe('«Ver semana»', () => {
+        it.each([
+            ['es', 'Ver semana y horarios especiales'],
+            ['en', 'See the week and special hours'],
+        ] as const)('en %s, con horarios especiales que vienen, lo dice y los muestra al desplegar', async (locale, summary) => {
+            const { wrapper } = await mountShow(
+                profile({ special_hours: [{ date: '2026-10-12', closed: true, opens: null, closes: null, note: 'Festivo de prueba' }] }),
+                locale,
+            );
+            const details = wrapper.get('details[data-week]');
+
+            expect(details.get('summary').text()).toBe(summary);
+            expect(details.get('[data-special]').text()).toContain('Festivo de prueba');
+        });
+
+        it('se despliega con el teclado: es un <details> con su <summary>, de 44 px', async () => {
+            const { wrapper } = await mountShow();
+            const details = wrapper.get('details[data-week]');
+
+            expect(details.element.firstElementChild?.tagName).toBe('SUMMARY');
+            expect(details.get('summary').classes()).toContain('min-h-touch');
+        });
     });
 });

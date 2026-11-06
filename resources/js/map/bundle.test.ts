@@ -439,6 +439,11 @@ describe('presupuesto de descarga', () => {
         // junto a cuántos hay, y el botón sumó un chevron (un ícono, que baja
         // aparte): 81,165 antes y 81,177 después (81,164 con «Quitar
         // filtros» al lado de «Filtros», que partía la fila en dos).
+        // Con la ficha en dos columnas (#125, ADR 0038), 81,163: su diseño es
+        // CSS propio de la ficha y no suma utilidades. Con su revisión,
+        // 81,171 (+0,009): la cabecera y el pie del layout pasan de
+        // max-w-5xl a max-w-6xl, al ancho de la ficha.
+        // Juntos, con main (#125) y la barra corregida (#130): 81,16.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 

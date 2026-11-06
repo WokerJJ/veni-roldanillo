@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Schedule, SpecialHours, WeeklyHours } from './openStatus';
-import { BUSINESS_TIME_ZONE, businessDay, openStatus } from './openStatus';
+import { BUSINESS_TIME_ZONE, businessDay, openStatus, serviceDay } from './openStatus';
 
 /*
 | «Abierto ahora» con fechas fijas. Octubre de 2026: el 5 es lunes, el 7
@@ -303,6 +303,21 @@ describe('abierto ahora', () => {
             expect(openStatus(schedule([], [closedOn('2026-10-07')]), bogota('2026-10-07', '12:30'))).toEqual({ state: 'closed', opens: null });
         });
 
+        it('sin horario semanal, un horario especial que viene (o uno de ayer) no dice «Cerrado»: no se sabe (BUG-035)', () => {
+            const now = bogota('2026-10-07', '12:30');
+
+            expect(openStatus(schedule([], [closedOn('2026-10-12')]), now)).toEqual({ state: 'unknown' });
+            expect(openStatus(schedule([], [openOn('2026-10-30', '12:00', '14:00')]), now)).toEqual({ state: 'unknown' });
+            expect(openStatus(schedule([], [openOn('2026-10-06', '12:00', '14:00')]), now)).toEqual({ state: 'unknown' });
+        });
+
+        it('sin horario semanal, el especial de hoy sí dice si está abierto, también después de cerrar', () => {
+            const today = schedule([], [openOn('2026-10-07', '12:00', '14:00')]);
+
+            expect(openStatus(today, bogota('2026-10-07', '12:30'))).toEqual({ state: 'open', closes: { daysAhead: 0, weekday: WED, time: '14:00' } });
+            expect(openStatus(today, bogota('2026-10-07', '15:00'))).toEqual({ state: 'closed', opens: null });
+        });
+
         it('si no abre en los próximos siete días, está cerrado sin fecha de apertura', () => {
             const closedAllWeek = schedule(
                 [weekly(WED, '11:00', '15:00')],
@@ -446,5 +461,28 @@ describe('el día de hoy', () => {
         const { date } = businessDay(now);
 
         expect(openStatus(schedule([weekly(WED, '18:00', '22:00')], [closedOn(date)]), now).state).toBe('closed');
+    });
+});
+
+describe('el día cuyo horario vale ahora (BUG-034)', () => {
+    it('pasada la medianoche, mientras sigue abierto el turno de anoche, es ayer: el mismo que dice «abierto»', () => {
+        const late = schedule([weekly(WED, '18:00', '02:00')]);
+
+        expect(openStatus(late, bogota('2026-10-08', '00:30')).state).toBe('open');
+        expect(serviceDay(late, bogota('2026-10-08', '00:30'))).toEqual({ date: '2026-10-07', weekday: WED });
+        // A las 2:00 ya cerró: vuelve a ser hoy.
+        expect(serviceDay(late, bogota('2026-10-08', '02:00'))).toEqual({ date: '2026-10-08', weekday: THU });
+    });
+
+    it('el horario especial de ayer manda sobre el semanal, como en openStatus', () => {
+        const now = bogota('2026-10-08', '00:30');
+
+        expect(serviceDay(schedule([weekly(WED, '18:00', '02:00')], [closedOn('2026-10-07')]), now)).toEqual({ date: '2026-10-08', weekday: THU });
+        expect(serviceDay(schedule([], [openOn('2026-10-07', '20:00', '01:00')]), now)).toEqual({ date: '2026-10-07', weekday: WED });
+    });
+
+    it('sin un turno de anoche abierto, es hoy', () => {
+        expect(serviceDay(schedule([weekly(WED, '18:00', '22:00')]), bogota('2026-10-08', '00:30'))).toEqual({ date: '2026-10-08', weekday: THU });
+        expect(serviceDay(schedule([]), bogota('2026-10-08', '00:30'))).toEqual({ date: '2026-10-08', weekday: THU });
     });
 });

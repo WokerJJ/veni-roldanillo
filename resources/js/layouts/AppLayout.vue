@@ -92,7 +92,7 @@ import('@/components/links')
             una sola grilla, sin el logo corrido hacia el centro.
         -->
         <header class="border-b border-line">
-            <div class="flex items-center justify-between gap-4 px-4 py-0.5 md:py-2" :class="{ 'mx-auto max-w-5xl': !immersive }">
+            <div class="flex items-center justify-between gap-4 px-4 py-0.5 md:py-2" :class="{ 'mx-auto max-w-6xl': !immersive }">
                 <Link href="/" class="inline-flex min-h-touch items-center rounded-veni-sm">
                     <img :src="wordmark" :alt="t('layout.home_link')" width="72" height="40" class="h-10 w-auto dark:hidden">
                     <img
@@ -117,7 +117,7 @@ import('@/components/links')
         </main>
 
         <footer v-if="!immersive" class="border-t border-line">
-            <div class="mx-auto max-w-5xl px-4 py-6 text-sm text-ink-muted">
+            <div class="mx-auto max-w-6xl px-4 py-6 text-sm text-ink-muted">
                 <p>{{ t('layout.footer', { year }) }}</p>
                 <div class="flex flex-wrap gap-x-4">
                     <!-- La atribución de OpenStreetMap (ODbL) y cómo pedir sus datos: ADR 0021. -->
