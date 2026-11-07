@@ -425,7 +425,7 @@ onBeforeUnmount(() => {
     max-height: 92dvh;
     padding: 0;
     border: 0;
-    border-radius: 1rem 1rem 0 0;
+    border-radius: var(--veni-radius-lg) var(--veni-radius-lg) 0 0;
     background: var(--color-canvas);
 }
 
@@ -441,7 +441,7 @@ onBeforeUnmount(() => {
 @media (min-width: 768px) {
     .saved-sheet {
         margin: auto;
-        border-radius: 1rem;
+        border-radius: var(--veni-radius-lg);
     }
 }
 
@@ -451,7 +451,7 @@ onBeforeUnmount(() => {
 
 .saved-field {
     min-height: 2.75rem;
-    border-radius: 0.5rem;
+    border-radius: var(--veni-radius-sm);
 }
 
 .saved-check {
@@ -460,5 +460,41 @@ onBeforeUnmount(() => {
 
 [data-theme='dark'] .saved-check {
     accent-color: var(--color-veni-mango);
+}
+/*
+ * Entra en 320 ms (#138, ADR 0040): desde abajo en el celular y, centrado
+ * en una pantalla ancha, un poco desde abajo y apareciendo. Con una curva
+ * sin rebote: el resorte la subiría de más y dejaría ver una franja abajo.
+ * Con «Reducir movimiento», sin animación.
+ */
+@media (prefers-reduced-motion: no-preference) {
+    .saved-sheet[open] {
+        animation: saved-sheet-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1);
+    }
+
+    .saved-sheet[open]::backdrop {
+        animation: saved-sheet-fade 200ms ease-out;
+    }
+}
+
+@keyframes saved-sheet-in {
+    from {
+        translate: 0 100%;
+    }
+}
+
+@keyframes saved-sheet-fade {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (min-width: 768px) {
+    @keyframes saved-sheet-in {
+        from {
+            opacity: 0;
+            translate: 0 2rem;
+        }
+    }
 }
 </style>

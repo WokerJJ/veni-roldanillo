@@ -927,7 +927,7 @@ onBeforeUnmount(() => {
     max-height: 92dvh;
     padding: 0;
     border: 0;
-    border-radius: 1rem 1rem 0 0;
+    border-radius: var(--veni-radius-lg) var(--veni-radius-lg) 0 0;
     background: var(--color-canvas);
 }
 
@@ -943,7 +943,7 @@ onBeforeUnmount(() => {
 @media (min-width: 768px) {
     .order-cart {
         margin: auto;
-        border-radius: 1rem;
+        border-radius: var(--veni-radius-lg);
     }
 }
 
@@ -957,7 +957,7 @@ onBeforeUnmount(() => {
 
 .order-cart-field {
     min-height: 2.75rem;
-    border-radius: 0.5rem;
+    border-radius: var(--veni-radius-sm);
 }
 
 .order-cart-check {
@@ -968,8 +968,17 @@ onBeforeUnmount(() => {
     accent-color: var(--color-veni-mango);
 }
 
+/*
+ * Desactivado (#138, A4): con opacidad el «−» quedaba en 2,5:1 y el borde casi
+ * no se veía. El signo y el borde van con el color del texto mezclado con el
+ * fondo, a 3,8:1 en claro y 5,8:1 en oscuro (WCAG 1.4.11), y el borde
+ * punteado dice que no se puede usar sin depender solo del color.
+ */
 .order-cart-step:disabled {
-    opacity: 0.4;
+    border-style: dashed;
+    border-color: currentColor;
+    color: color-mix(in srgb, var(--color-ink) 55%, var(--color-canvas));
+    cursor: not-allowed;
 }
 
 .order-cart-totals {
@@ -980,5 +989,41 @@ onBeforeUnmount(() => {
 
 .order-cart-quantity {
     width: 2rem;
+}
+/*
+ * Entra en 320 ms (#138, ADR 0040): desde abajo en el celular y, centrado
+ * en una pantalla ancha, un poco desde abajo y apareciendo. Con una curva
+ * sin rebote: el resorte la subiría de más y dejaría ver una franja abajo.
+ * Con «Reducir movimiento», sin animación.
+ */
+@media (prefers-reduced-motion: no-preference) {
+    .order-cart[open] {
+        animation: order-cart-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1);
+    }
+
+    .order-cart[open]::backdrop {
+        animation: order-cart-fade 200ms ease-out;
+    }
+}
+
+@keyframes order-cart-in {
+    from {
+        translate: 0 100%;
+    }
+}
+
+@keyframes order-cart-fade {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (min-width: 768px) {
+    @keyframes order-cart-in {
+        from {
+            opacity: 0;
+            translate: 0 2rem;
+        }
+    }
 }
 </style>

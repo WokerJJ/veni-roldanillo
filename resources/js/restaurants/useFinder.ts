@@ -7,7 +7,9 @@ import type { Restaurant } from './api';
 import type { Filters } from './filterParams';
 import { hasFilters } from './filterParams';
 import type { LunchOfTheDay } from './finder';
-import { filterRestaurants, pickSuggestion, todaysLunches, withoutUnknownCategory } from './finder';
+import { filterRestaurants, firstToOpen, pickSuggestion, todaysLunches, withoutUnknownCategory } from './finder';
+import { openStatus } from './openStatus';
+import { opensText } from './statusText';
 
 /*
 | Lo que comparten la bienvenida (WelcomeActions.vue), la lista
@@ -107,11 +109,13 @@ export interface FinderPanel extends Finder {
     announced: Readonly<Ref<string>>;
     /** «Sugerime algo»: el slug de uno de los abiertos que cumplen los filtros (no el último), o null si no hay. */
     suggest: () => string | null;
+    /** «Sugerime algo» no encontró abiertos: el que abre primero, para ofrecerlo en pantalla; si no, null. */
+    next: ComputedRef<Restaurant | null>;
 }
 
 /** Lo de la lista y la bienvenida: además de filtrar, los almuerzos, «Sugerime algo» y la región de estado. */
 export function useFinderPanel(source: FinderSource, { unfiltered, onFilters }: FinderPanelOptions): FinderPanel {
-    const { t } = useI18n();
+    const { t, locale } = useI18n();
     const finder = useFinder(source);
     const { now, filtered, matching } = finder;
     const lunches = computed(() => todaysLunches(matching.value, now.value));
@@ -141,11 +145,35 @@ export function useFinderPanel(source: FinderSource, { unfiltered, onFilters }: 
         missed.value = false;
     });
 
+    // Con el reloj, abre alguno de los que cumplen los filtros: «no hay
+    // ninguno abierto» y «el que abre primero» ya no son ciertos, y se van.
+    watch(
+        () => missed.value && matching.value.some((restaurant) => openStatus(restaurant, now.value).state === 'open'),
+        (opened) => {
+            if (opened) {
+                missed.value = false;
+            }
+        },
+        { flush: 'sync' },
+    );
+
+    const next = computed(() => (missed.value ? firstToOpen(matching.value, now.value) : null));
+
     const message = computed(() => {
         const total = source.restaurants().length;
 
         if (missed.value) {
-            return filtered.value ? t('finder.suggest_none_filtered') : t('finder.suggest_none');
+            const first = next.value;
+            const opens = first === null ? null : openStatus(first, now.value);
+
+            if (first === null || opens?.state !== 'closed' || opens.opens === null) {
+                return filtered.value ? t('finder.suggest_none_filtered') : t('finder.suggest_none');
+            }
+
+            // Cuál abre primero y cuándo: «…, abre mañana a las 11:00 a. m.».
+            const replacements = { name: first.name, when: opensText(opens.opens, t, locale.value) };
+
+            return filtered.value ? t('finder.suggest_none_filtered_next', replacements) : t('finder.suggest_none_next', replacements);
         }
 
         if (!filtered.value) {
@@ -203,5 +231,5 @@ export function useFinderPanel(source: FinderSource, { unfiltered, onFilters }: 
         return pick.slug;
     }
 
-    return { ...finder, lunches, message, announced, suggest };
+    return { ...finder, lunches, message, announced, suggest, next };
 }

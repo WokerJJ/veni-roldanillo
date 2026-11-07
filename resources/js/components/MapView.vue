@@ -257,7 +257,7 @@ defineExpose({
             <p class="max-w-prose">{{ unavailable ? t('map.unavailable') : t('map.error') }}</p>
             <button
                 type="button"
-                class="inline-flex min-h-touch items-center rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco transition-colors hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                class="inline-flex min-h-touch items-center rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
                 @click="retry"
             >
                 {{ t('map.retry') }}

@@ -43,3 +43,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0037](0037-barra-lateral-en-computador.md) | La barra lateral en computador: la lista fija a la izquierda, el mapa al lado y lo que no hace falta al abrir fuera del arranque | Aceptada |
 | [0038](0038-ficha-en-dos-columnas-y-horario-compacto.md) | La ficha en dos columnas en computador, el horario compacto y lo importante primero en el celular | Aceptada |
 | [0039](0039-rango-de-precios-de-la-carta.md) | El rango de precios de la carta en lugar del nivel 1–4: calculado en la consulta, sin bebidas ni postres, y el filtro «platos hasta $X» | Aceptada |
+| [0040](0040-base-visual-y-movimiento-del-celular.md) | La base visual y el movimiento del celular: radios de la marca, un resorte solo sin «Reducir movimiento» y la lista a la altura completa | Aceptada |

@@ -456,7 +456,7 @@ onBeforeUnmount(() => {
         margin-top: 1rem;
         padding: 1.25rem;
         border: 1px solid var(--color-line);
-        border-radius: 1rem;
+        border-radius: var(--veni-radius-md);
     }
 }
 </style>

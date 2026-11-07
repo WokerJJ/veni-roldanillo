@@ -72,13 +72,13 @@ const SIZES = {
 .dish-photo-thumb {
     width: 4rem;
     height: 4rem;
-    border-radius: 0.5rem;
+    border-radius: var(--veni-radius-sm);
 }
 
 .dish-photo-large {
     width: 100%;
     aspect-ratio: 1;
-    border-radius: 0.75rem;
+    border-radius: var(--veni-radius-md);
 }
 
 /* En computador la carta tiene lugar: la miniatura crece y el ícono con ella (#126). */

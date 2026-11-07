@@ -96,7 +96,7 @@ onMounted(() => {
                 <p role="status" class="text-sm" data-route-status>{{ t('directions.offline') }}</p>
                 <button
                     type="button"
-                    class="mt-2 inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
+                    class="mt-2 inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold hover:bg-surface"
                     @click="$emit('retryDirections')"
                 >
                     {{ t('directions.retry') }}
@@ -107,8 +107,8 @@ onMounted(() => {
         <template v-else>
             <p v-if="restaurant.fictitious" class="mb-2"><SampleDataBadge /></p>
 
-            <ul v-if="restaurant.categories.length > 0" class="flex flex-wrap gap-1.5" :aria-label="t('restaurants.categories')">
-                <li v-for="category in restaurant.categories" :key="category.slug" class="inline-flex items-center gap-1 rounded-full bg-surface px-2.5 py-0.5 text-sm" :data-category="category.slug">
+            <ul v-if="restaurant.categories.length > 0" class="flex flex-wrap gap-2" :aria-label="t('restaurants.categories')">
+                <li v-for="category in restaurant.categories" :key="category.slug" class="inline-flex items-center gap-1 rounded-full bg-surface px-3 py-1 text-sm" :data-category="category.slug">
                     <Icon :name="categoryIcon(category.slug)" :size="16" />
                     {{ category.name }}
                 </li>
@@ -119,7 +119,7 @@ onMounted(() => {
                 <span>{{ statusText }}</span>
             </p>
 
-            <p v-if="restaurant.delivery" class="mt-1.5 flex items-start gap-2 text-sm" data-delivery>
+            <p v-if="restaurant.delivery" class="mt-2 flex items-start gap-2 text-sm" data-delivery>
                 <Icon name="check" :size="20" class="shrink-0" />
                 <span>{{ t('restaurants.delivery') }}</span>
             </p>
@@ -127,7 +127,7 @@ onMounted(() => {
             <div class="mt-3 flex flex-wrap gap-2">
                 <button
                     type="button"
-                    class="inline-flex min-h-touch items-center gap-1.5 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                    class="inline-flex min-h-touch items-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
                     data-directions
                     @click="$emit('directions')"
                 >

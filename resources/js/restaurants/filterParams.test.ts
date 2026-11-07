@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { filtersFromUrl, hasFilters, MAX_QUERY_LENGTH, NO_FILTERS, sameAddress, writeFilters } from './filterParams';
+import { hasListParams } from './listParams';
 
 function written(filters: Parameters<typeof writeFilters>[1], start = ''): string {
     const params = new URLSearchParams(start);
@@ -70,5 +71,46 @@ describe('sameAddress', () => {
         expect(sameAddress('/?open=1&q=x', '/?q=x&open=1')).toBe(true);
         expect(sameAddress('/?q=la%20ceiba', '/?q=la+ceiba&open=1')).toBe(false);
         expect(sameAddress('/', '/?r=prueba-la-ceiba')).toBe(false);
+    });
+});
+
+describe('la mirada rápida del arranque a la dirección (listParams.ts, #138)', () => {
+    // El inicio abre la lista con siluetas si la dirección trae filtros, sin
+    // bajar este módulo: su lectura tiene que decir lo mismo que la de verdad.
+    it.each([
+        '/',
+        '/?r=prueba-la-ceiba',
+        '/?q=sancocho',
+        '/?r=prueba-la-ceiba&q=sopa',
+        '/?q=',
+        '/?q=+',
+        '/?q=%20%09',
+        '/?q=&q=sancocho',
+        '/?q=sancocho&q=',
+        `/?q=${'%20'.repeat(MAX_QUERY_LENGTH)}x`,
+        '/?q=x#ancla',
+        '/#ancla?q=x',
+        '/?open=1',
+        '/?open=10',
+        '/?open=true',
+        '/?open=%31',
+        '/?delivery=1',
+        '/?delivery=0',
+        '/?price=2',
+        '/?price=15000',
+        '/?price=25000',
+        '/?price=40000',
+        '/?price=015000',
+        '/?price=+40000',
+        '/?price=2.5e4',
+        '/?price=',
+        '/?category=comida-tipica',
+        '/?category=Mala_Categoria',
+        '/?category=a--b',
+        '/?category=',
+        `/?category=${'a'.repeat(101)}`,
+        `/?category=${'a'.repeat(100)}`,
+    ])('%s: abre la lista solo si los filtros que lee la lista la abrirían', (url) => {
+        expect(hasListParams(url)).toBe(hasFilters(filtersFromUrl(url)));
     });
 });

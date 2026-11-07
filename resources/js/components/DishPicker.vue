@@ -267,9 +267,9 @@ onMounted(() => {
             <header class="dish-picker-header flex items-start justify-between gap-3 border-b border-line">
                 <div class="min-w-0">
                     <h2 :id="`${id}-title`" ref="title" tabindex="-1" class="text-xl wrap-anywhere">{{ dish.name }}</h2>
-                    <p v-if="dish.description" class="mt-0.5 text-sm wrap-anywhere text-ink-muted">{{ dish.description }}</p>
+                    <p v-if="dish.description" class="mt-1 text-sm wrap-anywhere text-ink-muted">{{ dish.description }}</p>
                     <p class="mt-1 font-semibold tabular-nums">{{ formatPesos(dish.price, locale) }}</p>
-                    <p v-for="name in withoutToday" :key="name" class="mt-0.5 text-sm font-semibold wrap-anywhere" data-ingredient-note>
+                    <p v-for="name in withoutToday" :key="name" class="mt-1 text-sm font-semibold wrap-anywhere" data-ingredient-note>
                         {{ t('restaurant.menu.today_without', { name }) }}
                     </p>
                 </div>
@@ -432,7 +432,7 @@ onMounted(() => {
     max-height: 90dvh;
     padding: 0;
     border: 0;
-    border-radius: 1rem 1rem 0 0;
+    border-radius: var(--veni-radius-lg) var(--veni-radius-lg) 0 0;
     background: var(--color-canvas);
 }
 
@@ -448,7 +448,7 @@ onMounted(() => {
 @media (min-width: 768px) {
     .dish-picker {
         margin: auto;
-        border-radius: 1rem;
+        border-radius: var(--veni-radius-lg);
     }
 }
 
@@ -468,7 +468,7 @@ onMounted(() => {
     margin-inline: auto;
     padding: 0;
     border: 0;
-    border-radius: 0.75rem;
+    border-radius: var(--veni-radius-md);
     background: none;
     cursor: zoom-in;
 }
@@ -490,15 +490,60 @@ onMounted(() => {
     opacity: 0.6;
 }
 
+/*
+ * Desactivado (#138, A4): con opacidad el «−» quedaba en 2,5:1 y el borde casi
+ * no se veía. El signo y el borde van con el color del texto mezclado con el
+ * fondo, a 3,8:1 en claro y 5,8:1 en oscuro (WCAG 1.4.11), y el borde
+ * punteado dice que no se puede usar sin depender solo del color.
+ */
 .dish-picker-step:disabled {
-    opacity: 0.4;
+    border-style: dashed;
+    border-color: currentColor;
+    color: color-mix(in srgb, var(--color-ink) 55%, var(--color-canvas));
+    cursor: not-allowed;
 }
 
 .dish-picker-note {
-    border-radius: 0.5rem;
+    border-radius: var(--veni-radius-sm);
 }
 
 .dish-picker-quantity {
     width: 2rem;
+}
+/*
+ * Entra en 320 ms (#138, ADR 0040): desde abajo en el celular y, centrado
+ * en una pantalla ancha, un poco desde abajo y apareciendo. Con una curva
+ * sin rebote: el resorte la subiría de más y dejaría ver una franja abajo.
+ * Con «Reducir movimiento», sin animación.
+ */
+@media (prefers-reduced-motion: no-preference) {
+    .dish-picker[open] {
+        animation: dish-picker-in 320ms cubic-bezier(0.2, 0.9, 0.3, 1);
+    }
+
+    .dish-picker[open]::backdrop {
+        animation: dish-picker-fade 200ms ease-out;
+    }
+}
+
+@keyframes dish-picker-in {
+    from {
+        translate: 0 100%;
+    }
+}
+
+@keyframes dish-picker-fade {
+    from {
+        opacity: 0;
+    }
+}
+
+@media (min-width: 768px) {
+    @keyframes dish-picker-in {
+        from {
+            opacity: 0;
+            translate: 0 2rem;
+        }
+    }
 }
 </style>

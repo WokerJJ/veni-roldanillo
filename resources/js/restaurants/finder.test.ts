@@ -5,6 +5,7 @@ import { EL_GUADUAL, LA_CEIBA, restaurant } from '@/testing/restaurants';
 import {
     categoriesOf,
     filterRestaurants,
+    firstToOpen,
     filtersFromUrl,
     matchesQuery,
     normalizeText,
@@ -181,6 +182,29 @@ describe('todaysLunches', () => {
 
         expect(todaysLunches([hoy], new Date('2026-10-08T04:30:00Z'))).toHaveLength(1);
         expect(todaysLunches([hoy], new Date('2026-10-08T05:00:00Z'))).toHaveLength(0);
+    });
+});
+
+describe('firstToOpen (#138, A1)', () => {
+    // A las 12:00 de Colombia (NOON): La Ceiba (11–15) abierta, El Guadual (18–02) cerrado.
+    const temprano = restaurant({ slug: 'abre-a-las-cuatro', hours: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, opens: '16:00', closes: '20:00' })) });
+    const manana = restaurant({ slug: 'abre-manana', hours: [{ weekday: 4, opens: '07:00', closes: '10:00' }] });
+    const sinHorario = restaurant({ slug: 'sin-horario', hours: [] });
+
+    it('entre los cerrados, el que abre antes: hoy antes que mañana y, el mismo día, la hora más temprana', () => {
+        expect(firstToOpen([EL_GUADUAL, manana, temprano], NOON)?.slug).toBe('abre-a-las-cuatro');
+        expect(firstToOpen([manana, EL_GUADUAL], NOON)?.slug).toBe(EL_GUADUAL.slug);
+    });
+
+    it('deja fuera a los abiertos y a los que no tienen horario; sin ninguno que abra, null', () => {
+        expect(firstToOpen([LA_CEIBA, sinHorario], NOON)).toBeNull();
+        expect(firstToOpen([], NOON)).toBeNull();
+    });
+
+    it('si dos abren a la vez, el primero en el orden en que llegaron', () => {
+        const otro = restaurant({ ...temprano, slug: 'otro-a-las-cuatro' });
+
+        expect(firstToOpen([otro, temprano], NOON)?.slug).toBe('otro-a-las-cuatro');
     });
 });
 

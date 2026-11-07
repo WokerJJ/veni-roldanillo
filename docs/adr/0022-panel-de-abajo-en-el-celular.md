@@ -39,3 +39,7 @@ El arranque estaba en 82,9 kB de 83, y el ADR 0020 fijó qué hacer antes de sub
 - Con la franja de los botones libre, el panel completo deja 10 rem de mapa arriba aunque la lista sea larga.
 - Entre 480 y 767 px de ancho el panel cambia de abajo al costado al girar el teléfono; un arrastre a medio hacer termina ahí.
 - Las alturas viven en `sheet.ts` (y la de asomado, en rem): cambiarlas es cambiar ese archivo y sus pruebas.
+
+## Precisión: la lista a la altura completa (#138)
+
+- La lista abre a la altura completa y no a media altura, y el panel cambia de alto con un resorte de 320 ms solo sin «Reducir movimiento». Ver el ADR 0040.

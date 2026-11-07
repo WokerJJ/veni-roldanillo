@@ -5,6 +5,7 @@ import { computed, nextTick, onMounted, shallowRef, useId, useTemplateRef, watch
 import DishResults from '@/components/DishResults.vue';
 import FilterControls from '@/components/FilterControls.vue';
 import Icon from '@/components/Icon.vue';
+import { PILL } from '@/components/pill';
 import RestaurantFilters from '@/components/RestaurantFilters.vue';
 import RestaurantSearch from '@/components/RestaurantSearch.vue';
 import SampleDataBadge from '@/components/SampleDataBadge.vue';
@@ -121,7 +122,7 @@ const list = useTemplateRef<HTMLElement>('list');
 
 const filters = computed(() => given ?? NO_FILTERS);
 /** Cuáles cumplen los filtros, «Sugerime algo» y la región de estado: lo mismo que la bienvenida (useFinder.ts). */
-const { now, filtered, matching, lunches, message, announced, suggest: pick } = useFinderPanel(
+const { now, filtered, matching, lunches, message, announced, next, suggest: pick } = useFinderPanel(
     { restaurants: () => all, filters: () => given },
     {
         unfiltered: 'count',
@@ -355,12 +356,23 @@ defineExpose({ focusItem });
                 <p role="status" class="sr-only" data-count-status>{{ announced }}</p>
                 <button
                     type="button"
-                    class="inline-flex min-h-touch items-center gap-2 rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
+                    :class="PILL"
                     data-suggest
                     @click="suggest"
                 >
                     <Icon name="estrella" :size="20" />
                     {{ t('finder.suggest') }}
+                </button>
+                <!-- Sin abiertos (#138, A1): el que abre primero, que el aviso de arriba nombra. -->
+                <button
+                    v-if="next"
+                    type="button"
+                    :class="PILL"
+                    data-suggest-next
+                    @click="$emit('select', next.slug)"
+                >
+                    <Icon name="chevron-derecha" :size="20" />
+                    {{ t('finder.suggest_view', { name: next.name }) }}
                 </button>
                 <!-- En la barra, el último de lo fijo: el siguiente en el foco es su panel, arriba de lo que se desplaza. El chevron dice si está abierto. -->
                 <button
@@ -368,7 +380,7 @@ defineExpose({ focusItem });
                     :id="toggleId"
                     ref="filtersToggle"
                     type="button"
-                    class="inline-flex min-h-touch items-center gap-2 rounded-full border px-4 font-semibold transition-colors hover:bg-surface"
+                    class="inline-flex min-h-touch items-center gap-2 rounded-full border px-4 font-semibold hover:bg-surface"
                     :class="activeFilters > 0 ? 'border-current' : 'border-line'"
                     :aria-expanded="filtersOpen"
                     :aria-controls="panelId"
@@ -406,7 +418,7 @@ defineExpose({ focusItem });
                 <button
                     v-if="filtered && matching.length === 0"
                     type="button"
-                    class="mt-2 inline-flex min-h-touch items-center rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco transition-colors hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                    class="mt-2 inline-flex min-h-touch items-center rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
                     data-empty-clear
                     @click="emit('update:filters', { ...NO_FILTERS })"
                 >
@@ -419,16 +431,26 @@ defineExpose({ focusItem });
                 <section v-if="!filtered && favoriteRows.length > 0" class="mt-2" :aria-labelledby="`${headingId}-favorites`" data-favorites>
                     <h3 :id="`${headingId}-favorites`" class="font-semibold">{{ t('favorites.title') }}</h3>
                     <ul class="-mx-2">
-                        <li v-for="{ restaurant, status } in favoriteRows" :key="restaurant.slug">
+                        <!-- Como las demás filas (#138, A3): el resumen al tocarla y la ficha con la flecha. -->
+                        <li v-for="{ restaurant, status } in favoriteRows" :key="restaurant.slug" class="flex items-center gap-1">
                             <button
                                 type="button"
-                                class="flex min-h-touch w-full min-w-0 flex-col justify-center rounded-veni-sm px-2 py-1 text-left hover:bg-surface"
+                                class="flex min-h-touch min-w-0 flex-1 flex-col justify-center rounded-veni-sm px-2 py-1 text-left hover:bg-surface"
                                 :data-favorite-slug="restaurant.slug"
                                 @click="$emit('select', restaurant.slug)"
                             >
                                 <span class="font-semibold">{{ restaurant.name }}</span>
                                 <span class="text-sm text-ink-muted">{{ status }}</span>
                             </button>
+                            <Link
+                                :href="restaurantUrl(restaurant.slug)"
+                                class="inline-flex size-touch shrink-0 items-center justify-center rounded-full hover:bg-surface"
+                                :aria-label="t('restaurants.view_details_of', { name: restaurant.name })"
+                                :title="t('restaurants.view_details')"
+                                data-favorite-details
+                            >
+                                <Icon name="chevron-derecha" />
+                            </Link>
                         </li>
                     </ul>
                 </section>
@@ -447,7 +469,7 @@ defineExpose({ focusItem });
                             :data-slug="restaurant.slug"
                             @click="$emit('select', restaurant.slug)"
                         >
-                            <span class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
                                 <span class="font-semibold" data-name>{{ restaurant.name }}</span>
                                 <SampleDataBadge v-if="restaurant.fictitious && !allSamples" />
                             </span>

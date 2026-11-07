@@ -9,6 +9,8 @@
 
 @source '../js';
 @source '../views';
+/* Las pruebas no viajan: una palabra en ellas (`transition`) no suma su utilidad al arranque (#138). */
+@source not '../js/**/*.test.ts';
 
 /* El modo oscuro lo decide data-theme en <html> (ver resources/js/composables/useTheme.ts). */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
@@ -50,6 +52,92 @@
      * la cubre aunque el texto de la página se achique.
      */
     --veni-attribution-clearance: max(2.25rem, 36px);
+
+    /*
+     * Base visual del celular (#138, ADR 0040). Radios, con los de la marca:
+     * las hojas (el panel de abajo y los diálogos) 22 px (--veni-radius-lg),
+     * las tarjetas 14 px (md), las filas y los campos 10 px (sm) y los botones
+     * en píldora (rounded-full). Los espacios van en múltiplos de 4 px (la
+     * escala de Tailwind). En las listas, tres tamaños de texto: el nombre
+     * (text-base), lo de abajo (text-sm) y lo más chico (text-xs, 12 px).
+     *
+     * Movimiento: un resorte con un rebote leve para el panel de abajo
+     * (320 ms) y la respuesta al tocar; los diálogos entran sin rebote, con
+     * su propia curva. Solo con «Reducir
+     * movimiento» apagado: las reglas que lo usan van dentro de
+     * `prefers-reduced-motion: no-preference`.
+     */
+    --veni-ease-spring: cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+
+/*
+ * Siluetas de carga (#138): filas grises con la forma de lo que va a llegar,
+ * en vez de un texto de «cargando». Son para la vista: quien las pone las
+ * oculta al lector (`aria-hidden`) y dice que carga en una región de estado.
+ * Con «Reducir movimiento» apagado, laten despacio.
+ */
+.veni-skeleton {
+    display: block;
+    width: 75%;
+    height: 1rem;
+    border-radius: var(--veni-radius-sm);
+    background: var(--line);
+}
+
+/* La segunda línea, como la del estado: más corta y más baja. */
+.veni-skeleton + .veni-skeleton {
+    width: 50%;
+    height: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .veni-skeleton {
+        animation: veni-skeleton 1.2s ease-in-out infinite alternate;
+    }
+}
+
+@keyframes veni-skeleton {
+    to {
+        opacity: 0.4;
+    }
+}
+
+/*
+ * La respuesta al tocar (#138): botones, enlaces y filas se achican un poco
+ * mientras se presionan y vuelven con el resorte. Lleva también el cambio de
+ * color al pasar por encima (150 ms, el de Tailwind), que antes ponía en cada
+ * botón la utilidad de transición de colores: con «Reducir movimiento», la
+ * regla de la capa base deja todo en 0,01 ms igual. La manija del panel no,
+ * porque se arrastra.
+ *
+ * En la capa base, como el panel de abajo: una utilidad de Tailwind (una
+ * transición o una escala propia de un botón) le gana. Sin capa, ganaba esta.
+ */
+@layer base {
+    @media (prefers-reduced-motion: no-preference) {
+        :where(button:not(:disabled, [data-sheet-handle]), a[href], summary) {
+            transition:
+                scale 160ms var(--veni-ease-spring),
+                color 150ms,
+                background-color 150ms,
+                border-color 150ms;
+        }
+
+        :where(button:not(:disabled, [data-sheet-handle]), a[href], summary):active {
+            scale: 0.97;
+        }
+
+        /*
+         * El panel de abajo (la variante `sheet:`) cambia de alto con el
+         * resorte; mientras se arrastra, sigue al dedo. Al costado no se anima.
+         */
+        [data-sheet]:not([data-dragging]) {
+            @variant sheet {
+                transition: max-height 320ms var(--veni-ease-spring);
+            }
+        }
+    }
 }
 
 :root[data-theme='dark'] {

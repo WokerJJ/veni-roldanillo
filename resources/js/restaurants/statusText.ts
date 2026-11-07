@@ -2,7 +2,7 @@ import type { Locale, TranslationKey } from '@/composables/useI18n';
 import { intlLocale } from '@/i18n/intlLocale';
 import type { Replacements } from '@/i18n/translate';
 
-import type { OpenStatus } from './openStatus';
+import type { Moment, OpenStatus } from './openStatus';
 
 /** `t()` de useI18n. */
 type Translate = (key: TranslationKey, replacements?: Replacements) => string;
@@ -85,4 +85,23 @@ export function openStatusText(status: OpenStatus, t: Translate, locale: Locale)
     }
 
     return t('restaurants.status.closed_opens_weekday', { day: weekdayName(status.opens.weekday, locale), time });
+}
+
+/**
+ * Solo cuándo abre, sin el «Cerrado» de adelante: «abre a las 6:00 p. m.»,
+ * «abre mañana a las 11:00 a. m.», «abre el viernes a las 8:00 a. m.». Para
+ * una frase que ya dice que está cerrado (#138, «Sugerime algo» sin abiertos).
+ */
+export function opensText(opens: Moment, t: Translate, locale: Locale): string {
+    const time = spokenTime(opens.time, t, locale);
+
+    if (opens.daysAhead === 0) {
+        return t('restaurants.status.opens_today', { time });
+    }
+
+    if (opens.daysAhead === 1) {
+        return t('restaurants.status.opens_tomorrow', { time });
+    }
+
+    return t('restaurants.status.opens_weekday', { day: weekdayName(opens.weekday, locale), time });
 }
