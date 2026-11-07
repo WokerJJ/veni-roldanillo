@@ -4,6 +4,7 @@
 - Fecha: 2026-10-07
 - Precisa: ADR 0007 (los restaurantes son una capa GeoJSON que sirve la app), ADR 0009 (horario semanal y horarios especiales), ADR 0010 (el idioma lo resuelve el servidor) y ADR 0015 (qué guarda el service worker).
 - Afecta a: `docs/03-arquitectura.md` («Mapa autohospedado» y «App instalable y caché»).
+- Precisado por: ADR 0039 (retiro de `price_level`).
 
 ## Contexto
 

@@ -1,6 +1,6 @@
 # ADR 0028 · Búsqueda y filtros del inicio: en el dispositivo, en la dirección y con los almuerzos de hoy en la capa del mapa
 
-- Estado: aceptada
+- Estado: aceptada (el nivel de precio, reemplazado por el rango de la carta en el ADR 0039)
 - Fecha: 2026-10-28
 - Precisa: ADR 0017 (el GeoJSON de los restaurantes: campos aditivos, caché de un minuto, «abierto ahora» en el dispositivo), ADR 0018 (el elegido en la dirección, `?r=slug`), ADR 0008 (la ubicación no sale del dispositivo) y ADR 0022 (la regla del presupuesto del arranque).
 - Afecta a: `RestaurantFeature`, `pages/Home.vue`, `RestaurantList.vue`, `RestaurantsLayer.vue` y `docs/03-arquitectura.md` («Restaurantes en el mapa»).
