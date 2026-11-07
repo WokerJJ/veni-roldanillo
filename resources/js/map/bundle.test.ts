@@ -450,6 +450,23 @@ describe('presupuesto de descarga', () => {
         // rango (priceRange.ts) baja con la lista y la ficha.
         // Con las correcciones de la revisión de #127 (el almuerzo de hoy
         // también cuenta para «platos hasta $X»): 81,205 (-0,003).
+        // Con la base visual y el movimiento del celular (#138, ADR 0040):
+        // 81,205 antes y 81,518 después (+0,313). Hecho primero medía 81,747:
+        // salieron los tokens de radio con nombre propio (se usan los de la
+        // marca), los tamaños de las siluetas en utilidades y la utilidad de
+        // transición de colores de los botones (la lleva la regla de la
+        // respuesta al tocar). Queda el CSS que se ve al abrir (el resorte del
+        // panel, la respuesta al tocar, las siluetas) y la lista que abre la
+        // dirección en Home.vue: registrado en el ADR 0040, sin subir el
+        // presupuesto. Tailwind ya no escanea las pruebas (app.css): una
+        // palabra de una prueba sumaba su utilidad sin viajar (+0,18 kB con
+        // la prueba nueva del CSS; -0,013 con las de antes).
+        // Con las correcciones de su revisión, 81,684 (+0,166): la mirada a
+        // la dirección pasó de una expresión regular a listParams.ts, que la
+        // lee como la lista (decodifica y toma el primer valor; +0,106: la
+        // regla abría la lista con `price=2` o `q=+`), y la respuesta al
+        // tocar y el panel entraron en la capa base con `@variant sheet`.
+        // Lo que queda por etapa del rediseño, en el ADR 0040.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
