@@ -77,7 +77,6 @@ function restaurantPageComplete(): Restaurant
         'reference' => 'Frente al parque de prueba',
         'phone' => '6020000000',
         'whatsapp' => '570009998877',
-        'price_level' => 2,
         'delivery' => true,
         'delivery_notes_es' => 'Domicilios hasta las 9 de la noche.',
         'delivery_notes_en' => 'Delivery until 9 PM.',
@@ -189,7 +188,7 @@ describe('lista blanca', function () {
         expect(array_values(array_diff(array_keys($response->inertiaProps()), array_keys($this->get('/')->inertiaProps()))))->toBe(['restaurant', 'meta'])
             ->and(array_keys($profile))->toBe([
                 'slug', 'name', 'description', 'categories', 'fictitious', 'hidden', 'unverified', 'claimable', 'updated_on',
-                'owner_updated_on', 'delay_minutes', 'delay_until', 'price_level', 'address', 'reference', 'phone', 'whatsapp', 'payment_methods', 'delivery',
+                'owner_updated_on', 'delay_minutes', 'delay_until', 'price_range', 'address', 'reference', 'phone', 'whatsapp', 'payment_methods', 'delivery',
                 'hours', 'special_hours', 'menu', 'promotions',
             ])
             ->and(array_keys($profile['categories'][0]))->toBe(['slug', 'name'])
@@ -215,7 +214,6 @@ describe('lista blanca', function () {
             'reference' => 'Dirección inventada',
             'phone' => '6020000000',
             'whatsapp' => '570009998877',
-            'price_level' => 2,
             'delivery' => true,
             'delivery_notes_es' => 'Domicilios hasta las 9 de la noche.',
             'payment_methods' => [PaymentMethod::Cash, PaymentMethod::Nequi],
@@ -313,7 +311,7 @@ describe('lista blanca', function () {
             ->not->toContain('photo_path');
     });
 
-    test('trae el contacto del negocio, los medios de pago y el nivel de precios', function () {
+    test('trae el contacto del negocio, los medios de pago y el rango de precios de la carta', function () {
         restaurantPageComplete();
 
         expect(restaurantPageProfile($this->get('/restaurants/la-ceiba')))->toMatchArray([
@@ -322,7 +320,8 @@ describe('lista blanca', function () {
             'phone' => '6020000000',
             'whatsapp' => '570009998877',
             'payment_methods' => ['cash', 'nequi'],
-            'price_level' => 2,
+            // Un solo plato: el más barato y el más caro son el mismo.
+            'price_range' => ['min' => 18000, 'max' => 18000],
             'fictitious' => true,
         ]);
     });
@@ -330,14 +329,14 @@ describe('lista blanca', function () {
     test('lo que el restaurante no cargó llega vacío, no inventado', function () {
         Restaurant::factory()->create([
             'slug' => 'recien-creado', 'description_es' => null, 'description_en' => null, 'address' => null,
-            'reference' => null, 'phone' => null, 'whatsapp' => null, 'price_level' => null,
+            'reference' => null, 'phone' => null, 'whatsapp' => null,
             'delivery' => false, 'payment_methods' => [],
         ]);
 
         expect(restaurantPageProfile($this->get('/restaurants/recien-creado')))->toMatchArray([
             'description' => null,
             'categories' => [],
-            'price_level' => null,
+            'price_range' => null,
             'address' => null,
             'reference' => null,
             'phone' => null,

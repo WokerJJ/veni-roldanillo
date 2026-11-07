@@ -70,7 +70,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *     owner_updated_on: string|null,
  *     delay_minutes: int|null,
  *     delay_until: string|null,
- *     price_level: int|null,
+ *     price_range: array{min: int, max: int}|null,
  *     address: string|null,
  *     reference: string|null,
  *     phone: string|null,
@@ -127,7 +127,8 @@ class RestaurantProfile extends JsonResource
             // Hasta cuándo vale (ISO-8601, hora de Colombia): el dispositivo lo quita
             // al vencer aunque la ficha siga abierta.
             'delay_until' => $restaurant->activeDelayMinutes() === null ? null : $restaurant->delay_until?->timezone(BusinessDay::TIME_ZONE)->toIso8601String(),
-            'price_level' => $restaurant->price_level,
+            // El plato más barato y el más caro de la carta (ADR 0039).
+            'price_range' => $restaurant->menuPriceRange(),
             'address' => $restaurant->address,
             'reference' => $restaurant->reference,
             'phone' => $restaurant->phone,

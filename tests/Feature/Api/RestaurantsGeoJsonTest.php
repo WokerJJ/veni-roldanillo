@@ -3,6 +3,8 @@
 use App\Models\Category;
 use App\Models\DailyMenu;
 use App\Models\DeliveryZone;
+use App\Models\Dish;
+use App\Models\MenuSection;
 use App\Models\OpeningHour;
 use App\Models\Restaurant;
 use App\Models\SpecialHour;
@@ -136,7 +138,7 @@ test('cada restaurante lleva solo los campos públicos de la lista blanca', func
 
     expect(array_keys($feature))->toBe(['type', 'geometry', 'properties'])
         ->and(array_keys($feature['geometry']))->toBe(['type', 'coordinates'])
-        ->and(array_keys($feature['properties']))->toBe(['slug', 'name', 'categories', 'delivery', 'fictitious', 'hours', 'special_hours', 'price_level', 'lunch'])
+        ->and(array_keys($feature['properties']))->toBe(['slug', 'name', 'categories', 'delivery', 'fictitious', 'hours', 'special_hours', 'lunch', 'price_range'])
         ->and(array_keys($feature['properties']['categories'][0]))->toBe(['slug', 'name'])
         ->and(array_keys($feature['properties']['hours'][0]))->toBe(['weekday', 'opens', 'closes']);
 
@@ -165,8 +167,12 @@ test('responde lo que dice el contrato que también lee el cliente', function ()
         'name' => 'Restaurante de Prueba La Ceiba (ficticio)',
         'location' => new GeoPoint(4.4128, -76.1547),
         'delivery' => true,
-        'price_level' => 2,
     ]);
+    // El rango cuenta los platos fuertes, no el jugo de la sección de bebidas (ADR 0039).
+    $fuertes = MenuSection::factory()->for($ceiba)->create(['name_es' => 'Platos fuertes']);
+    Dish::factory()->for($fuertes)->create(['price' => 16000]);
+    Dish::factory()->for($fuertes)->create(['price' => 22000]);
+    Dish::factory()->for(MenuSection::factory()->for($ceiba)->create(['name_es' => 'Bebidas']))->create(['price' => 4000]);
     DailyMenu::factory()->for($ceiba)->create(['served_on' => '2026-10-07', 'description_es' => 'Almuerzo de prueba: sopa, arroz y jugo.', 'price' => 15000]);
     $ceiba->categories()->attach(Category::factory()->create(['slug' => 'comida-tipica', 'name_es' => 'Comida típica']));
     OpeningHour::factory()->for($ceiba)->create(['weekday' => 1, 'opens_at' => '11:00', 'closes_at' => '15:00']);
@@ -180,7 +186,6 @@ test('responde lo que dice el contrato que también lee el cliente', function ()
         'name' => 'Restaurante de Prueba El Guadual (ficticio)',
         'location' => new GeoPoint(4.4102, -76.1539),
         'delivery' => false,
-        'price_level' => null,
     ]);
 
     $contract = json_decode((string) file_get_contents(base_path(RESTAURANTS_GEOJSON_CONTRACT)), true, flags: JSON_THROW_ON_ERROR);
@@ -339,14 +344,21 @@ describe('horarios para «abierto ahora»', function () {
     });
 });
 
-describe('nivel de precio y almuerzo de hoy (#12)', function () {
-    test('trae el nivel de precio, o null si el restaurante no lo cargó', function () {
-        Restaurant::factory()->create(['slug' => 'con-precio', 'price_level' => 3]);
-        Restaurant::factory()->create(['slug' => 'sin-precio', 'price_level' => null]);
+describe('rango de precios (#127) y almuerzo de hoy (#12)', function () {
+    test('trae el rango de precios de la carta, o null sin platos, y ya no el nivel 1–4', function () {
+        $conCarta = Restaurant::factory()->create(['slug' => 'con-carta']);
+        $section = MenuSection::factory()->for($conCarta)->create(['name_es' => 'Almuerzos']);
+        Dish::factory()->for($section)->create(['price' => 18000]);
+        Dish::factory()->for($section)->create(['price' => 12500]);
+        // Lo que el dueño sacó de la carta no cuenta.
+        Dish::factory()->for($section)->create(['price' => 90000, 'available' => false]);
+        Restaurant::factory()->create(['slug' => 'sin-carta']);
+        DB::table('restaurants')->update(['price_level' => 4]);
         $response = $this->get(RESTAURANTS_GEOJSON);
 
-        expect(geoJsonProperties($response, 'con-precio')['price_level'])->toBe(3)
-            ->and(geoJsonProperties($response, 'sin-precio')['price_level'])->toBeNull();
+        expect(geoJsonProperties($response, 'con-carta')['price_range'])->toBe(['min' => 12500, 'max' => 18000])
+            ->and(geoJsonProperties($response, 'sin-carta')['price_range'])->toBeNull()
+            ->and(geoJsonProperties($response, 'con-carta'))->not->toHaveKey('price_level');
     });
 
     test('trae solo el almuerzo de hoy, con su fecha, descripción y precio', function () {
@@ -502,6 +514,8 @@ test('hace las mismas consultas con un restaurante que con muchos', function () 
             SpecialHour::factory()->for($restaurant)->create(['on_date' => now()->toDateString()]);
             DeliveryZone::factory()->for($restaurant)->create();
             DailyMenu::factory()->for($restaurant)->create(['served_on' => BusinessDay::today()->toDateString()]);
+            // El rango de precios va en la consulta de restaurantes, no en una por cada uno.
+            Dish::factory()->count(2)->for(MenuSection::factory()->for($restaurant))->create();
         });
     };
     $queries = function (): int {

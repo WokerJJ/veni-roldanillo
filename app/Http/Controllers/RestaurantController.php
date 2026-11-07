@@ -31,10 +31,12 @@ class RestaurantController extends Controller
         $restaurant = Restaurant::query()
             ->select([
                 'id', 'slug', 'name', 'description_es', 'description_en', 'address', 'reference',
-                'phone', 'whatsapp', 'price_level', 'delivery', 'delivery_notes_es', 'delivery_notes_en',
+                'phone', 'whatsapp', 'delivery', 'delivery_notes_es', 'delivery_notes_en',
                 'payment_methods', 'status', 'is_fictitious', 'updated_at', 'updated_by_owner_at',
                 'delay_minutes', 'delay_until',
             ])
+            // El rango de precios de la carta (ADR 0039): el mismo cálculo que el mapa.
+            ->withMenuPriceRange()
             ->where('slug', $slug)
             ->first();
 

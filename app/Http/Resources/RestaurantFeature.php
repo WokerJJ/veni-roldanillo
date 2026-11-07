@@ -22,16 +22,20 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * lo diría mal. Lleva el horario, y el dispositivo calcula con su hora (ADR 0017).
  *
  * Los campos que se sumaron después van al final (solo cambios aditivos,
- * ADR 0017): el nivel de precio y el almuerzo de hoy (#12, ADR 0028).
+ * ADR 0017): el almuerzo de hoy (#12, ADR 0028) y el rango de precios de la
+ * carta (#127, ADR 0039), que reemplazó al nivel de precio 1–4: las apps
+ * instaladas desde #12 leen su falta como «sin nivel».
  *
  * Espera las relaciones ya cargadas (categories, openingHours, specialHours,
- * dailyMenus con solo el de hoy) y delivery_zones_exists: las carga RestaurantGeoJsonController en una
+ * dailyMenus con solo el de hoy), delivery_zones_exists y price_min/price_max
+ * (Restaurant::withMenuPriceRange): las carga RestaurantGeoJsonController en una
  * consulta por tabla.
  *
  * @phpstan-type FeatureCategory array{slug: string, name: string}
  * @phpstan-type FeatureHours array{weekday: int, opens: string, closes: string}
  * @phpstan-type FeatureSpecialHours array{date: string, closed: bool, opens: string|null, closes: string|null}
  * @phpstan-type FeatureLunch array{date: string, description: string, price: int}
+ * @phpstan-type FeaturePriceRange array{min: int, max: int}
  * @phpstan-type Feature array{
  *     type: 'Feature',
  *     geometry: array{type: 'Point', coordinates: array{float, float}},
@@ -43,8 +47,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *         fictitious: bool,
  *         hours: list<FeatureHours>,
  *         special_hours: list<FeatureSpecialHours>,
- *         price_level: int|null,
  *         lunch: FeatureLunch|null,
+ *         price_range: FeaturePriceRange|null,
  *     },
  * }
  */
@@ -101,8 +105,9 @@ class RestaurantFeature extends JsonResource
                         'closes' => $day->closes_at === null ? null : self::time($day->closes_at),
                     ])
                     ->all()),
-                'price_level' => $restaurant->price_level,
                 'lunch' => self::lunch($restaurant->dailyMenus->first(), $this->locale),
+                // El plato más barato y el más caro de la carta (ADR 0039).
+                'price_range' => $restaurant->menuPriceRange(),
             ],
         ];
     }
