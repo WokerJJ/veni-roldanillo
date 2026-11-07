@@ -44,7 +44,6 @@ class RestaurantFactory extends Factory
             'location' => self::pointInRoldanillo(),
             'phone' => null,
             'whatsapp' => '570000'.fake()->numerify('######'),
-            'price_level' => fake()->numberBetween(1, 4),
             'delivery' => fake()->boolean(),
             'payment_methods' => fake()->randomElements(PaymentMethod::cases(), fake()->numberBetween(1, 3)),
             'status' => RestaurantStatus::Unclaimed,

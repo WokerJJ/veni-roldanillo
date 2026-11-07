@@ -92,13 +92,16 @@ export function isOpenNow(restaurant: Restaurant, now: Date): boolean {
 /**
  * Los restaurantes que cumplen todos los filtros, en el orden en que
  * llegaron. «Abierto ahora» deja fuera a los que no tienen horario cargado
- * (no se sabe si abren); un precio, a los que no lo cargaron.
+ * (no se sabe si abren); «platos hasta $X», a los que no tienen ni un plato
+ * de la carta ni el almuerzo de hoy hasta ese precio (ADR 0039).
  */
 export function filterRestaurants(restaurants: readonly Restaurant[], filters: Readonly<Filters>, now: Date): Restaurant[] {
+    const today = businessDay(now).date;
+
     return restaurants.filter(
         (restaurant) =>
             (!filters.delivery || restaurant.delivery) &&
-            (filters.price === null || (restaurant.price_level !== null && restaurant.price_level <= filters.price)) &&
+            (filters.price === null || hasDishUpTo(restaurant, filters.price, today)) &&
             (filters.category === null || restaurant.categories.some(({ slug }) => slug === filters.category)) &&
             matchesQuery(restaurant, filters.query) &&
             (!filters.open || isOpenNow(restaurant, now)),
@@ -136,6 +139,15 @@ export function categoriesOf(restaurants: readonly Restaurant[], locale: string)
 export interface LunchOfTheDay {
     restaurant: Restaurant;
     lunch: Lunch;
+}
+
+/**
+ * «Platos hasta $X»: el plato más barato de la carta o el almuerzo de hoy
+ * cuestan hasta ese tope, inclusive. El texto «Platos de… a…» sigue siendo
+ * solo de la carta: el almuerzo cambia cada día y tiene su propia sección.
+ */
+function hasDishUpTo(restaurant: Restaurant, cap: number, today: string): boolean {
+    return (restaurant.price_range !== null && restaurant.price_range.min <= cap) || (restaurant.lunch?.date === today && restaurant.lunch.price <= cap);
 }
 
 /**

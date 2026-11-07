@@ -8,6 +8,7 @@ use App\Filament\Owner\Resources\Dishes\Pages\EditDish;
 use App\Filament\Owner\Resources\Dishes\Pages\ListDishes;
 use App\Filament\Owner\Resources\Dishes\RelationManagers\OptionGroupsRelationManager;
 use App\Filament\Owner\Resources\MenuSections\Pages\CreateMenuSection;
+use App\Filament\Owner\Resources\MenuSections\Pages\EditMenuSection;
 use App\Filament\Owner\Resources\OpeningHours\Pages\CreateOpeningHour;
 use App\Models\MenuSection;
 use App\Models\OptionGroup;
@@ -17,6 +18,7 @@ use App\Support\BusinessDay;
 use Filament\Auth\Pages\Login;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 
@@ -167,6 +169,22 @@ describe('la ficha', function () {
             ->assertHasFormErrors(['description_es']);
     });
 
+    test('el nivel de precios ya no se carga: los precios salen de la carta (#127)', function () {
+        $restaurant = Restaurant::factory()->claimed()->create();
+        DB::table('restaurants')->where('id', $restaurant->id)->update(['price_level' => 2]);
+        actInPanel(panelMember($restaurant), $restaurant);
+
+        Livewire::test(EditRestaurantProfile::class)
+            ->assertFormFieldDoesNotExist('price_level')
+            ->set('data.price_level', 4)
+            ->fillForm(['name' => 'Fonda de Prueba'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        expect(DB::table('restaurants')->where('id', $restaurant->id)->value('price_level'))->toBe(2)
+            ->and(EditRestaurantProfile::FIELDS)->not->toContain('price_level');
+    });
+
     test('slug, estado, plan, verificación y «ficticio» no se cambian desde el panel', function () {
         $restaurant = Restaurant::factory()->claimed()->create(['slug' => 'la-original', 'is_fictitious' => false]);
         actInPanel(panelMember($restaurant), $restaurant);
@@ -305,6 +323,45 @@ describe('el menú', function () {
             ->assertHasNoFormErrors();
 
         expect($restaurant->menuSections()->where('name_es', 'Bebidas')->exists())->toBeTrue()
+            ->and($restaurant->refresh()->updated_by_owner_at)->not->toBeNull();
+    });
+
+    test('al crear una sección, «Cuenta para el rango de precios» sale del nombre y el dueño la puede cambiar', function () {
+        $restaurant = Restaurant::factory()->claimed()->create();
+        actInPanel(panelMember($restaurant), $restaurant);
+
+        Livewire::test(CreateMenuSection::class)
+            ->fillForm(['name_es' => 'Platos fuertes'])
+            ->assertFormSet(['counts_for_price_range' => true])
+            ->fillForm(['name_es' => 'Bebidas'])
+            ->assertFormSet(['counts_for_price_range' => false])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        // Lo que el dueño eligió no lo pisa un cambio de nombre posterior.
+        Livewire::test(CreateMenuSection::class)
+            ->fillForm(['name_es' => 'Postres'])
+            ->fillForm(['counts_for_price_range' => true])
+            ->fillForm(['name_es' => 'Postres de la casa'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        expect($restaurant->menuSections()->pluck('counts_for_price_range', 'name_es')->all())
+            ->toBe(['Bebidas' => false, 'Postres de la casa' => true]);
+    });
+
+    test('editar una sección guarda la casilla del rango de precios', function () {
+        $restaurant = Restaurant::factory()->claimed()->create(['updated_by_owner_at' => null]);
+        $section = MenuSection::factory()->for($restaurant)->create(['name_es' => 'Platos fuertes']);
+        actInPanel(panelMember($restaurant), $restaurant);
+
+        Livewire::test(EditMenuSection::class, ['record' => $section->getRouteKey()])
+            ->assertFormSet(['counts_for_price_range' => true])
+            ->fillForm(['counts_for_price_range' => false])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        expect($section->refresh()->counts_for_price_range)->toBeFalse()
             ->and($restaurant->refresh()->updated_by_owner_at)->not->toBeNull();
     });
 

@@ -454,7 +454,7 @@ describe('Restaurants/Show', () => {
 
         it('sin ningún dato de contacto, no deja el título solo', async () => {
             const { wrapper } = await mountShow(
-                profile({ address: null, reference: null, phone: null, whatsapp: null, payment_methods: [], price_level: null }),
+                profile({ address: null, reference: null, phone: null, whatsapp: null, payment_methods: [], price_range: null }),
             );
 
             expect(wrapper.findAll('h2').map((title) => title.text())).toEqual(['Horario', 'Promociones', 'Menú', 'Domicilios']);
@@ -673,7 +673,7 @@ describe('Restaurants/Show: dos columnas en computador y lo importante primero e
                     phone: null,
                     whatsapp: null,
                     payment_methods: [],
-                    price_level: null,
+                    price_range: null,
                 }),
             );
             expect(none.wrapper.find('nav[data-sections]').exists()).toBe(false);
@@ -681,7 +681,7 @@ describe('Restaurants/Show: dos columnas en computador y lo importante primero e
 
         it('un medio de pago que la app no conoce no cuenta como contacto: no lleva a una sección que no sale (BUG-037)', async () => {
             const { wrapper } = await mountShow(
-                profile({ address: null, reference: null, phone: null, whatsapp: null, price_level: null, payment_methods: ['bitcoin' as PaymentMethod] }),
+                profile({ address: null, reference: null, phone: null, whatsapp: null, price_range: null, payment_methods: ['bitcoin' as PaymentMethod] }),
             );
 
             expect(wrapper.findAll('nav[data-sections] a').map((link) => link.text())).toEqual(['Promociones', 'Menú', 'Domicilios']);

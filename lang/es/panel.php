@@ -35,7 +35,6 @@ return [
         'name' => 'Nombre del restaurante',
         'description_es' => 'Descripción (español)',
         'description_en' => 'Descripción (inglés, opcional)',
-        'price_level' => 'Nivel de precios',
         'payment_methods' => 'Medios de pago',
         'address' => 'Dirección',
         'reference' => 'Referencia («frente al parque»)',
@@ -121,6 +120,7 @@ return [
         'all_options' => 'Más opciones del plato',
         'english' => 'En inglés',
         'english_help' => 'Opcional. Si lo dejás vacío, la ficha en inglés muestra el español.',
+        'price_range' => 'Así se ven tus precios en tu ficha: :range. Si no cuadra, revisá «Cuenta para el rango de precios» en tus secciones.',
     ],
     'media' => [
         'dishes' => [
@@ -149,6 +149,8 @@ return [
     'sections' => [
         'label' => 'Sección',
         'plural' => 'Secciones',
+        'counts_for_price_range' => 'Cuenta para el rango de precios',
+        'counts_for_price_range_help' => 'Apagala en bebidas, postres y adiciones: así «Platos de $X a $Y» en tu ficha habla de tus platos.',
     ],
     'dishes' => [
         'label' => 'Plato',

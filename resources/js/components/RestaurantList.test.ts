@@ -8,6 +8,9 @@ import { EL_GUADUAL, LA_CEIBA, restaurant } from '@/testing/restaurants';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 
+/** Los espacios que pone Intl (sin corte) como espacios comunes. */
+const spaced = (text: string): string => text.replace(/\s/gu, ' ');
+
 async function mountList(
     locale: 'es' | 'en' = 'es',
     restaurants: readonly Restaurant[] = [LA_CEIBA, EL_GUADUAL],
@@ -301,12 +304,22 @@ describe('búsqueda y filtros (#12)', () => {
         expect(items()).toHaveLength(1);
     });
 
-    it('cada nivel de precio dice con palabras cuánto es, no solo con signos', async () => {
+    it('el filtro de precio ofrece «platos hasta $X» con el precio escrito en pesos', async () => {
         const options = async (locale: 'es' | 'en') =>
-            (await mountList(locale)).wrapper.findAll('select[data-filter="price"] option').map((option) => option.text());
+            (await mountList(locale)).wrapper.findAll('select[data-filter="price"] option').map((option) => spaced(option.text()));
 
-        expect(await options('es')).toEqual(['Cualquiera', 'Hasta $ · económico', 'Hasta $$ · moderado', 'Hasta $$$ · costoso', 'Hasta $$$$ · muy costoso']);
-        expect(await options('en')).toEqual(['Any', 'Up to $ · inexpensive', 'Up to $$ · moderate', 'Up to $$$ · expensive', 'Up to $$$$ · very expensive']);
+        expect(await options('es')).toEqual(['Cualquiera', 'Platos hasta $ 15.000', 'Platos hasta $ 25.000', 'Platos hasta $ 40.000']);
+        expect(await options('en')).toEqual(['Any', 'Dishes up to COP 15,000', 'Dishes up to COP 25,000', 'Dishes up to COP 40,000']);
+    });
+
+    it('cada fila dice los precios de la carta, y sin carta no dice nada', async () => {
+        const unPrecio = restaurant({ slug: 'prueba-un-precio', name: 'Un Precio (ficticio)', price_range: { min: 15_000, max: 15_000 } });
+        const { wrapper } = await mountList('es', [LA_CEIBA, EL_GUADUAL, unPrecio]);
+        const range = (slug: string) => wrapper.find(`[data-row="${slug}"] [data-price-range]`);
+
+        expect(spaced(range(LA_CEIBA.slug).text())).toBe('Platos de $ 16.000 a $ 22.000');
+        expect(range(EL_GUADUAL.slug).exists()).toBe(false);
+        expect(spaced(range('prueba-un-precio').text())).toBe('Platos a $ 15.000');
     });
 
     it('«Sugerime algo» no repite el último sugerido si hay otro abierto', async () => {

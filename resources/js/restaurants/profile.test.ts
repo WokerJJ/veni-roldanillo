@@ -6,7 +6,7 @@ import type { PaymentMethod, RestaurantProfile } from './profile';
 import { hasContactInfo, knownPaymentMethods } from './profile';
 
 /** Una ficha sin ningún dato de contacto. */
-const bare = profile({ address: null, reference: null, phone: null, whatsapp: null, payment_methods: [], price_level: null });
+const bare = profile({ address: null, reference: null, phone: null, whatsapp: null, payment_methods: [], price_range: null });
 
 describe('hay algo de «Ubicación y contacto» (EVA-035, BUG-037)', () => {
     it('sin ningún dato, no', () => {
@@ -19,7 +19,7 @@ describe('hay algo de «Ubicación y contacto» (EVA-035, BUG-037)', () => {
         ['phone', { phone: '602 000 0000' }],
         ['whatsapp', { whatsapp: '570009998877' }],
         ['payment_methods', { payment_methods: ['cash'] }],
-        ['price_level', { price_level: 2 }],
+        ['price_range', { price_range: { min: 15_000, max: 15_000 } }],
     ])('con %s, sí', (_field, data) => {
         expect(hasContactInfo({ ...bare, ...data })).toBe(true);
     });
@@ -28,5 +28,12 @@ describe('hay algo de «Ubicación y contacto» (EVA-035, BUG-037)', () => {
         expect(knownPaymentMethods(['bitcoin' as PaymentMethod])).toEqual([]);
         expect(knownPaymentMethods(['bitcoin' as PaymentMethod, 'nequi'])).toEqual(['nequi']);
         expect(hasContactInfo({ ...bare, payment_methods: ['bitcoin' as PaymentMethod] })).toBe(false);
+    });
+
+    it('una página de antes de #127, sin price_range, no cuenta como dato', () => {
+        const old: Partial<typeof bare> = { ...bare };
+        delete old.price_range;
+
+        expect(hasContactInfo(old as typeof bare)).toBe(false);
     });
 });

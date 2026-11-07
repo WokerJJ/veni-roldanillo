@@ -24,8 +24,8 @@ export function restaurant(overrides: Partial<Restaurant> = {}): Restaurant {
         fictitious: true,
         hours: EVERY_DAY.map((weekday) => ({ weekday, opens: '11:00', closes: '15:00' })),
         special_hours: [],
-        price_level: 2,
         lunch: null,
+        price_range: { min: 16_000, max: 22_000 },
         ...overrides,
     };
 }
@@ -42,7 +42,7 @@ export const EL_GUADUAL = restaurant({
     ],
     delivery: false,
     hours: EVERY_DAY.map((weekday) => ({ weekday, opens: '18:00', closes: '02:00' })),
-    price_level: null,
+    price_range: null,
 });
 
 /** Un restaurante como figura de la respuesta del servidor. */

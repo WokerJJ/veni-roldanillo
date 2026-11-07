@@ -17,14 +17,15 @@ test('el aviso sale en el campo de la restricción que rechazó la ficha', funct
     $restaurant = Restaurant::factory()->claimed()->create(['name' => 'Original']);
     actInPanel(panelMember($restaurant), $restaurant);
     Restaurant::saving(function (Restaurant $restaurant): void {
-        $restaurant->price_level = 9;
+        // Sin pasar por el mutador, que normaliza el número.
+        $restaurant->setRawAttributes(['whatsapp' => '123'] + $restaurant->getAttributes());
     });
 
     Livewire::test(EditRestaurantProfile::class)
         ->fillForm(['name' => 'Nuevo nombre'])
         ->call('save')
-        ->assertHasFormErrors(['price_level'])
-        ->assertHasNoFormErrors(['whatsapp']);
+        ->assertHasFormErrors(['whatsapp'])
+        ->assertHasNoFormErrors(['payment_methods']);
 
     expect($restaurant->refresh()->name)->toBe('Original');
 });

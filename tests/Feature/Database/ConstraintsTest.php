@@ -254,6 +254,7 @@ test('el recargo de una opción no es negativo', function () {
     Option::factory()->create(['price_delta' => -500]);
 })->throws(QueryException::class, 'options_price_delta_non_negative');
 
+// En desuso desde #127; la columna y su CHECK se retiran una versión después (ADR 0039).
 test('el nivel de precio va de 1 a 4', function (int $level) {
     Restaurant::factory()->create(['price_level' => $level]);
 })->with([0, 5])->throws(QueryException::class, 'restaurants_price_level_range');

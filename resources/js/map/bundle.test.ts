@@ -444,6 +444,12 @@ describe('presupuesto de descarga', () => {
         // 81,171 (+0,009): la cabecera y el pie del layout pasan de
         // max-w-5xl a max-w-6xl, al ancho de la ficha.
         // Juntos, con main (#125) y la barra corregida (#130): 81,16.
+        // Con el rango de precios de la carta (#127, ADR 0039): 81,177 antes
+        // y 81,208 después (+0,031). Viajan los topes de «platos hasta $X»
+        // (filterParams.ts) y la lectura del rango del GeoJSON; el texto del
+        // rango (priceRange.ts) baja con la lista y la ficha.
+        // Con las correcciones de la revisión de #127 (el almuerzo de hoy
+        // también cuenta para «platos hasta $X»): 81,205 (-0,003).
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 

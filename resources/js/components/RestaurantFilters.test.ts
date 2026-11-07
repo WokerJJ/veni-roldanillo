@@ -42,7 +42,7 @@ describe('RestaurantFilters', () => {
     });
 
     it('con filtros puestos empieza abierto y los cuenta; «Quitar filtros» se ve aunque se cierre', async () => {
-        const { wrapper, details } = await mountFinder({ ...NO_FILTERS, delivery: true, price: 2 });
+        const { wrapper, details } = await mountFinder({ ...NO_FILTERS, delivery: true, price: 25_000 });
 
         expect(details().element.open).toBe(true);
         expect(details().get('summary').text()).toBe('Filtros (2)');
@@ -65,7 +65,7 @@ describe('RestaurantFilters', () => {
     it('cambiar un control del <details> emite los filtros nuevos', async () => {
         const { wrapper } = await mountFinder();
 
-        await wrapper.get('details [data-filter="price"]').setValue('1');
-        expect(wrapper.emitted('update:filters')).toEqual([[{ ...NO_FILTERS, price: 1 }]]);
+        await wrapper.get('details [data-filter="price"]').setValue('15000');
+        expect(wrapper.emitted('update:filters')).toEqual([[{ ...NO_FILTERS, price: 15_000 }]]);
     });
 });

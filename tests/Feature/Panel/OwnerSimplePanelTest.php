@@ -18,7 +18,9 @@ use App\Filament\Owner\Resources\SpecialHours\SpecialHourResource;
 use App\Filament\Owner\Support\PanelModeSwitch;
 use App\Models\DailyMenu;
 use App\Models\DeliveryZone;
+use App\Models\Dish;
 use App\Models\Ingredient;
+use App\Models\MenuSection;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Support\BusinessDay;
@@ -525,6 +527,25 @@ describe('Mi carta', function () {
             ->assertSee(__('panel.my_menu.no_photo'))
             ->assertDontSee('Plato ajeno')
             ->assertSeeHtml('href="'.DishResource::getUrl('basics', ['record' => $dish]).'"');
+    });
+
+    test('dice cómo se ven sus precios en la ficha, sin las secciones que no cuentan', function () {
+        $restaurant = Restaurant::factory()->claimed()->create();
+        $mains = MenuSection::factory()->for($restaurant)->create(['name_es' => 'Platos fuertes']);
+        $drinks = MenuSection::factory()->for($restaurant)->create(['name_es' => 'Bebidas']);
+        Dish::factory()->for($mains)->create(['price' => 16000]);
+        Dish::factory()->for($mains)->create(['price' => 22000]);
+        Dish::factory()->for($drinks)->create(['price' => 3000]);
+        actInPanel(panelMember($restaurant), $restaurant);
+
+        Livewire::test(MyMenu::class)->assertSeeText('Así se ven tus precios en tu ficha: Platos de $16.000 a $22.000');
+    });
+
+    test('sin platos que contar no dice nada de los precios', function () {
+        $restaurant = Restaurant::factory()->claimed()->create();
+        actInPanel(panelMember($restaurant), $restaurant);
+
+        Livewire::test(MyMenu::class)->assertDontSeeText('Así se ven tus precios');
     });
 
     test('el interruptor «Agotado hoy» llega al valor pedido, no lo invierte', function () {

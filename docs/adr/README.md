@@ -42,3 +42,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0036](0036-iconos-de-ingredientes-y-comida.md) | Íconos de comida e ingredientes: propios por nombre de archivo, bajo demanda, y chips de ingredientes en la carta | Aceptada |
 | [0037](0037-barra-lateral-en-computador.md) | La barra lateral en computador: la lista fija a la izquierda, el mapa al lado y lo que no hace falta al abrir fuera del arranque | Aceptada |
 | [0038](0038-ficha-en-dos-columnas-y-horario-compacto.md) | La ficha en dos columnas en computador, el horario compacto y lo importante primero en el celular | Aceptada |
+| [0039](0039-rango-de-precios-de-la-carta.md) | El rango de precios de la carta en lugar del nivel 1–4: calculado en la consulta, sin bebidas ni postres, y el filtro «platos hasta $X» | Aceptada |

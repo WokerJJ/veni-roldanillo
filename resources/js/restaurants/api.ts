@@ -32,6 +32,17 @@ export interface Lunch {
     price: number;
 }
 
+/**
+ * El rango de precios de la carta (#127, ADR 0039): el plato más barato y el
+ * más caro, en pesos enteros. Lo calcula el servidor con los platos que el
+ * dueño no sacó de la carta, su precio base y sin las secciones de bebidas,
+ * postres ni adiciones (Restaurant::withMenuPriceRange).
+ */
+export interface PriceRange {
+    min: number;
+    max: number;
+}
+
 /** Un restaurante como lo necesita el mapa: lo público y nada más (ADR 0017). */
 export interface Restaurant extends Schedule {
     /** Identificador público; el de la URL de la ficha. */
@@ -44,10 +55,10 @@ export interface Restaurant extends Schedule {
     delivery: boolean;
     /** Dato de ejemplo: la interfaz lo marca «Datos de ejemplo». */
     fictitious: boolean;
-    /** De 1 ($) a 4 ($$$$), o null si no lo cargó. */
-    price_level: number | null;
     /** El almuerzo de hoy, o null si no publicó. */
     lunch: Lunch | null;
+    /** Los precios de la carta, o null sin platos. */
+    price_range: PriceRange | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -81,8 +92,16 @@ function parseSpecialHours(value: unknown): SpecialHours | null {
     };
 }
 
-function parsePriceLevel(value: unknown): number | null {
-    return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 4 ? value : null;
+function isPrice(value: unknown): value is number {
+    return typeof value === 'number' && Number.isInteger(value) && value > 0;
+}
+
+/**
+ * Lo que no tenga la forma del rango (una respuesta guardada de antes de
+ * #127, un dato roto) es null: no se muestra ni pasa el filtro de precio.
+ */
+export function parsePriceRange(value: unknown): PriceRange | null {
+    return isRecord(value) && isPrice(value.min) && isPrice(value.max) && value.min <= value.max ? { min: value.min, max: value.max } : null;
 }
 
 function parseLunch(value: unknown): Lunch | null {
@@ -124,9 +143,9 @@ function parseFeature(value: unknown): Restaurant | null {
         fictitious: properties.fictitious === true,
         hours: listOf(properties.hours, parseHours),
         special_hours: listOf(properties.special_hours, parseSpecialHours),
-        // Sumados en #12: una respuesta guardada de antes no los trae (null).
-        price_level: parsePriceLevel(properties.price_level),
+        // Sumados después (#12 y #127): una respuesta guardada de antes no los trae (null).
         lunch: parseLunch(properties.lunch),
+        price_range: parsePriceRange(properties.price_range),
     };
 }
 

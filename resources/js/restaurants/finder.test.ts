@@ -20,7 +20,7 @@ const NOON = new Date('2026-10-07T17:00:00Z');
 /** El mismo día a las 20:00: al revés. */
 const NIGHT = new Date('2026-10-08T01:00:00Z');
 
-const SIN_HORARIO = restaurant({ slug: 'prueba-sin-horario', name: 'Fonda Sin Horario (ficticio)', hours: [], categories: [], price_level: 4 });
+const SIN_HORARIO = restaurant({ slug: 'prueba-sin-horario', name: 'Fonda Sin Horario (ficticio)', hours: [], categories: [], price_range: { min: 30_000, max: 60_000 } });
 const ALL = [LA_CEIBA, EL_GUADUAL, SIN_HORARIO];
 
 const slugs = (list: readonly { slug: string }[]): string[] => list.map(({ slug }) => slug);
@@ -85,11 +85,47 @@ describe('filterRestaurants', () => {
         expect(slugs(filterRestaurants(ALL, { ...NO_FILTERS, delivery: true }, NOON))).toEqual([LA_CEIBA.slug, SIN_HORARIO.slug]);
     });
 
-    it('el precio es «hasta ese nivel», y deja fuera a los que no lo cargaron', () => {
-        // La Ceiba es $$, El Guadual no lo cargó y la fonda es $$$$.
-        expect(slugs(filterRestaurants(ALL, { ...NO_FILTERS, price: 1 }, NOON))).toEqual([]);
-        expect(slugs(filterRestaurants(ALL, { ...NO_FILTERS, price: 2 }, NOON))).toEqual([LA_CEIBA.slug]);
-        expect(slugs(filterRestaurants(ALL, { ...NO_FILTERS, price: 4 }, NOON))).toEqual([LA_CEIBA.slug, SIN_HORARIO.slug]);
+    it('«platos hasta $X» pide un plato de la carta hasta ese precio, y deja fuera a los que no tienen carta', () => {
+        // La Ceiba va de $16.000 a $22.000, El Guadual no tiene carta y la fonda va de $30.000 a $60.000.
+        expect(slugs(filterRestaurants(ALL, { ...NO_FILTERS, price: 15_000 }, NOON))).toEqual([]);
+        expect(slugs(filterRestaurants(ALL, { ...NO_FILTERS, price: 25_000 }, NOON))).toEqual([LA_CEIBA.slug]);
+        expect(slugs(filterRestaurants(ALL, { ...NO_FILTERS, price: 40_000 }, NOON))).toEqual([LA_CEIBA.slug, SIN_HORARIO.slug]);
+    });
+
+    it('el tope es inclusivo: el plato más barato puede costar justo eso', () => {
+        const justo = restaurant({ slug: 'prueba-justo', price_range: { min: 15_000, max: 15_000 } });
+
+        expect(slugs(filterRestaurants([justo], { ...NO_FILTERS, price: 15_000 }, NOON))).toEqual(['prueba-justo']);
+        expect(slugs(filterRestaurants([justo], { ...NO_FILTERS, price: 14_999 }, NOON))).toEqual([]);
+    });
+
+    describe('el almuerzo de hoy también cuenta para «platos hasta $X»', () => {
+        const lunch = (date: string, price: number) => ({ date, description: 'Almuerzo de prueba', price });
+
+        it('pasa con solo el almuerzo de hoy, sin carta', () => {
+            const soloAlmuerzo = restaurant({ slug: 'solo-almuerzo', price_range: null, lunch: lunch('2026-10-07', 12_000) });
+
+            expect(slugs(filterRestaurants([soloAlmuerzo], { ...NO_FILTERS, price: 15_000 }, NOON))).toEqual(['solo-almuerzo']);
+        });
+
+        it('pasa si el almuerzo es más barato que la carta', () => {
+            const almuerzoBarato = restaurant({ slug: 'almuerzo-barato', price_range: { min: 18_000, max: 30_000 }, lunch: lunch('2026-10-07', 14_000) });
+
+            expect(slugs(filterRestaurants([almuerzoBarato], { ...NO_FILTERS, price: 15_000 }, NOON))).toEqual(['almuerzo-barato']);
+        });
+
+        it('no pasa si ni la carta ni el almuerzo llegan', () => {
+            const caro = restaurant({ slug: 'caro', price_range: { min: 18_000, max: 30_000 }, lunch: lunch('2026-10-07', 16_000) });
+            const sinNada = restaurant({ slug: 'sin-nada', price_range: null, lunch: null });
+
+            expect(slugs(filterRestaurants([caro, sinNada], { ...NO_FILTERS, price: 15_000 }, NOON))).toEqual([]);
+        });
+
+        it('el almuerzo de ayer no cuenta', () => {
+            const ayer = restaurant({ slug: 'ayer', price_range: null, lunch: lunch('2026-10-06', 9_000) });
+
+            expect(slugs(filterRestaurants([ayer], { ...NO_FILTERS, price: 15_000 }, NOON))).toEqual([]);
+        });
     });
 
     it('la categoría va por slug', () => {

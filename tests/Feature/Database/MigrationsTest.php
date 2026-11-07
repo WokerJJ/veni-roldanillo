@@ -107,3 +107,31 @@ test('el down del idioma opcional vuelve a exigirlo, con español para quien no 
 
     DB::table('users')->delete();
 });
+
+test('la casilla del rango de precios marca por el nombre las secciones que ya había, y su down la quita', function () {
+    $this->artisan('migrate:fresh')->assertSuccessful();
+    $migration = 'database/migrations/2026_11_06_100000_add_counts_for_price_range_to_menu_sections.php';
+    $this->artisan('migrate:rollback', ['--path' => $migration])->assertSuccessful();
+
+    expect(Schema::hasColumn('menu_sections', 'counts_for_price_range'))->toBeFalse();
+
+    $restaurant = DB::table('restaurants')->insertGetId([
+        'name' => 'Fonda de Prueba (ficticio)', 'slug' => 'fonda-de-prueba', 'is_fictitious' => true,
+        'location' => DB::raw("ST_GeogFromText('SRID=4326;POINT(-76.15 4.41)')"),
+    ]);
+    foreach ([['Platos fuertes', null], ['ACOMPAÑAMIENTOS', null], ['🥤 Bebidas', null], ['Para tomar', 'Drinks']] as $position => [$es, $en]) {
+        DB::table('menu_sections')->insert(['restaurant_id' => $restaurant, 'name_es' => $es, 'name_en' => $en, 'position' => $position]);
+    }
+
+    $this->artisan('migrate')->assertSuccessful();
+
+    expect(DB::table('menu_sections')->orderBy('position')->pluck('counts_for_price_range', 'name_es')->all())->toBe([
+        'Platos fuertes' => true,
+        'ACOMPAÑAMIENTOS' => false,
+        '🥤 Bebidas' => false,
+        'Para tomar' => false,
+    ]);
+
+    // Deja la base vacía para las pruebas que siguen.
+    $this->artisan('migrate:fresh')->assertSuccessful();
+});

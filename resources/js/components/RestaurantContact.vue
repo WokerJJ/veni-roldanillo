@@ -4,26 +4,25 @@ import { computed, useId } from 'vue';
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
 import type { RestaurantProfile } from '@/restaurants/profile';
+import { priceRangeText } from '@/restaurants/priceRange';
 import { hasContactInfo, knownPaymentMethods, PAYMENT_METHOD_KEYS } from '@/restaurants/profile';
 
 /**
  * Dónde queda un restaurante y cómo hablarle (#13): la dirección con su
- * referencia, el teléfono, el WhatsApp, los medios de pago y el nivel de
- * precios. Son los datos del negocio, los que el restaurante publica; de lo
- * que no cargó no queda ni el rótulo, y sin ninguno la sección no sale.
+ * referencia, el teléfono, el WhatsApp, los medios de pago y los precios de
+ * la carta (ADR 0039). Son los datos del negocio, los que el restaurante
+ * publica; de lo que no cargó no queda ni el rótulo, y sin ninguno la
+ * sección no sale.
  *
  * El WhatsApp es un enlace para escribirle, sin mensaje armado: el pedido
  * armado sale del carrito (OrderBar y OrderCart, #15).
  */
 const { restaurant } = defineProps<{
-    restaurant: Pick<RestaurantProfile, 'address' | 'reference' | 'phone' | 'whatsapp' | 'payment_methods' | 'price_level'>;
+    restaurant: Pick<RestaurantProfile, 'address' | 'reference' | 'phone' | 'whatsapp' | 'payment_methods' | 'price_range'>;
 }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const headingId = useId();
-
-/** Hasta cuánto llega el nivel de precios (CHECK price_level BETWEEN 1 AND 4). */
-const PRICE_LEVELS = 4;
 
 /** Un medio de pago que esta versión de la app todavía no conoce no se muestra como una clave suelta. */
 const payments = computed(() => knownPaymentMethods(restaurant.payment_methods));
@@ -115,9 +114,10 @@ const whatsappText = computed(() => {
                 </dd>
             </div>
 
-            <div v-if="restaurant.price_level !== null" data-price-level>
-                <dt class="text-sm text-ink-muted">{{ t('restaurant.contact.price_level') }}</dt>
-                <dd>{{ t('restaurant.contact.price_level_of', { level: restaurant.price_level, max: PRICE_LEVELS }) }}</dd>
+            <!-- != null: una página guardada de antes de #127 no trae el campo. -->
+            <div v-if="restaurant.price_range != null" data-price-range>
+                <dt class="text-sm text-ink-muted">{{ t('restaurant.contact.prices') }}</dt>
+                <dd class="tabular-nums">{{ priceRangeText(restaurant.price_range, t, locale) }}</dd>
             </div>
         </dl>
     </section>

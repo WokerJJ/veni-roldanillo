@@ -36,7 +36,7 @@ describe.each([
     ['apilados (barra)', true],
 ])('FilterControls %s', (_, stacked) => {
     it('cada casilla emite los filtros con ese cambio y lo demás igual', async () => {
-        const filters = { ...NO_FILTERS, query: 'ceiba', price: 3 };
+        const filters = { ...NO_FILTERS, query: 'ceiba', price: 40_000 };
         const { wrapper, last } = await mountControls({ filters, stacked });
 
         await wrapper.get('[data-filter="open"]').trigger('change');
@@ -47,12 +47,12 @@ describe.each([
     });
 
     it('el precio sale como número, y «cualquiera» como null', async () => {
-        const { wrapper, last } = await mountControls({ filters: { ...NO_FILTERS, price: 1 }, stacked });
+        const { wrapper, last } = await mountControls({ filters: { ...NO_FILTERS, price: 15_000 }, stacked });
         const price = wrapper.get('[data-filter="price"]');
-        expect((price.element as HTMLSelectElement).value).toBe('1');
+        expect((price.element as HTMLSelectElement).value).toBe('15000');
 
-        await price.setValue('3');
-        expect(last()).toEqual({ ...NO_FILTERS, price: 3 });
+        await price.setValue('40000');
+        expect(last()).toEqual({ ...NO_FILTERS, price: 40_000 });
 
         await price.setValue('');
         expect(last()).toEqual({ ...NO_FILTERS, price: null });

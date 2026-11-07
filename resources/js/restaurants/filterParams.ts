@@ -15,7 +15,7 @@ export interface Filters {
     open: boolean;
     /** Solo los que hacen domicilios. */
     delivery: boolean;
-    /** Hasta ese nivel de precio (1 = $ … 4 = $$$$), o cualquiera. */
+    /** Con algún plato hasta ese precio, en pesos (uno de PRICE_CAPS), o cualquiera. */
     price: number | null;
     /** El slug de una categoría, o cualquiera. */
     category: string | null;
@@ -25,6 +25,13 @@ export const NO_FILTERS: Readonly<Filters> = { query: '', open: false, delivery:
 
 /** Los parámetros de la dirección, uno por filtro. `r` es el del elegido (links.ts). */
 export const FILTER_PARAMS = { query: 'q', open: 'open', delivery: 'delivery', price: 'price', category: 'category' } as const;
+
+/**
+ * Los topes del filtro «platos hasta $X» (ADR 0039): un almuerzo o un plato
+ * sencillo, un plato fuerte y lo de una salida. Solo estos: en la dirección,
+ * `price=2` (el nivel 1–4 de antes de #127) no es ninguno y se ignora.
+ */
+export const PRICE_CAPS = [15_000, 25_000, 40_000] as const;
 
 /** Lo más largo que se acepta en el buscador: un nombre de restaurante entra de sobra. */
 export const MAX_QUERY_LENGTH = 80;
@@ -50,7 +57,7 @@ export function filtersFromUrl(url: string): Filters {
         query: (params.get(FILTER_PARAMS.query) ?? '').slice(0, MAX_QUERY_LENGTH),
         open: params.get(FILTER_PARAMS.open) === '1',
         delivery: params.get(FILTER_PARAMS.delivery) === '1',
-        price: Number.isInteger(price) && price >= 1 && price <= 4 ? price : null,
+        price: (PRICE_CAPS as readonly number[]).includes(price) ? price : null,
         category: category !== null && category.length <= 100 && SLUG.test(category) ? category : null,
     };
 }

@@ -25,7 +25,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Ficha de un restaurante. slug, status, plan, verified_at e is_fictitious
@@ -47,10 +49,15 @@ use Illuminate\Support\Collection;
  * @property CarbonInterface|null $updated_by_owner_at
  * @property int|null $delay_minutes
  * @property CarbonInterface|null $delay_until
+ *
+ * price_level (el «nivel de precios» 1–4 que declaraba el dueño) queda en
+ * desuso desde #127: nada lo lee ni lo escribe, y la columna se retira una
+ * versión después (ADR 0039 y la regla de migraciones del ADR 0013). Los
+ * precios de la ficha salen de la carta: withMenuPriceRange().
  */
 #[Fillable([
     'name', 'description_es', 'description_en',
-    'address', 'reference', 'location', 'phone', 'whatsapp', 'price_level',
+    'address', 'reference', 'location', 'phone', 'whatsapp',
     'delivery', 'delivery_notes_es', 'delivery_notes_en', 'payment_methods',
 ])]
 class Restaurant extends Model
@@ -80,7 +87,6 @@ class Restaurant extends Model
     {
         return [
             'location' => AsGeoPoint::class,
-            'price_level' => 'integer',
             'delivery' => 'boolean',
             'payment_methods' => AsEnumCollection::of(PaymentMethod::class),
             'status' => RestaurantStatus::class,
@@ -186,6 +192,72 @@ class Restaurant extends Model
                     ->where('served_on', $today);
             },
         ]);
+    }
+
+    /**
+     * Suma price_min y price_max: el plato más barato y el más caro de la
+     * carta (#127, ADR 0039), en pesos, o null sin platos que contar.
+     *
+     * Cuentan los platos que el dueño no sacó de la carta (available), con
+     * precio (mayor que 0) y su precio base: sin opciones ni adiciones. Un
+     * plato agotado hoy cuenta: vuelve mañana, y la capa del mapa se guarda en
+     * cachés. Solo cuentan las secciones con la casilla «Cuenta para el rango
+     * de precios» (menu_sections.counts_for_price_range): las bebidas, los
+     * postres y las adiciones no. Si el restaurante no tiene ninguna sección
+     * que cuente (una heladería, una juguería), cuentan todas; si las tiene
+     * pero sin platos que contar (ocultos o en 0), no hay rango: no se cae a
+     * los precios de las bebidas.
+     *
+     * Se calcula en la consulta, con un LEFT JOIN LATERAL por restaurante
+     * que recorre sus secciones una vez (MIN y MAX en la misma pasada, y
+     * bool_or para saber si alguna cuenta) y une los platos por el índice
+     * (restaurant_id, available) de dishes: nada que mantener al guardar un
+     * plato y sin una consulta por restaurante. Se llama después de
+     * select(): un select() posterior reemplaza las columnas y se lleva el
+     * rango. Sin select() previo, trae todas las columnas del restaurante.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function withMenuPriceRange(Builder $query): void
+    {
+        $base = $query->getQuery();
+        $from = is_string($base->from) ? $base->from : $this->getTable();
+        // La tabla como la nombra la consulta: el alias si tiene uno («restaurants as r»).
+        $table = preg_match('/\s+as\s+(\S+)$/i', $from, $match) === 1 ? $match[1] : $from;
+
+        if ($base->columns === null) {
+            $query->select("{$table}.*");
+        }
+
+        $range = DB::table('menu_sections as s')
+            ->leftJoin('dishes as d', function (JoinClause $join): void {
+                $join->on('d.menu_section_id', '=', 's.id')
+                    ->on('d.restaurant_id', '=', 's.restaurant_id')
+                    ->where('d.available', true)
+                    ->where('d.price', '>', 0);
+            })
+            // Sin ninguna sección que cuente, cuentan todas; con alguna, solo esas (aunque no tengan platos).
+            ->selectRaw('CASE WHEN bool_or(s.counts_for_price_range) THEN MIN(d.price) FILTER (WHERE s.counts_for_price_range) ELSE MIN(d.price) END AS price_min')
+            ->selectRaw('CASE WHEN bool_or(s.counts_for_price_range) THEN MAX(d.price) FILTER (WHERE s.counts_for_price_range) ELSE MAX(d.price) END AS price_max')
+            ->whereColumn('s.restaurant_id', "{$table}.{$this->getKeyName()}");
+
+        $query->leftJoinLateral($range, 'menu_price_range')
+            ->addSelect(['menu_price_range.price_min', 'menu_price_range.price_max']);
+    }
+
+    /**
+     * El rango que sumó withMenuPriceRange(), o null si la carta no tiene
+     * platos que contar (o la consulta no lo pidió).
+     *
+     * @return array{min: int, max: int}|null
+     */
+    public function menuPriceRange(): ?array
+    {
+        $min = $this->getAttribute('price_min');
+        $max = $this->getAttribute('price_max');
+
+        return is_numeric($min) && is_numeric($max) ? ['min' => (int) $min, 'max' => (int) $max] : null;
     }
 
     /**
