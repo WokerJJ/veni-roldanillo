@@ -2,6 +2,7 @@
 import { computed, onMounted } from 'vue';
 
 import Icon from '@/components/Icon.vue';
+import { PILL } from '@/components/pill';
 import { useI18n } from '@/composables/useI18n';
 import type { Restaurant } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
@@ -17,7 +18,9 @@ import { useFinderPanel } from '@/restaurants/useFinder';
  *
  * «Sugerime algo» elige uno al azar entre los abiertos ahora que cumplen los
  * filtros y lo emite como si lo hubieran tocado en el mapa (`select`); si no
- * hay ninguno, lo dice en su región de estado.
+ * hay ninguno, lo dice en su región de estado, que se ve, con el que abre
+ * primero y un botón para verlo (#138, A1), y pide más alto (`expand`): en el
+ * panel asomado el aviso quedaba debajo del borde.
  *
  * Si el inicio se abrió con una búsqueda o filtros en la dirección (#21), al
  * montarse pide abrir la lista (`list`), una sola vez (finder.ts).
@@ -34,11 +37,13 @@ const emit = defineEmits<{
     /** Abrir la lista: la dirección traía una búsqueda o filtros. */
     list: [];
     'update:filters': [filters: Filters];
+    /** Lo que dice no entra en el panel asomado: que suba. */
+    expand: [];
 }>();
 
 const { t } = useI18n();
 /** Cuáles cumplen los filtros, «Sugerime algo» y la región de estado: lo mismo que la lista (useFinder.ts). */
-const { filtered, lunches, announced, suggest: pick } = useFinderPanel(
+const { filtered, lunches, announced, next, suggest: pick } = useFinderPanel(
     { restaurants: () => restaurants, filters: () => filters },
     {
         unfiltered: 'silent',
@@ -58,12 +63,13 @@ onMounted(() => {
 function suggest(): void {
     const slug = pick();
 
-    if (slug !== null) {
+    if (slug === null) {
+        emit('expand');
+    } else {
         emit('select', slug);
     }
 }
 
-const PILL = 'inline-flex min-h-touch items-center gap-2 rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface';
 </script>
 
 <template>
@@ -81,4 +87,8 @@ const PILL = 'inline-flex min-h-touch items-center gap-2 rounded-full border bor
     </button>
     <!-- Siempre en la página: el lector de pantalla anuncia cuando cambia. -->
     <p role="status" class="basis-full text-sm" data-welcome-status>{{ announced }}</p>
+    <button v-if="next" type="button" :class="PILL" data-suggest-next @click="emit('select', next.slug)">
+        <Icon name="chevron-derecha" :size="20" />
+        {{ t('finder.suggest_view', { name: next.name }) }}
+    </button>
 </template>

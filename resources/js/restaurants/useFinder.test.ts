@@ -91,7 +91,44 @@ describe('useFinderPanel', () => {
 
         filters.value = { ...NO_FILTERS, query: 'guadual' };
         expect(panel.suggest()).toBeNull();
-        expect(panel.message.value).toBe('Ahora no hay ningún restaurante abierto con estos filtros.');
+        // En pantalla y con el que abre primero (#138, A1).
+        expect(panel.message.value).toBe('Ahora no hay ningún restaurante abierto con estos filtros. El que abre primero es Restaurante de Prueba El Guadual (ficticio), abre a las 6:00 p. m.');
+        expect(panel.next.value?.slug).toBe('prueba-el-guadual');
+    });
+
+    it('sin abiertos y sin ninguno que abra en los próximos días, lo dice sin sugerir', async () => {
+        const sinHorario = restaurant({ slug: 'prueba-sin-horario', hours: [] });
+        const { panel } = await mountFinder([sinHorario]);
+
+        expect(panel.suggest()).toBeNull();
+        expect(panel.next.value).toBeNull();
+        expect(panel.message.value).toBe('Ahora no hay ningún restaurante abierto.');
+    });
+
+    it('el que abre primero deja de ofrecerse al cambiar los filtros', async () => {
+        const { panel, filters } = await mountFinder([EL_GUADUAL]);
+
+        panel.suggest();
+        expect(panel.next.value?.slug).toBe('prueba-el-guadual');
+
+        filters.value = { ...NO_FILTERS, delivery: true };
+        await nextTick();
+        expect(panel.next.value).toBeNull();
+    });
+
+    it('el aviso sin abiertos se va en cuanto abre alguno de los que cumplen los filtros: no queda viejo', async () => {
+        // 17:58: La Ceiba (11–15) y El Guadual (18–02) cerrados.
+        vi.setSystemTime(new Date('2026-10-07T17:58:00-05:00'));
+        const { panel, wrapper } = await mountFinder([LA_CEIBA, EL_GUADUAL]);
+
+        expect(panel.suggest()).toBeNull();
+        expect(panel.next.value?.slug).toBe('prueba-el-guadual');
+
+        // 18:01: abrió El Guadual. Ni «no hay abiertos» ni el que «abre primero» (ya abrió).
+        await vi.advanceTimersByTimeAsync(3 * 60_000);
+        expect(panel.next.value).toBeNull();
+        expect(panel.message.value).toBe('2 restaurantes en el mapa');
+        expect(wrapper.text()).not.toContain('Ahora no hay');
     });
 
     describe('la región de estado (WCAG 4.1.3)', () => {
@@ -126,7 +163,7 @@ describe('useFinderPanel', () => {
 
             panel.suggest();
             await nextTick();
-            expect(wrapper.text()).toBe('Ahora no hay ningún restaurante abierto.');
+            expect(wrapper.text()).toBe('Ahora no hay ningún restaurante abierto. El que abre primero es Restaurante de Prueba El Guadual (ficticio), abre a las 6:00 p. m.');
 
             panel.suggest();
             await nextTick();
@@ -134,7 +171,7 @@ describe('useFinderPanel', () => {
             await nextTick();
             texts.push(wrapper.text());
 
-            expect(texts).toEqual(['', 'Ahora no hay ningún restaurante abierto.']);
+            expect(texts).toEqual(['', 'Ahora no hay ningún restaurante abierto. El que abre primero es Restaurante de Prueba El Guadual (ficticio), abre a las 6:00 p. m.']);
         });
     });
 });

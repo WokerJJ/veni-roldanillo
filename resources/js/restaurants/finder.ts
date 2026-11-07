@@ -13,9 +13,11 @@ export { hasFilters, NO_FILTERS, sameAddress, writeFilters } from './filterParam
 | sección «Platos» (#17), que el mapa solo no muestra. Sin un parámetro
 | aparte, para que los enlaces ya compartidos también la abran.
 |
-| Lo decide la bienvenida (WelcomeActions.vue), que se monta recién cuando
-| hay restaurantes y baja con la lista: en el inicio solo queda escuchar su
-| `list`, porque el arranque no tiene lugar (resources/js/map/bundle.test.ts).
+| El inicio la abre al montarse, con siluetas mientras llegan los
+| restaurantes y la lista (#138, ADR 0040), con una mirada rápida a la
+| dirección; al bajar la lista consume este «una vez». Si no la reconoció, la
+| abre la bienvenida (WelcomeActions.vue), que se monta cuando hay
+| restaurantes.
 | Se reconocen por ser el mismo objeto que leyó el inicio de su dirección: los
 | que se cambian en la lista son otros, y al cerrarla no la vuelven a abrir.
 */
@@ -162,6 +164,32 @@ export function todaysLunches(restaurants: readonly Restaurant[], now: Date): Lu
         .filter((restaurant): restaurant is Restaurant & { lunch: Lunch } => restaurant.lunch?.date === today)
         .map((restaurant) => ({ restaurant, lunch: restaurant.lunch }))
         .sort((a, b) => a.lunch.price - b.lunch.price);
+}
+
+/**
+ * Con todos cerrados, el que abre primero entre `restaurants` (#138, A1), o
+ * null si ninguno abre en los próximos días (o no tienen horario). Si dos
+ * abren a la vez, el primero en el orden en que llegaron.
+ */
+export function firstToOpen(restaurants: readonly Restaurant[], now: Date): Restaurant | null {
+    let best: { restaurant: Restaurant; key: string } | null = null;
+
+    for (const restaurant of restaurants) {
+        const status = openStatus(restaurant, now);
+
+        if (status.state !== 'closed' || status.opens === null) {
+            continue;
+        }
+
+        // «HH:MM» se ordena como texto: el día adelante primero, después la hora.
+        const key = `${String(status.opens.daysAhead).padStart(2, '0')}${status.opens.time}`;
+
+        if (best === null || key < best.key) {
+            best = { restaurant, key };
+        }
+    }
+
+    return best?.restaurant ?? null;
 }
 
 /**

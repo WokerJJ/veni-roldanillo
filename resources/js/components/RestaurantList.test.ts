@@ -287,7 +287,13 @@ describe('búsqueda y filtros (#12)', () => {
         await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'guadual' } });
         await wrapper.get('button[data-suggest]').trigger('click');
         expect(wrapper.emitted('select')).toHaveLength(1);
-        expect(wrapper.get('[data-count]').text()).toBe('Ahora no hay ningún restaurante abierto con estos filtros.');
+        expect(wrapper.get('[data-count]').text()).toBe('Ahora no hay ningún restaurante abierto con estos filtros. El que abre primero es Restaurante de Prueba El Guadual (ficticio), abre a las 6:00 p. m.');
+
+        // Sugiere el que abre primero (#138, A1): tocarlo lo elige.
+        const next = wrapper.get('button[data-suggest-next]');
+        expect(next.text()).toBe('Ver Restaurante de Prueba El Guadual (ficticio)');
+        await next.trigger('click');
+        expect(wrapper.emitted('select')?.at(-1)).toEqual(['prueba-el-guadual']);
     });
 
     it('una categoría que ninguno tiene (un enlace viejo) se descarta: no deja la lista vacía sin poder sacarla', async () => {
@@ -382,6 +388,17 @@ describe('RestaurantList · favoritos (#16)', () => {
 
         await wrapper.setProps({ filters: { ...NO_FILTERS, query: 'ceiba' } });
         expect(wrapper.find('[data-favorites]').exists()).toBe(false);
+    });
+
+    it('cada favorito lleva, como las demás filas, la flecha «›» a su ficha con el nombre en el enlace (#138, A3)', async () => {
+        window.localStorage.setItem('veni:favorites', JSON.stringify({ v: 1, data: [EL_GUADUAL.slug] }));
+        const { wrapper } = await mountList();
+
+        const link = wrapper.get('[data-favorites] a[data-favorite-details]');
+        expect(link.attributes('href')).toBe(`/restaurants/${EL_GUADUAL.slug}`);
+        expect(link.attributes('aria-label')).toBe(wrapper.get(`li[data-row="${EL_GUADUAL.slug}"] a`).attributes('aria-label'));
+        expect(link.classes()).toContain('size-touch');
+        expect(link.find('svg').exists()).toBe(true);
     });
 
     it('sin favoritos no hay sección, y «Guardado en este teléfono» abre lo guardado y devuelve el foco al cerrar', async () => {
