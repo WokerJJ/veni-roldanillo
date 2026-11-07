@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.7.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.6.0...v0.7.0) (2026-11-07)
+
+
+### Funcionalidades
+
+* barra lateral fija en computador ([#83](https://github.com/WokerJJ/veni-roldanillo/issues/83)) ([#129](https://github.com/WokerJJ/veni-roldanillo/issues/129)) ([bb2f4e7](https://github.com/WokerJJ/veni-roldanillo/commit/bb2f4e76bd886f5874cd3350674b597cc8b081ee))
+* ficha en dos columnas y horario compacto ([#125](https://github.com/WokerJJ/veni-roldanillo/issues/125), [#82](https://github.com/WokerJJ/veni-roldanillo/issues/82)) ([#131](https://github.com/WokerJJ/veni-roldanillo/issues/131)) ([7a229fb](https://github.com/WokerJJ/veni-roldanillo/commit/7a229fbf8427be2ef14da61f4fe0ad8b70b725ca))
+* foto grande del plato en el detalle ([#126](https://github.com/WokerJJ/veni-roldanillo/issues/126)) ([#133](https://github.com/WokerJJ/veni-roldanillo/issues/133)) ([1c2f51c](https://github.com/WokerJJ/veni-roldanillo/commit/1c2f51c50d7ea92c5328e18710f53baa1612fbb5))
+* fotos de los platos e imágenes promocionales ([#113](https://github.com/WokerJJ/veni-roldanillo/issues/113)) ([#119](https://github.com/WokerJJ/veni-roldanillo/issues/119)) ([484d5f3](https://github.com/WokerJJ/veni-roldanillo/commit/484d5f38b9e17b2991536c842b2627e63354efa3))
+* íconos de comida y chips de ingredientes ([#115](https://github.com/WokerJJ/veni-roldanillo/issues/115)) ([#128](https://github.com/WokerJJ/veni-roldanillo/issues/128)) ([8ac3de6](https://github.com/WokerJJ/veni-roldanillo/commit/8ac3de6eb394a66b8a3c2d26be81bea257c56485))
+* ingredientes agotados hoy con reemplazo ([#112](https://github.com/WokerJJ/veni-roldanillo/issues/112)) ([#117](https://github.com/WokerJJ/veni-roldanillo/issues/117)) ([0373b96](https://github.com/WokerJJ/veni-roldanillo/commit/0373b963bc7dbf55a25df9b7c08337272f59df1f))
+* modo simple del panel del dueño con «Ver todo» ([#114](https://github.com/WokerJJ/veni-roldanillo/issues/114)) ([#123](https://github.com/WokerJJ/veni-roldanillo/issues/123)) ([317ec55](https://github.com/WokerJJ/veni-roldanillo/commit/317ec552d22038cc36611c1cead3bf86aff81501))
+* rango de precios calculado de la carta ([#127](https://github.com/WokerJJ/veni-roldanillo/issues/127)) ([#137](https://github.com/WokerJJ/veni-roldanillo/issues/137)) ([ab38bb3](https://github.com/WokerJJ/veni-roldanillo/commit/ab38bb39778d218c3f71e1043f2728d930bc5e68))
+
+
+### Correcciones
+
+* los filtros abiertos ya no achican la lista de la barra ([#130](https://github.com/WokerJJ/veni-roldanillo/issues/130)) ([#132](https://github.com/WokerJJ/veni-roldanillo/issues/132)) ([a4c3187](https://github.com/WokerJJ/veni-roldanillo/commit/a4c318750b36bf02b295ac4cd5702c8b49365cf7))
+
 ## [0.6.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.5.0...v0.6.0) (2026-10-31)
 
 
