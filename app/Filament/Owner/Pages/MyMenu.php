@@ -6,8 +6,10 @@ use App\Enums\MediaKind;
 use App\Filament\Owner\Concerns\ResolvesOwnerTenant;
 use App\Filament\Owner\Concerns\SetsSoldOutToday;
 use App\Filament\Owner\Resources\Dishes\DishResource;
+use App\Filament\Owner\Support\Fields;
 use App\Filament\Owner\Support\TouchTarget;
 use App\Models\Dish;
+use App\Models\Restaurant;
 use App\Support\Media\MediaStore;
 use Filament\Actions\Action;
 use Filament\Pages\Page;
@@ -82,7 +84,28 @@ class MyMenu extends Page
             ->values()
             ->all();
 
-        return ['sections' => $sections];
+        return ['sections' => $sections, 'priceRange' => $this->priceRangeText()];
+    }
+
+    /**
+     * «Platos de $16.000 a $22.000», el rango que muestra la ficha (ADR
+     * 0039), para que el dueño note si una sección de bebidas o adiciones
+     * quedó contando. Null si no hay platos que contar.
+     */
+    protected function priceRangeText(): ?string
+    {
+        $range = Restaurant::query()->select('id')->withMenuPriceRange()
+            ->whereKey($this->restaurant()->getKey())
+            ->firstOrFail()
+            ->menuPriceRange();
+
+        if ($range === null) {
+            return null;
+        }
+
+        return $range['min'] === $range['max']
+            ? __('restaurant.price_single', ['price' => Fields::formatPesos($range['min'])])
+            : __('restaurant.price_range', ['min' => Fields::formatPesos($range['min']), 'max' => Fields::formatPesos($range['max'])]);
     }
 
     /** @return Collection<int, Dish> */

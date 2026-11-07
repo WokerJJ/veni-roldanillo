@@ -9,6 +9,10 @@ use App\Filament\Owner\Resources\MenuSections\Pages\ListMenuSections;
 use App\Filament\Owner\Support\Fields;
 use App\Models\MenuSection;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -46,10 +50,43 @@ class MenuSectionResource extends OwnerResource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            Fields::text('name_es', __('panel.fields.name_es'), 80, required: true),
-            Fields::text('name_en', __('panel.fields.name_en'), 80),
+            self::proposingPriceRange(Fields::text('name_es', __('panel.fields.name_es'), 80, required: true)),
+            self::proposingPriceRange(Fields::text('name_en', __('panel.fields.name_en'), 80)),
             Fields::position(),
+            Toggle::make('counts_for_price_range')
+                ->label(__('panel.sections.counts_for_price_range'))
+                ->helperText(__('panel.sections.counts_for_price_range_help'))
+                ->default(true),
         ]);
+    }
+
+    /**
+     * Al crear, el nombre propone la casilla del rango de precios
+     * (MenuSection::countsForPriceRangeByName, ADR 0039): «Bebidas» la
+     * apaga. Solo mientras la casilla siga como la propuso el nombre
+     * anterior: si el dueño la cambió a mano, su elección queda. Al editar no
+     * se toca: cambiar el nombre no cambia lo que el dueño ya decidió.
+     */
+    private static function proposingPriceRange(TextInput $name): TextInput
+    {
+        return $name
+            ->live(onBlur: true)
+            ->afterStateUpdated(function (Get $get, Set $set, ?string $old, string $operation, TextInput $component): void {
+                if ($operation !== 'create') {
+                    return;
+                }
+
+                $names = ['name_es' => $get('name_es'), 'name_en' => $get('name_en')];
+                $previous = [...$names, $component->getName() => $old];
+                $proposed = fn (array $names): bool => MenuSection::countsForPriceRangeByName(
+                    is_string($names['name_es']) ? $names['name_es'] : null,
+                    is_string($names['name_en']) ? $names['name_en'] : null,
+                );
+
+                if ($get('counts_for_price_range') === $proposed($previous)) {
+                    $set('counts_for_price_range', $proposed($names));
+                }
+            });
     }
 
     public static function table(Table $table): Table

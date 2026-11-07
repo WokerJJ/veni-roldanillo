@@ -14,6 +14,11 @@
 <x-filament-panels::page>
     <p class="veni-muted">{{ __('panel.my_menu.intro') }}</p>
 
+    @if ($priceRange !== null)
+        {{-- El rango de la ficha (ADR 0039): si sale raro, una sección que no son platos está contando. --}}
+        <p data-price-range>{{ __('panel.my_menu.price_range', ['range' => $priceRange]) }}</p>
+    @endif
+
     @forelse ($sections as $section)
         <x-filament::section :heading="$section['name']">
             <ul role="list">

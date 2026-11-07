@@ -11,7 +11,6 @@ use App\Models\Restaurant;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
 use Filament\Pages\Tenancy\EditTenantProfile;
 use Filament\Schemas\Components\Section;
@@ -43,7 +42,7 @@ class EditRestaurantProfile extends EditTenantProfile
 
     /** Lo que el dueño edita de su ficha. */
     public const FIELDS = [
-        'name', 'description_es', 'description_en', 'price_level', 'payment_methods',
+        'name', 'description_es', 'description_en', 'payment_methods',
         'address', 'reference', 'phone', 'whatsapp',
         'delivery', 'delivery_notes_es', 'delivery_notes_en',
     ];
@@ -64,10 +63,6 @@ class EditRestaurantProfile extends EditTenantProfile
                     Fields::text('name', __('panel.profile.name'), 120, required: true)->columnSpanFull(),
                     Fields::longText('description_es', __('panel.profile.description_es'), self::DESCRIPTION_MAX),
                     Fields::longText('description_en', __('panel.profile.description_en'), self::DESCRIPTION_MAX),
-                    Select::make('price_level')
-                        ->label(__('panel.profile.price_level'))
-                        ->options([1 => '$', 2 => '$$', 3 => '$$$', 4 => '$$$$'])
-                        ->in([1, 2, 3, 4]),
                     CheckboxList::make('payment_methods')
                         ->label(__('panel.profile.payment_methods'))
                         ->options(collect(PaymentMethod::cases())
@@ -189,7 +184,6 @@ class EditRestaurantProfile extends EditTenantProfile
     {
         return match ($constraint) {
             'restaurants_whatsapp_format' => 'data.whatsapp',
-            'restaurants_price_level_range' => 'data.price_level',
             'restaurants_payment_methods_array', 'restaurants_payment_methods_known' => 'data.payment_methods',
             default => null,
         };

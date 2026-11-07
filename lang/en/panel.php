@@ -33,7 +33,6 @@ return [
         'name' => 'Restaurant name',
         'description_es' => 'Description (Spanish)',
         'description_en' => 'Description (English, optional)',
-        'price_level' => 'Price level',
         'payment_methods' => 'Payment methods',
         'address' => 'Address',
         'reference' => 'Landmark (“across from the park”)',
@@ -119,6 +118,7 @@ return [
         'all_options' => 'More dish options',
         'english' => 'In English',
         'english_help' => 'Optional. If you leave it empty, the English page shows the Spanish text.',
+        'price_range' => 'This is how your prices look on your page: :range. If it looks off, check “Counts toward the price range” in your sections.',
     ],
     'media' => [
         'dishes' => [
@@ -147,6 +147,8 @@ return [
     'sections' => [
         'label' => 'Section',
         'plural' => 'Sections',
+        'counts_for_price_range' => 'Counts toward the price range',
+        'counts_for_price_range_help' => 'Turn it off for drinks, desserts and add-ons, so “Dishes from $X to $Y” on your page is about your dishes.',
     ],
     'dishes' => [
         'label' => 'Dish',
