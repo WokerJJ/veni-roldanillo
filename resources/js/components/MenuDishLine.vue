@@ -39,8 +39,8 @@ const { t, locale } = useI18n();
     <span class="block min-w-0 flex-1">
         <span class="block font-semibold wrap-anywhere" :class="{ 'text-ink-muted': soldOut || unavailable }" data-name>{{ dish.name }}</span>
         <IngredientChips :chips="chips" />
-        <span v-if="dish.description" class="mt-0.5 block text-sm wrap-anywhere text-ink-muted" data-description>{{ dish.description }}</span>
-        <span v-for="note in notes" :key="note" class="mt-0.5 block text-sm font-semibold wrap-anywhere" data-ingredient-note>{{ note }}</span>
+        <span v-if="dish.description" class="mt-1 block text-sm wrap-anywhere text-ink-muted" data-description>{{ dish.description }}</span>
+        <span v-for="note in notes" :key="note" class="mt-1 block text-sm font-semibold wrap-anywhere" data-ingredient-note>{{ note }}</span>
         <!-- Con el ingrediente que falta el aviso es largo: va aquí, donde puede partirse, y no junto al precio. -->
         <span v-if="!soldOut && unavailable && without !== null" class="mt-1 block">
             <span class="inline-block rounded-full border border-line px-2 py-0.5 text-xs font-semibold wrap-anywhere" data-unavailable>

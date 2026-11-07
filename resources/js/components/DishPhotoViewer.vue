@@ -129,7 +129,7 @@ onMounted(() => {
     width: min(100%, 100dvh - 7rem);
     height: auto;
     aspect-ratio: 1;
-    border-radius: 0.75rem;
+    border-radius: var(--veni-radius-md);
     object-fit: cover;
     background: var(--color-surface);
 }

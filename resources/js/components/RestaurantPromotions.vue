@@ -63,7 +63,7 @@ const headingId = useId();
 .promotion-image {
     width: 100%;
     aspect-ratio: 16 / 9;
-    border-radius: 0.75rem;
+    border-radius: var(--veni-radius-md);
     object-fit: cover;
 }
 </style>
