@@ -1,6 +1,6 @@
 import type { TranslationKey } from '@/composables/useI18n';
 
-import type { RestaurantCategory } from './api';
+import type { PriceRange, RestaurantCategory } from './api';
 import type { SpecialHours, WeeklyHours } from './openStatus';
 
 /**
@@ -40,7 +40,7 @@ export function knownPaymentMethods(methods: readonly PaymentMethod[]): PaymentM
  * para RestaurantContact y la ficha.
  */
 export function hasContactInfo(
-    restaurant: Pick<RestaurantProfile, 'address' | 'reference' | 'phone' | 'whatsapp' | 'payment_methods' | 'price_level'>,
+    restaurant: Pick<RestaurantProfile, 'address' | 'reference' | 'phone' | 'whatsapp' | 'payment_methods' | 'price_range'>,
 ): boolean {
     return (
         restaurant.address !== null ||
@@ -48,7 +48,8 @@ export function hasContactInfo(
         restaurant.phone !== null ||
         restaurant.whatsapp !== null ||
         knownPaymentMethods(restaurant.payment_methods).length > 0 ||
-        restaurant.price_level !== null
+        // != null: una página guardada de antes de #127 no trae el campo (undefined).
+        restaurant.price_range != null
     );
 }
 
@@ -196,8 +197,8 @@ export interface RestaurantProfile {
     delay_minutes: number | null;
     /** Hasta cuándo vale el aviso (ISO-8601 con zona), o null: al vencer, la página lo quita sola. */
     delay_until: string | null;
-    /** De 1 a 4. */
-    price_level: number | null;
+    /** Los precios de la carta (ADR 0039), o null sin platos. */
+    price_range: PriceRange | null;
     address: string | null;
     reference: string | null;
     phone: string | null;

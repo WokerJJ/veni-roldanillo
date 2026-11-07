@@ -18,6 +18,7 @@ import { hasFilters, NO_FILTERS } from '@/restaurants/filterParams';
 import { categoriesOf, filterRestaurants } from '@/restaurants/finder';
 import { restaurantUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
+import { priceRangeText } from '@/restaurants/priceRange';
 import { openStatusText } from '@/restaurants/statusText';
 import { useFinderPanel } from '@/restaurants/useFinder';
 import { useFavorites } from '@/saved/favorites';
@@ -454,6 +455,9 @@ defineExpose({ focusItem });
                                 <span data-status>{{ status }}</span>
                                 <template v-if="distance"> · <span data-distance>{{ distance }}</span></template>
                             </span>
+                            <span v-if="restaurant.price_range" class="text-sm text-ink-muted tabular-nums" data-price-range>{{
+                                priceRangeText(restaurant.price_range, t, locale)
+                            }}</span>
                         </button>
                         <!-- El ícono solo no dice nada: el nombre del enlace lleva el del restaurante. -->
                         <Link

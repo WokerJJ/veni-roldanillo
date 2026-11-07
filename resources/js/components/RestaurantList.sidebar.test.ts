@@ -127,7 +127,7 @@ describe('RestaurantList en la barra lateral', () => {
     });
 
     it('con filtros puestos, el botón los cuenta (también para el lector, en su nombre) y el panel empieza abierto', async () => {
-        const { wrapper } = await mountInSidebar({ filters: { ...NO_FILTERS, open: true, price: 2 } });
+        const { wrapper } = await mountInSidebar({ filters: { ...NO_FILTERS, open: true, price: 25_000 } });
         const toggle = wrapper.get('button[data-filters-toggle]');
 
         expect(toggle.text()).toBe('Filtros (2)');
@@ -153,9 +153,9 @@ describe('RestaurantList en la barra lateral', () => {
         const toggle = wrapper.get('button[data-filters-toggle]');
         await toggle.trigger('click');
 
-        await wrapper.get('[data-filters-panel] [data-filter="price"]').setValue('2');
+        await wrapper.get('[data-filters-panel] [data-filter="price"]').setValue('25000');
         const emitted = wrapper.emitted<[Filters]>('update:filters') ?? [];
-        expect(emitted.at(-1)).toEqual([{ ...NO_FILTERS, price: 2 }]);
+        expect(emitted.at(-1)).toEqual([{ ...NO_FILTERS, price: 25_000 }]);
 
         await wrapper.setProps({ filters: emitted.at(-1)?.[0] ?? null });
         expect(toggle.text()).toBe('Filtros (1)');

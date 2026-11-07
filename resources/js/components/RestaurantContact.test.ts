@@ -6,7 +6,7 @@ import type * as FakeInertia from '@/testing/inertia';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 
-type Contact = Pick<RestaurantProfile, 'address' | 'reference' | 'phone' | 'whatsapp' | 'payment_methods' | 'price_level'>;
+type Contact = Pick<RestaurantProfile, 'address' | 'reference' | 'phone' | 'whatsapp' | 'payment_methods' | 'price_range'>;
 
 const COMPLETE: Contact = {
     address: 'Calle de Prueba # 1-23',
@@ -14,10 +14,10 @@ const COMPLETE: Contact = {
     phone: '602 000 0000',
     whatsapp: '570009998877',
     payment_methods: ['cash', 'nequi', 'daviplata', 'card'],
-    price_level: 2,
+    price_range: { min: 16_000, max: 22_000 },
 };
 
-const NOTHING: Contact = { address: null, reference: null, phone: null, whatsapp: null, payment_methods: [], price_level: null };
+const NOTHING: Contact = { address: null, reference: null, phone: null, whatsapp: null, payment_methods: [], price_range: null };
 
 async function mountContact(restaurant: Contact = COMPLETE, locale: 'es' | 'en' = 'es') {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
@@ -42,8 +42,8 @@ beforeEach(() => {
 
 describe('RestaurantContact', () => {
     it.each([
-        ['es', 'Ubicación y contacto', ['Dirección', 'Teléfono', 'WhatsApp', 'Medios de pago', 'Nivel de precios']],
-        ['en', 'Location and contact', ['Address', 'Phone', 'WhatsApp', 'Payment methods', 'Price level']],
+        ['es', 'Ubicación y contacto', ['Dirección', 'Teléfono', 'WhatsApp', 'Medios de pago', 'Precios']],
+        ['en', 'Location and contact', ['Address', 'Phone', 'WhatsApp', 'Payment methods', 'Prices']],
     ] as const)('en %s muestra los datos del negocio, cada uno con su rótulo', async (locale, title, labels) => {
         const { wrapper, labels: shown } = await mountContact(COMPLETE, locale);
 
@@ -128,12 +128,27 @@ describe('RestaurantContact', () => {
     });
 
     it.each([
-        ['es', '2 de 4'],
-        ['en', '2 out of 4'],
-    ] as const)('en %s dice el nivel de precios con palabras', async (locale, text) => {
+        ['es', 'Precios', 'Platos de $ 16.000 a $ 22.000'],
+        ['en', 'Prices', 'Dishes from COP 16,000 to COP 22,000'],
+    ] as const)('en %s dice los precios de la carta, del plato más barato al más caro', async (locale, label, text) => {
         const { wrapper } = await mountContact(COMPLETE, locale);
 
-        expect(wrapper.get('[data-price-level] dd').text()).toBe(text);
+        expect(wrapper.get('[data-price-range] dt').text()).toBe(label);
+        expect(wrapper.get('[data-price-range] dd').text().replace(/\s/gu, ' ')).toBe(text);
+    });
+
+    it('con un solo precio dice «Platos a $X»', async () => {
+        const { wrapper } = await mountContact({ ...COMPLETE, price_range: { min: 15_000, max: 15_000 } });
+
+        expect(wrapper.get('[data-price-range] dd').text().replace(/\s/gu, ' ')).toBe('Platos a $ 15.000');
+    });
+
+    it('una página de antes de #127, sin price_range, no muestra los precios', async () => {
+        const old: Partial<Contact> = { ...COMPLETE };
+        delete old.price_range;
+        const { wrapper } = await mountContact(old as Contact);
+
+        expect(wrapper.find('[data-price-range]').exists()).toBe(false);
     });
 
     describe('lo que el restaurante no cargó', () => {

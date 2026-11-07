@@ -72,7 +72,7 @@ describe('pedir los restaurantes del mapa', () => {
             'hours',
             'lunch',
             'name',
-            'price_level',
+            'price_range',
             'slug',
             'special_hours',
         ]);
@@ -120,7 +120,8 @@ describe('pedir los restaurantes del mapa', () => {
                             delivery: 'sí',
                             hours: [{ weekday: '1', opens: '11:00', closes: '15:00' }, { weekday: 1, opens: '11:00', closes: '15:00' }],
                             special_hours: [{ date: '2026-10-07', closed: true }, { closed: true }],
-                            price_level: 7,
+                            price_level: 2,
+                            price_range: { min: 22_000, max: 16_000 },
                             lunch: { date: '2026-10-07', description: 'Sin precio' },
                         },
                     },
@@ -138,8 +139,8 @@ describe('pedir los restaurantes del mapa', () => {
                 fictitious: false,
                 hours: [{ weekday: 1, opens: '11:00', closes: '15:00' }],
                 special_hours: [{ date: '2026-10-07', closed: true, opens: null, closes: null }],
-                price_level: null,
                 lunch: null,
+                price_range: null,
             },
         ]);
     });
