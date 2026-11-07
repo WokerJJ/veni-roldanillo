@@ -109,7 +109,7 @@ const canRetry = computed(() => ['no-route', 'far', 'outside', 'offline', 'denie
                 :key="option"
                 type="button"
                 :aria-pressed="profile === option"
-                class="min-h-touch rounded-veni-sm border px-3 py-1.5 text-left transition-colors"
+                class="min-h-touch rounded-veni-sm border px-3 py-1.5 text-left"
                 :class="profile === option ? 'border-veni-ciruela bg-veni-ciruela text-veni-blanco dark:border-veni-mango dark:bg-veni-mango dark:text-veni-ciruela' : 'border-line hover:bg-surface'"
                 :data-profile="option"
                 @click="$emit('profile', option)"
@@ -132,7 +132,7 @@ const canRetry = computed(() => ['no-route', 'far', 'outside', 'offline', 'denie
         <button
             v-if="canRetry"
             type="button"
-            class="mt-2 inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
+            class="mt-2 inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold hover:bg-surface"
             @click="$emit('retry')"
         >
             {{ t('directions.retry') }}
@@ -149,7 +149,7 @@ const canRetry = computed(() => ['no-route', 'far', 'outside', 'offline', 'denie
                     :href="googleMapsUrl(destination, profile)"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full border border-line px-3 font-semibold transition-colors hover:bg-surface"
+                    class="inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full border border-line px-3 font-semibold hover:bg-surface"
                     data-google-maps
                 >
                     {{ t('directions.google_maps') }}
@@ -159,7 +159,7 @@ const canRetry = computed(() => ['no-route', 'far', 'outside', 'offline', 'denie
                     :href="wazeUrl(destination)"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full border border-line px-3 font-semibold transition-colors hover:bg-surface"
+                    class="inline-flex min-h-touch items-center justify-center gap-1.5 rounded-full border border-line px-3 font-semibold hover:bg-surface"
                     data-waze
                 >
                     {{ t('directions.waze') }}

@@ -124,7 +124,7 @@ describe('BottomSheet', () => {
         await pointer(handle(), 'pointermove', 500, 600);
 
         expect(section.attributes('style')).toContain('--sheet-height: 320px');
-        expect(section.classes()).not.toContain('sheet:motion-safe:transition-[max-height]');
+        expect(section.attributes('data-dragging')).toBe('');
 
         await pointer(handle(), 'pointerup', 500, 900);
         // El clic que sigue al arrastre con el mouse no sube otro escalón.
@@ -132,7 +132,7 @@ describe('BottomSheet', () => {
 
         expect(model.value).toBe('half');
         expect(section.attributes('style')).toContain('--sheet-height: 50%');
-        expect(section.classes()).toContain('sheet:motion-safe:transition-[max-height]');
+        expect(section.attributes('data-dragging')).toBeUndefined();
     });
 
     it('un gesto rápido hacia arriba lo lleva a la altura siguiente aunque no llegue a la mitad', async () => {
@@ -214,7 +214,7 @@ describe('BottomSheet', () => {
         await pointer(handle(), type, 500, 700);
 
         expect(section.attributes('style')).not.toContain('px');
-        expect(section.classes()).toContain('sheet:motion-safe:transition-[max-height]');
+        expect(section.attributes('data-dragging')).toBeUndefined();
     });
 
     it('dice cuándo termina de moverse: al acabar la transición de su alto o, sin transición, enseguida', async () => {
@@ -247,6 +247,32 @@ describe('BottomSheet', () => {
         Object.defineProperty(end, 'propertyName', { value: 'max-height' });
         section.element.dispatchEvent(end);
         await flushPromises();
+        expect(done).toHaveBeenCalledOnce();
+    });
+
+    it('si la transición no avisa que terminó, a los 600 ms se da por quieto igual', async () => {
+        const { section, model, wrapper } = await mountSheet();
+        const sheet = wrapper.getComponent({ name: 'BottomSheet' }).vm as unknown as { settled: () => Promise<void> };
+        const computed = window.getComputedStyle.bind(window);
+        const style = vi
+            .spyOn(window, 'getComputedStyle')
+            .mockImplementation((element) => (element === section.element ? ({ transitionDuration: '0.32s' } as CSSStyleDeclaration) : computed(element)));
+        vi.useFakeTimers();
+        onTestFinished(() => {
+            vi.useRealTimers();
+            style.mockRestore();
+        });
+        const done = vi.fn();
+
+        model.value = 'full';
+        await nextTick();
+        void sheet.settled().then(done);
+
+        // Más que el resorte (320 ms), sin transitionend: todavía espera.
+        await vi.advanceTimersByTimeAsync(599);
+        expect(done).not.toHaveBeenCalled();
+
+        await vi.advanceTimersByTimeAsync(1);
         expect(done).toHaveBeenCalledOnce();
     });
 

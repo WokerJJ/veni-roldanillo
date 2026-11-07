@@ -64,7 +64,7 @@ onBeforeUnmount(() => {
                 :lang="option.value"
                 :aria-label="option.name"
                 :aria-pressed="locale === option.value"
-                class="inline-flex min-h-touch min-w-touch items-center justify-center rounded-full px-3 text-sm font-semibold text-ink transition-colors aria-pressed:bg-ink aria-pressed:text-canvas aria-[pressed=false]:hover:bg-surface"
+                class="inline-flex min-h-touch min-w-touch items-center justify-center rounded-full px-3 text-sm font-semibold text-ink aria-pressed:bg-ink aria-pressed:text-canvas aria-[pressed=false]:hover:bg-surface"
                 @click="choose(option.value)"
             >
                 {{ option.code }}

@@ -172,7 +172,7 @@ watch(
             return;
         }
 
-        // La única transición del panel es la de su alto (200 ms): «0s» si no hay.
+        // La única transición del panel es la de su alto (el resorte de app.css, 320 ms): «0s» si no hay.
         if (!(Number.parseFloat(getComputedStyle(element).transitionDuration) > 0)) {
             return;
         }
@@ -187,7 +187,7 @@ watch(
             // Por si la transición no avisa (se cortó, el alto no cambió de verdad, o se ocultó).
             const timer = setTimeout(() => {
                 finish();
-            }, 400);
+            }, 600);
 
             finish = () => {
                 clearTimeout(timer);
@@ -219,9 +219,9 @@ defineExpose({ root, settled });
     <section
         ref="root"
         class="flex flex-col"
-        :class="{ 'sheet:motion-safe:transition-[max-height] sheet:motion-safe:duration-200': !props.docked && dragHeight === null }"
         :style="props.docked ? undefined : { '--sheet-height': height }"
         :data-sheet="props.docked ? undefined : props.snap"
+        :data-dragging="dragHeight === null ? undefined : ''"
     >
         <button
             v-if="!props.docked"

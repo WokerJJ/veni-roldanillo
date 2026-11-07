@@ -74,9 +74,13 @@ const message = computed(() => {
 
         <p role="status" class="sr-only" data-dishes-status>{{ message }}</p>
 
-        <p v-if="status === 'loading'" class="px-2 pb-2 text-sm text-ink-muted" aria-hidden="true" data-dishes-loading>
-            {{ t('dishes.loading') }}
-        </p>
+        <!-- Siluetas de dos platos mientras responde (#138): solo para la vista, como antes el texto; el lector oye el resultado. -->
+        <div v-if="status === 'loading'" class="flex flex-col gap-4 px-2 pb-2" aria-hidden="true" data-dishes-loading>
+            <span v-for="line in 2" :key="line" data-skeleton>
+                <span class="veni-skeleton" />
+                <span class="veni-skeleton" />
+            </span>
+        </div>
 
         <!-- Solo el texto se esconde del lector (ya lo oyó de la región de estado); los botones, no. -->
         <div v-else-if="status !== 'done' || count === 0" class="px-2 pb-2 text-sm text-ink-muted">
@@ -87,7 +91,7 @@ const message = computed(() => {
             <button
                 v-if="filteredOut"
                 type="button"
-                class="mt-1 inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold text-ink transition-colors hover:bg-surface"
+                class="mt-1 inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold text-ink hover:bg-surface"
                 data-dishes-clear-filters
                 @click="$emit('clearFilters')"
             >
@@ -96,7 +100,7 @@ const message = computed(() => {
             <button
                 v-if="status === 'error' || status === 'offline'"
                 type="button"
-                class="mt-1 inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold text-ink transition-colors hover:bg-surface"
+                class="mt-1 inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold text-ink hover:bg-surface"
                 data-dishes-retry
                 @click="retry"
             >
