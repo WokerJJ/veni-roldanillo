@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { useI18n } from '@/composables/useI18n';
+import { formatPesos } from '@/i18n/intl';
 import type { RestaurantCategory } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
+import { PRICE_CAPS } from '@/restaurants/filterParams';
 
 /**
- * Los filtros del buscador (abierto ahora, domicilios, precio y tipo de
- * comida), sin el buscador ni lo que los abre: RestaurantFilters los pone
+ * Los filtros del buscador (abierto ahora, domicilios, «platos hasta $X» y
+ * tipo de comida), sin el buscador ni lo que los abre: RestaurantFilters los pone
  * dentro de su <details> en el celular; en la barra lateral de computador
  * (#130), la lista los pone sueltos al principio de lo que se desplaza, como
  * el panel de su botón «Filtros». Con `stacked`, el rótulo de cada menú
@@ -22,15 +24,7 @@ const emit = defineEmits<{
     'update:filters': [filters: Filters];
 }>();
 
-const { t } = useI18n();
-
-/** Cada nivel, con la palabra que lo dice: «$$» solo no le dice nada a un lector de pantalla. */
-const PRICE_LEVELS = [
-    { level: 1, name: 'finder.price_level_1' },
-    { level: 2, name: 'finder.price_level_2' },
-    { level: 3, name: 'finder.price_level_3' },
-    { level: 4, name: 'finder.price_level_4' },
-] as const;
+const { t, locale } = useI18n();
 
 function update(changes: Partial<Filters>): void {
     emit('update:filters', { ...filters, ...changes });
@@ -57,8 +51,8 @@ function onSelect(event: Event, key: 'price' | 'category'): void {
             {{ t('finder.price') }}
             <select class="min-h-touch rounded-veni-sm border border-line bg-canvas px-2" :class="{ 'w-full': stacked }" data-filter="price" @change="onSelect($event, 'price')">
                 <option value="" :selected="filters.price === null">{{ t('finder.price_any') }}</option>
-                <option v-for="{ level, name } in PRICE_LEVELS" :key="level" :value="level" :selected="filters.price === level">
-                    {{ t('finder.price_up_to', { level: '$'.repeat(level), name: t(name) }) }}
+                <option v-for="cap in PRICE_CAPS" :key="cap" :value="cap" :selected="filters.price === cap">
+                    {{ t('finder.price_up_to', { price: formatPesos(cap, locale) }) }}
                 </option>
             </select>
         </label>
