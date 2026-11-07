@@ -15,6 +15,7 @@ import { DESKTOP_QUERY, useMediaQuery } from '@/composables/useMediaQuery';
 import type { Filters } from '@/restaurants/filterParams';
 import type * as Finder from '@/restaurants/finder';
 import { SELECTED_PARAM, selectedFromUrl } from '@/restaurants/links';
+import { hasListParams } from '@/restaurants/listParams';
 import { useRestaurants } from '@/restaurants/useRestaurants';
 // Solo los tipos: la ruta llega con import() al pedirla (ADR 0020).
 import type { RouteProfile, RouteState } from '@/routing/directions';
@@ -114,6 +115,12 @@ function loadPanelParts(): void {
         .then(([summary, list, distances, welcome, links, finderModule, sidebar]) => {
             finder.value = finderModule;
             filters.value ??= finderModule.filtersFromUrl(page.url);
+            // La dirección ya abrió la lista: la bienvenida no la vuelve a abrir,
+            // aunque la hayan cerrado antes de que bajara este chunk.
+            if (listFromAddress) {
+                listFromAddress = false;
+                finderModule.opensListFromUrl(filters.value);
+            }
             panelParts.value = {
                 summary: summary.default,
                 list: list.default,
@@ -198,6 +205,9 @@ const page = usePage();
  */
 let requestedSlug = selectedFromUrl(page.url);
 
+/** El inicio abrió la lista porque la dirección traía filtros: al bajar finder.ts se consume ese «una vez». */
+let listFromAddress = false;
+
 /** El restaurante hasta el que se pidió la ruta (siempre el elegido), o null. */
 const directionsFor = ref<string | null>(null);
 const profile = ref<RouteProfile>('foot');
@@ -239,7 +249,7 @@ const LAYOUTS = {
     },
     floating: {
         page: '',
-        sheet: 'absolute inset-x-2 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-(--sheet-height) rounded-veni-md border border-line bg-canvas/95 shadow-lg side:inset-x-auto side:top-4 side:bottom-auto side:left-4 side:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] side:w-[calc(100%_-_2rem)] side:max-w-sm',
+        sheet: 'absolute inset-x-2 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-(--sheet-height) rounded-veni-lg border border-line bg-canvas/95 shadow-lg side:inset-x-auto side:top-4 side:bottom-auto side:left-4 side:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] side:w-[calc(100%_-_2rem)] side:max-w-sm',
         map: '',
         footer: 'contents',
     },
@@ -285,16 +295,27 @@ const panelView = computed(() => {
         return directionsOpen.value ? 'route' : 'summary';
     }
 
-    if (listOpen.value) {
+    if (listOpen.value && status.value !== 'error' && !panelPartsFailed.value) {
         return 'list';
     }
 
     return status.value === 'error' || (status.value === 'ready' && !hasRestaurants.value) || panelPartsFailed.value ? 'notice' : 'welcome';
 });
 
+// La lista, a la altura completa (#138, A2): a media altura entraban dos o tres filas.
 watch(panelView, (view) => {
-    sheetSnap.value = view === 'welcome' ? 'peek' : 'half';
+    sheetSnap.value = view === 'welcome' ? 'peek' : view === 'list' ? 'full' : 'half';
 });
+
+/** La lista pedida que todavía no llegó (los restaurantes o su chunk): sus siluetas. */
+const listLoading = computed(() => listOpen.value && !desktop.value && (status.value === 'loading' || (panelParts.value === null && !panelPartsFailed.value)));
+
+/** «Sugerime algo» sin abiertos lo dice en la bienvenida: asomado no se vería. */
+function expandSheet(): void {
+    if (sheetSnap.value === 'peek') {
+        sheetSnap.value = 'half';
+    }
+}
 
 function openList(start: 'heading' | 'lunches' = 'heading'): void {
     loadPanelParts();
@@ -531,6 +552,15 @@ watch(desktop, async (wide) => {
 
 onMounted(() => {
     document.addEventListener('keydown', onKeydown);
+
+    // La dirección trae una búsqueda o filtros: la lista se abre enseguida,
+    // con sus siluetas (#138, A5); antes esperaba a la bienvenida, que se
+    // monta recién con los restaurantes y la lista.
+    if (hasListParams(page.url)) {
+        listFromAddress = true;
+        listOpen.value = true;
+    }
+
     loadPanelParts();
 });
 
@@ -584,7 +614,7 @@ onBeforeUnmount(() => {
             </RestaurantSummary>
 
             <RestaurantList
-                v-else-if="listOpen && panelParts && !desktop"
+                v-else-if="listOpen && panelParts && hasRestaurants && !desktop"
                 closable
                 autofocus
                 :restaurants="restaurants"
@@ -595,6 +625,17 @@ onBeforeUnmount(() => {
                 @select="selectFromList"
                 @close="closeList"
             />
+
+            <!-- La lista pedida mientras llega: siluetas para la vista y el estado para el lector. -->
+            <div v-else-if="listLoading" class="mt-3" data-list-loading>
+                <p role="status" class="sr-only">{{ t('restaurants.loading') }}</p>
+                <ul aria-hidden="true" class="flex flex-col gap-4">
+                    <li v-for="row in 5" :key="row" data-skeleton>
+                        <span class="veni-skeleton" />
+                        <span class="veni-skeleton" />
+                    </li>
+                </ul>
+            </div>
 
             <template v-else>
                 <!--
@@ -625,7 +666,7 @@ onBeforeUnmount(() => {
                         <p class="grow basis-48">{{ t('restaurants.error') }}</p>
                         <button
                             type="button"
-                            class="inline-flex min-h-touch items-center rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco transition-colors hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                            class="inline-flex min-h-touch items-center rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
                             @click="retryRestaurants"
                         >
                             {{ t('restaurants.retry') }}
@@ -636,7 +677,7 @@ onBeforeUnmount(() => {
                         <button
                             ref="listButton"
                             type="button"
-                            class="inline-flex min-h-touch items-center gap-2 rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
+                            class="inline-flex min-h-touch items-center gap-2 rounded-full border border-line px-4 font-semibold hover:bg-surface"
                             @click="openList('heading')"
                         >
                             <Icon name="buscar" :size="20" />
@@ -650,6 +691,7 @@ onBeforeUnmount(() => {
                             @lunches="openList('lunches')"
                             @list="openList()"
                             @update:filters="filters = $event"
+                            @expand="expandSheet"
                         />
                         <SampleDataBadge v-if="hasSampleData" />
                     </div>
@@ -658,7 +700,7 @@ onBeforeUnmount(() => {
                         <p class="grow basis-48">{{ t('home.panel_offline') }}</p>
                         <button
                             type="button"
-                            class="inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold transition-colors hover:bg-surface"
+                            class="inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold hover:bg-surface"
                             @click="loadPanelParts"
                         >
                             {{ t('restaurants.retry') }}

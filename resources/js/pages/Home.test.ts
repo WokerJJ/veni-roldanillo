@@ -22,7 +22,18 @@ vi.mock('@/map/iconImage', () => ({ iconImage: () => new Promise(() => undefined
  * enseguida; sin él, el pedido queda en `network` para que la prueba lo
  * responda, lo haga fallar o lo deje esperando.
  */
-async function mountHome({ locale = 'es', answer, url = '/' }: { locale?: 'es' | 'en'; answer?: readonly Restaurant[]; url?: string } = {}) {
+async function mountHome({
+    locale = 'es',
+    answer,
+    url = '/',
+    beforeChunks,
+}: {
+    locale?: 'es' | 'en';
+    answer?: readonly Restaurant[];
+    url?: string;
+    /** Lo que pasa recién montado, antes de que bajen el resumen y la lista. */
+    beforeChunks?: () => void;
+} = {}) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     inertia.reset();
     inertia.receiveFromServer(locale, { replace: true });
@@ -39,6 +50,7 @@ async function mountHome({ locale = 'es', answer, url = '/' }: { locale?: 'es' |
     const host = document.createElement('div');
     document.body.append(host);
     const wrapper = mount(Home, { attachTo: host });
+    beforeChunks?.();
     // El resumen y la lista bajan aparte, apenas monta (ADR 0022).
     await vi.dynamicImportSettled();
     await flushPromises();
@@ -187,14 +199,17 @@ describe('Home', () => {
         expect(panel().attributes('style')).toContain('--sheet-height: 7.5rem');
     });
 
-    it('el panel toma la altura de lo que muestra: asomado con la bienvenida, a media altura con la lista o un resumen', async () => {
+    it('el panel toma la altura de lo que muestra: asomado con la bienvenida, completo con la lista y a media altura con un resumen', async () => {
         const { panel, listButton, items } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
         expect(panel().attributes('data-sheet')).toBe('peek');
 
+        // «Ver la lista» la abre a la altura completa (#138, A2).
         await listButton()?.trigger('click');
-        expect(panel().attributes('data-sheet')).toBe('half');
+        expect(panel().attributes('data-sheet')).toBe('full');
 
         // Quien la cambia con la manija manda, hasta que el panel muestra otra cosa.
+        await panel().get('[data-sheet-handle]').trigger('keydown', { key: 'ArrowDown' });
+        expect(panel().attributes('data-sheet')).toBe('half');
         await panel().get('[data-sheet-handle]').trigger('keydown', { key: 'ArrowUp' });
         expect(panel().attributes('data-sheet')).toBe('full');
 
@@ -1042,16 +1057,76 @@ describe('Home', () => {
             expect(panel().find('input[data-search]').exists()).toBe(false);
         });
 
-        it('con la búsqueda en la dirección, la lista espera a que lleguen los restaurantes', async () => {
+        it('con la búsqueda en la dirección, la lista se abre enseguida con sus siluetas mientras llegan los restaurantes (#138, A5)', async () => {
             const { network, panel } = await mountHome({ url: '/?q=sancocho' });
 
+            // Ni el mapa sin marcadores con el panel asomado ni un texto de «cargando» a la vista.
             expect(panel().find('input[data-search]').exists()).toBe(false);
-            expect(panel().get('[role="status"]').text()).toBe('Cargando los restaurantes…');
+            expect(panel().attributes('data-sheet')).toBe('full');
+            expect(panel().findAll('[data-list-loading] [data-skeleton]')).toHaveLength(5);
+            expect(panel().get('[data-list-loading] ul').attributes('aria-hidden')).toBe('true');
+            expect(panel().get('[data-list-loading] [role="status"]').text()).toBe('Cargando los restaurantes…');
+            expect(panel().find('button[data-suggest]').exists()).toBe(false);
 
             network.requests[0]?.respond([LA_CEIBA, EL_GUADUAL]);
             await flushPromises();
 
+            expect(panel().find('[data-list-loading]').exists()).toBe(false);
             expect(panel().get<HTMLInputElement>('input[data-search]').element.value).toBe('sancocho');
+            expect(panel().attributes('data-sheet')).toBe('full');
+        });
+
+        it('si los restaurantes no llegan, las siluetas dejan lugar al aviso con «Reintentar»', async () => {
+            const { network, panel } = await mountHome({ url: '/?q=sancocho' });
+
+            network.requests[0]?.fail();
+            await flushPromises();
+
+            expect(panel().find('[data-list-loading]').exists()).toBe(false);
+            expect(panel().get('[role="alert"]').text()).toContain('Reintentar');
+            expect(panel().attributes('data-sheet')).toBe('half');
+        });
+
+        it('cerrada antes de que baje la lista, la que abrió la dirección no se vuelve a abrir al llegar los restaurantes', async () => {
+            const { network, panel } = await mountHome({
+                url: '/?q=sancocho',
+                beforeChunks: () => {
+                    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+                },
+            });
+
+            network.requests[0]?.respond([LA_CEIBA, EL_GUADUAL]);
+            await flushPromises();
+
+            expect(panel().find('input[data-search]').exists()).toBe(false);
+            expect(panel().find('button[data-suggest]').exists()).toBe(true);
+            expect(panel().attributes('data-sheet')).toBe('peek');
+        });
+
+        it('con la búsqueda en la dirección y ningún restaurante, el aviso queda a media altura', async () => {
+            const { network, panel } = await mountHome({ url: '/?q=sancocho' });
+
+            network.requests[0]?.respond([]);
+            await flushPromises();
+
+            expect(panel().find('[data-list-loading]').exists()).toBe(false);
+            expect(panel().find('input[data-search]').exists()).toBe(false);
+            expect(panel().text()).toContain('Todavía no hay restaurantes');
+            expect(panel().attributes('data-sheet')).toBe('half');
+        });
+
+        it('sin búsqueda en la dirección no hay siluetas: la bienvenida dice que carga', async () => {
+            const { panel } = await mountHome({ url: '/' });
+
+            expect(panel().find('[data-list-loading]').exists()).toBe(false);
+            expect(panel().attributes('data-sheet')).toBe('peek');
+        });
+
+        it.each(['/?price=2', '/?category=Mala_Categoria', '/?open=10', '/?q=+'])('%s no es un filtro: ni siluetas ni la lista', async (url) => {
+            const { panel } = await mountHome({ url });
+
+            expect(panel().find('[data-list-loading]').exists()).toBe(false);
+            expect(panel().attributes('data-sheet')).toBe('peek');
         });
 
         it('abrir con una búsqueda en la dirección no la vuelve a escribir: «%20» y «+» son el mismo espacio', async () => {
@@ -1130,7 +1205,13 @@ describe('Home', () => {
             await flushPromises();
 
             expect(layer().props('selected')).toBeNull();
-            expect(panel().get('[data-welcome-status]').text()).toBe('Ahora no hay ningún restaurante abierto.');
+            // En pantalla (#138, A1): el panel sube de asomado a media altura, con el que abre primero.
+            expect(panel().get('[data-welcome-status]').text()).toBe('Ahora no hay ningún restaurante abierto. El que abre primero es Restaurante de Prueba El Guadual (ficticio), abre a las 6:00 p. m.');
+            expect(panel().attributes('data-sheet')).toBe('half');
+
+            await panel().get('button[data-suggest-next]').trigger('click');
+            await flushPromises();
+            expect(layer().props('selected')).toBe('prueba-el-guadual');
         });
 
         it('«Almuerzos de hoy» abre la lista en esa sección, con el foco ahí', async () => {
