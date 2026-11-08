@@ -203,3 +203,30 @@
     min-height: 24px;
     line-height: 24px;
 }
+
+/*
+ * El celular (#139, ADR 0041): sin cabecera, los botones de arriba bajan el
+ * margen del sistema (la isla del iPhone), y la atribución de abajo sube
+ * sobre la barra de pestañas (--veni-tabbar-space, app.css), siempre a la
+ * vista (ADR 0003).
+ */
+.maplibregl-ctrl-top-right,
+.maplibregl-ctrl-top-left {
+    top: env(safe-area-inset-top, 0px);
+}
+
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-bottom-left {
+    bottom: var(--veni-tabbar-space, 0px);
+}
+
+/* Acostado, la isla y las esquinas del iPhone quedan a los lados (viewport-fit=cover): la atribución sigue a la vista. */
+.maplibregl-ctrl-top-left,
+.maplibregl-ctrl-bottom-left {
+    left: env(safe-area-inset-left, 0px);
+}
+
+.maplibregl-ctrl-top-right,
+.maplibregl-ctrl-bottom-right {
+    right: env(safe-area-inset-right, 0px);
+}
