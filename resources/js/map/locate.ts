@@ -81,7 +81,7 @@ export interface LocateControl {
 const PERMISSION_DENIED = 1;
 
 /** Un ícono para un botón: decorativo, del color del texto (`currentColor`) y del tamaño que diga map.css. */
-function iconElement(svg: string): SVGSVGElement {
+export function iconElement(svg: string): SVGSVGElement {
     const icon = new DOMParser().parseFromString(svg, 'image/svg+xml').querySelector('svg');
 
     if (icon === null) {

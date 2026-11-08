@@ -32,6 +32,7 @@
     "map.canvas_label": "Mapa interactivo. Movete con las flechas y acercá o alejá con las teclas más y menos.",
     "map.zoom_in": "Acercar",
     "map.zoom_out": "Alejar",
+    "map.attribution": "Créditos del mapa",
     "map.locate": "¿Dónde estoy?",
     "map.locate_found": "Listo: tu ubicación está en el mapa.",
     "map.locate_denied": "No tenemos permiso para ver tu ubicación. Tocá otra vez «¿Dónde estoy?» y elegí «Permitir». Si no te pregunta, activala en la configuración del sitio (el candado junto a la dirección) o en los ajustes del teléfono.",

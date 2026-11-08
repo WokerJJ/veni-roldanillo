@@ -9,7 +9,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import '../../css/map.css';
 
 import type { AddProtocolAction, ErrorEvent, LngLatBoundsLike, LngLatLike, MapSourceDataEvent, StyleSpecification } from 'maplibre-gl';
-import { addProtocol, GeolocateControl, Map as MapLibreMap, NavigationControl, removeProtocol, setWorkerUrl } from 'maplibre-gl';
+import { addProtocol, AttributionControl, GeolocateControl, Map as MapLibreMap, NavigationControl, removeProtocol, setWorkerUrl } from 'maplibre-gl';
 // MapLibre busca su worker junto a su propio archivo; empaquetado, ese archivo
 // ya no existe con ese nombre: Vite compila el worker y da su URL. Al compilar
 // para producción, vite.config.ts (shareMapWorkerCode) resuelve este import
@@ -21,6 +21,8 @@ import { MapUnavailableError } from './errors';
 import { fetchMapStyle } from './fetchStyle';
 import { createLayerRegistry } from './layerRegistry';
 import type { MapLayerGroup, MapLayerGroupHandle } from './layers';
+import type { AttributionHandle, AttributionTexts } from './attribution';
+import { addAttribution } from './attribution';
 import type { LocateControl, LocateEvent, LocateTexts } from './locate';
 import { addLocateControl } from './locate';
 import type { MapPadding } from './padding';
@@ -36,6 +38,8 @@ export interface MapLabels {
     zoomOut: string;
     /** «¿Dónde estoy?»: su botón y sus avisos. */
     locate: LocateTexts;
+    /** El crédito de OpenStreetMap compacto del celular: su botón «i» y su texto. */
+    attribution: AttributionTexts;
 }
 
 export interface CreateMapOptions {
@@ -357,9 +361,9 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
             container,
             style,
             ...camera,
-            // La atribución de OpenStreetMap viene en el estilo y queda
-            // siempre desplegada, también en pantallas angostas.
-            attributionControl: { compact: false },
+            // La atribución de OpenStreetMap la pone addAttribution: la de
+            // MapLibre, desplegada, en computador; compacta en el celular.
+            attributionControl: false,
             // Mapa siempre con el norte arriba y sin inclinación: un pueblo
             // se recorre mejor así y no hace falta el botón de brújula.
             dragRotate: false,
@@ -383,6 +387,7 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
     const layers = createLayerRegistry(map);
     /** «¿Dónde estoy?», cuando ya está en el mapa. */
     let locate: LocateControl | null = null;
+    let attribution: AttributionHandle | null = null;
     /** Lo que la página pone encima del mapa (su panel). */
     let overlay: HTMLElement | null = null;
 
@@ -402,6 +407,7 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
         stopRetrying();
         layers.dispose();
         locate?.dispose();
+        attribution?.dispose();
         // Quita también los controles: el de la ubicación deja de pedirla.
         map.remove();
         releaseProtocol();
@@ -417,6 +423,7 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
         map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
         // Debajo de los de zoom: arriba a la derecha no lo tapa el panel de la página.
         locate = addLocateControl(map, () => new GeolocateControl(LOCATE_OPTIONS), labels.locate, currentPadding);
+        attribution = addAttribution(map, () => new AttributionControl({ compact: false }), labels.attribution);
         applyLabels(map, labels);
 
         let startedPainting: () => void = () => undefined;
@@ -503,6 +510,7 @@ export async function createMap(options: CreateMapOptions): Promise<MapHandle> {
             if (!destroyed) {
                 applyLabels(map, next);
                 locate.relabel(next.locate);
+                attribution.relabel(next.attribution);
             }
         },
         addLayerGroup: (group) => layers.add(group),

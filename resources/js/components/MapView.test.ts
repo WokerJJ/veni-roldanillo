@@ -9,6 +9,7 @@ import type { MapLayers } from '@/map/useMapLayers';
 import { removeGeolocation, stubGeolocation } from '@/testing/geolocation';
 import type * as FakeInertia from '@/testing/inertia';
 import type * as FakeMapLibre from '@/testing/maplibre';
+import { desktopWidth, phoneWidth, stubMedia } from '@/testing/media';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 vi.mock('maplibre-gl', () => import('@/testing/maplibre'));
@@ -379,25 +380,108 @@ describe('MapView', () => {
             const { loadedMap } = await mountMap();
             const created = await loadedMap();
 
-            expect(created.controls).toHaveLength(2);
+            // El zoom, «¿Dónde estoy?» y el crédito de OpenStreetMap.
+            expect(created.controls).toHaveLength(3);
             expect(created.controls[0]?.options).toEqual({ showCompass: false });
             expect(created.options).toMatchObject({ dragRotate: false, pitchWithRotate: false, touchPitch: false });
             expect(created.touchZoomRotate.disableRotation).toHaveBeenCalledOnce();
             expect(created.keyboard.disableRotation).toHaveBeenCalledOnce();
         });
 
-        it('deja la atribución de OpenStreetMap siempre desplegada', async () => {
+        it('la atribución de OpenStreetMap la pone la app, no MapLibre (attribution.ts)', async () => {
             const { map } = await mountMap();
 
-            expect((await map()).options.attributionControl).toEqual({ compact: false });
+            expect((await map()).options.attributionControl).toBe(false);
         });
 
         it('no agrega botones de tema ni de idioma dentro del mapa', async () => {
             const { loadedMap, region } = await mountMap();
             await loadedMap();
 
-            // Los únicos botones de la región son los de MapLibre: zoom y ubicación.
-            expect(region().findAll('button').map((button) => button.attributes('title'))).toEqual(['Acercar', 'Alejar', '¿Dónde estoy?']);
+            // Los únicos botones de la región son los del mapa: zoom, ubicación y el crédito.
+            expect(region().findAll('button').map((button) => button.attributes('title'))).toEqual(['Acercar', 'Alejar', '¿Dónde estoy?', 'Créditos del mapa']);
+        });
+    });
+
+    describe('crédito de OpenStreetMap (#139, ADR 0041)', () => {
+        const credit = (map: FakeMapLibre.Map) => ({
+            button: map.container.querySelector<HTMLButtonElement>('.maplibregl-ctrl-top-left .veni-attrib-button'),
+            panel: map.container.querySelector<HTMLElement>('.maplibregl-ctrl-top-left .veni-attrib-text'),
+            full: map.container.querySelector('.maplibregl-ctrl-attrib'),
+        });
+
+        it('en el celular es compacto, arriba a la izquierda: al cargar se ve el crédito, que lleva a los créditos de la app', async () => {
+            stubMedia(phoneWidth);
+            const { loadedMap } = await mountMap();
+            const { button, panel, full } = credit(await loadedMap());
+
+            expect(full).toBeNull();
+            expect(button?.getAttribute('aria-label')).toBe('Créditos del mapa');
+            expect(button?.type).toBe('button');
+            expect(button?.getAttribute('aria-expanded')).toBe('true');
+            expect(button?.getAttribute('aria-controls')).toBe(panel?.id);
+            expect(panel?.hidden).toBe(false);
+            expect(panel?.querySelector('a')?.getAttribute('href')).toBe('/credits');
+            expect(panel?.querySelector('a')?.textContent).toBe('© colaboradores de OpenStreetMap');
+        });
+
+        it('se pliega con el primer toque o movimiento de quien usa el mapa, no con los de la app, y el botón «i» lo vuelve a abrir', async () => {
+            stubMedia(phoneWidth);
+            const { loadedMap } = await mountMap();
+            const created = await loadedMap();
+            const { button, panel } = credit(created);
+
+            // La cámara que va hasta el elegido no trae evento de quien usa el mapa.
+            created.fire('movestart', {});
+            expect(button?.getAttribute('aria-expanded')).toBe('true');
+
+            created.fire('touchstart', { originalEvent: new Event('touchstart') });
+            expect(button?.getAttribute('aria-expanded')).toBe('false');
+            expect(panel?.hidden).toBe(true);
+
+            button?.click();
+            expect(button?.getAttribute('aria-expanded')).toBe('true');
+            expect(panel?.hidden).toBe(false);
+
+            // Abierto otra vez, mover el mapa (la rueda, las flechas) lo vuelve a plegar.
+            created.fire('movestart', { originalEvent: new Event('wheel') });
+            expect(panel?.hidden).toBe(true);
+
+            button?.click();
+            button?.click();
+            expect(button?.getAttribute('aria-expanded')).toBe('false');
+        });
+
+        it('en computador queda la de MapLibre, desplegada abajo a la derecha', async () => {
+            stubMedia(desktopWidth);
+            const { loadedMap } = await mountMap();
+            const created = await loadedMap();
+            const { button, full } = credit(created);
+
+            expect(button).toBeNull();
+            expect(created.container.querySelector('.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib')).toBe(full);
+            expect(created.controls.find((control) => control.options.compact !== undefined)?.options).toEqual({ compact: false });
+        });
+
+        it('al cruzar 1024 px cambia de una a otra sin repetirse', async () => {
+            const media = stubMedia(phoneWidth);
+            const { loadedMap } = await mountMap();
+            const created = await loadedMap();
+
+            media.change(desktopWidth);
+            expect(credit(created).button).toBeNull();
+            expect(created.container.querySelectorAll('.maplibregl-ctrl-attrib')).toHaveLength(1);
+
+            media.change(phoneWidth);
+            expect(created.container.querySelectorAll('.maplibregl-ctrl-attrib, .veni-attrib')).toHaveLength(1);
+            expect(credit(created).button?.getAttribute('aria-expanded')).toBe('true');
+            expect(created.controls).toHaveLength(3);
+        });
+
+        it('la consulta del ancho es la del computador (ADR 0037)', async () => {
+            const [{ WIDE_QUERY }, { DESKTOP_QUERY }] = await Promise.all([import('@/map/attribution'), import('@/composables/useMediaQuery')]);
+
+            expect(WIDE_QUERY).toBe(DESKTOP_QUERY);
         });
     });
 
@@ -1282,12 +1366,14 @@ describe('MapView', () => {
             expect(created.getCenter()).toEqual(ELSEWHERE);
             expect(created.getZoom()).toBe(16);
             expect(region().attributes('aria-label')).toBe('Map of Roldanillo');
-            expect([...created.container.querySelectorAll('button')].map((button) => button.title)).toEqual(['Zoom in', 'Zoom out', 'Where am I?']);
+            expect([...created.container.querySelectorAll('button')].map((button) => button.title)).toEqual(['Zoom in', 'Zoom out', 'Where am I?', 'Map credits']);
             expect([...created.container.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'))).toEqual([
                 'Zoom in',
                 'Zoom out',
                 'Where am I?',
+                'Map credits',
             ]);
+            expect(created.container.querySelector('.veni-attrib-text a')?.textContent).toBe('© OpenStreetMap contributors');
             expect(created.getCanvas().getAttribute('aria-label')).toMatch(/^Interactive map\./);
         });
 

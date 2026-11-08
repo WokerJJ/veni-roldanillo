@@ -89,6 +89,7 @@ async function setUp() {
                         close: 'Cerrar',
                         problems: { denied: 'Sin permiso', signal: 'Sin señal', outside: 'Fuera', unsupported: 'Sin geolocalización' },
                     },
+                    attribution: { button: 'Créditos del mapa', credit: '© colaboradores de OpenStreetMap' },
                 },
                 signal: controller.signal,
             });
@@ -111,7 +112,8 @@ beforeEach(() => {
     vi.resetModules();
     vi.stubGlobal(
         'matchMedia',
-        vi.fn(() => ({ matches: false })),
+        // El ancho lo escucha la atribución (attribution.ts).
+        vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
     );
 });
 

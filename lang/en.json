@@ -32,6 +32,7 @@
     "map.canvas_label": "Interactive map. Move with the arrow keys and zoom with the plus and minus keys.",
     "map.zoom_in": "Zoom in",
     "map.zoom_out": "Zoom out",
+    "map.attribution": "Map credits",
     "map.locate": "Where am I?",
     "map.locate_found": "Done: your location is on the map.",
     "map.locate_denied": "We don't have permission to see your location. Tap “Where am I?” again and choose “Allow”. If you aren't asked, turn it on in the site settings (the lock next to the address) or in your phone's settings.",

@@ -190,7 +190,7 @@
     border-width: 0;
 }
 
-/* Atribución: siempre legible, en claro y en oscuro (contraste de --ink sobre --canvas). */
+/* Atribución de computador (abajo a la derecha): siempre legible, en claro y en oscuro (contraste de --ink sobre --canvas). */
 .maplibregl-ctrl.maplibregl-ctrl-attrib {
     background-color: color-mix(in oklab, var(--canvas) 85%, transparent);
     color: var(--ink);
@@ -198,29 +198,89 @@
 
 .maplibregl-ctrl-attrib a {
     color: inherit;
-    /* Área táctil de al menos 24 px de alto (WCAG 2.5.8): cabe en la franja que nada tapa (--veni-attribution-clearance). */
+    /* Área táctil de al menos 24 px de alto (WCAG 2.5.8): cabe en la franja que nada tapa en computador (--veni-attribution-clearance). */
     display: inline-block;
     min-height: 24px;
     line-height: 24px;
 }
 
 /*
- * El celular (#139, ADR 0041): sin cabecera, los botones de arriba bajan el
- * margen del sistema (la isla del iPhone), y la atribución de abajo sube
- * sobre la barra de pestañas (--veni-tabbar-space, app.css), siempre a la
- * vista (ADR 0003).
+ * El crédito compacto del celular (#139, ADR 0041, map/attribution.ts):
+ * arriba a la izquierda, frente a los de zoom, un botón redondo «i» de 44 px
+ * con el mismo fondo, borde y foco que ellos, y a su lado el crédito mientras
+ * está abierto. El ícono (--ink sobre --canvas) pasa 3:1 y el texto, 4,5:1,
+ * en claro y en oscuro: los dos son sólidos sobre el mapa.
+ */
+.veni-attrib {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100vw - 92px);
+}
+
+.veni-attrib-button {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--veni-touch-min);
+    height: var(--veni-touch-min);
+    border-radius: 9999px;
+    background-color: var(--canvas);
+    color: var(--ink);
+    box-shadow: 0 0 0 1px var(--line);
+    cursor: pointer;
+}
+
+.veni-attrib-button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+.veni-attrib-text {
+    display: flex;
+    align-items: center;
+    min-height: var(--veni-touch-min);
+    padding: 0 14px;
+    border-radius: 9999px;
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    box-shadow: 0 0 0 1px var(--line);
+}
+
+.veni-attrib-text[hidden] {
+    display: none;
+}
+
+.veni-attrib-text a {
+    /* El enlace ocupa el alto de la píldora: 44 px para el dedo. */
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--veni-touch-min);
+    color: inherit;
+    text-decoration: underline;
+}
+
+.veni-attrib-text a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/*
+ * El celular (#139, ADR 0041): sin cabecera, los botones de arriba (el
+ * crédito, el zoom y «¿Dónde estoy?») bajan el margen del sistema (la isla
+ * del iPhone). Abajo no queda ninguno: la atribución de computador va al
+ * borde, donde no hay barra de pestañas.
  */
 .maplibregl-ctrl-top-right,
 .maplibregl-ctrl-top-left {
     top: env(safe-area-inset-top, 0px);
 }
 
-.maplibregl-ctrl-bottom-right,
-.maplibregl-ctrl-bottom-left {
-    bottom: var(--veni-tabbar-space, 0px);
-}
-
-/* Acostado, la isla y las esquinas del iPhone quedan a los lados (viewport-fit=cover): la atribución sigue a la vista. */
+/* Acostado, la isla y las esquinas del iPhone quedan a los lados (viewport-fit=cover): el crédito sigue a la vista. */
 .maplibregl-ctrl-top-left,
 .maplibregl-ctrl-bottom-left {
     left: env(safe-area-inset-left, 0px);

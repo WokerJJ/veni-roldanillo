@@ -15,7 +15,8 @@ import { MAP_CONTEXT } from '@/map/useMapLayers';
  * Mapa de Roldanillo de veni-mapa, del tamaño de su contenedor. El tema y el
  * idioma los pone la app: elige el estilo `veni-{tema}-{idioma}.json` y lo
  * cambia cuando cambian, sin mover la cámara. No trae botones de tema ni de
- * idioma, solo los de zoom, «¿Dónde estoy?» y la atribución de OpenStreetMap.
+ * idioma, solo los de zoom, «¿Dónde estoy?» y la atribución de OpenStreetMap
+ * (compacta en el celular: attribution.ts).
  *
  * Lo que la app pinta encima va adentro, como componentes (ADR 0016):
  *
@@ -79,6 +80,7 @@ function labels(): MapLabels {
                 unsupported: t('map.locate_unsupported'),
             },
         },
+        attribution: { button: t('map.attribution'), credit: t('credits.osm_attribution') },
     };
 }
 
