@@ -487,6 +487,13 @@ describe('presupuesto de descarga', () => {
         // que ya se ve) y la lista publicada para «Pedido». Lo demás bajó
         // aparte: los márgenes seguros y el `scroll-padding` de la barra van
         // en el CSS de TabBar.vue, y la lista vigila la orden por su cuenta.
+        // Con el crédito en un botón «i» y la lista a pantalla completa (M7 y
+        // M8 del ADR 0041), 82,191 (+0,042): los dos textos del crédito que
+        // el mapa le pide al idioma (y los nombres con hash de los chunks).
+        // El control va en el chunk del mapa y la
+        // pantalla completa en el CSS de la barra; la visita de Inertia desde
+        // el chunk del mapa partía la entrada (89,7) y pasarla desde el
+        // inicio sumaba 0,024: el enlace del crédito recarga.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 
