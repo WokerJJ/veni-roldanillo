@@ -10,7 +10,7 @@ vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 /** Miércoles 7 de octubre de 2026, 12:30 en Colombia: La Ceiba (11 a 15) está abierta. */
 const WEDNESDAY_NOON = new Date('2026-10-07T12:30:00-05:00');
 
-async function mountSummary(props: { restaurant: Restaurant }, locale: 'es' | 'en' = 'es') {
+async function mountSummary(props: { restaurant: Restaurant; inRow?: boolean }, locale: 'es' | 'en' = 'es') {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     inertia.reset();
     inertia.receiveFromServer(locale, { replace: true });
@@ -155,15 +155,25 @@ describe('RestaurantSummary', () => {
 
     describe('enlace a la ficha', () => {
         it.each([
-            ['es', 'Ver la ficha'],
-            ['en', 'View details'],
-        ] as const)('en %s termina en un enlace a la ficha de ese restaurante, de 44 px', async (locale, text) => {
+            ['es', 'Ver la ficha de Restaurante de Prueba El Guadual (ficticio)', 'Ver la ficha'],
+            ['en', 'View details of Restaurante de Prueba El Guadual (ficticio)', 'View details'],
+        ] as const)('en %s, en el panel, es un botón redondo de 44 px con el nombre del restaurante (#139)', async (locale, name, title) => {
             const { wrapper } = await mountSummary({ restaurant: EL_GUADUAL }, locale);
             const link = wrapper.get('a');
 
             expect(link.attributes('href')).toBe('/restaurants/prueba-el-guadual');
-            expect(link.text()).toBe(text);
+            expect(link.attributes('aria-label')).toBe(name);
+            expect(link.attributes('title')).toBe(title);
+            expect(link.classes()).toContain('size-touch');
+        });
+
+        it('debajo de su fila (la barra de computador) sigue con el texto, sin cambiar (ADR 0037)', async () => {
+            const { wrapper } = await mountSummary({ restaurant: EL_GUADUAL, inRow: true });
+            const link = wrapper.get('a');
+
+            expect(link.text()).toBe('Ver la ficha');
             expect(link.classes()).toContain('min-h-touch');
+            expect(wrapper.get('[data-favorite]').text()).toBe('Favorito');
         });
 
         it('es el único enlace del resumen', async () => {
@@ -215,6 +225,57 @@ describe('RestaurantSummary', () => {
             await buttons[0]?.trigger('click');
             expect(wrapper.emitted('closeDirections')).toHaveLength(1);
             expect(wrapper.emitted('close')).toBeUndefined();
+        });
+    });
+
+    describe('acciones en una fila y arrastrar a la ficha (#139)', () => {
+        it('«Cómo llegar» ocupa lo que sobra; la ficha y «Favorito» son íconos de 44 px con nombre accesible', async () => {
+            const { wrapper } = await mountSummary({ restaurant: LA_CEIBA });
+            const actions = wrapper.get('[data-summary-actions]');
+
+            expect(actions.classes()).not.toContain('flex-wrap');
+            expect(actions.get('button[data-directions]').classes()).toEqual(expect.arrayContaining(['flex-1', 'min-h-touch']));
+            const favorite = actions.get('button[data-favorite]');
+            expect(favorite.attributes('aria-label')).toBe('Favorito');
+            expect(favorite.attributes('aria-pressed')).toBe('false');
+            expect(favorite.classes()).toContain('size-touch');
+            expect(favorite.text()).toBe('');
+        });
+
+        it('el nombre no se corta: se ajusta en las líneas que haga falta', async () => {
+            const { wrapper } = await mountSummary({ restaurant: LA_CEIBA });
+
+            expect(wrapper.get('h2').classes()).not.toContain('truncate');
+        });
+
+        it.each([
+            ['subir el dedo 60 px abre la ficha', 'touch', 300, 240, true],
+            ['menos de 48 px no', 'touch', 300, 260, false],
+            ['hacia abajo no', 'touch', 300, 380, false],
+            ['con el mouse no: para eso está el botón', 'mouse', 300, 200, false],
+        ] as const)('%s', async (_name, pointerType, from, to, opens) => {
+            const { wrapper, inertia } = await mountSummary({ restaurant: LA_CEIBA });
+            const visit = vi.fn();
+            Object.assign(inertia.router, { visit });
+            const grab = wrapper.get('[data-summary-grab]');
+
+            expect(grab.classes()).toContain('touch-none');
+            await grab.trigger('pointerdown', { pointerId: 1, isPrimary: true, pointerType, clientX: 100, clientY: from });
+            await grab.trigger('pointerup', { pointerId: 1, isPrimary: true, pointerType, clientX: 104, clientY: to });
+
+            expect(visit.mock.calls).toEqual(opens ? [['/restaurants/prueba-la-ceiba']] : []);
+        });
+
+        it('debajo de su fila no se arrastra (la barra de computador se desplaza)', async () => {
+            const { wrapper, inertia } = await mountSummary({ restaurant: LA_CEIBA, inRow: true });
+            const visit = vi.fn();
+            Object.assign(inertia.router, { visit });
+            const grab = wrapper.get('[data-summary-grab]');
+
+            expect(grab.classes()).not.toContain('touch-none');
+            await grab.trigger('pointerdown', { pointerId: 1, isPrimary: true, pointerType: 'touch', clientX: 100, clientY: 300 });
+            await grab.trigger('pointerup', { pointerId: 1, isPrimary: true, pointerType: 'touch', clientX: 100, clientY: 200 });
+            expect(visit).not.toHaveBeenCalled();
         });
     });
 });

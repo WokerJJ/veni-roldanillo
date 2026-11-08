@@ -4,7 +4,7 @@ import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from 'vue
 import type OrderCartComponent from '@/components/OrderCart.vue';
 import { useI18n } from '@/composables/useI18n';
 import { formatPesos } from '@/i18n/intl';
-import { useOrder } from '@/order/useOrder';
+import { cartRequest, useOrder } from '@/order/useOrder';
 import type { RestaurantProfile } from '@/restaurants/profile';
 
 /**
@@ -14,6 +14,11 @@ import type { RestaurantProfile } from '@/restaurants/profile';
  * ficha: el carrito (OrderCart.vue) se importa a mano al tocarla, como el
  * selector de platos, sin defineAsyncComponent (sumaría código al chunk de
  * Vue, el del arranque).
+ *
+ * En el celular va encima de la barra de pestañas (#139, ADR 0041) y baja al
+ * borde cuando la barra se esconde. La pestaña «Pedido» la abre con
+ * `requestCart` (order/useOrder.ts), en esta ficha o desde otra página: la
+ * barra lo vigila desde que se monta y consume solo el pedido de su slug.
  */
 const { restaurant } = defineProps<{
     restaurant: Pick<RestaurantProfile, 'slug' | 'name' | 'whatsapp' | 'delivery' | 'payment_methods'>;
@@ -47,8 +52,8 @@ const summary = computed(() =>
         : `${t(count.value === 1 ? 'order.bar.count_one' : 'order.bar.count_many', { count: count.value })} · ${formatPesos(total.value, locale.value)}`,
 );
 
-async function show(event: MouseEvent): Promise<void> {
-    opener = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+async function show(event?: MouseEvent): Promise<void> {
+    opener = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null;
     announcement.value = '';
 
     try {
@@ -63,6 +68,22 @@ async function show(event: MouseEvent): Promise<void> {
 
     open.value = true;
 }
+
+watch(
+    cartRequest,
+    (slug) => {
+        if (slug !== restaurant.slug) {
+            return;
+        }
+
+        cartRequest.value = null;
+
+        if (count.value > 0) {
+            void show();
+        }
+    },
+    { immediate: true },
+);
 
 /** El foco vuelve a la barra; si el pedido quedó vacío y la barra se fue, al título de la ficha. */
 async function close(): Promise<void> {
@@ -127,6 +148,37 @@ async function close(): Promise<void> {
 
 /* El alto de la barra y un poco de aire: lo enfocado queda por encima de ella. */
 :global(html.has-order-bar) {
-    scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom) + var(--veni-tabbar-space, 0px));
+}
+
+/*
+ * En el celular, encima de la barra de pestañas (--veni-tabbar-space, app.css),
+ * que ya deja el margen del sistema; cuando la barra se esconde al bajar,
+ * vuelve al borde. El espaciador suma el alto de la barra: lo dibuja la barra
+ * misma (TabBar.vue).
+ */
+@media (width < 64rem) {
+    .order-bar {
+        bottom: var(--veni-tabbar-space, 0px);
+        padding-bottom: 0.5rem;
+    }
+
+    html[data-tabbar-hidden] .order-bar {
+        bottom: 0;
+        padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    }
+
+    .order-bar-spacer {
+        height: 4.5rem;
+    }
+}
+
+@media (width < 64rem) and (prefers-reduced-motion: no-preference) {
+    .order-bar {
+        /* Sin el atajo: Tailwind leería la palabra y sumaría su utilidad al arranque. */
+        transition-property: bottom;
+        transition-duration: 320ms;
+        transition-timing-function: var(--veni-ease-spring);
+    }
 }
 </style>

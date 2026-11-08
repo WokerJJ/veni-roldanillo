@@ -32,6 +32,24 @@ interface FakeControl {
     onRemove(): void;
 }
 
+/** La atribución de MapLibre: un contenedor con su clase (el texto lo pone el estilo). */
+class FakeAttributionControl implements FakeControl {
+    private readonly container = document.createElement('details');
+
+    constructor(readonly options: Record<string, unknown> = {}) {}
+
+    /** Como MapLibre: el control saca su contenedor. */
+    onRemove(): void {
+        this.container.remove();
+    }
+
+    onAdd(): HTMLElement {
+        this.container.className = 'maplibregl-ctrl maplibregl-ctrl-attrib';
+
+        return this.container;
+    }
+}
+
 class FakeNavigationControl implements FakeControl {
     constructor(readonly options: Record<string, unknown> = {}) {}
 
@@ -917,7 +935,7 @@ export const addProtocol = vi.fn();
 export const removeProtocol = vi.fn();
 export const setWorkerUrl = vi.fn();
 
-export { FakeMap as Map, FakeNavigationControl as NavigationControl, FakeGeolocateControl as GeolocateControl, FakeSource as GeoJSONSource };
+export { FakeMap as Map, FakeAttributionControl as AttributionControl, FakeNavigationControl as NavigationControl, FakeGeolocateControl as GeolocateControl, FakeSource as GeoJSONSource };
 
 /** El siguiente `new Map()` lanza este error, como un navegador sin WebGL. */
 export function failNextMap(error: Error): void {

@@ -151,7 +151,7 @@ describe('BottomSheet', () => {
         await drag(100, 900, { slow: true });
 
         expect(model.value).toBe('peek');
-        expect(section.attributes('style')).toContain('--sheet-height: 7.5rem');
+        expect(section.attributes('style')).toContain('--sheet-height: 8.5rem');
     });
 
     it('un toque sin moverse no es un arrastre: sube un escalón, como el clic', async () => {

@@ -1,5 +1,6 @@
-import { enableAutoUnmount, mount } from '@vue/test-utils';
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defineComponent, h, inject } from 'vue';
 
 import type * as FakeInertia from '@/testing/inertia';
 
@@ -68,7 +69,8 @@ describe('AppLayout', () => {
     it('la cabecera es baja en el celular y, con el mapa, va a lo ancho con el margen del panel', async () => {
         const immersive = (await mountLayout({ immersive: true })).get('header > div');
         // 46 px del selector de idioma y 2 arriba y abajo; desde 768 px, 8.
-        expect(immersive.classes()).toEqual(expect.arrayContaining(['px-4', 'py-0.5', 'md:py-2']));
+        // El margen de 16 px (veni-safe-x) crece con la isla del iPhone acostado (#139, EVA-071).
+        expect(immersive.classes()).toEqual(expect.arrayContaining(['veni-safe-x', 'py-0.5', 'md:py-2']));
         expect(immersive.classes()).not.toContain('max-w-6xl');
 
         // Las demás páginas siguen centradas, al ancho de la ficha en dos columnas (ADR 0038): el logo queda sobre el nombre.
@@ -76,13 +78,14 @@ describe('AppLayout', () => {
         expect((await mountLayout()).get('footer > div').classes()).toEqual(expect.arrayContaining(['mx-auto', 'max-w-6xl']));
     });
 
-    it.each([false, true])('con immersive=%s la cabecera trae «Mapa · Guía de platos» desde 768 px, que baja aparte (ADR 0037)', async (immersive) => {
+    it.each([false, true])('con immersive=%s la cabecera trae «Mapa · Guía de platos» desde 1024 px, que baja aparte (ADR 0037; #139)', async (immersive) => {
         const wrapper = await mountLayout({ immersive });
         await vi.dynamicImportSettled();
         const nav = wrapper.get('header nav[data-main-nav]');
 
         expect(nav.attributes('aria-label')).toBe('Secciones');
-        expect(nav.classes()).toEqual(expect.arrayContaining(['hidden', 'md:block']));
+        // Cuándo se ve lo dice su CSS (MainNav.vue): por debajo de 1024 px va la barra de pestañas.
+        expect(nav.classes()).toEqual(['main-nav']);
         expect(nav.findAll('a').map((link) => link.attributes('href'))).toEqual(['/', '/dishes']);
         // La dirección de mentira es el inicio.
         expect(nav.get('a[aria-current="page"]').text()).toBe('Mapa');
@@ -94,6 +97,38 @@ describe('AppLayout', () => {
         expect(wrapper.get('a[href="#contenido"]').text()).toBe('Saltar al contenido');
         expect(wrapper.get('main').attributes('id')).toBe('contenido');
         expect(wrapper.get('header').findAll('button').length).toBeGreaterThan(0);
+    });
+
+    describe('el celular (#139, ADR 0041)', () => {
+        it('con el mapa, la cabecera se esconde por debajo de 1024 px: el mapa llega arriba', async () => {
+            expect((await mountLayout({ immersive: true })).get('header').classes()).toContain('max-lg:hidden');
+            expect((await mountLayout()).get('header').classes()).not.toContain('max-lg:hidden');
+        });
+
+        it.each([false, true])('con immersive=%s trae la barra de pestañas, que baja aparte; la cabecera chica y el espaciador, solo fuera del mapa', async (immersive) => {
+            const wrapper = await mountLayout({ immersive });
+            expect(wrapper.find('nav[data-tabbar]').exists()).toBe(false);
+            await vi.dynamicImportSettled();
+            await flushPromises();
+
+            const bar = wrapper.get('nav[data-tabbar]');
+            expect(bar.attributes('aria-label')).toBe('Secciones');
+            expect(wrapper.find('.tabbar-spacer').exists()).toBe(!immersive);
+            expect(wrapper.find('[data-compact-header]').exists()).toBe(!immersive);
+        });
+
+        it('le da al inicio el idioma y el tema para sus «Ajustes»', async () => {
+            const fake = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
+            fake.reset();
+            const { SETTINGS } = await import('@/navigation/tabs');
+            const { default: AppLayout } = await import('./AppLayout.vue');
+            const Page = defineComponent({
+                setup: () => () => h('p', { 'data-controls': inject(SETTINGS, []).length }),
+            });
+            const wrapper = mount(AppLayout, { slots: { default: () => h(Page) } });
+
+            expect(wrapper.get('[data-controls]').attributes('data-controls')).toBe('2');
+        });
     });
 
     // El layout es persistente: al navegar no se vuelve a montar y el foco

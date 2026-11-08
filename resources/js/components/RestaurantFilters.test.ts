@@ -18,7 +18,7 @@ async function mountFinder(filters: Filters = NO_FILTERS) {
         attachTo: document.body,
     });
 
-    return { wrapper, details: () => wrapper.get<HTMLDetailsElement>('details[data-filters]') };
+    return { wrapper, chips: () => wrapper.get('[data-filters]') };
 }
 
 enableAutoUnmount(afterEach);
@@ -29,43 +29,48 @@ afterEach(() => {
 
 /*
 | El buscador y los filtros del celular (y del lateral de siempre, por debajo
-| de 1024 px): el buscador (RestaurantSearch) y los controles en un <details>.
+| de 1024 px, #139): el buscador (RestaurantSearch) y los controles en una
+| fila de píldoras que se desplaza de lado, siempre a la vista.
 */
 describe('RestaurantFilters', () => {
-    it('sin filtros, el <details> empieza cerrado, sin contar ni «Quitar filtros»', async () => {
-        const { wrapper, details } = await mountFinder();
+    it('muestra el buscador y los filtros como píldoras en un grupo con nombre, sin «Quitar filtros»', async () => {
+        const { wrapper, chips } = await mountFinder();
 
         expect(wrapper.getComponent({ name: 'RestaurantSearch' }).find('input[type="search"]').exists()).toBe(true);
-        expect(details().element.open).toBe(false);
-        expect(details().get('summary').text()).toBe('Filtros');
+        expect(wrapper.find('details').exists()).toBe(false);
+        expect(chips().attributes('role')).toBe('group');
+        expect(chips().attributes('aria-label')).toBe('Filtros');
+        expect(chips().attributes('data-chips')).toBe('true');
+        expect(chips().findAll('label').map((label) => label.text())).toEqual([
+            'Abierto ahora',
+            'Hace domicilios',
+            expect.stringMatching(/^Precio/),
+            expect.stringMatching(/^Tipo de comida/),
+        ]);
         expect(wrapper.find('[data-clear-filters]').exists()).toBe(false);
     });
 
-    it('con filtros puestos empieza abierto y los cuenta; «Quitar filtros» se ve aunque se cierre', async () => {
-        const { wrapper, details } = await mountFinder({ ...NO_FILTERS, delivery: true, price: 25_000 });
+    it('con filtros puestos los marca y «Quitar filtros» los saca todos', async () => {
+        const { wrapper, chips } = await mountFinder({ ...NO_FILTERS, delivery: true, price: 15_000 });
 
-        expect(details().element.open).toBe(true);
-        expect(details().get('summary').text()).toBe('Filtros (2)');
+        expect(chips().get<HTMLInputElement>('[data-filter="delivery"]').element.checked).toBe(true);
+        expect(chips().get<HTMLSelectElement>('[data-filter="price"]').element.value).toBe('15000');
 
-        details().element.open = false;
-        const clear = wrapper.get('[data-clear-filters]');
-        expect(details().element.contains(clear.element)).toBe(false);
-
-        await clear.trigger('click');
+        await wrapper.get('[data-clear-filters]').trigger('click');
         expect(wrapper.emitted('update:filters')).toEqual([[NO_FILTERS]]);
     });
 
-    it('con solo la búsqueda, «Quitar filtros» está y el <details> no se abre', async () => {
-        const { wrapper, details } = await mountFinder({ ...NO_FILTERS, query: 'sancocho' });
+    it('con solo la búsqueda, «Quitar filtros» está', async () => {
+        const { wrapper } = await mountFinder({ ...NO_FILTERS, query: 'sancocho' });
 
-        expect(details().element.open).toBe(false);
         expect(wrapper.find('[data-clear-filters]').exists()).toBe(true);
     });
 
-    it('cambiar un control del <details> emite los filtros nuevos', async () => {
-        const { wrapper } = await mountFinder();
+    it('cambiar una píldora emite los filtros nuevos', async () => {
+        const { wrapper, chips } = await mountFinder();
 
-        await wrapper.get('details [data-filter="price"]').setValue('15000');
-        expect(wrapper.emitted('update:filters')).toEqual([[{ ...NO_FILTERS, price: 15_000 }]]);
+        await chips().get('[data-filter="price"]').setValue('15000');
+        await chips().get('[data-filter="open"]').trigger('change');
+        expect(wrapper.emitted('update:filters')).toEqual([[{ ...NO_FILTERS, price: 15_000 }], [{ ...NO_FILTERS, open: true }]]);
     });
 });

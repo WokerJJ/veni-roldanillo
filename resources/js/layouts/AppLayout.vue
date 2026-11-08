@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
 import type { FunctionalComponent } from 'vue';
-import { h, onBeforeUnmount, shallowRef, useTemplateRef } from 'vue';
+import { h, onBeforeUnmount, provide, shallowRef, useTemplateRef } from 'vue';
 
 import LocaleSwitcher from '@/components/LocaleSwitcher.vue';
 import ThemeToggle from '@/components/ThemeToggle.vue';
 import UpdatePrompt from '@/components/UpdatePrompt.vue';
 import type * as Links from '@/components/links';
 import { useI18n } from '@/composables/useI18n';
+import { SETTINGS } from '@/navigation/tabs';
 import wordmark from '@brand/logo/veni-wordmark.svg';
 import wordmarkWhite from '@brand/logo/veni-wordmark-blanco.svg';
 
@@ -53,10 +54,13 @@ onBeforeUnmount(stopFocusingContent);
 | La navegación de la cabecera («Mapa · Guía de platos», ADR 0037), la guía
 | de platos y los documentos legales del pie (#23, ADR 0030) bajan aparte, en
 | un solo chunk (components/links.ts): el layout viaja en el arranque y en él
-| no cabían. La navegación se ve desde 768 px; en el celular no entra al lado
-| del idioma y el tema, y la guía está en la bienvenida. Si no bajan (sin
-| señal), el pie queda con los créditos, que sí van en el arranque, y la
-| cabecera con el logo, que lleva al mapa.
+| no cabían. La navegación de la cabecera se ve desde 1024 px; por debajo, la
+| barra de pestañas de abajo (TabBar, #139, ADR 0041), que baja en el mismo
+| chunk con la cabecera chica que aparece al desplazar (CompactHeader). En el
+| mapa del celular no hay cabecera: el mapa llega arriba, y el idioma y el
+| tema van en «Ajustes», en el panel. Si no bajan (sin señal), el pie queda
+| con los créditos, que sí van en el arranque, y la cabecera con el logo, que
+| lleva al mapa.
 */
 const links = shallowRef<typeof Links>();
 const lazy =
@@ -66,6 +70,9 @@ const lazy =
 const MainNav = lazy('MainNav');
 const DishGuideLink = lazy('DishGuideLink');
 const LegalLinks = lazy('LegalLinks');
+const TabBar = lazy('TabBar');
+const CompactHeader = lazy('CompactHeader');
+provide(SETTINGS, [LocaleSwitcher, ThemeToggle]);
 
 import('@/components/links')
     .then((module) => {
@@ -86,13 +93,14 @@ import('@/components/links')
         </a>
 
         <!--
-            En el celular, unos 52 px (el selector de idioma, 46, y 2 px arriba y
+            Con el mapa (immersive), solo desde 1024 px: en el celular el mapa
+            llega hasta arriba (#139). En el celular, unos 52 px (el selector de idioma, 46, y 2 px arriba y
             abajo, más el borde): el mapa gana alto. Con el mapa (immersive), la cabecera va
             a lo ancho, con el mismo margen de 16 px que el panel del inicio:
             una sola grilla, sin el logo corrido hacia el centro.
         -->
-        <header class="border-b border-line">
-            <div class="flex items-center justify-between gap-4 px-4 py-0.5 md:py-2" :class="{ 'mx-auto max-w-6xl': !immersive }">
+        <header class="border-b border-line" :class="{ 'max-lg:hidden': immersive }">
+            <div class="veni-safe-x flex items-center justify-between gap-4 py-0.5 md:py-2" :class="{ 'mx-auto max-w-6xl': !immersive }">
                 <Link href="/" class="inline-flex min-h-touch items-center rounded-veni-sm">
                     <img :src="wordmark" :alt="t('layout.home_link')" width="72" height="40" class="h-10 w-auto dark:hidden">
                     <img
@@ -104,7 +112,7 @@ import('@/components/links')
                     >
                 </Link>
                 <!-- «Mapa · Guía de platos», con la sección actual marcada: baja con los documentos legales. -->
-                <MainNav class="hidden grow md:block" />
+                <MainNav />
                 <div class="flex items-center gap-2">
                     <LocaleSwitcher />
                     <ThemeToggle />
@@ -112,12 +120,13 @@ import('@/components/links')
             </div>
         </header>
 
-        <main id="contenido" ref="main" tabindex="-1" class="flex-1 focus:outline-none" :class="{ 'relative min-h-0': immersive }">
+        <!-- Fuera del mapa, el contenido suma a los lados el margen del sistema (veni-safe-inset, #139). -->
+        <main id="contenido" ref="main" tabindex="-1" class="flex-1 focus:outline-none" :class="immersive ? 'relative min-h-0' : 'veni-safe-inset'">
             <slot />
         </main>
 
         <footer v-if="!immersive" class="border-t border-line">
-            <div class="mx-auto max-w-6xl px-4 py-6 text-sm text-ink-muted">
+            <div class="veni-safe-x mx-auto max-w-6xl py-6 text-sm text-ink-muted">
                 <p>{{ t('layout.footer', { year }) }}</p>
                 <div class="flex flex-wrap gap-x-4">
                     <!-- La atribución de OpenStreetMap (ODbL) y cómo pedir sus datos: ADR 0021. -->
@@ -129,6 +138,9 @@ import('@/components/links')
                 </div>
             </div>
         </footer>
+
+        <CompactHeader v-if="!immersive" />
+        <TabBar :immersive="immersive" />
 
         <UpdatePrompt />
     </div>

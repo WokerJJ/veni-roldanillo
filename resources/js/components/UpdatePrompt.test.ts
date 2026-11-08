@@ -213,12 +213,15 @@ describe('UpdatePrompt · lugar en la pantalla', () => {
         expect(wrapper.classes()).toContain('bottom-(--veni-attribution-clearance)');
     });
 
-    it('la holgura está definida una vez, en la hoja de estilos de la app', () => {
+    it('la holgura está en la hoja de estilos de la app: la atribución en computador y solo la barra de pestañas en el celular (#139)', () => {
         // Del disco (desde la raíz del repositorio, donde corre Vitest): las
         // hojas de estilos que se importan en una prueba llegan vacías.
         const css = readFileSync('resources/css/app.css', 'utf8');
 
-        expect(css.match(/--veni-attribution-clearance:/g)).toHaveLength(1);
+        expect(css.match(/--veni-attribution-clearance:/g)).toHaveLength(2);
+        expect(css).toContain('--veni-attribution-clearance: max(2.25rem, 36px);');
+        // En el celular el crédito del mapa va arriba: abajo no queda su franja.
+        expect(css).toMatch(/@media \(width < 64rem\) \{\s*--veni-tabbar-space: [^;]+;\s*--veni-attribution-clearance: var\(--veni-tabbar-space\);/);
     });
 
     it('mientras se ve, deja en <html> el lugar que ocupa; al cerrarse, lo quita', async () => {

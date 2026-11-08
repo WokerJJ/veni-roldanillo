@@ -12,12 +12,16 @@ import { PRICE_CAPS } from '@/restaurants/filterParams';
  * (#130), la lista los pone sueltos al principio de lo que se desplaza, como
  * el panel de su botón «Filtros». Con `stacked`, el rótulo de cada menú
  * va arriba: los dos menús entran en una fila y el panel le quita menos alto
- * a la lista.
+ * a la lista. Con `chips` (el celular, #139, ADR 0041), cada control es una
+ * píldora en una sola fila que se desplaza de lado bajo el buscador: los
+ * mismos controles y la misma lógica, con otro estilo (CSS propio, que baja
+ * con la lista y no con el arranque).
  */
-const { filters, categories, stacked } = defineProps<{
+const { filters, categories, stacked, chips } = defineProps<{
     filters: Readonly<Filters>;
     categories: readonly RestaurantCategory[];
     stacked?: boolean;
+    chips?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -38,7 +42,7 @@ function onSelect(event: Event, key: 'price' | 'category'): void {
 </script>
 
 <template>
-    <div class="pt-1 text-sm" :class="stacked ? 'grid grid-cols-2 gap-x-3 gap-y-1' : 'flex flex-wrap items-center gap-x-4 gap-y-1'">
+    <div class="pt-1 text-sm" :class="chips ? 'filter-chips' : stacked ? 'grid grid-cols-2 gap-x-3 gap-y-1' : 'flex flex-wrap items-center gap-x-4 gap-y-1'" :data-chips="chips || undefined">
         <label class="inline-flex min-h-touch items-center gap-2">
             <input type="checkbox" class="size-5" :checked="filters.open" data-filter="open" @change="update({ open: !filters.open })">
             {{ t('finder.open_now') }}
@@ -67,3 +71,47 @@ function onSelect(event: Event, key: 'price' | 'category'): void {
         </label>
     </div>
 </template>
+
+<style scoped>
+/*
+ * Los filtros en píldoras (#139): una fila que se desplaza de lado, sin barra
+ * a la vista (el dedo y el foco la desplazan: cada control es enfocable y el
+ * navegador lo lleva a la vista). Una píldora marcada lleva el borde y el
+ * peso del texto, no solo el color.
+ */
+.filter-chips {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    /* Hasta el borde de lo que se desplaza (la lista lleva 0,5 rem a cada lado), sin pasarse. */
+    margin-inline: -0.5rem;
+    padding-inline: 0.5rem;
+    scrollbar-width: none;
+}
+
+.filter-chips::-webkit-scrollbar {
+    display: none;
+}
+
+.filter-chips > label {
+    flex-shrink: 0;
+    gap: 0.5rem;
+    border: 1px solid var(--color-line);
+    border-radius: 9999px;
+    padding-inline: 0.75rem;
+    white-space: nowrap;
+}
+
+.filter-chips > label:has(:checked),
+.filter-chips > label:has(select option:checked:not([value=''])) {
+    border-color: currentColor;
+    font-weight: 600;
+}
+
+.filter-chips select {
+    min-height: 2.5rem;
+    border: 0;
+    background: transparent;
+    font-weight: 600;
+}
+</style>

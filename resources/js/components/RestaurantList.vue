@@ -12,6 +12,9 @@ import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import TodaysLunches from '@/components/TodaysLunches.vue';
 import { useI18n } from '@/composables/useI18n';
 import { useLazyDialog } from '@/composables/useLazyDialog';
+import { formatPesos } from '@/i18n/intl';
+import { categoryIcon, GENERIC_FOOD_ICON } from '@/icons/food';
+import { homeListRequest } from '@/navigation/tabs';
 import type { Restaurant } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
 import { activeFilterCount } from '@/restaurants/filterCount';
@@ -20,7 +23,7 @@ import { categoriesOf, filterRestaurants } from '@/restaurants/finder';
 import { restaurantUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
 import { priceRangeText } from '@/restaurants/priceRange';
-import { openStatusText } from '@/restaurants/statusText';
+import { openStatusParts, openStatusText } from '@/restaurants/statusText';
 import { useFinderPanel } from '@/restaurants/useFinder';
 import { useFavorites } from '@/saved/favorites';
 import { formatDistance } from '@/routing/directions';
@@ -57,8 +60,8 @@ import { formatDistance } from '@/routing/directions';
  * final, «Guardado en este teléfono», que abre SavedOnDevice.vue (baja con
  * import() al tocarlo) para editar y borrar direcciones y favoritos.
  *
- * Con `autofocus`, al abrirse toma el foco en el título (o en «Almuerzos de hoy», con
- * `start`); quien la muestra la cierra con
+ * Con `autofocus`, al abrirse toma el foco en el título (o, con `start`, en
+ * «Almuerzos de hoy» o en el buscador); quien la muestra la cierra con
  * `close` (el botón o Escape) y, al volver de un resumen, devuelve el foco al
  * botón de ese restaurante con `focusItem`.
  *
@@ -94,7 +97,7 @@ const {
     /** La búsqueda y los filtros; null mientras el inicio no los leyó de la dirección. */
     filters?: Readonly<Filters> | null;
     /** Dónde queda el foco al abrir: el título o «Almuerzos de hoy». */
-    start?: 'heading' | 'lunches';
+    start?: 'heading' | 'lunches' | 'search';
     /** Metros hasta cada restaurante, por slug, o null sin ubicación. */
     distances?: Readonly<Record<string, number>> | null;
     /** Con su botón de cerrar (`close`); sin él, el orden sigue a quién está abierto y a las distancias. */
@@ -137,11 +140,15 @@ const details = computed(() =>
         const status = openStatus(restaurant, now.value);
         const meters = distances?.[restaurant.slug];
 
+        const parts = openStatusParts(status, t, locale.value);
+
         return {
             restaurant,
             open: status.state === 'open',
             meters: meters ?? Number.POSITIVE_INFINITY,
             status: openStatusText(status, t, locale.value),
+            /** En el celular (#139): lo de la píldora («Abierto ahora», «Cerrado») y lo de después («cierra a…»), cada uno de su clave. */
+            pill: status.state === 'unknown' ? null : parts,
             distance: meters === undefined ? null : formatDistance(meters, locale.value),
         };
     }),
@@ -150,6 +157,16 @@ const details = computed(() =>
 /** Abiertos primero; entre ellos, el más cerca. Si empatan, el orden de siempre (sort es estable). */
 function ranking(): string[] {
     return [...details.value].sort((a, b) => Number(b.open) - Number(a.open) || a.meters - b.meters).map(({ restaurant }) => restaurant.slug);
+}
+
+/** El almuerzo de hoy de cada uno que lo publicó, para su fila en el celular (#139). */
+const lunchOf = computed(() => new Map(lunches.value.map(({ restaurant, lunch }) => [restaurant.slug, lunch])));
+
+/** La miniatura de la fila: el ícono de su primer tipo de comida (ADR 0036), o el genérico. */
+function thumbIcon(restaurant: Restaurant) {
+    const first = restaurant.categories[0];
+
+    return first === undefined ? GENERIC_FOOD_ICON : categoryIcon(first.slug);
 }
 
 /** Los slugs en el orden en que se muestran: fijo mientras la lista está abierta (salvo la que no se cierra). */
@@ -280,10 +297,25 @@ watch(
     },
 );
 
+/** El buscador de la bienvenida o el botón de buscar de la barra de pestañas (#139). */
+function focusSearch(): void {
+    heading.value?.closest('section')?.querySelector<HTMLElement>('input[type="search"]')?.focus({ preventScroll: true });
+}
+
 onMounted(() => {
     // Con «Almuerzos de hoy», el foco lo toma esa sección (TodaysLunches).
     if (start === 'heading' && autofocus) {
         heading.value?.focus({ preventScroll: true });
+    } else if (start === 'search' && autofocus) {
+        focusSearch();
+    }
+});
+
+// Abierta, el botón de buscar de la barra lleva al buscador cada vez que se
+// toca: la orden (navigation/tabs.ts), aunque `start` ya fuera el buscador.
+watch([() => start, homeListRequest], ([next]) => {
+    if (next === 'search' && autofocus) {
+        focusSearch();
     }
 });
 
@@ -298,7 +330,8 @@ defineExpose({ focusItem });
 </script>
 
 <template>
-    <section :aria-labelledby="headingId" class="flex min-h-0 flex-col">
+    <!-- En el celular llena la pantalla de la lista (#139, `data-full-list`: TabBar.vue); en la barra, el alto lo pone quien la usa. -->
+    <section :aria-labelledby="headingId" class="flex min-h-0 flex-col" :class="{ 'flex-1': !pinnedFinder }" :data-full-list="pinnedFinder ? undefined : ''">
         <div class="flex items-start justify-between gap-2">
             <h2 :id="headingId" ref="heading" tabindex="-1" class="py-2 text-lg leading-tight focus:outline-none md:text-xl">
                 {{ t('restaurants.list_title') }}
@@ -315,82 +348,78 @@ defineExpose({ focusItem });
         </div>
 
         <!--
-            Todo lo de abajo del título se desplaza junto: con poco alto, el
-            buscador no deja la lista sin lugar. Con `pinnedFinder`, el
-            buscador y «Sugerime algo» quedan fijos y se desplaza lo de abajo.
+            En el celular (la lista a pantalla completa, #139) se desplaza
+            todo lo de abajo del título, con el buscador, los filtros y
+            cuántos hay pegados arriba (`sticky`); con poco alto (acostado)
+            se desplazan con las filas y no las dejan sin lugar. Con
+            `pinnedFinder`, el buscador y «Sugerime algo» quedan fijos y se
+            desplaza lo de abajo.
         -->
         <div :class="pinnedFinder ? 'contents' : SCROLL">
-            <RestaurantSearch v-if="pinnedFinder" :filters="filters" @update:filters="emit('update:filters', $event)" />
-            <RestaurantFilters v-else :filters="filters" :categories="categories" @update:filters="emit('update:filters', $event)" />
+            <div :class="pinnedFinder ? 'contents' : 'list-head'" data-list-head>
+                <RestaurantSearch v-if="pinnedFinder" :filters="filters" @update:filters="emit('update:filters', $event)" />
+                <RestaurantFilters v-else :filters="filters" :categories="categories" @update:filters="emit('update:filters', $event)" />
 
-            <!-- Con tres letras o más, los platos primero: si se buscó «sancocho», es lo que se quería ver. -->
-            <DishResults
-                v-if="!pinnedFinder"
-                :query="filters.query"
-                :allowed="allowedForDishes"
-                @select="$emit('select', $event)"
-                @clear-filters="emit('update:filters', { ...NO_FILTERS, query: filters.query })"
-            />
-
-            <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <!-- Se ve enseguida; el lector lo oye de la región de abajo, medio segundo después de dejar de teclear. -->
-                <!--
+                <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <!-- Se ve enseguida; el lector lo oye de la región de abajo, medio segundo después de dejar de teclear. -->
+                    <!--
                     En la barra, cuántos hay va en su propia línea y, con algo
                     puesto (también solo la búsqueda), «Quitar filtros» a su
                     lado: fuera del panel, se ve aunque esté cerrado, y en la
                     fila de abajo «Sugerime algo» y «Filtros» siguen juntos.
                 -->
-                <div :class="pinnedFinder ? 'flex basis-full items-center justify-between gap-2' : 'contents'">
-                    <p class="text-sm" aria-hidden="true" data-count>{{ message }}</p>
+                    <div :class="pinnedFinder ? 'flex basis-full items-center justify-between gap-2' : 'contents'">
+                        <p class="text-sm" aria-hidden="true" data-count>{{ message }}</p>
+                        <button
+                            v-if="pinnedFinder && hasFilters(filters)"
+                            type="button"
+                            class="inline-flex min-h-touch shrink-0 items-center gap-2 rounded-full border border-line px-4 text-sm font-semibold hover:bg-surface"
+                            data-clear-filters
+                            @click="clearFilters"
+                        >
+                            <Icon name="cerrar" :size="20" />
+                            {{ t('finder.clear') }}
+                        </button>
+                    </div>
+                    <p role="status" class="sr-only" data-count-status>{{ announced }}</p>
                     <button
-                        v-if="pinnedFinder && hasFilters(filters)"
                         type="button"
-                        class="inline-flex min-h-touch shrink-0 items-center gap-2 rounded-full border border-line px-4 text-sm font-semibold hover:bg-surface"
-                        data-clear-filters
-                        @click="clearFilters"
+                        :class="PILL"
+                        data-suggest
+                        @click="suggest"
                     >
-                        <Icon name="cerrar" :size="20" />
-                        {{ t('finder.clear') }}
+                        <Icon name="estrella" :size="20" />
+                        {{ t('finder.suggest') }}
+                    </button>
+                    <!-- Sin abiertos (#138, A1): el que abre primero, que el aviso de arriba nombra. -->
+                    <button
+                        v-if="next"
+                        type="button"
+                        :class="PILL"
+                        data-suggest-next
+                        @click="$emit('select', next.slug)"
+                    >
+                        <Icon name="chevron-derecha" :size="20" />
+                        {{ t('finder.suggest_view', { name: next.name }) }}
+                    </button>
+                    <!-- En la barra, el último de lo fijo: el siguiente en el foco es su panel, arriba de lo que se desplaza. El chevron dice si está abierto. -->
+                    <button
+                        v-if="pinnedFinder"
+                        :id="toggleId"
+                        ref="filtersToggle"
+                        type="button"
+                        class="inline-flex min-h-touch items-center gap-2 rounded-full border px-4 font-semibold hover:bg-surface"
+                        :class="activeFilters > 0 ? 'border-current' : 'border-line'"
+                        :aria-expanded="filtersOpen"
+                        :aria-controls="panelId"
+                        data-filters-toggle
+                        @click="toggleFilters"
+                    >
+                        <Icon name="filtro" :size="20" />
+                        {{ activeFilters > 0 ? t('finder.filters_active', { count: activeFilters }) : t('finder.filters') }}
+                        <Icon :name="filtersOpen ? 'chevron-arriba' : 'chevron-abajo'" :size="20" />
                     </button>
                 </div>
-                <p role="status" class="sr-only" data-count-status>{{ announced }}</p>
-                <button
-                    type="button"
-                    :class="PILL"
-                    data-suggest
-                    @click="suggest"
-                >
-                    <Icon name="estrella" :size="20" />
-                    {{ t('finder.suggest') }}
-                </button>
-                <!-- Sin abiertos (#138, A1): el que abre primero, que el aviso de arriba nombra. -->
-                <button
-                    v-if="next"
-                    type="button"
-                    :class="PILL"
-                    data-suggest-next
-                    @click="$emit('select', next.slug)"
-                >
-                    <Icon name="chevron-derecha" :size="20" />
-                    {{ t('finder.suggest_view', { name: next.name }) }}
-                </button>
-                <!-- En la barra, el último de lo fijo: el siguiente en el foco es su panel, arriba de lo que se desplaza. El chevron dice si está abierto. -->
-                <button
-                    v-if="pinnedFinder"
-                    :id="toggleId"
-                    ref="filtersToggle"
-                    type="button"
-                    class="inline-flex min-h-touch items-center gap-2 rounded-full border px-4 font-semibold hover:bg-surface"
-                    :class="activeFilters > 0 ? 'border-current' : 'border-line'"
-                    :aria-expanded="filtersOpen"
-                    :aria-controls="panelId"
-                    data-filters-toggle
-                    @click="toggleFilters"
-                >
-                    <Icon name="filtro" :size="20" />
-                    {{ activeFilters > 0 ? t('finder.filters_active', { count: activeFilters }) : t('finder.filters') }}
-                    <Icon :name="filtersOpen ? 'chevron-arriba' : 'chevron-abajo'" :size="20" />
-                </button>
             </div>
 
             <div ref="scroller" :class="pinnedFinder ? `${SCROLL} mt-2 flex-1` : 'contents'" data-list-scroll>
@@ -407,8 +436,8 @@ defineExpose({ focusItem });
                     data-filters-panel
                     @update:filters="emit('update:filters', $event)"
                 />
+                <!-- Con tres letras o más, los platos primero: si se buscó «sancocho», es lo que se quería ver. -->
                 <DishResults
-                    v-if="pinnedFinder"
                     :query="filters.query"
                     :allowed="allowedForDishes"
                     @select="$emit('select', $event)"
@@ -460,7 +489,7 @@ defineExpose({ focusItem });
                 <div v-if="selectedOutside" ref="outside" class="mt-2" data-selected-outside><slot name="selected" :restaurant="selectedOutside" :in-row="false" /></div>
 
                 <ul ref="list" class="-mx-2">
-                    <li v-for="{ restaurant, status, distance } in rows" :key="restaurant.slug" :data-row="restaurant.slug" class="flex flex-wrap items-center gap-1">
+                    <li v-for="{ restaurant, status, pill, distance, open } in rows" :key="restaurant.slug" :data-row="restaurant.slug" class="flex flex-wrap items-center gap-1">
                         <button
                             type="button"
                             class="flex min-h-touch min-w-0 flex-1 flex-col justify-center rounded-veni-sm px-2 py-1 text-left hover:bg-surface"
@@ -469,17 +498,40 @@ defineExpose({ focusItem });
                             :data-slug="restaurant.slug"
                             @click="$emit('select', restaurant.slug)"
                         >
-                            <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span class="font-semibold" data-name>{{ restaurant.name }}</span>
-                                <SampleDataBadge v-if="restaurant.fictitious && !allSamples" />
+                            <template v-if="pinnedFinder">
+                                <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <span class="font-semibold" data-name>{{ restaurant.name }}</span>
+                                    <SampleDataBadge v-if="restaurant.fictitious && !allSamples" />
+                                </span>
+                                <span class="text-sm text-ink-muted">
+                                    <span data-status>{{ status }}</span>
+                                    <template v-if="distance"> · <span data-distance>{{ distance }}</span></template>
+                                </span>
+                                <span v-if="restaurant.price_range" class="text-sm text-ink-muted tabular-nums" data-price-range>{{
+                                    priceRangeText(restaurant.price_range, t, locale)
+                                }}</span>
+                            </template>
+                            <!--
+                                En el celular (#139): la miniatura (el ícono de su tipo de
+                                comida), el nombre, el estado en una píldora con texto y
+                                una línea con el almuerzo de hoy o los precios y, con
+                                «¿Dónde estoy?», la distancia.
+                            -->
+                            <span v-else class="list-row">
+                                <span class="list-thumb" aria-hidden="true" data-thumb><Icon :name="thumbIcon(restaurant)" :size="28" /></span>
+                                <span class="list-text">
+                                    <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                        <span class="font-semibold" data-name>{{ restaurant.name }}</span>
+                                        <SampleDataBadge v-if="restaurant.fictitious && !allSamples" />
+                                    </span>
+                                    <span class="text-sm text-ink-muted" data-status><span v-if="pill" class="list-pill" :data-open="open || undefined">{{ pill.head }}</span><template v-else>{{ status }}</template><template v-if="pill && pill.tail"> · {{ pill.tail }}</template></span>
+                                    <span v-if="lunchOf.get(restaurant.slug) || restaurant.price_range || distance" class="text-sm text-ink-muted tabular-nums" data-row-line>
+                                        <span v-if="lunchOf.get(restaurant.slug)" data-row-lunch>{{ t('restaurants.row_lunch', { price: formatPesos(lunchOf.get(restaurant.slug)?.price ?? 0, locale) }) }}</span>
+                                        <span v-else-if="restaurant.price_range" data-price-range>{{ priceRangeText(restaurant.price_range, t, locale) }}</span>
+                                        <template v-if="distance"><template v-if="lunchOf.get(restaurant.slug) || restaurant.price_range"> · </template><span data-distance>{{ distance }}</span></template>
+                                    </span>
+                                </span>
                             </span>
-                            <span class="text-sm text-ink-muted">
-                                <span data-status>{{ status }}</span>
-                                <template v-if="distance"> · <span data-distance>{{ distance }}</span></template>
-                            </span>
-                            <span v-if="restaurant.price_range" class="text-sm text-ink-muted tabular-nums" data-price-range>{{
-                                priceRangeText(restaurant.price_range, t, locale)
-                            }}</span>
                         </button>
                         <!-- El ícono solo no dice nada: el nombre del enlace lleva el del restaurante. -->
                         <Link
@@ -513,3 +565,73 @@ defineExpose({ focusItem });
         <Manager v-if="managing" :restaurants="all" @close="closeManager" />
     </section>
 </template>
+
+<style scoped>
+/*
+ * Lo de arriba de la lista del celular (#139): el buscador, los filtros y
+ * cuántos hay, pegados arriba mientras se desplazan las filas. Con poco alto
+ * (acostado) se desplazan con ellas. En el CSS de la lista y no con
+ * utilidades de Tailwind: no viaja en el arranque.
+ */
+.list-head {
+    margin-inline: -0.5rem;
+    padding: 0 0.5rem 0.5rem;
+    background-color: var(--canvas);
+}
+
+@media (height >= 32rem) {
+    .list-head {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+}
+
+/*
+ * Las filas del celular (#139, ADR 0041). CSS propio de la lista, que baja
+ * aparte: las utilidades nuevas de Tailwind irían al CSS del arranque.
+ */
+.list-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.list-thumb {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: var(--veni-radius-sm);
+    background: var(--color-surface);
+    color: var(--color-ink);
+}
+
+.list-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/*
+ * El estado, en una píldora que siempre lleva texto: el color no es lo único
+ * que lo dice (WCAG 1.4.1). Abierto, ciruela sobre mango (8,4:1, igual en los
+ * dos temas); cerrado, el texto apagado sobre el fondo de las filas (5,7:1 en
+ * claro, 11,4:1 en oscuro).
+ */
+.list-pill {
+    display: inline-block;
+    border-radius: 9999px;
+    padding-inline: 0.5rem;
+    background: var(--color-surface);
+    color: var(--color-ink-muted);
+    font-weight: 600;
+}
+
+.list-pill[data-open] {
+    background: var(--veni-mango);
+    color: var(--veni-ciruela);
+}
+</style>

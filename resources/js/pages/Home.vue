@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import type { Component, FunctionalComponent } from 'vue';
-import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
+import { computed, h, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useTemplateRef, watch } from 'vue';
 
 import BottomSheet from '@/components/BottomSheet.vue';
 import Icon from '@/components/Icon.vue';
@@ -11,6 +11,7 @@ import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import type { SheetSnap } from '@/components/sheet';
 import { useI18n } from '@/composables/useI18n';
 import { DESKTOP_QUERY, useMediaQuery } from '@/composables/useMediaQuery';
+import { homeList, homeListRequest, published, SETTINGS } from '@/navigation/tabs';
 // Solo los tipos: buscar, filtrar y sortear bajan con la lista (ADR 0028).
 import type { Filters } from '@/restaurants/filterParams';
 import type * as Finder from '@/restaurants/finder';
@@ -51,7 +52,10 @@ const RestaurantList: FunctionalComponent = (_props, { attrs }) => (panelParts.v
 const RestaurantDistances: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.distances, attrs) : null);
 const WelcomeActions: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.welcome, attrs) : null);
 const LegalLinks: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.links.LegalLinks, attrs) : null);
-const DishGuideLink: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.links.DishGuideLink, attrs) : null);
+/** «Ajustes» (#139): el idioma y el tema, que el layout comparte (navigation/tabs.ts). */
+const settingsControls = inject(SETTINGS, []);
+const SettingsMenu: FunctionalComponent = (_props, { attrs }) =>
+    panelParts.value ? h(panelParts.value.links.SettingsMenu, attrs, () => settingsControls.map((control) => h(control))) : null;
 /** Lo de la barra lateral de computador (ADR 0037): la lista con el resumen del elegido. */
 const HomeSidebar: FunctionalComponent = (_props, { attrs, slots }) => (panelParts.value ? h(panelParts.value.sidebar, { ...attrs, ref: list }, slots) : null);
 
@@ -176,19 +180,23 @@ const { status, restaurants, retry } = useRestaurants();
  * de los filtros si está abierto, almuerzos, filas, favoritos); abajo, la línea chica del pie. El mapa no
  * lleva nada encima (`overlay` null): la cámara usa todo su ancho y MapLibre
  * sigue el tamaño de su contenedor al cambiar de diseño. Cuántos hay lo dice
- * la lista; «Ver la lista» y los botones de la bienvenida no se muestran,
+ * la lista; el buscador y los botones de la bienvenida no se muestran,
  * porque la lista ya está a la vista. Lo que no hace falta para el primer
  * pintado (la lista y el resumen) baja aparte, con la lista (HomeSidebar.vue
  * y components/links.ts). La guía de platos va en la navegación de la
- * cabecera (#130); en el celular, que no la muestra, en la bienvenida.
+ * cabecera (#130); en el celular, en la barra de pestañas (#139).
  */
 const desktop = useMediaQuery(DESKTOP_QUERY);
 
 /** Slug del restaurante con el resumen abierto. */
 const selectedSlug = ref<string | null>(null);
-const listOpen = ref(false);
-/** Dónde toma el foco la lista al abrirse: su título o «Almuerzos de hoy». */
-const listStart = ref<'heading' | 'lunches'>('heading');
+/**
+ * La lista abierta en el panel, y dónde toma el foco al abrirse: su título,
+ * «Almuerzos de hoy» o el buscador; `false`, cerrada. Es la misma que ve la
+ * barra de pestañas del celular (#139, ADR 0041, navigation/tabs.ts): la
+ * barra la abre y la cierra, y marca su pestaña con ella.
+ */
+const listOpen = homeList;
 /** Metros hasta cada restaurante con «¿Dónde estoy?» encendido y la lista abierta; si no, null. */
 const distances = ref<Record<string, number> | null>(null);
 /** El mapa no cargó: su aviso lo ocupa entero y el panel, con la lista, deja de ir encima. */
@@ -229,9 +237,16 @@ const hasSampleData = computed(() => restaurants.value.some(({ fictitious }) => 
  * mapa y sin flotar cuando el mapa no cargó en el celular (`docked`, su
  * aviso lo taparía: van en una columna que se desplaza si no entran los dos),
  * o flotando encima del mapa (`floating`): el panel de abajo en un celular
- * vertical (`sheet:`, ADR 0022), que deja libre la franja de la atribución de
- * OpenStreetMap y se corre encima del aviso de versión nueva, o al costado
- * (`side:`), arriba a la izquierda, sin pasar del alto del mapa.
+ * vertical (`sheet:`, ADR 0022), que deja libre la barra de pestañas (#139)
+ * y se corre encima del aviso de versión nueva, o al costado (`side:`),
+ * arriba a la izquierda, sin pasar del alto del mapa. Sólido (#139, ADR
+ * 0041): al 95 % se veían los marcadores y las calles detrás del texto.
+ *
+ * Con la lista, el panel flotante ocupa toda la pantalla, de borde a borde,
+ * como una pestaña de iOS (#139): lo dice el CSS de la barra de pestañas
+ * (`.veni-full-list`, TabBar.vue), que lo reconoce porque muestra la lista o
+ * sus siluetas, y no viaja en el arranque. El mapa sigue montado debajo (no
+ * recarga sus teselas), oculto para la vista, el foco y el lector.
  */
 const layout = computed(() => (desktop.value ? 'sidebar' : mapFailed.value ? 'docked' : 'floating'));
 const LAYOUTS = {
@@ -243,13 +258,13 @@ const LAYOUTS = {
     },
     docked: {
         page: 'flex flex-col overflow-y-auto',
-        sheet: 'mx-3 mt-3 shrink-0 rounded-veni-md border border-line bg-canvas/95 shadow-lg md:mx-4 md:mt-4 md:w-[calc(100%_-_2rem)] md:max-w-sm',
+        sheet: 'mx-3 mt-3 shrink-0 rounded-veni-md border border-line bg-canvas shadow-lg md:mx-4 md:mt-4 md:w-[calc(100%_-_2rem)] md:max-w-sm',
         map: 'min-h-56',
         footer: 'contents',
     },
     floating: {
         page: '',
-        sheet: 'absolute inset-x-2 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-(--sheet-height) rounded-veni-lg border border-line bg-canvas/95 shadow-lg side:inset-x-auto side:top-4 side:bottom-auto side:left-4 side:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] side:w-[calc(100%_-_2rem)] side:max-w-sm',
+        sheet: 'absolute inset-x-2 bottom-[calc(var(--veni-tabbar-space)_+_var(--veni-update-prompt-space,0px))] max-h-(--sheet-height) rounded-veni-lg border border-line bg-canvas shadow-lg veni-safe-side side:inset-x-auto side:top-4 side:bottom-auto side:left-4 side:max-h-[calc(100%_-_var(--veni-tabbar-space)_-_1rem)] side:w-[calc(100%_-_2rem)] side:max-w-sm',
         map: '',
         footer: 'contents',
     },
@@ -289,7 +304,8 @@ const panel = computed(() => sheet.value?.root ?? null);
  * para los avisos que piden leerse (sin restaurantes o sin conexión). Desde
  * ahí, quien usa la app la cambia con la manija.
  */
-const sheetSnap = ref<SheetSnap>('peek');
+// Abierta con la lista (la barra de pestañas la pidió desde otra página), a la altura completa.
+const sheetSnap = ref<SheetSnap>(listOpen.value === false ? 'peek' : 'full');
 const panelView = computed(() => {
     if (selected.value) {
         return directionsOpen.value ? 'route' : 'summary';
@@ -317,10 +333,9 @@ function expandSheet(): void {
     }
 }
 
-function openList(start: 'heading' | 'lunches' = 'heading'): void {
+function openList(start: 'heading' | 'lunches' | 'search' = 'heading'): void {
     loadPanelParts();
-    listStart.value = start;
-    listOpen.value = true;
+    listOpen.value = start;
 }
 
 function selectFromMap(slug: string): void {
@@ -515,8 +530,21 @@ watch(listShown, (open) => {
     }
 });
 
-// Sin restaurantes no hay lista que mostrar.
+// Cada orden de la barra de pestañas de mostrar la lista (#139) deja el
+// elegido, aunque la lista ya estuviera abierta: es la orden, no el valor, lo
+// que se vigila (navigation/tabs.ts). La bienvenida la abre sin elegido, y al
+// volver al celular con filtros se abre sin orden, debajo del elegido, que sigue.
+watch(homeListRequest, () => {
+    if (listOpen.value !== false) {
+        selectedSlug.value = null;
+    }
+});
+
+// Sin restaurantes no hay lista que mostrar. La barra de pestañas mira la
+// lista publicada para no ofrecer el pedido de uno que ya no está (#139).
 watch(restaurants, (current) => {
+    published.value = current;
+
     if (current.length === 0) {
         listOpen.value = false;
     }
@@ -534,7 +562,7 @@ watch(desktop, async (wide) => {
     const hadFocus = root?.contains(document.activeElement) === true;
 
     if (!wide && hasRestaurants.value && filters.value !== null && finder.value?.hasFilters(filters.value)) {
-        listOpen.value = true;
+        listOpen.value = 'heading';
     }
 
     await nextTick();
@@ -558,7 +586,7 @@ onMounted(() => {
     // monta recién con los restaurantes y la lista.
     if (hasListParams(page.url)) {
         listFromAddress = true;
-        listOpen.value = true;
+        listOpen.value = 'heading';
     }
 
     loadPanelParts();
@@ -567,6 +595,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
     document.removeEventListener('keydown', onKeydown);
     clearTimeout(filtersTimer);
+    listOpen.value = false;
 });
 </script>
 
@@ -591,7 +620,7 @@ onBeforeUnmount(() => {
             :class="classes.sheet"
         >
             <!-- El título de la página sigue en el documento aunque el panel muestre otra cosa. -->
-            <h1 :class="!desktop && panelParts && (selected || listOpen) ? 'sr-only' : 'text-lg md:text-2xl'">{{ t('home.heading') }}</h1>
+            <h1 :class="[!desktop && panelParts && (selected || listOpen) ? 'sr-only' : 'text-lg md:text-2xl', { 'sheet:sr-only': hasRestaurants }]">{{ t('home.heading') }}</h1>
 
             <RestaurantSummary
                 v-if="selected && panelParts && !desktop"
@@ -619,7 +648,7 @@ onBeforeUnmount(() => {
                 autofocus
                 :restaurants="restaurants"
                 :filters="filters"
-                :start="listStart"
+                :start="listOpen || undefined"
                 :distances="distances"
                 @update:filters="filters = $event"
                 @select="selectFromList"
@@ -640,8 +669,9 @@ onBeforeUnmount(() => {
             <template v-else>
                 <!--
                     En el celular, con restaurantes en el mapa, la bienvenida
-                    entra en el panel asomado: el título y «Ver la lista». La
-                    presentación y cuántos hay quedan para el lector de pantalla.
+                    entra en el panel asomado: el buscador y una fila de
+                    botones (#139). El título, la presentación y cuántos hay
+                    quedan para el lector de pantalla.
                 -->
                 <p class="mt-1 text-sm text-ink-muted" :class="{ 'sheet:hidden': hasRestaurants }">{{ t('home.intro') }}</p>
 
@@ -674,14 +704,16 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div v-else-if="hasRestaurants && !desktop" class="mt-2 flex flex-wrap items-center gap-2">
+                        <!-- El buscador a la vista (#139): abre la lista con el foco en el campo. -->
                         <button
                             ref="listButton"
                             type="button"
-                            class="inline-flex min-h-touch items-center gap-2 rounded-full border border-line px-4 font-semibold hover:bg-surface"
-                            @click="openList('heading')"
+                            class="flex min-h-touch w-full items-center gap-2 rounded-full bg-surface px-4 text-ink-muted"
+                            data-search-open
+                            @click="openList('search')"
                         >
                             <Icon name="buscar" :size="20" />
-                            {{ t('restaurants.show_list') }}
+                            {{ t('home.search_open') }}
                         </button>
                         <!-- «Sugerime algo», «Almuerzos de hoy» y «Quitar filtros»: bajan con la lista. -->
                         <WelcomeActions
@@ -745,8 +777,9 @@ onBeforeUnmount(() => {
                     >
                         {{ desktop ? t('credits.link_short') : t('credits.link') }}
                     </Link>
-                    <DishGuideLink v-if="!desktop" class="text-sm text-ink-muted" />
                     <LegalLinks short :inline="desktop" :class="{ 'text-sm text-ink-muted': !desktop }" />
+                    <!-- El idioma y el tema: en el mapa del celular no hay cabecera (#139). -->
+                    <SettingsMenu v-if="!desktop" />
                 </div>
             </template>
         </BottomSheet>

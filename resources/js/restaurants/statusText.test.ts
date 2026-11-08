@@ -8,7 +8,7 @@ import en from '../../../lang/en.json';
 import es from '../../../lang/es.json';
 
 import type { OpenStatus } from './openStatus';
-import { formatClock, openStatusText, weekdayName } from './statusText';
+import { formatClock, openStatusParts, openStatusText, weekdayName } from './statusText';
 
 const messages = { es, en };
 /** El espacio que no parte la línea. */
@@ -82,5 +82,33 @@ describe('el estado, en palabras', () => {
 
         expect(text({ state: 'closed', opens: { daysAhead: 0, weekday: 3, time: '13:00' } }, 'es', other)).toBe('Cerrado · abre a la mera 1:00 p. m.');
         expect(text({ state: 'open', closes: { daysAhead: 0, weekday: 3, time: '15:00' } }, 'es', other)).toBe('Abierto ahora · cierra a las meras 3:00 p. m.');
+    });
+});
+
+describe('el estado en dos partes, para la píldora de la lista (EVA-066)', () => {
+    /** Las dos partes con los textos de verdad, con los espacios que no parten la línea como comunes. */
+    function parts(status: OpenStatus, locale: Locale) {
+        const t = (key: TranslationKey, replacements?: Replacements): string => translate(messages[locale], key, replacements);
+        const { head, tail } = openStatusParts(status, t, locale);
+
+        return { head, tail: tail?.replaceAll(NBSP, ' ') ?? null };
+    }
+
+    it.each([
+        [{ state: 'open', closes: { daysAhead: 0, weekday: 3, time: '15:00' } }, ['Abierto ahora', 'cierra a las 3:00 p. m.'], ['Open now', 'closes at 3:00 PM']],
+        [{ state: 'open', closes: null }, ['Abierto ahora', null], ['Open now', null]],
+        [{ state: 'closed', opens: { daysAhead: 1, weekday: 4, time: '11:00' } }, ['Cerrado', 'abre mañana a las 11:00 a. m.'], ['Closed', 'opens tomorrow at 11:00 AM']],
+        [{ state: 'closed', opens: { daysAhead: 2, weekday: FRI, time: '13:00' } }, ['Cerrado', 'abre el viernes a la 1:00 p. m.'], ['Closed', 'opens Friday at 1:00 PM']],
+        [{ state: 'closed', opens: null }, ['Cerrado', null], ['Closed', null]],
+        [{ state: 'unknown' }, ['Horario sin confirmar', null], ['Hours not confirmed', null]],
+    ] as [OpenStatus, [string, string | null], [string, string | null]][])('%o: cada parte sale de su propia clave', (status, [esHead, esTail], [enHead, enTail]) => {
+        expect(parts(status, 'es')).toEqual({ head: esHead, tail: esTail });
+        expect(parts(status, 'en')).toEqual({ head: enHead, tail: enTail });
+    });
+
+    it('la frase entera junta las dos partes como dice el idioma, sin cortar un texto traducido', () => {
+        const other = { ...messages.es, 'restaurants.status.parts': ':state — :detail' };
+
+        expect(text({ state: 'closed', opens: { daysAhead: 0, weekday: 3, time: '18:00' } }, 'es', other)).toBe('Cerrado — abre a las 6:00 p. m.');
     });
 });

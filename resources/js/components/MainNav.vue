@@ -8,7 +8,9 @@ import { useI18n } from '@/composables/useI18n';
  * La navegación de la cabecera (ADR 0037): «Mapa · Guía de platos», enlaces
  * reales con la sección en que se está marcada con `aria-current="page"`. En
  * otra página (una ficha, un documento) no marca ninguna. Baja aparte del
- * arranque, con los documentos legales (components/links.ts).
+ * arranque, con los documentos legales (components/links.ts). Se ve desde
+ * 1024 px; por debajo, la barra de pestañas (#139, ADR 0041). Cuándo se ve
+ * lo dice su CSS, que baja con ella, y no utilidades del arranque.
  */
 const { t } = useI18n();
 const page = usePage();
@@ -23,7 +25,7 @@ const path = computed(() => new URL(page.url, window.location.href).pathname);
 </script>
 
 <template>
-    <nav :aria-label="t('layout.nav_label')" data-main-nav>
+    <nav class="main-nav" :aria-label="t('layout.nav_label')" data-main-nav>
         <ul class="flex items-center gap-1">
             <li v-for="item in NAV" :key="item.href">
                 <Link
@@ -38,3 +40,16 @@ const path = computed(() => new URL(page.url, window.location.href).pathname);
         </ul>
     </nav>
 </template>
+
+<style scoped>
+.main-nav {
+    display: none;
+    flex: 1 1 auto;
+}
+
+@media (min-width: 64rem) {
+    .main-nav {
+        display: block;
+    }
+}
+</style>

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { OrderItem } from './selection';
-import { CART_TTL_MS } from './storage';
-import { resetOrders, useOrder } from './useOrder';
+import { CART_TTL_MS, saveCart } from './storage';
+import { cartRequest, requestCart, resetOrders, useLatestOrder, useOrder } from './useOrder';
 
 const juice: OrderItem = { dish: 'Jugo de prueba', unitPrice: 4500, quantity: 1, choices: [{ group: 'Preparación', name: 'En leche', price: 500 }], removed: [], note: null };
 
@@ -163,12 +163,69 @@ describe('useOrder', () => {
         window.dispatchEvent(new StorageEvent('storage', { key: 'veni:delivery:la-ceiba', newValue: null }));
         expect(order.items.value).toEqual([juice]);
 
-        // Un restaurante que esta pestaña no abrió no se carga por el aviso.
+        // El aviso de otro restaurante no toca los de esta pestaña.
         window.dispatchEvent(new StorageEvent('storage', { key: 'veni:cart:otro', newValue: written }));
         expect(other.items.value).toEqual([]);
 
         // La otra pestaña vació el carrito.
         window.dispatchEvent(new StorageEvent('storage', { key: 'veni:cart:la-ceiba', newValue: null }));
         expect(order.items.value).toEqual([]);
+    });
+});
+
+describe('el pedido de la pestaña «Pedido» (#139)', () => {
+    it('sin pedidos, ninguno', () => {
+        expect(useLatestOrder().value).toBeNull();
+    });
+
+    it('lee los carritos guardados en el teléfono y da el que cambió último, con sus platos', () => {
+        const now = Date.now();
+        saveCart('la-ceiba', [{ ...juice, quantity: 2 }], now - HOUR_MS);
+        saveCart('el-guadual', [juice], now - 2 * HOUR_MS);
+
+        expect(useLatestOrder().value).toEqual({ slug: 'la-ceiba', count: 2 });
+    });
+
+    it('no cuenta un carrito vencido', () => {
+        saveCart('la-ceiba', [juice], Date.now() - CART_TTL_MS - HOUR_MS);
+
+        expect(useLatestOrder().value).toBeNull();
+    });
+
+    it('sigue los cambios de cualquier ficha mientras se ve', () => {
+        const latest = useLatestOrder();
+
+        useOrder('el-guadual').add(juice);
+        expect(latest.value).toEqual({ slug: 'el-guadual', count: 1 });
+
+        vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1000);
+        useOrder('la-ceiba').add({ ...juice, quantity: 3 });
+        expect(latest.value).toEqual({ slug: 'la-ceiba', count: 3 });
+
+        useOrder('la-ceiba').clear();
+        expect(latest.value).toEqual({ slug: 'el-guadual', count: 1 });
+    });
+
+    it('un carrito nuevo de otra pestaña aparece en «Pedido» sin recargar (BUG-053)', () => {
+        const latest = useLatestOrder();
+        expect(latest.value).toBeNull();
+
+        // La otra pestaña arma un pedido en un restaurante que esta no abrió.
+        saveCart('el-guadual', [{ ...juice, quantity: 2 }]);
+        const written = localStorage.getItem('veni:cart:el-guadual');
+        window.dispatchEvent(new StorageEvent('storage', { key: 'veni:cart:el-guadual', newValue: written }));
+        expect(latest.value).toEqual({ slug: 'el-guadual', count: 2 });
+
+        // Y desde ahí lo sigue: si lo vacía, se va.
+        window.dispatchEvent(new StorageEvent('storage', { key: 'veni:cart:el-guadual', newValue: null }));
+        expect(latest.value).toBeNull();
+    });
+
+    it('el pedido de abrir el carrito es un estado que se ve, y empezar de cero lo olvida (EVA-067)', () => {
+        requestCart('la-ceiba');
+        expect(cartRequest.value).toBe('la-ceiba');
+
+        resetOrders();
+        expect(cartRequest.value).toBeNull();
     });
 });
