@@ -329,8 +329,9 @@ describe('TabBar (#139, ADR 0041)', () => {
             const motion = /@media \(prefers-reduced-motion: no-preference\) \{\s*\.tabbar \{[^}]*\}\s*\}/.exec(css)?.[0] ?? '';
 
             expect(motion).toContain('transition-property: translate;');
-            // Ninguna transición fuera de esa regla.
-            expect(css.split('transition-').length).toBe(motion.split('transition-').length);
+            // Ninguna transición fuera de esa regla; la lista a pantalla completa (#139) solo apaga la del panel.
+            expect(css.split('transition-property: none;')).toHaveLength(2);
+            expect(css.replace('transition-property: none;', '').split('transition-').length).toBe(motion.split('transition-').length);
             expect(css).toContain('calc(0.5rem + env(safe-area-inset-bottom))');
         });
 

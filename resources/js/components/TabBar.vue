@@ -279,6 +279,41 @@ onBeforeUnmount(() => {
     padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
 }
 
+/*
+ * La lista del inicio a pantalla completa (#139, ADR 0041): el panel de
+ * abajo (`data-sheet`, que en computador y sin mapa no lleva) que muestra la
+ * lista o sus siluetas ocupa todo el mapa, de borde a borde y sin la manija,
+ * como una pestaña de iOS, con lo de adentro debajo de la isla y de las
+ * esquinas y arriba de la barra. El mapa sigue montado (no recarga sus
+ * teselas) pero oculto: fuera de la vista, del foco y del lector. Entra sin
+ * moverse; al elegir un restaurante baja a media altura con el resorte de
+ * siempre, y el panel avisa cuando termina (la cámara espera eso). Aquí y no
+ * en el inicio: viaja con la barra, no en el arranque.
+ */
+:global([data-sheet]:has(> [data-sheet-body] > :is([data-full-list], [data-list-loading]))) {
+    inset: 0;
+    z-index: 20;
+    max-height: 100%;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) var(--veni-tabbar-space) env(safe-area-inset-left);
+    border-width: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transition-property: none;
+}
+
+:global([data-sheet]:has(> [data-sheet-body] > :is([data-full-list], [data-list-loading])) > [data-sheet-handle]) {
+    display: none;
+}
+
+/* Sin manija, lo de adentro no le deja lugar arriba: solo el margen del sistema y un respiro. */
+:global([data-sheet]:has(> [data-sheet-body] > :is([data-full-list], [data-list-loading])) > [data-sheet-body]) {
+    padding-top: 0.5rem;
+}
+
+:global([data-sheet]:has(> [data-sheet-body] > :is([data-full-list], [data-list-loading])) ~ *) {
+    visibility: hidden;
+}
+
 /* El panel del inicio al costado (`side:`, app.css) empieza después de la isla. */
 @media (width >= 48rem), (width >= 30rem) and (height < 32rem) {
     :global(.veni-safe-side) {

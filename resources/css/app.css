@@ -13,10 +13,11 @@
 @source not '../js/**/*.test.ts';
 /*
  * Palabras que son utilidades pero ninguna plantilla usa como clase: el CSS
- * con alcance de un componente las nombra (la barra de pestañas, #139) y
+ * con alcance de un componente las nombra (la barra de pestañas y lo de
+ * arriba de la lista del celular, #139) y
  * sumarían su utilidad al arranque. Se excluyen las palabras, no los archivos.
  */
-@source not inline('transition backdrop-filter flex-grow');
+@source not inline('transition backdrop-filter flex-grow sticky');
 
 /* El modo oscuro lo decide data-theme en <html> (ver resources/js/composables/useTheme.ts). */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
@@ -52,14 +53,14 @@
     --line: color-mix(in oklab, var(--veni-ciruela) 15%, transparent);
 
     /*
-     * Franja de abajo del mapa que nada tapa: la atribución de OpenStreetMap
-     * (ADR 0003). Encima flotan la bienvenida del inicio y el aviso de versión
-     * nueva. MapLibre la escribe en px (una línea de 20 px): el mínimo en px
-     * la cubre aunque el texto de la página se achique. En el celular suma la
-     * barra de pestañas (#139), debajo de la atribución: el panel del mapa y
-     * el aviso van encima de las dos.
+     * Franja de abajo del mapa que nada tapa. En computador, la atribución de
+     * OpenStreetMap (ADR 0003): encima flota el aviso de versión nueva.
+     * MapLibre la escribe en px (una línea de 20 px): el mínimo en px la
+     * cubre aunque el texto de la página se achique. En el celular el crédito
+     * es compacto y va arriba (#139, map/attribution.ts): la franja es solo la
+     * barra de pestañas, y el panel del mapa y el aviso van encima de ella.
      */
-    --veni-attribution-clearance: calc(max(2.25rem, 36px) + var(--veni-tabbar-space));
+    --veni-attribution-clearance: max(2.25rem, 36px);
 
     /*
      * Base visual del celular (#138, ADR 0040). Radios, con los de la marca:
@@ -81,13 +82,14 @@
      * El lugar de la barra de pestañas del celular (#139, ADR 0041), que baja
      * aparte: reservado desde el primer pintado, así el panel del mapa no
      * salta cuando llega. Su alto (3,5 rem), el aire de abajo y el margen del
-     * sistema. En computador no hay barra. La franja de la atribución (arriba)
-     * ya la suma: el panel del mapa y el aviso de versión nueva la usan sola.
+     * sistema. En computador no hay barra. En el celular es la franja de
+     * abajo (arriba): el panel del mapa y el aviso de versión nueva usan esa.
      */
     --veni-tabbar-space: 0px;
 
     @media (width < 64rem) {
         --veni-tabbar-space: calc(4.5rem + env(safe-area-inset-bottom));
+        --veni-attribution-clearance: var(--veni-tabbar-space);
     }
 }
 

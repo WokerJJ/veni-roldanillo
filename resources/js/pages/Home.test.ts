@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { h } from 'vue';
@@ -200,17 +202,17 @@ describe('Home', () => {
         expect(panel().text()).toContain(intro);
     });
 
-    it('la bienvenida deja libre la atribución del mapa y se corre sobre el aviso de versión nueva', async () => {
+    it('la bienvenida deja libre la barra de pestañas (el crédito del mapa va arriba, #139) y se corre sobre el aviso de versión nueva', async () => {
         const { panel } = await mountHome();
 
         // La misma holgura que el aviso (UpdatePrompt.vue) más el lugar que él ocupa cuando se ve.
-        expect(panel().classes()).toContain('bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))]');
+        expect(panel().classes()).toContain('bottom-[calc(var(--veni-tabbar-space)_+_var(--veni-update-prompt-space,0px))]');
     });
 
     it('en el celular el panel va abajo, sin pasar del alto de su altura; desde 768 px (o acostado), a la izquierda, sin pasar del mapa', async () => {
         const { panel } = await mountHome();
 
-        expect(panel().classes()).toEqual(expect.arrayContaining(['max-h-(--sheet-height)', 'side:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)]', 'side:top-4']));
+        expect(panel().classes()).toEqual(expect.arrayContaining(['max-h-(--sheet-height)', 'side:max-h-[calc(100%_-_var(--veni-tabbar-space)_-_1rem)]', 'side:top-4']));
         expect(panel().attributes('style')).toContain('--sheet-height: 8.5rem');
     });
 
@@ -1318,6 +1320,103 @@ describe('Home con la barra de pestañas (#139, ADR 0041)', () => {
         await flushPromises();
         expect(panel().find('[role="dialog"]').exists()).toBe(false);
         expect(items()).toHaveLength(2);
+    });
+
+    it('«Lista» muestra la lista a pantalla completa: el panel de abajo con la lista, con lo de arriba fijo, sin desmontar el mapa', async () => {
+        const { showHomeList } = await import('@/navigation/tabs');
+        const { panel, map } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        const mapView = map().element;
+
+        showHomeList('heading');
+        await flushPromises();
+        // Lo que reconoce la regla de TabBar.vue: el panel de abajo (`data-sheet`) con la lista adentro.
+        expect(panel().attributes('data-sheet')).toBeDefined();
+        expect(panel().find('[data-sheet-body] > [data-full-list]').exists()).toBe(true);
+        expect(panel().get('[data-full-list] h2').text()).toBe('Restaurantes');
+        // El buscador, los filtros en píldoras y cuántos hay van juntos arriba; las filas, después.
+        const head = panel().get('[data-list-head]');
+        expect(head.find('input[type="search"]').exists()).toBe(true);
+        expect(head.find('[data-count]').text()).toBe('2 restaurantes en el mapa');
+        expect(head.find('button[data-slug]').exists()).toBe(false);
+
+        showHomeList(false);
+        await flushPromises();
+        expect(panel().find('[data-full-list]').exists()).toBe(false);
+        // El mismo mapa: no se desmontó ni volvió a pedir sus teselas.
+        expect(map().element).toBe(mapView);
+    });
+
+    it('la pantalla completa la dice el CSS de la barra (fuera del arranque): de borde a borde, sobre la barra, sin manija y con el mapa oculto', () => {
+        const css = readFileSync('resources/js/components/TabBar.vue', 'utf8');
+        const full = ':global([data-sheet]:has(> [data-sheet-body] > :is([data-full-list], [data-list-loading]))';
+
+        expect(css).toContain(`${full}) {`);
+        expect(css).toMatch(/inset: 0;\s*z-index: 20;\s*max-height: 100%;\s*padding: env\(safe-area-inset-top\) env\(safe-area-inset-right\) var\(--veni-tabbar-space\) env\(safe-area-inset-left\);/);
+        expect(css).toContain(`${full} > [data-sheet-handle]) {
+    display: none;`);
+        expect(css).toContain(`${full} ~ *) {
+    visibility: hidden;`);
+    });
+
+    it('a pantalla completa solo en el celular: en computador la lista va en la barra lateral, sin panel de abajo (ADR 0037)', async () => {
+        const media = stubMedia(phoneWidth);
+        const { showHomeList } = await import('@/navigation/tabs');
+        const { panel } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        showHomeList('heading');
+        await flushPromises();
+        expect(panel().find('[data-full-list]').exists()).toBe(true);
+
+        media.change(desktopWidth);
+        await vi.dynamicImportSettled();
+        await flushPromises();
+        expect(panel().attributes('data-sheet')).toBeUndefined();
+        expect(panel().find('[data-full-list]').exists()).toBe(false);
+
+        media.change(phoneWidth);
+        await flushPromises();
+        expect(panel().find('[data-sheet-body] > [data-full-list]').exists()).toBe(true);
+    });
+
+    it('ida y vuelta entre «Mapa» y «Lista» conserva la búsqueda y los filtros, y el foco vuelve al título de la lista', async () => {
+        const { showHomeList } = await import('@/navigation/tabs');
+        const { panel, items, layer } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        showHomeList('heading');
+        await flushPromises();
+        await panel().get('input[data-search]').setValue('guadual');
+        await panel().get('input[data-filter="delivery"]').setValue(true);
+        await flushPromises();
+        expect(layer().props('filters')).toMatchObject({ query: 'guadual', delivery: true });
+
+        showHomeList(false);
+        await flushPromises();
+        expect(items()).toHaveLength(0);
+        // En el mapa siguen los filtros.
+        expect(layer().props('filters')).toMatchObject({ query: 'guadual', delivery: true });
+
+        showHomeList('heading');
+        await flushPromises();
+        expect((panel().get('input[data-search]').element as HTMLInputElement).value).toBe('guadual');
+        expect((panel().get('input[data-filter="delivery"]').element as HTMLInputElement).checked).toBe(true);
+        expect(document.activeElement).toBe(panel().get('[data-full-list] h2').element);
+    });
+
+    it('elegir desde la lista a pantalla completa vuelve al mapa con su resumen y el marcador elegido; al cerrarlo, la lista vuelve con el foco en su fila', async () => {
+        const { showHomeList } = await import('@/navigation/tabs');
+        const { panel, items, layer, pressEscape } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        showHomeList('heading');
+        await flushPromises();
+        const slug = items()[1]?.attributes('data-slug');
+
+        await items()[1]?.trigger('click');
+        await flushPromises();
+        expect(panel().find('[data-full-list]').exists()).toBe(false);
+        expect(panel().find('[role="dialog"]').exists()).toBe(true);
+        expect(panel().attributes('data-sheet')).toBe('half');
+        expect(layer().props('selected')).toBe(slug);
+
+        await pressEscape();
+        expect(panel().find('[data-full-list]').exists()).toBe(true);
+        expect(document.activeElement?.getAttribute('data-slug')).toBe(slug);
     });
 
     it('le pasa a la barra la lista publicada, para que «Pedido» no ofrezca uno que ya no está (BUG-051)', async () => {

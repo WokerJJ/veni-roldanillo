@@ -330,7 +330,8 @@ defineExpose({ focusItem });
 </script>
 
 <template>
-    <section :aria-labelledby="headingId" class="flex min-h-0 flex-col">
+    <!-- En el celular llena la pantalla de la lista (#139, `data-full-list`: TabBar.vue); en la barra, el alto lo pone quien la usa. -->
+    <section :aria-labelledby="headingId" class="flex min-h-0 flex-col" :class="{ 'flex-1': !pinnedFinder }" :data-full-list="pinnedFinder ? undefined : ''">
         <div class="flex items-start justify-between gap-2">
             <h2 :id="headingId" ref="heading" tabindex="-1" class="py-2 text-lg leading-tight focus:outline-none md:text-xl">
                 {{ t('restaurants.list_title') }}
@@ -347,82 +348,78 @@ defineExpose({ focusItem });
         </div>
 
         <!--
-            Todo lo de abajo del título se desplaza junto: con poco alto, el
-            buscador no deja la lista sin lugar. Con `pinnedFinder`, el
-            buscador y «Sugerime algo» quedan fijos y se desplaza lo de abajo.
+            En el celular (la lista a pantalla completa, #139) se desplaza
+            todo lo de abajo del título, con el buscador, los filtros y
+            cuántos hay pegados arriba (`sticky`); con poco alto (acostado)
+            se desplazan con las filas y no las dejan sin lugar. Con
+            `pinnedFinder`, el buscador y «Sugerime algo» quedan fijos y se
+            desplaza lo de abajo.
         -->
         <div :class="pinnedFinder ? 'contents' : SCROLL">
-            <RestaurantSearch v-if="pinnedFinder" :filters="filters" @update:filters="emit('update:filters', $event)" />
-            <RestaurantFilters v-else :filters="filters" :categories="categories" @update:filters="emit('update:filters', $event)" />
+            <div :class="pinnedFinder ? 'contents' : 'list-head'" data-list-head>
+                <RestaurantSearch v-if="pinnedFinder" :filters="filters" @update:filters="emit('update:filters', $event)" />
+                <RestaurantFilters v-else :filters="filters" :categories="categories" @update:filters="emit('update:filters', $event)" />
 
-            <!-- Con tres letras o más, los platos primero: si se buscó «sancocho», es lo que se quería ver. -->
-            <DishResults
-                v-if="!pinnedFinder"
-                :query="filters.query"
-                :allowed="allowedForDishes"
-                @select="$emit('select', $event)"
-                @clear-filters="emit('update:filters', { ...NO_FILTERS, query: filters.query })"
-            />
-
-            <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <!-- Se ve enseguida; el lector lo oye de la región de abajo, medio segundo después de dejar de teclear. -->
-                <!--
+                <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <!-- Se ve enseguida; el lector lo oye de la región de abajo, medio segundo después de dejar de teclear. -->
+                    <!--
                     En la barra, cuántos hay va en su propia línea y, con algo
                     puesto (también solo la búsqueda), «Quitar filtros» a su
                     lado: fuera del panel, se ve aunque esté cerrado, y en la
                     fila de abajo «Sugerime algo» y «Filtros» siguen juntos.
                 -->
-                <div :class="pinnedFinder ? 'flex basis-full items-center justify-between gap-2' : 'contents'">
-                    <p class="text-sm" aria-hidden="true" data-count>{{ message }}</p>
+                    <div :class="pinnedFinder ? 'flex basis-full items-center justify-between gap-2' : 'contents'">
+                        <p class="text-sm" aria-hidden="true" data-count>{{ message }}</p>
+                        <button
+                            v-if="pinnedFinder && hasFilters(filters)"
+                            type="button"
+                            class="inline-flex min-h-touch shrink-0 items-center gap-2 rounded-full border border-line px-4 text-sm font-semibold hover:bg-surface"
+                            data-clear-filters
+                            @click="clearFilters"
+                        >
+                            <Icon name="cerrar" :size="20" />
+                            {{ t('finder.clear') }}
+                        </button>
+                    </div>
+                    <p role="status" class="sr-only" data-count-status>{{ announced }}</p>
                     <button
-                        v-if="pinnedFinder && hasFilters(filters)"
                         type="button"
-                        class="inline-flex min-h-touch shrink-0 items-center gap-2 rounded-full border border-line px-4 text-sm font-semibold hover:bg-surface"
-                        data-clear-filters
-                        @click="clearFilters"
+                        :class="PILL"
+                        data-suggest
+                        @click="suggest"
                     >
-                        <Icon name="cerrar" :size="20" />
-                        {{ t('finder.clear') }}
+                        <Icon name="estrella" :size="20" />
+                        {{ t('finder.suggest') }}
+                    </button>
+                    <!-- Sin abiertos (#138, A1): el que abre primero, que el aviso de arriba nombra. -->
+                    <button
+                        v-if="next"
+                        type="button"
+                        :class="PILL"
+                        data-suggest-next
+                        @click="$emit('select', next.slug)"
+                    >
+                        <Icon name="chevron-derecha" :size="20" />
+                        {{ t('finder.suggest_view', { name: next.name }) }}
+                    </button>
+                    <!-- En la barra, el último de lo fijo: el siguiente en el foco es su panel, arriba de lo que se desplaza. El chevron dice si está abierto. -->
+                    <button
+                        v-if="pinnedFinder"
+                        :id="toggleId"
+                        ref="filtersToggle"
+                        type="button"
+                        class="inline-flex min-h-touch items-center gap-2 rounded-full border px-4 font-semibold hover:bg-surface"
+                        :class="activeFilters > 0 ? 'border-current' : 'border-line'"
+                        :aria-expanded="filtersOpen"
+                        :aria-controls="panelId"
+                        data-filters-toggle
+                        @click="toggleFilters"
+                    >
+                        <Icon name="filtro" :size="20" />
+                        {{ activeFilters > 0 ? t('finder.filters_active', { count: activeFilters }) : t('finder.filters') }}
+                        <Icon :name="filtersOpen ? 'chevron-arriba' : 'chevron-abajo'" :size="20" />
                     </button>
                 </div>
-                <p role="status" class="sr-only" data-count-status>{{ announced }}</p>
-                <button
-                    type="button"
-                    :class="PILL"
-                    data-suggest
-                    @click="suggest"
-                >
-                    <Icon name="estrella" :size="20" />
-                    {{ t('finder.suggest') }}
-                </button>
-                <!-- Sin abiertos (#138, A1): el que abre primero, que el aviso de arriba nombra. -->
-                <button
-                    v-if="next"
-                    type="button"
-                    :class="PILL"
-                    data-suggest-next
-                    @click="$emit('select', next.slug)"
-                >
-                    <Icon name="chevron-derecha" :size="20" />
-                    {{ t('finder.suggest_view', { name: next.name }) }}
-                </button>
-                <!-- En la barra, el último de lo fijo: el siguiente en el foco es su panel, arriba de lo que se desplaza. El chevron dice si está abierto. -->
-                <button
-                    v-if="pinnedFinder"
-                    :id="toggleId"
-                    ref="filtersToggle"
-                    type="button"
-                    class="inline-flex min-h-touch items-center gap-2 rounded-full border px-4 font-semibold hover:bg-surface"
-                    :class="activeFilters > 0 ? 'border-current' : 'border-line'"
-                    :aria-expanded="filtersOpen"
-                    :aria-controls="panelId"
-                    data-filters-toggle
-                    @click="toggleFilters"
-                >
-                    <Icon name="filtro" :size="20" />
-                    {{ activeFilters > 0 ? t('finder.filters_active', { count: activeFilters }) : t('finder.filters') }}
-                    <Icon :name="filtersOpen ? 'chevron-arriba' : 'chevron-abajo'" :size="20" />
-                </button>
             </div>
 
             <div ref="scroller" :class="pinnedFinder ? `${SCROLL} mt-2 flex-1` : 'contents'" data-list-scroll>
@@ -439,8 +436,8 @@ defineExpose({ focusItem });
                     data-filters-panel
                     @update:filters="emit('update:filters', $event)"
                 />
+                <!-- Con tres letras o más, los platos primero: si se buscó «sancocho», es lo que se quería ver. -->
                 <DishResults
-                    v-if="pinnedFinder"
                     :query="filters.query"
                     :allowed="allowedForDishes"
                     @select="$emit('select', $event)"
@@ -570,6 +567,26 @@ defineExpose({ focusItem });
 </template>
 
 <style scoped>
+/*
+ * Lo de arriba de la lista del celular (#139): el buscador, los filtros y
+ * cuántos hay, pegados arriba mientras se desplazan las filas. Con poco alto
+ * (acostado) se desplazan con ellas. En el CSS de la lista y no con
+ * utilidades de Tailwind: no viaja en el arranque.
+ */
+.list-head {
+    margin-inline: -0.5rem;
+    padding: 0 0.5rem 0.5rem;
+    background-color: var(--canvas);
+}
+
+@media (height >= 32rem) {
+    .list-head {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+}
+
 /*
  * Las filas del celular (#139, ADR 0041). CSS propio de la lista, que baja
  * aparte: las utilidades nuevas de Tailwind irían al CSS del arranque.

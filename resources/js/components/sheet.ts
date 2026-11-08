@@ -22,16 +22,17 @@ export const CONTROLS_REM = 10;
 
 /**
  * El alto de cada una, como lo entiende CSS (`--sheet-height`). Media altura es
- * la mitad del mapa; completo, todo el mapa menos la franja de la atribución,
- * el aviso de versión nueva si se ve y la franja de los botones del mapa (la
- * de la atribución suma la barra de pestañas del celular, #139). Es un alto máximo:
+ * la mitad del mapa; completo, todo el mapa menos la barra de pestañas (el
+ * panel flota solo por debajo de 1024 px, donde la hay, #139; el crédito del
+ * mapa va arriba), el aviso de versión nueva si se ve y la franja de los
+ * botones del mapa. Es un alto máximo:
  * si lo de adentro es más corto (la ruta compacta), el panel se ajusta a él y
  * no tapa mapa de más.
  */
 export const SNAP_HEIGHTS: Readonly<Record<SheetSnap, string>> = {
     peek: `${String(PEEK_REM)}rem`,
     half: '50%',
-    full: `calc(100% - var(--veni-attribution-clearance) - var(--veni-update-prompt-space, 0px) - ${String(CONTROLS_REM)}rem)`,
+    full: `calc(100% - var(--veni-tabbar-space) - var(--veni-update-prompt-space, 0px) - ${String(CONTROLS_REM)}rem)`,
 };
 
 /** Menos que esto (px) entre apoyar y soltar es un toque, no un arrastre. */

@@ -237,11 +237,16 @@ const hasSampleData = computed(() => restaurants.value.some(({ fictitious }) => 
  * mapa y sin flotar cuando el mapa no cargó en el celular (`docked`, su
  * aviso lo taparía: van en una columna que se desplaza si no entran los dos),
  * o flotando encima del mapa (`floating`): el panel de abajo en un celular
- * vertical (`sheet:`, ADR 0022), que deja libre la franja de la atribución de
- * OpenStreetMap (con la barra de pestañas debajo, #139) y se corre encima del aviso de
- * versión nueva, o al costado (`side:`), arriba a la izquierda, sin pasar del
- * alto del mapa. Sólido (#139, ADR 0041): al 95 % se veían los marcadores y
- * las calles detrás del texto.
+ * vertical (`sheet:`, ADR 0022), que deja libre la barra de pestañas (#139)
+ * y se corre encima del aviso de versión nueva, o al costado (`side:`),
+ * arriba a la izquierda, sin pasar del alto del mapa. Sólido (#139, ADR
+ * 0041): al 95 % se veían los marcadores y las calles detrás del texto.
+ *
+ * Con la lista, el panel flotante ocupa toda la pantalla, de borde a borde,
+ * como una pestaña de iOS (#139): lo dice el CSS de la barra de pestañas
+ * (`.veni-full-list`, TabBar.vue), que lo reconoce porque muestra la lista o
+ * sus siluetas, y no viaja en el arranque. El mapa sigue montado debajo (no
+ * recarga sus teselas), oculto para la vista, el foco y el lector.
  */
 const layout = computed(() => (desktop.value ? 'sidebar' : mapFailed.value ? 'docked' : 'floating'));
 const LAYOUTS = {
@@ -259,7 +264,7 @@ const LAYOUTS = {
     },
     floating: {
         page: '',
-        sheet: 'absolute inset-x-2 bottom-[calc(var(--veni-attribution-clearance)_+_var(--veni-update-prompt-space,0px))] max-h-(--sheet-height) rounded-veni-lg border border-line bg-canvas shadow-lg veni-safe-side side:inset-x-auto side:top-4 side:bottom-auto side:left-4 side:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)] side:w-[calc(100%_-_2rem)] side:max-w-sm',
+        sheet: 'absolute inset-x-2 bottom-[calc(var(--veni-tabbar-space)_+_var(--veni-update-prompt-space,0px))] max-h-(--sheet-height) rounded-veni-lg border border-line bg-canvas shadow-lg veni-safe-side side:inset-x-auto side:top-4 side:bottom-auto side:left-4 side:max-h-[calc(100%_-_var(--veni-tabbar-space)_-_1rem)] side:w-[calc(100%_-_2rem)] side:max-w-sm',
         map: '',
         footer: 'contents',
     },
