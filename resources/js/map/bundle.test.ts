@@ -467,6 +467,26 @@ describe('presupuesto de descarga', () => {
         // regla abría la lista con `price=2` o `q=+`), y la respuesta al
         // tocar y el panel entraron en la capa base con `@variant sheet`.
         // Lo que queda por etapa del rediseño, en el ADR 0040.
+        //
+        // Con la navegación del celular (#139, ADR 0041; tope de la etapa:
+        // 0,45 kB): 81,684 antes y 82,108 después (+0,424). La barra de
+        // pestañas, la cabecera chica y «Ajustes» bajan con components/links.ts;
+        // viajan el lugar reservado de la barra (--veni-tabbar-space), la
+        // franja sin barra de desplazamiento del panel, la lista compartida
+        // con la barra (navigation/tabs.ts) y el buscador de la bienvenida en
+        // lugar de «Ver la lista». Hecho primero medía 90,153: importar el
+        // idioma y el tema desde otro chunk que la entrada partía la entrada
+        // en tres (+7,6; ahora el layout los da con provide), y la palabra de
+        // una propiedad de CSS en un <style> de un componente sumaba su
+        // utilidad de Tailwind (`transition`, `backdrop-filter`, `flex-grow`):
+        // se escriben las propiedades largas, y app.css excluye esas palabras
+        // (`@source not inline`), no el archivo.
+        // Con las correcciones de su revisión, 82,149 (+0,041; 0,015 sobre el
+        // tope de la etapa, registrado en el ADR 0041): la orden de mostrar la
+        // lista (un contador, así «Lista» y buscar responden aunque pidan lo
+        // que ya se ve) y la lista publicada para «Pedido». Lo demás bajó
+        // aparte: los márgenes seguros y el `scroll-padding` de la barra van
+        // en el CSS de TabBar.vue, y la lista vigila la orden por su cuenta.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 

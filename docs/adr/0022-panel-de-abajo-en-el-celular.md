@@ -43,3 +43,7 @@ El arranque estaba en 82,9 kB de 83, y el ADR 0020 fijó qué hacer antes de sub
 ## Precisión: la lista a la altura completa (#138)
 
 - La lista abre a la altura completa y no a media altura, y el panel cambia de alto con un resorte de 320 ms solo sin «Reducir movimiento». Ver el ADR 0040.
+
+## Precisión: la navegación del celular (#139)
+
+- El panel es sólido, el asomado mide 8,5 rem (el buscador y una fila de botones, en lugar del título y «Ver la lista»), los filtros van en píldoras bajo el buscador y la franja de abajo suma la barra de pestañas. Ver el ADR 0041.
