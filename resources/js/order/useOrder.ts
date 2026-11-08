@@ -4,7 +4,7 @@ import { removeWithPrefix } from '@/device/localStore';
 
 import type { OrderItem } from './selection';
 import { addItem, clampQuantity, itemsCount, itemsTotal } from './selection';
-import { CART_PREFIX, CART_TTL_MS, loadSavedCart, parseCart, saveCart } from './storage';
+import { CART_PREFIX, CART_TTL_MS, loadSavedCart, parseCart, saveCart, savedCartSlugs } from './storage';
 
 /**
  * El pedido que se está armando, por restaurante (#14 y #15, ADR 0023 y
@@ -77,7 +77,10 @@ function onVisibilityChange(): void {
     }
 }
 
-/** Otra pestaña cambió el carrito de un restaurante que esta ya tiene abierto (key null: vació todo). */
+/**
+ * Otra pestaña cambió un carrito (key null: vació todo). El de un restaurante
+ * que esta ya leyó se sigue; uno nuevo se carga, para que «Pedido» lo cuente.
+ */
 function onStorage(event: StorageEvent): void {
     if (event.key === null) {
         forgetAllOrders();
@@ -91,9 +94,10 @@ function onStorage(event: StorageEvent): void {
 
     const slug = event.key.slice(CART_PREFIX.length);
 
-    if (loaded.has(slug)) {
+    if (loaded.has(slug) || event.newValue !== null) {
         const now = Date.now();
 
+        loaded.add(slug);
         set(slug, parseCart(event.newValue, now) ?? [], now);
     }
 }
@@ -108,10 +112,8 @@ function listen(): void {
     document.addEventListener('visibilitychange', onVisibilityChange);
 }
 
-/** El pedido del restaurante `slug`. */
-export function useOrder(slug: string): Order {
-    listen();
-
+/** Lee una vez el carrito guardado de `slug` y lo vence si pasó un día. */
+function load(slug: string): void {
     if (!loaded.has(slug)) {
         loaded.add(slug);
 
@@ -123,6 +125,55 @@ export function useOrder(slug: string): Order {
     }
 
     expire(slug);
+}
+
+/**
+ * El pedido que cambió último entre los de este teléfono, con cuántos platos
+ * lleva, o null sin ninguno: la pestaña «Pedido» de la barra del celular
+ * (#139, ADR 0041). Lee los carritos guardados al llamarla y sigue los
+ * cambios de cualquier ficha (y de otras pestañas) mientras está montada.
+ * `available` deja afuera los de restaurantes que ya no se ofrecen (no están
+ * en la lista publicada); se vuelve a mirar si lee algo reactivo.
+ */
+export function useLatestOrder(available: (slug: string) => boolean = () => true): ComputedRef<{ slug: string; count: number } | null> {
+    listen();
+
+    for (const slug of savedCartSlugs()) {
+        load(slug);
+    }
+
+    return computed(() => {
+        let latest: { slug: string; count: number; at: number } | null = null;
+
+        for (const [slug, items] of orders.value) {
+            const at = changedAt.get(slug) ?? 0;
+
+            if ((latest === null || at > latest.at) && available(slug)) {
+                latest = { slug, count: itemsCount(items), at };
+            }
+        }
+
+        return latest === null ? null : { slug: latest.slug, count: latest.count };
+    });
+}
+
+/**
+ * El restaurante cuyo carrito pidió abrir la pestaña «Pedido» (#139), o null:
+ * un solo canal, en esa ficha o desde otra página. La barra del pedido de esa
+ * ficha lo vigila desde que se monta y lo consume solo si es el suyo; quien
+ * lo pide lo olvida al terminar su visita (si la ficha no llegó a tomarlo).
+ */
+export const cartRequest = shallowRef<string | null>(null);
+
+export function requestCart(slug: string): void {
+    cartRequest.value = slug;
+}
+
+/** El pedido del restaurante `slug`. */
+export function useOrder(slug: string): Order {
+    listen();
+
+    load(slug);
 
     const items = computed(() => orders.value.get(slug) ?? []);
 
@@ -158,6 +209,11 @@ export function useOrder(slug: string): Order {
     };
 }
 
+/** Olvida el pedido de un restaurante que ya no existe (su ficha respondió 404), aquí y en el dispositivo. */
+export function forgetOrder(slug: string): void {
+    update(slug, []);
+}
+
 /**
  * Vacía todos los pedidos sin enviar, en la memoria y en el dispositivo
  * («Borrar todo lo guardado», #16). Las pestañas abiertas que tengan uno lo
@@ -173,4 +229,5 @@ export function forgetAllOrders(): void {
 export function resetOrders(): void {
     forgetAllOrders();
     loaded.clear();
+    cartRequest.value = null;
 }

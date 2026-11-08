@@ -2,7 +2,7 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { OrderItem } from '@/order/selection';
-import { resetOrders, useOrder } from '@/order/useOrder';
+import { cartRequest, requestCart, resetOrders, useOrder } from '@/order/useOrder';
 import type { RestaurantProfile } from '@/restaurants/profile';
 import type * as FakeInertia from '@/testing/inertia';
 
@@ -50,6 +50,45 @@ describe('OrderBar', () => {
         const button = wrapper.get('[data-open-cart]');
         expect(button.attributes('aria-haspopup')).toBe('dialog');
         expect(button.text().replace(/\p{Zs}/gu, ' ')).toBe('Ver tu pedido 2 platos · $ 8.000');
+    });
+
+    it('la pestaña «Pedido» de otra página lo pide: la ficha abre el carrito al llegar, una sola vez (#139)', async () => {
+        useOrder(RESTAURANT.slug).add(JUICE);
+        requestCart(RESTAURANT.slug);
+        const wrapper = await mountBar();
+
+        await vi.waitFor(() => {
+            expect(wrapper.find('[data-order-cart]').exists()).toBe(true);
+        });
+
+        wrapper.unmount();
+        const again = await mountBar();
+        await flushPromises();
+        expect(again.find('[data-order-cart]').exists()).toBe(false);
+    });
+
+    it('el pedido de otro restaurante no abre el carrito de esta ficha ni se gasta aquí (BUG-054)', async () => {
+        useOrder(RESTAURANT.slug).add(JUICE);
+        requestCart('otro-restaurante');
+        const wrapper = await mountBar();
+        await flushPromises();
+
+        expect(wrapper.find('[data-order-cart]').exists()).toBe(false);
+        expect(cartRequest.value).toBe('otro-restaurante');
+    });
+
+    it('ya en la ficha, la pestaña «Pedido» lo pide y el carrito se abre sin tocar el botón (EVA-067)', async () => {
+        useOrder(RESTAURANT.slug).add(JUICE);
+        const wrapper = await mountBar();
+        await flushPromises();
+        expect(wrapper.find('[data-order-cart]').exists()).toBe(false);
+
+        requestCart(RESTAURANT.slug);
+
+        await vi.waitFor(() => {
+            expect(wrapper.find('[data-order-cart]').exists()).toBe(true);
+        });
+        expect(cartRequest.value).toBeNull();
     });
 
     it('abre el carrito al tocarla y devuelve el foco al cerrar', async () => {

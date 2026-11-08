@@ -1,4 +1,4 @@
-import { isRecord, readItem, text, writeItem } from '@/device/localStore';
+import { isRecord, keysWithPrefix, readItem, text, writeItem } from '@/device/localStore';
 
 import type { DeliveryMode } from './checkout';
 import { ADDRESS_MAX_LENGTH, NAME_MAX_LENGTH, NEIGHBORHOOD_MAX_LENGTH, REFERENCE_MAX_LENGTH } from './checkout';
@@ -205,6 +205,11 @@ export function parseDelivery(raw: string | null, now: number): RememberedDelive
 /** El carrito del restaurante; si venció o está dañado, se borra. */
 export function loadCart(slug: string, now: number = Date.now()): OrderItem[] {
     return loadSavedCart(slug, now)?.items ?? [];
+}
+
+/** Los restaurantes con un carrito guardado en el dispositivo (vigente o no: quien lo lee lo vence). */
+export function savedCartSlugs(): string[] {
+    return keysWithPrefix(CART_PREFIX).map((key) => key.slice(CART_PREFIX.length));
 }
 
 /** Como loadCart, con la fecha del último cambio; null si no hay carrito vigente. */

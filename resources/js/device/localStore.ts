@@ -47,6 +47,27 @@ export function writeItem(key: string, value: string | null): boolean {
     }
 }
 
+/** Las claves que empiezan con `prefix`; sin almacenamiento, ninguna. */
+export function keysWithPrefix(prefix: string): string[] {
+    const keys: string[] = [];
+
+    try {
+        const store = storage();
+
+        for (let index = 0; index < (store?.length ?? 0); index++) {
+            const key = store?.key(index);
+
+            if (key?.startsWith(prefix) === true) {
+                keys.push(key);
+            }
+        }
+    } catch {
+        // Bloqueado: como si no hubiera nada.
+    }
+
+    return keys;
+}
+
 /** Borra todas las claves que empiezan con `prefix`. */
 export function removeWithPrefix(prefix: string): void {
     try {
@@ -56,17 +77,7 @@ export function removeWithPrefix(prefix: string): void {
             return;
         }
 
-        const keys: string[] = [];
-
-        for (let index = 0; index < store.length; index++) {
-            const key = store.key(index);
-
-            if (key?.startsWith(prefix) === true) {
-                keys.push(key);
-            }
-        }
-
-        keys.forEach((key) => {
+        keysWithPrefix(prefix).forEach((key) => {
             store.removeItem(key);
         });
     } catch {
