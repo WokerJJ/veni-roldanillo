@@ -418,4 +418,58 @@ describe('RestaurantList · favoritos (#16)', () => {
         });
         expect(wrapper.find('[data-saved]').exists()).toBe(false);
     });
+
+    describe('las filas del celular (#139, ADR 0041)', () => {
+        const WITH_LUNCH = restaurant({
+            slug: 'prueba-con-almuerzo',
+            name: 'Restaurante de Prueba Con Almuerzo (ficticio)',
+            categories: [],
+            lunch: { date: '2026-10-07', description: 'Sancocho de prueba', price: 12_000 },
+        });
+
+        it('llevan la miniatura de su tipo de comida (o la genérica), oculta para el lector', async () => {
+            const { wrapper } = await mountList('es', [LA_CEIBA, WITH_LUNCH]);
+            const thumbs = wrapper.findAll('button[data-slug] [data-thumb]');
+
+            expect(thumbs).toHaveLength(2);
+            expect(thumbs.every((thumb) => thumb.attributes('aria-hidden') === 'true')).toBe(true);
+        });
+
+        it('el estado va en una píldora con texto, de color si está abierto, y lo demás al lado: el lector oye lo mismo que antes', async () => {
+            const { wrapper, statuses } = await mountList();
+            const pills = wrapper.findAll('button[data-slug] .list-pill');
+
+            expect(pills.map((pill) => [pill.text(), pill.attributes('data-open')])).toEqual([
+                ['Abierto ahora', 'true'],
+                ['Cerrado', undefined],
+            ]);
+            expect(statuses()).toEqual(['Abierto ahora · cierra a las 3:00 p. m.', 'Cerrado · abre a las 6:00 p. m.']);
+        });
+
+        it('una línea con el almuerzo de hoy, si hay, o los precios, y la distancia con «¿Dónde estoy?»', async () => {
+            const { wrapper } = await mountList('es', [LA_CEIBA, WITH_LUNCH, EL_GUADUAL], { 'prueba-la-ceiba': 120, 'prueba-con-almuerzo': 340, 'prueba-el-guadual': 900 });
+            const line = (slug: string) => wrapper.find(`button[data-slug="${slug}"] [data-row-line]`);
+
+            expect(line('prueba-con-almuerzo').get('[data-row-lunch]').text().replace(/\p{Zs}/gu, ' ')).toBe('Almuerzo de hoy · $ 12.000');
+            expect(line('prueba-la-ceiba').find('[data-price-range]').exists()).toBe(true);
+            expect(line('prueba-la-ceiba').find('[data-distance]').exists()).toBe(true);
+            // Sin precios ni almuerzo, la distancia sola.
+            expect(line('prueba-el-guadual').text()).toBe(line('prueba-el-guadual').get('[data-distance]').text());
+        });
+
+        it('en la barra de computador las filas no cambian: sin miniatura ni píldora (ADR 0037)', async () => {
+            const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
+            inertia.reset();
+            inertia.receiveFromServer('es', { replace: true });
+            const { default: RestaurantList } = await import('./RestaurantList.vue');
+            const wrapper = mount(RestaurantList, { props: { restaurants: [LA_CEIBA, EL_GUADUAL], distances: null, pinnedFinder: true } });
+
+            expect(wrapper.find('[data-thumb]').exists()).toBe(false);
+            expect(wrapper.find('.list-pill').exists()).toBe(false);
+            expect(wrapper.findAll('button[data-slug] [data-status]').map((line) => line.text().replace(/\p{Zs}/gu, ' '))).toEqual([
+                'Abierto ahora · cierra a las 3:00 p. m.',
+                'Cerrado · abre a las 6:00 p. m.',
+            ]);
+        });
+    });
 });

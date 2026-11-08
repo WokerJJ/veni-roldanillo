@@ -1,13 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-
 import FilterControls from '@/components/FilterControls.vue';
 import Icon from '@/components/Icon.vue';
 import RestaurantSearch from '@/components/RestaurantSearch.vue';
 import { useI18n } from '@/composables/useI18n';
 import type { RestaurantCategory } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
-import { activeFilterCount } from '@/restaurants/filterCount';
 import { hasFilters, NO_FILTERS } from '@/restaurants/filterParams';
 
 /**
@@ -15,9 +12,11 @@ import { hasFilters, NO_FILTERS } from '@/restaurants/filterParams';
  * lista. No filtra: emite los filtros nuevos y quien la muestra (Home.vue)
  * los aplica a la lista y al mapa a la vez, y los escribe en la dirección.
  *
- * Los filtros van en un <details> nativo, cerrado al abrir la lista salvo que
- * ya haya alguno puesto: así el panel a media altura deja ver resultados.
- * «Quitar filtros» va fuera, y se ve aunque se cierre.
+ * Los filtros van como píldoras en una fila que se desplaza de lado, bajo el
+ * buscador (#139, ADR 0041): siempre a la vista y en una sola línea, así el
+ * panel deja ver resultados. Antes iban en un <details> cerrado. Son los
+ * mismos controles que la barra de computador (FilterControls, con `chips`).
+ * «Quitar filtros» va debajo, con algo puesto (también solo la búsqueda).
  *
  * En la barra lateral de computador (#130) la lista no usa este componente:
  * pone el buscador (RestaurantSearch) fijo arriba y los controles
@@ -33,24 +32,22 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-
-const activeCount = computed(() => activeFilterCount(filters));
-
-// Fijo al montar: si siguiera a los filtros, sacar el último cerraría el panel bajo el dedo.
-const startOpen = activeCount.value > 0;
 </script>
 
 <template>
     <div>
         <RestaurantSearch :filters="filters" @update:filters="emit('update:filters', $event)" />
 
-        <details class="mt-2" :open="startOpen" data-filters>
-            <summary class="inline-flex min-h-touch cursor-pointer items-center gap-2 rounded-full px-2 font-semibold hover:bg-surface">
-                <Icon name="filtro" :size="20" />
-                {{ activeCount > 0 ? t('finder.filters_active', { count: activeCount }) : t('finder.filters') }}
-            </summary>
-            <FilterControls :filters="filters" :categories="categories" @update:filters="emit('update:filters', $event)" />
-        </details>
+        <FilterControls
+            chips
+            role="group"
+            :aria-label="t('finder.filters')"
+            class="mt-2"
+            :filters="filters"
+            :categories="categories"
+            data-filters
+            @update:filters="emit('update:filters', $event)"
+        />
 
         <button
             v-if="hasFilters(filters)"

@@ -1,5 +1,6 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { h } from 'vue';
 
 import type { Restaurant } from '@/restaurants/api';
 import { NO_FILTERS } from '@/restaurants/filterParams';
@@ -27,12 +28,15 @@ async function mountHome({
     answer,
     url = '/',
     beforeChunks,
+    inLayout = false,
 }: {
     locale?: 'es' | 'en';
     answer?: readonly Restaurant[];
     url?: string;
     /** Lo que pasa recién montado, antes de que bajen el resumen y la lista. */
     beforeChunks?: () => void;
+    /** Dentro del layout de verdad, que le da al inicio el idioma y el tema (`provide`). */
+    inLayout?: boolean;
 } = {}) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     inertia.reset();
@@ -49,7 +53,9 @@ async function mountHome({
     const { default: Home } = await import('./Home.vue');
     const host = document.createElement('div');
     document.body.append(host);
-    const wrapper = mount(Home, { attachTo: host });
+    const wrapper = inLayout
+        ? mount((await import('@/layouts/AppLayout.vue')).default, { props: { immersive: true }, slots: { default: () => h(Home) }, attachTo: host })
+        : mount(Home, { attachTo: host });
     beforeChunks?.();
     // El resumen y la lista bajan aparte, apenas monta (ADR 0022).
     await vi.dynamicImportSettled();
@@ -69,7 +75,8 @@ async function mountHome({
         status: () => panel().get('[role="status"]'),
         // El espacio que no parte la línea de «3:00 p. m.» se compara como uno común.
         openStatus: () => panel().get('[data-status]').text().replaceAll(' ', ' '),
-        listButton: () => panel().findAll('button').find((button) => ['Ver la lista', 'Show the list'].includes(button.text())),
+        /** El buscador de la bienvenida (#139): abre la lista con el foco en el campo. Antes, «Ver la lista». */
+        listButton: () => panel().findAll('button').find((button) => button.attributes('data-search-open') !== undefined),
         items: () => wrapper.findAll('button[data-slug]'),
         layer: () => wrapper.getComponent({ name: 'RestaurantsLayer' }),
         map: () => wrapper.get('section[aria-busy]'),
@@ -158,13 +165,21 @@ describe('Home', () => {
         expect(credits.text()).toBe('Créditos y datos de OpenStreetMap');
     });
 
-    it('la bienvenida enlaza la guía de platos típicos, que baja con la lista (#21): en el celular la cabecera no muestra su navegación (#130)', async () => {
+    it('la bienvenida ya no enlaza la guía de platos: en el celular va en la barra de pestañas (#139)', async () => {
         const { wrapper } = await mountHome({ locale: 'en' });
         await vi.dynamicImportSettled();
 
-        const guide = wrapper.get('section [data-dish-guide-link]');
-        expect(guide.attributes('href')).toBe('/dishes');
-        expect(guide.text()).toBe('Typical dishes guide');
+        expect(wrapper.find('section [data-dish-guide-link]').exists()).toBe(false);
+    });
+
+    it('«Ajustes» del celular, al final de la bienvenida, lleva el idioma y el tema que le da el layout (#139)', async () => {
+        const { wrapper } = await mountHome({ answer: [LA_CEIBA] });
+        const settings = wrapper.get('section [data-settings]');
+
+        expect(settings.get('h2').text()).toBe('Ajustes');
+        expect(settings.attributes('aria-labelledby')).toBe(settings.get('h2').attributes('id'));
+        // Sin layout (esta prueba monta la página sola) no hay controles; con él, los de la cabecera (AppLayout.test.ts).
+        expect(settings.findAll('button')).toHaveLength(0);
     });
 
     it('muestra el mapa de Roldanillo', async () => {
@@ -196,14 +211,14 @@ describe('Home', () => {
         const { panel } = await mountHome();
 
         expect(panel().classes()).toEqual(expect.arrayContaining(['max-h-(--sheet-height)', 'side:max-h-[calc(100%_-_var(--veni-attribution-clearance)_-_1rem)]', 'side:top-4']));
-        expect(panel().attributes('style')).toContain('--sheet-height: 7.5rem');
+        expect(panel().attributes('style')).toContain('--sheet-height: 8.5rem');
     });
 
     it('el panel toma la altura de lo que muestra: asomado con la bienvenida, completo con la lista y a media altura con un resumen', async () => {
         const { panel, listButton, items } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
         expect(panel().attributes('data-sheet')).toBe('peek');
 
-        // «Ver la lista» la abre a la altura completa (#138, A2).
+        // El buscador de la bienvenida la abre a la altura completa (#138, A2; #139).
         await listButton()?.trigger('click');
         expect(panel().attributes('data-sheet')).toBe('full');
 
@@ -229,12 +244,12 @@ describe('Home', () => {
         expect(wrapper.getComponent({ name: 'MapView' }).props('overlay')).toBe(panel().element);
     });
 
-    it('no pone botones de tema ni de idioma sobre el mapa: son de la cabecera', async () => {
+    it('no pone botones de tema ni de idioma sobre el mapa: van en «Ajustes», al final del panel (#139)', async () => {
         const { wrapper } = await mountHome({ answer: [LA_CEIBA] });
 
         // La manija del panel no es un botón del mapa: cambia el alto del panel.
         // «Sugerime algo» y «Almuerzos de hoy» son de la bienvenida (#12).
-        expect(wrapper.findAll('button:not([data-sheet-handle])').map((button) => button.text())).toEqual(['Ver la lista', 'Sugerime algo']);
+        expect(wrapper.findAll('button:not([data-sheet-handle])').map((button) => button.text())).toEqual(['Buscá dónde comer', 'Sugerime algo']);
     });
 
     describe('los restaurantes', () => {
@@ -261,8 +276,8 @@ describe('Home', () => {
         });
 
         it.each([
-            ['es', '2 restaurantes en el mapa', 'Ver la lista'],
-            ['en', '2 restaurants on the map', 'Show the list'],
+            ['es', '2 restaurantes en el mapa', 'Buscá dónde comer'],
+            ['en', '2 restaurants on the map', 'Find where to eat'],
         ] as const)('cuando llegan, dice cuántos hay (%s) y ofrece la lista', async (locale, text, label) => {
             const { status, listButton } = await mountHome({ locale, answer: [LA_CEIBA, EL_GUADUAL] });
 
@@ -393,7 +408,7 @@ describe('Home', () => {
             expect(page().classes()).toEqual(expect.arrayContaining(['flex', 'flex-col']));
             expect(panel().classes()).not.toContain('absolute');
             expect(status().text()).toBe('2 restaurantes en el mapa');
-            expect(listButton()?.text()).toBe('Ver la lista');
+            expect(listButton()?.text()).toBe('Buscá dónde comer');
         });
 
         it('la lista, que es la alternativa al mapa, se abre y deja elegir un restaurante', async () => {
@@ -403,7 +418,8 @@ describe('Home', () => {
             await flushPromises();
 
             expect(items().map((item) => item.attributes('data-slug'))).toEqual(['prueba-la-ceiba', 'prueba-el-guadual']);
-            expect(document.activeElement).toBe(panel().get('h2').element);
+            // Desde el buscador de la bienvenida (#139): el foco va al campo.
+            expect(document.activeElement).toBe(panel().get('input[type="search"]').element);
 
             await items()[0]?.trigger('click');
             await flushPromises();
@@ -448,11 +464,11 @@ describe('Home', () => {
             expect(panel().findAll('li > a').map((link) => link.attributes('href'))).toEqual(['/restaurants/prueba-la-ceiba', '/restaurants/prueba-el-guadual']);
         });
 
-        it('se abre con su botón, con todos los restaurantes y el foco en su título', async () => {
+        it('se abre con el buscador de la bienvenida, con todos los restaurantes y el foco en el campo (#139)', async () => {
             const { items, panel, wrapper } = await mountWithList();
 
             expect(items().map((item) => item.attributes('data-slug'))).toEqual(['prueba-la-ceiba', 'prueba-el-guadual']);
-            expect(document.activeElement).toBe(panel().get('h2').element);
+            expect(document.activeElement).toBe(panel().get('input[type="search"]').element);
             // El título de la página sigue en el documento, y sigue siendo uno.
             expect(wrapper.findAll('h1')).toHaveLength(1);
             expect(wrapper.get('h1').classes()).toContain('sr-only');
@@ -517,8 +533,8 @@ describe('Home', () => {
             );
             const badge = panel().get('[data-sample]');
             expect(badge.text()).toBe('Datos de ejemplo');
-            // Al lado de «Ver la lista», como siempre.
-            expect(badge.element.parentElement?.querySelector('button')?.textContent.trim()).toBe('Ver la lista');
+            // Al lado de el buscador, como siempre.
+            expect(badge.element.parentElement?.querySelector('button')?.textContent.trim()).toBe('Buscá dónde comer');
         });
 
         it('lo dice, y «Reintentar» los vuelve a pedir', async () => {
@@ -554,7 +570,7 @@ describe('Home', () => {
             );
         });
 
-        it('«Ver la lista» también los vuelve a pedir y abre la lista cuando llegan', async () => {
+        it('El buscador de la bienvenida también los vuelve a pedir y abre la lista cuando llegan', async () => {
             const listImport = failListImport(1);
             const { panel, listButton } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
             await vi.waitFor(
@@ -1170,7 +1186,7 @@ describe('Home', () => {
 
         it('sin resultados lo dice, y «Quitar filtros» los saca de la lista, del mapa y de la dirección', async () => {
             const { layer, panel, replace } = await mountHome({ url: '/?r=x', answer: [LA_CEIBA, EL_GUADUAL] });
-            await panel().findAll('button').find((button) => button.text() === 'Ver la lista')?.trigger('click');
+            await panel().findAll('button').find((button) => button.text() === 'Buscá dónde comer')?.trigger('click');
             await flushPromises();
 
             await panel().get('input[data-search]').setValue('no existe');
@@ -1230,6 +1246,130 @@ describe('Home', () => {
             expect(lunches.get('a[data-lunch]').attributes('href')).toBe('/restaurants/prueba-la-ceiba');
             expect(lunches.get('[data-price]').text().replaceAll(' ', ' ')).toBe('$ 14.000');
         });
+    });
+});
+
+describe('Home con la barra de pestañas (#139, ADR 0041)', () => {
+    afterEach(async () => {
+        const { resetHomeList } = await import('@/navigation/tabs');
+        resetHomeList();
+    });
+
+    it('«Lista» abre la lista a la altura completa, y «Mapa» la cierra', async () => {
+        const { showHomeList } = await import('@/navigation/tabs');
+        const { panel, items } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+
+        showHomeList('heading');
+        await flushPromises();
+        expect(panel().attributes('data-sheet')).toBe('full');
+        expect(items()).toHaveLength(2);
+
+        showHomeList(false);
+        await flushPromises();
+        expect(items()).toHaveLength(0);
+        expect(panel().attributes('data-sheet')).toBe('peek');
+    });
+
+    it('abrir la lista desde el panel la marca en la barra; cerrarla, también', async () => {
+        const { homeList } = await import('@/navigation/tabs');
+        const { listButton, panel } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+
+        await listButton()?.trigger('click');
+        await flushPromises();
+        expect(homeList.value).toBe('search');
+
+        await panel().get('button[aria-label="Cerrar la lista"]').trigger('click');
+        expect(homeList.value).toBe(false);
+    });
+
+    it('con un elegido, «Lista» cierra su resumen y muestra la lista', async () => {
+        const { showHomeList } = await import('@/navigation/tabs');
+        const { panel, tapOnMap, items } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        await tapOnMap(LA_CEIBA.slug);
+        expect(panel().find('[role="dialog"]').exists()).toBe(true);
+
+        showHomeList('heading');
+        await flushPromises();
+        expect(panel().find('[role="dialog"]').exists()).toBe(false);
+        expect(items()).toHaveLength(2);
+    });
+
+    it('buscar con la lista abierta lleva el foco al buscador', async () => {
+        const { showHomeList } = await import('@/navigation/tabs');
+        const { panel } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        showHomeList('heading');
+        await flushPromises();
+
+        showHomeList('search');
+        await flushPromises();
+        expect(document.activeElement).toBe(panel().get('input[type="search"]').element);
+    });
+
+    it('«Lista» con la lista ya abierta y un elegido de ella vuelve a la lista (BUG-049)', async () => {
+        const { showHomeList } = await import('@/navigation/tabs');
+        const { panel, items } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        showHomeList('heading');
+        await flushPromises();
+        await items()[1]?.trigger('click');
+        await flushPromises();
+        expect(panel().find('[role="dialog"]').exists()).toBe(true);
+
+        showHomeList('heading');
+        await flushPromises();
+        expect(panel().find('[role="dialog"]').exists()).toBe(false);
+        expect(items()).toHaveLength(2);
+    });
+
+    it('le pasa a la barra la lista publicada, para que «Pedido» no ofrezca uno que ya no está (BUG-051)', async () => {
+        const { published } = await import('@/navigation/tabs');
+        await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+
+        expect(published.value?.map(({ slug }) => slug)).toEqual([LA_CEIBA.slug, EL_GUADUAL.slug]);
+    });
+
+    it('buscar dos veces lleva el foco al buscador las dos veces (BUG-049)', async () => {
+        const { showHomeList } = await import('@/navigation/tabs');
+        const { panel } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        const search = () => panel().get('input[type="search"]').element;
+
+        showHomeList('search');
+        await flushPromises();
+        expect(document.activeElement).toBe(search());
+
+        (search() as HTMLInputElement).blur();
+        showHomeList('search');
+        await flushPromises();
+        expect(document.activeElement).toBe(search());
+    });
+
+    it('pedida desde otra página, la lista abre al montarse, completa; al irse, la barra vuelve a «Mapa»', async () => {
+        const { homeList } = await import('@/navigation/tabs');
+        homeList.value = 'heading';
+        const { panel, items, wrapper } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+
+        expect(panel().attributes('data-sheet')).toBe('full');
+        expect(items()).toHaveLength(2);
+
+        wrapper.unmount();
+        expect(homeList.value).toBe(false);
+    });
+
+    it('«Ajustes», dentro del layout, lleva el selector de idioma y el modo oscuro de verdad (EVA-070)', async () => {
+        const { wrapper } = await mountHome({ answer: [LA_CEIBA], inLayout: true });
+        const settings = wrapper.get('main [data-settings]');
+
+        expect(settings.get('h2').text()).toBe('Ajustes');
+        expect(settings.get('[role="group"]').attributes('aria-label')).toBe('Idioma (Language)');
+        expect(settings.find('button[aria-label="Modo oscuro"]').exists()).toBe(true);
+        // Son los mismos de la cabecera (que en el celular no se ve con el mapa), no copias a medias.
+        expect(wrapper.findAll('button[aria-label="Modo oscuro"]')).toHaveLength(2);
+    });
+
+    it('el panel es sólido y deja libre la franja de la atribución, que en el celular suma la barra', async () => {
+        const { panel } = await mountHome();
+
+        expect(panel().classes()).toContain('bg-canvas');
+        expect(panel().classes().some((name) => name.startsWith('bg-canvas/'))).toBe(false);
     });
 });
 
@@ -1444,6 +1584,28 @@ describe('Home en computador', () => {
         await pressEscape();
         expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
         expect(panel().find('button[aria-label="Cerrar la lista"]').exists()).toBe(true);
+    });
+
+    it('al volver al celular con la lista abierta, un elegido y un filtro, buscar quita el resumen (BUG-055)', async () => {
+        media.change(phoneWidth);
+        const { showHomeList } = await import('@/navigation/tabs');
+        const { items, panel } = await mountHome({ answer: [LA_CEIBA, EL_GUADUAL] });
+        showHomeList('heading');
+        await flushPromises();
+
+        await resize(desktopWidth);
+        await items()[0]?.trigger('click');
+        await flushPromises();
+        await panel().get('input[data-filter="delivery"]').setValue(true);
+        await flushPromises();
+
+        await resize(phoneWidth);
+        expect(panel().find('[role="dialog"]').exists()).toBe(true);
+
+        showHomeList('search');
+        await flushPromises();
+        expect(panel().find('[role="dialog"]').exists()).toBe(false);
+        expect(document.activeElement).toBe(panel().get('input[type="search"]').element);
     });
 
     it('al volver al celular con filtros y sin elegido, abre la lista con el foco en su título', async () => {

@@ -58,33 +58,35 @@ export function weekdayName(weekday: number, locale: Locale): string {
 }
 
 /**
- * El estado en palabras: «Abierto ahora · cierra a las 3:00 p. m.»,
- * «Cerrado · abre mañana a las 11:00 a. m.», «Horario sin confirmar».
+ * El estado en dos partes, cada una de su clave: lo principal («Abierto
+ * ahora», «Cerrado», «Horario sin confirmar») y, si se sabe, cuándo cambia
+ * («cierra a las 3:00 p. m.», «abre mañana a las 11:00 a. m.»), o null. La
+ * píldora de la lista del celular (#139) muestra la primera en la píldora.
  */
-export function openStatusText(status: OpenStatus, t: Translate, locale: Locale): string {
+export function openStatusParts(status: OpenStatus, t: Translate, locale: Locale): { head: string; tail: string | null } {
     if (status.state === 'unknown') {
-        return t('restaurants.status.unknown');
+        return { head: t('restaurants.status.unknown'), tail: null };
     }
 
     if (status.state === 'open') {
-        return status.closes === null ? t('restaurants.status.open') : t('restaurants.status.open_until', { time: spokenTime(status.closes.time, t, locale) });
+        return {
+            head: t('restaurants.status.open'),
+            tail: status.closes === null ? null : t('restaurants.status.closes', { time: spokenTime(status.closes.time, t, locale) }),
+        };
     }
 
-    if (status.opens === null) {
-        return t('restaurants.status.closed');
-    }
+    return { head: t('restaurants.status.closed'), tail: status.opens === null ? null : opensText(status.opens, t, locale) };
+}
 
-    const time = spokenTime(status.opens.time, t, locale);
+/**
+ * El estado en palabras: «Abierto ahora · cierra a las 3:00 p. m.»,
+ * «Cerrado · abre mañana a las 11:00 a. m.», «Horario sin confirmar». Las dos
+ * partes las junta el idioma (`restaurants.status.parts`).
+ */
+export function openStatusText(status: OpenStatus, t: Translate, locale: Locale): string {
+    const { head, tail } = openStatusParts(status, t, locale);
 
-    if (status.opens.daysAhead === 0) {
-        return t('restaurants.status.closed_opens_today', { time });
-    }
-
-    if (status.opens.daysAhead === 1) {
-        return t('restaurants.status.closed_opens_tomorrow', { time });
-    }
-
-    return t('restaurants.status.closed_opens_weekday', { day: weekdayName(status.opens.weekday, locale), time });
+    return tail === null ? head : t('restaurants.status.parts', { state: head, detail: tail });
 }
 
 /**

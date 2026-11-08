@@ -26,7 +26,7 @@ describe('las alturas del panel de abajo', () => {
     });
 
     it('CSS las entiende: asomado en rem, media altura del mapa, y completo sin tapar la atribución', () => {
-        expect(SNAP_HEIGHTS.peek).toBe('7.5rem');
+        expect(SNAP_HEIGHTS.peek).toBe('8.5rem');
         expect(SNAP_HEIGHTS.half).toBe('50%');
         expect(SNAP_HEIGHTS.full).toContain('var(--veni-attribution-clearance)');
         expect(SNAP_HEIGHTS.full).toContain('var(--veni-update-prompt-space, 0px)');
