@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from 'vue';
 
 import Icon from '@/components/Icon.vue';
+import { useNow } from '@/composables/useNow';
 import { useI18n } from '@/composables/useI18n';
 import { useLazyDialog } from '@/composables/useLazyDialog';
 import { formatPesos } from '@/i18n/intl';
@@ -19,12 +20,14 @@ import {
 } from '@/order/checkout';
 import { recordOrderIntent } from '@/order/intent';
 import { orderMessage, whatsappNumber, whatsappUrl } from '@/order/message';
+import { lineProblem } from '@/order/reconcile';
+import { businessDay } from '@/restaurants/openStatus';
 import type { OrderItem } from '@/order/selection';
 import { MAX_QUANTITY, MIN_QUANTITY } from '@/order/selection';
 import { forgetDelivery, loadDelivery } from '@/order/storage';
 import { useOrder } from '@/order/useOrder';
 import type { PaymentMethod, RestaurantProfile } from '@/restaurants/profile';
-import { PAYMENT_METHOD_KEYS } from '@/restaurants/profile';
+import { PAYMENT_METHOD_KEYS, knownPaymentMethods } from '@/restaurants/profile';
 import type { AddressLabel, AddressLabelKind, SavedAddress } from '@/saved/addresses';
 import { isStored, LABEL_MAX_LENGTH, MAX_ADDRESSES, useAddressBook } from '@/saved/addresses';
 import { LABEL_KEYS, LABEL_KINDS, labelText, suggestedKind } from '@/saved/labels';
@@ -54,7 +57,7 @@ import { LABEL_KEYS, LABEL_KINDS, labelText, suggestedKind } from '@/saved/label
  * Al servidor va solo el aviso de que se tocó «Enviar» (order/intent.ts).
  */
 const { restaurant } = defineProps<{
-    restaurant: Pick<RestaurantProfile, 'slug' | 'name' | 'whatsapp' | 'delivery' | 'payment_methods'>;
+    restaurant: Pick<RestaurantProfile, 'slug' | 'name' | 'whatsapp' | 'delivery' | 'payment_methods'> & Partial<Pick<RestaurantProfile, 'menu'>>;
 }>();
 
 const emit = defineEmits<{ close: [] }>();
@@ -73,7 +76,7 @@ const context = computed<OrderContext>(() => ({
     deliveryAvailable: restaurant.delivery.available,
     zones: restaurant.delivery.zones,
     // Un medio que esta versión no conoce no se ofrece como una clave suelta.
-    paymentMethods: restaurant.payment_methods.filter((method) => method in PAYMENT_METHOD_KEYS),
+    paymentMethods: knownPaymentMethods(restaurant.payment_methods),
 }));
 
 const number = computed(() => whatsappNumber(restaurant.whatsapp));
@@ -200,6 +203,20 @@ function describedBy(field: DetailsField, hint: boolean): string | undefined {
 
     return ids.length === 0 ? undefined : ids.join(' ');
 }
+
+/**
+ * Cada línea contra la carta de hoy (order/reconcile.ts): el carrito guarda
+ * una copia de lo que se vio y dura un día. Una línea que ya no vale se
+ * avisa y hay que quitarla antes de enviar. Sin la carta, no se revisa.
+ */
+const now = useNow();
+const today = computed(() => businessDay(now.value).date);
+const lineProblems = computed(() => {
+    const dishes = restaurant.menu?.flatMap((section) => section.dishes);
+
+    return items.value.map((item) => (dishes === undefined ? null : lineProblem(item, dishes, today.value)));
+});
+const blocked = computed(() => lineProblems.value.some((problem) => problem !== null));
 
 const message = computed(() => orderMessage(items.value, details.value, context.value, t, money));
 const href = computed(() => (number.value === null ? null : whatsappUrl(number.value, message.value)));
@@ -345,7 +362,10 @@ watch(book.addresses, (addresses) => {
     }
 });
 
-/** Elegir una de la libreta completa el formulario; «Otra dirección» lo deja en blanco (el nombre queda). */
+/**
+ * Elegir una de la libreta completa el formulario; «Otra dirección» lo deja en blanco (el nombre queda).
+ * La ubicación agregada era de la dirección anterior: se quita, para que el pin no contradiga a la dirección.
+ */
 async function choose(saved: SavedAddress | null): Promise<void> {
     rememberFull.value = false;
 
@@ -354,7 +374,7 @@ async function choose(saved: SavedAddress | null): Promise<void> {
         remember.value = false;
         label.value = { kind: suggestedKind(book.addresses.value), text: '' };
         neighborhoodMissing.value = null;
-        update({ neighborhood: '', address: '', reference: '' });
+        update({ neighborhood: '', address: '', reference: '', location: null });
 
         return;
     }
@@ -362,7 +382,7 @@ async function choose(saved: SavedAddress | null): Promise<void> {
     activeId.value = saved.id;
     label.value = { ...saved.label };
     remember.value = false;
-    update(fromSaved(saved));
+    update({ ...fromSaved(saved), location: null });
     await announce(t('order.form.saved_used', { label: labelText(saved.label, t) }));
 }
 
@@ -437,6 +457,14 @@ async function forgetLocation(): Promise<void> {
  * enlace: marca cada campo, lo anuncia y lleva el foco al primero.
  */
 async function onSend(event: MouseEvent): Promise<void> {
+    if (blocked.value) {
+        event.preventDefault();
+        await announce(t('order.cart.lines_blocked'), 'alert');
+        dialog.value?.querySelector<HTMLElement>('[data-line-problem]')?.closest('[data-line]')?.querySelector<HTMLElement>('[data-remove]')?.focus();
+
+        return;
+    }
+
     if (problems.value.size > 0) {
         event.preventDefault();
         attempted.value = true;
@@ -535,6 +563,10 @@ onBeforeUnmount(() => {
                                 <p class="font-semibold wrap-anywhere">{{ item.dish }}</p>
                                 <p v-if="lineDetails(item)" class="text-sm wrap-anywhere text-ink-muted" data-line-details>{{ lineDetails(item) }}</p>
                                 <p v-if="item.note" class="text-sm wrap-anywhere text-ink-muted" data-line-note>{{ t('order.cart.note', { note: item.note }) }}</p>
+                                <p v-if="lineProblems[index]" class="mt-1 flex items-start gap-1 text-sm font-semibold" data-line-problem>
+                                    <Icon name="informacion" :size="20" class="mt-0.5 shrink-0" />
+                                    {{ t(`order.cart.line_${lineProblems[index]}`) }}
+                                </p>
                             </div>
                             <div class="shrink-0 text-right tabular-nums">
                                 <p class="font-semibold" data-line-price>{{ money(item.unitPrice * item.quantity) }}</p>
@@ -876,9 +908,10 @@ onBeforeUnmount(() => {
                 </dd>
             </dl>
             <p class="mt-1 text-sm text-ink-muted">{{ t('order.cart.total_hint') }}</p>
+            <p v-if="blocked" class="mt-2 text-sm font-semibold" data-lines-blocked>{{ t('order.cart.lines_blocked') }}</p>
             <template v-if="href !== null">
                 <a
-                    v-if="problems.size === 0"
+                    v-if="problems.size === 0 && !blocked"
                     :href="href"
                     target="_blank"
                     rel="noopener noreferrer"
