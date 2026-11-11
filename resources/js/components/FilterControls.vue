@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, onUpdated, shallowRef, useTemplateRef } from 'vue';
+
 import { useI18n } from '@/composables/useI18n';
 import { formatPesos } from '@/i18n/intl';
 import type { RestaurantCategory } from '@/restaurants/api';
@@ -15,7 +17,8 @@ import { PRICE_CAPS } from '@/restaurants/filterParams';
  * a la lista. Con `chips` (el celular, #139, ADR 0041), cada control es una
  * píldora en una sola fila que se desplaza de lado bajo el buscador: los
  * mismos controles y la misma lógica, con otro estilo (CSS propio, que baja
- * con la lista y no con el arranque).
+ * con la lista y no con el arranque). Si hay más píldoras de un lado, ese
+ * borde se desvanece (#147): `more` dice de qué lado.
  */
 const { filters, categories, stacked, chips } = defineProps<{
     filters: Readonly<Filters>;
@@ -34,6 +37,43 @@ function update(changes: Partial<Filters>): void {
     emit('update:filters', { ...filters, ...changes });
 }
 
+/** De qué lado hay más píldoras fuera de la vista: el borde de ese lado se desvanece (#147). */
+const row = useTemplateRef<HTMLElement>('row');
+const more = shallowRef<{ start: boolean; end: boolean }>({ start: false, end: false });
+
+function measure(): void {
+    const element = row.value;
+
+    if (!chips || !element) {
+        return;
+    }
+
+    const start = element.scrollLeft > 1;
+    const end = element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+
+    if (start !== more.value.start || end !== more.value.end) {
+        more.value = { start, end };
+    }
+}
+
+let resizes: ResizeObserver | undefined;
+
+onMounted(() => {
+    measure();
+
+    if (chips && row.value && typeof ResizeObserver !== 'undefined') {
+        resizes = new ResizeObserver(measure);
+        resizes.observe(row.value);
+    }
+});
+
+// Otro filtro elegido cambia el ancho de su píldora; llegan las categorías.
+onUpdated(measure);
+
+onBeforeUnmount(() => {
+    resizes?.disconnect();
+});
+
 function onSelect(event: Event, key: 'price' | 'category'): void {
     const { value } = event.target as HTMLSelectElement;
 
@@ -42,7 +82,15 @@ function onSelect(event: Event, key: 'price' | 'category'): void {
 </script>
 
 <template>
-    <div class="pt-1 text-sm" :class="chips ? 'filter-chips' : stacked ? 'grid grid-cols-2 gap-x-3 gap-y-1' : 'flex flex-wrap items-center gap-x-4 gap-y-1'" :data-chips="chips || undefined">
+    <div
+        ref="row"
+        class="pt-1 text-sm"
+        :class="chips ? 'filter-chips' : stacked ? 'grid grid-cols-2 gap-x-3 gap-y-1' : 'flex flex-wrap items-center gap-x-4 gap-y-1'"
+        :data-chips="chips || undefined"
+        :data-more-start="(chips && more.start) || undefined"
+        :data-more-end="(chips && more.end) || undefined"
+        @scroll.passive="measure"
+    >
         <label class="inline-flex min-h-touch items-center gap-2">
             <input type="checkbox" class="size-5" :checked="filters.open" data-filter="open" @change="update({ open: !filters.open })">
             {{ t('finder.open_now') }}
@@ -89,6 +137,31 @@ function onSelect(event: Event, key: 'price' | 'category'): void {
     scrollbar-width: none;
 }
 
+/*
+ * Con más píldoras de un lado, ese borde se desvanece en 2 rem (#147): una
+ * máscara, sin nada encima que reciba toques. No se anima (nada se mueve con
+ * «Reducir movimiento»). Con una píldora enfocada con el teclado no hay
+ * máscara: el navegador la lleva a la vista y su anillo se ve entero.
+ */
+.filter-chips[data-more-start],
+.filter-chips[data-more-end] {
+    --fade-start: 0rem;
+    --fade-end: 0rem;
+    mask-image: linear-gradient(to right, transparent, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent);
+}
+
+.filter-chips[data-more-start] {
+    --fade-start: 2rem;
+}
+
+.filter-chips[data-more-end] {
+    --fade-end: 2rem;
+}
+
+.filter-chips:has(:focus-visible) {
+    mask-image: none;
+}
+
 .filter-chips::-webkit-scrollbar {
     display: none;
 }
@@ -108,8 +181,9 @@ function onSelect(event: Event, key: 'price' | 'category'): void {
     font-weight: 600;
 }
 
+/* El menú es el objetivo táctil: 44 px de alto, como la píldora. */
 .filter-chips select {
-    min-height: 2.5rem;
+    min-height: var(--veni-touch-min);
     border: 0;
     background: transparent;
     font-weight: 600;
