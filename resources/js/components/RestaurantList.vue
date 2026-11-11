@@ -147,8 +147,9 @@ const details = computed(() =>
             open: status.state === 'open',
             meters: meters ?? Number.POSITIVE_INFINITY,
             status: openStatusText(status, t, locale.value),
-            /** En el celular (#139): lo de la píldora («Abierto ahora», «Cerrado») y lo de después («cierra a…»), cada uno de su clave. */
-            pill: status.state === 'unknown' ? null : parts,
+            /** En el celular (#139): lo de la píldora («Abierto», «Cerrado») y lo de después («cierra a…»), cada uno de su clave. */
+            // Abierto, «Abierto» a secas, de su propia clave (#147): el «ahora» ya lo dice la lista y la píldora entra en menos ancho.
+            pill: status.state === 'unknown' ? null : { head: status.state === 'open' ? t('restaurants.status.open_short') : parts.head, tail: parts.tail },
             distance: meters === undefined ? null : formatDistance(meters, locale.value),
         };
     }),
@@ -341,6 +342,7 @@ defineExpose({ focusItem });
                 type="button"
                 class="-mt-1 -mr-2 inline-flex size-touch shrink-0 items-center justify-center rounded-full hover:bg-surface"
                 :aria-label="t('restaurants.close_list')"
+                data-close-list
                 @click="$emit('close')"
             >
                 <Icon name="cerrar" />
@@ -423,6 +425,8 @@ defineExpose({ focusItem });
             </div>
 
             <div ref="scroller" :class="pinnedFinder ? `${SCROLL} mt-2 flex-1` : 'contents'" data-list-scroll>
+                <!-- En el celular (#147), «Datos de ejemplo» una sola vez, como nota arriba de la lista y no entre las filas. -->
+                <p v-if="allSamples && !pinnedFinder" class="mt-2" data-sample-note><SampleDataBadge /></p>
                 <FilterControls
                     v-if="pinnedFinder"
                     :id="panelId"
@@ -484,7 +488,7 @@ defineExpose({ focusItem });
                     </ul>
                 </section>
 
-                <p v-if="allSamples" class="mt-2 mb-1"><SampleDataBadge /></p>
+                <p v-if="allSamples && pinnedFinder" class="mt-2 mb-1"><SampleDataBadge /></p>
 
                 <div v-if="selectedOutside" ref="outside" class="mt-2" data-selected-outside><slot name="selected" :restaurant="selectedOutside" :in-row="false" /></div>
 
@@ -617,8 +621,10 @@ defineExpose({ focusItem });
 
 /*
  * El estado, en una píldora que siempre lleva texto: el color no es lo único
- * que lo dice (WCAG 1.4.1). Abierto, ciruela sobre mango (8,4:1, igual en los
- * dos temas); cerrado, el texto apagado sobre el fondo de las filas (5,7:1 en
+ * que lo dice (WCAG 1.4.1). Abierto (#147), «Abierto» en verde, distinto del
+ * mango de «Datos de ejemplo»: verde oscuro sobre verde claro en el tema
+ * claro y al revés en el oscuro, los dos sobre 4,5:1 (mobileBase.test.ts lo
+ * mide); cerrado, el texto apagado sobre el fondo de las filas (5,7:1 en
  * claro, 11,4:1 en oscuro).
  */
 .list-pill {
@@ -630,8 +636,16 @@ defineExpose({ focusItem });
     font-weight: 600;
 }
 
+/* Los verdes de «Abierto» con nombre: la variante oscura solo los reasigna. */
 .list-pill[data-open] {
-    background: var(--veni-mango);
-    color: var(--veni-ciruela);
+    --open-bg: #dcf5e3;
+    --open-ink: #17602f;
+    background: var(--open-bg);
+    color: var(--open-ink);
+}
+
+:root[data-theme='dark'] .list-pill[data-open] {
+    --open-bg: #1a5631;
+    --open-ink: #c8f5d6;
 }
 </style>

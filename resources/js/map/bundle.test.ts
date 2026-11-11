@@ -494,6 +494,14 @@ describe('presupuesto de descarga', () => {
         // pantalla completa en el CSS de la barra; la visita de Inertia desde
         // el chunk del mapa partía la entrada (89,7) y pasarla desde el
         // inicio sumaba 0,024: el enlace del crédito recarga.
+        // Con el pulido del celular (#147), 82,186 (−0,005): todo va en CSS
+        // de componentes que bajan aparte (la lista, los filtros, la barra);
+        // la forma corta de «Abierto» la arma la lista y no
+        // restaurants/statusText.ts, que viaja en el arranque (ahí sumaba
+        // 0,007). Con el idioma en la cabecera del celular y el tema solo en
+        // computador (EVA-072), 82,191: la clase pasa del contenedor al tema.
+        // Un atributo para las pruebas en ese contenedor sumaba 0,018; la
+        // cabecera baja el margen del sistema arriba con el CSS de la barra.
         expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
     });
 

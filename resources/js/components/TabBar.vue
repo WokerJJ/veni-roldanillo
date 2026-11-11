@@ -280,6 +280,16 @@ onBeforeUnmount(() => {
 }
 
 /*
+ * La cabecera de la ficha, la guía y los documentos (la que sigue a «Ir al
+ * contenido», AppLayout.vue) baja el margen del sistema arriba: con
+ * viewport-fit=cover el logo no queda debajo de la barra de estado del
+ * iPhone. En el mapa del celular no hay cabecera; en computador el margen es 0.
+ */
+:global(a[href='#contenido'] + header) {
+    padding-top: env(safe-area-inset-top);
+}
+
+/*
  * La lista del inicio a pantalla completa (#139, ADR 0041): el panel de
  * abajo (`data-sheet`, que en computador y sin mapa no lleva) que muestra la
  * lista o sus siluetas ocupa todo el mapa, de borde a borde y sin la manija,
@@ -305,9 +315,18 @@ onBeforeUnmount(() => {
     display: none;
 }
 
-/* Sin manija, lo de adentro no le deja lugar arriba: solo el margen del sistema y un respiro. */
+/*
+ * Sin manija, lo de adentro no le deja lugar arriba (#147): solo el margen del
+ * sistema y el espaciado del título. Sin el «✕»: se vuelve con «Mapa», y
+ * Escape sigue cerrando. Si este CSS no bajó, la lista queda en el panel de
+ * siempre, con su botón.
+ */
 :global([data-sheet]:has(> [data-sheet-body] > :is([data-full-list], [data-list-loading])) > [data-sheet-body]) {
-    padding-top: 0.5rem;
+    padding-top: 0;
+}
+
+:global([data-sheet]:has(> [data-sheet-body] > [data-full-list]) [data-close-list]) {
+    display: none;
 }
 
 :global([data-sheet]:has(> [data-sheet-body] > :is([data-full-list], [data-list-loading])) ~ *) {

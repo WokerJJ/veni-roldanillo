@@ -58,7 +58,8 @@ onBeforeUnmount(stopFocusingContent);
 | barra de pestañas de abajo (TabBar, #139, ADR 0041), que baja en el mismo
 | chunk con la cabecera chica que aparece al desplazar (CompactHeader). En el
 | mapa del celular no hay cabecera: el mapa llega arriba, y el idioma y el
-| tema van en «Ajustes», en el panel. Si no bajan (sin señal), el pie queda
+| tema van en «Ajustes», en el panel; en las demás páginas del celular la
+| cabecera lleva el idioma y no repite el tema (#147). Si no bajan (sin señal), el pie queda
 | con los créditos, que sí van en el arranque, y la cabecera con el logo, que
 | lleva al mapa.
 */
@@ -113,9 +114,13 @@ import('@/components/links')
                 </Link>
                 <!-- «Mapa · Guía de platos», con la sección actual marcada: baja con los documentos legales. -->
                 <MainNav />
+                <!--
+                    El idioma sigue en el celular: quien llega a una ficha por un
+                    enlace lo cambia sin salir. El tema, no (#147): va en «Ajustes».
+                -->
                 <div class="flex items-center gap-2">
                     <LocaleSwitcher />
-                    <ThemeToggle />
+                    <ThemeToggle class="max-lg:hidden" />
                 </div>
             </div>
         </header>

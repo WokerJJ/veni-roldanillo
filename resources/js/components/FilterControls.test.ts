@@ -13,7 +13,7 @@ const CATEGORIES: RestaurantCategory[] = [
     { slug: 'comida-tipica', name: 'Comida típica' },
 ];
 
-async function mountControls(props: { filters?: Filters; categories?: RestaurantCategory[]; stacked?: boolean } = {}) {
+async function mountControls(props: { filters?: Filters; categories?: RestaurantCategory[]; stacked?: boolean; chips?: boolean } = {}) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     inertia.reset();
     inertia.receiveFromServer('es', { replace: true });
@@ -83,5 +83,116 @@ describe.each([
 
         expect(wrapper.classes()).toContain(stacked ? 'grid-cols-2' : 'flex-wrap');
         expect(label?.classList.contains('flex-col')).toBe(stacked);
+    });
+});
+
+describe('en píldoras (#147): el borde se desvanece del lado donde hay más', () => {
+    /** Una fila de 300 px de ancho con 600 de contenido, desplazada `left`. */
+    function size(element: Element, left: number): void {
+        Object.defineProperties(element, {
+            clientWidth: { configurable: true, value: 300 },
+            scrollWidth: { configurable: true, value: 600 },
+            scrollLeft: { configurable: true, writable: true, value: left },
+        });
+    }
+
+    it.each([
+        [0, undefined, 'true'],
+        [150, 'true', 'true'],
+        [300, 'true', undefined],
+    ])('desplazada %d px: al principio %o, al final %o', async (left, start, end) => {
+        const { wrapper } = await mountControls({ chips: true });
+        size(wrapper.element as Element, left);
+        await wrapper.trigger('scroll');
+
+        expect(wrapper.attributes('data-more-start')).toBe(start);
+        expect(wrapper.attributes('data-more-end')).toBe(end);
+    });
+
+    it('sin píldoras no lleva nada', async () => {
+        const { wrapper } = await mountControls();
+        size(wrapper.element as Element, 150);
+        await wrapper.trigger('scroll');
+
+        expect(wrapper.attributes()).not.toHaveProperty('data-more-start');
+        expect(wrapper.attributes()).not.toHaveProperty('data-more-end');
+    });
+});
+
+describe('en píldoras (#147, EVA-073): cuándo se mide', () => {
+    /** Toda fila mide 300 px de ancho con 600 de contenido, desde antes de montarse. */
+    function sizeEveryRow(): void {
+        vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300);
+        vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(600);
+    }
+
+    /** Un ResizeObserver de mentira que guarda su callback y lo que observa. */
+    function stubResizeObserver() {
+        const observer = { callback: undefined as (() => void) | undefined, observed: [] as Element[], disconnect: vi.fn() };
+        vi.stubGlobal(
+            'ResizeObserver',
+            class {
+                constructor(callback: () => void) {
+                    observer.callback = callback;
+                }
+
+                observe(element: Element): void {
+                    observer.observed.push(element);
+                }
+
+                disconnect(): void {
+                    observer.disconnect();
+                }
+            },
+        );
+
+        return observer;
+    }
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+    });
+
+    it('al montarse ya marca el final, sin que nadie desplace la fila', async () => {
+        sizeEveryRow();
+        const { wrapper } = await mountControls({ chips: true });
+
+        expect(wrapper.attributes('data-more-end')).toBe('true');
+        expect(wrapper.attributes()).not.toHaveProperty('data-more-start');
+    });
+
+    it('vuelve a medir cuando la fila cambia de ancho y deja de observar al desmontarse', async () => {
+        const observer = stubResizeObserver();
+        const { wrapper } = await mountControls({ chips: true });
+
+        expect(observer.observed).toEqual([wrapper.element]);
+        expect(wrapper.attributes()).not.toHaveProperty('data-more-end');
+
+        sizeEveryRow();
+        observer.callback?.();
+        await wrapper.vm.$nextTick();
+        expect(wrapper.attributes('data-more-end')).toBe('true');
+
+        wrapper.unmount();
+        expect(observer.disconnect).toHaveBeenCalledOnce();
+    });
+
+    it('sin píldoras no observa nada', async () => {
+        const observer = stubResizeObserver();
+        await mountControls();
+
+        expect(observer.callback).toBeUndefined();
+    });
+
+    it('vuelve a medir al actualizarse (otro filtro, llegan las categorías)', async () => {
+        const { wrapper } = await mountControls({ chips: true, categories: [] });
+        expect(wrapper.attributes()).not.toHaveProperty('data-more-end');
+
+        sizeEveryRow();
+        await wrapper.setProps({ categories: CATEGORIES });
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.attributes('data-more-end')).toBe('true');
     });
 });

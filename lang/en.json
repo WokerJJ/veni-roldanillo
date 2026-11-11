@@ -125,6 +125,7 @@
     "directions.attribution": "Route worked out on your phone with data from",
     "directions.attribution_link": "© OpenStreetMap contributors (ODbL)",
     "restaurants.status.open": "Open now",
+    "restaurants.status.open_short": "Open",
     "restaurants.status.closed": "Closed",
     "restaurants.status.closes": "closes at :time",
     "restaurants.status.parts": ":state · :detail",

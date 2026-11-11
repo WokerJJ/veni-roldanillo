@@ -302,3 +302,82 @@ describe('el «−» de cantidad desactivado (#138, A4)', () => {
         expect(contrast(mix(blanco, ciruela), ciruela)).toBeGreaterThanOrEqual(3);
     });
 });
+
+describe('el pulido del celular (#147)', () => {
+    /** Las declaraciones de cada regla de un componente, por su selector sin el atributo de alcance y con los espacios normalizados. */
+    function rules(file: string): Map<string, Record<string, string>> {
+        const found = new Map<string, Record<string, string>>();
+
+        for (const root of roots(file)) {
+            root.walkRules((rule) => {
+                const selector = rule.selector.replaceAll('[data-v-prueba]', '').replace(/\s+/g, ' ');
+                const decls = found.get(selector) ?? {};
+                rule.walkDecls((decl) => {
+                    decls[decl.prop] = decl.value;
+                });
+                found.set(selector, decls);
+            });
+        }
+
+        return found;
+    }
+
+    const rgb = (value: string | undefined): number[] => {
+        const hex = /^#([0-9a-f]{6})$/i.exec(value ?? '')?.[1] ?? '000000';
+
+        return [0, 2, 4].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+    };
+
+    it('«Abierto» va en verde, texto y fondo a ≥ 4,5:1 en claro y oscuro, y no en el mango de «Datos de ejemplo»', () => {
+        const list = rules('resources/js/components/RestaurantList.vue');
+        const light = list.get('.list-pill[data-open]');
+        const dark = list.get(":root[data-theme='dark'] .list-pill[data-open]");
+
+        // Los verdes tienen nombre (EVA-075): la píldora usa las propiedades y el tema oscuro solo las reasigna.
+        expect(light?.background).toBe('var(--open-bg)');
+        expect(light?.color).toBe('var(--open-ink)');
+        expect(Object.keys(dark ?? {}).sort()).toEqual(['--open-bg', '--open-ink']);
+
+        const resolved = (vars: Record<string, string> | undefined) => ({ background: vars?.['--open-bg'], color: vars?.['--open-ink'] });
+
+        for (const pill of [resolved(light), resolved(dark)]) {
+            expect(pill.background).toMatch(/^#[0-9a-f]{6}$/i);
+            expect(contrast(rgb(pill.color), rgb(pill.background))).toBeGreaterThanOrEqual(4.5);
+            expect(`${pill.background ?? ''} ${pill.color ?? ''}`).not.toContain('mango');
+
+            // Verde: el canal verde es el más alto del fondo y del texto.
+            for (const [r = 0, g = 0, b = 0] of [rgb(pill.background), rgb(pill.color)]) {
+                expect(g).toBeGreaterThan(Math.max(r, b));
+            }
+        }
+    });
+
+    it('la lista a pantalla completa no deja lugar arriba (solo el margen del sistema) y esconde el «✕» solo con :has()', () => {
+        const tabbar = rules('resources/js/components/TabBar.vue');
+        const full = ':is([data-full-list], [data-list-loading])';
+
+        expect(tabbar.get(`[data-sheet]:has(> [data-sheet-body] > ${full})`)?.padding).toMatch(/^env\(safe-area-inset-top\) /);
+        expect(tabbar.get(`[data-sheet]:has(> [data-sheet-body] > ${full}) > [data-sheet-body]`)?.['padding-top']).toBe('0');
+        expect(tabbar.get('[data-sheet]:has(> [data-sheet-body] > [data-full-list]) [data-close-list]')?.display).toBe('none');
+    });
+
+    it('las píldoras de los filtros se desvanecen del lado donde hay más, sin animarse y sin máscara con el foco del teclado', () => {
+        const chips = rules('resources/js/components/FilterControls.vue');
+
+        expect(chips.get('.filter-chips[data-more-start], .filter-chips[data-more-end]')?.['mask-image']).toContain('var(--fade-start)');
+        expect(chips.get('.filter-chips[data-more-start]')?.['--fade-start']).toBe('2rem');
+        expect(chips.get('.filter-chips[data-more-end]')?.['--fade-end']).toBe('2rem');
+        expect(chips.get('.filter-chips:has(:focus-visible)')?.['mask-image']).toBe('none');
+        expect(motionOutsideNoPreference('resources/js/components/FilterControls.vue')).toEqual([]);
+    });
+
+    it('el selector de precio y el de tipo de las píldoras llegan a 44 px de alto', () => {
+        expect(rules('resources/js/components/FilterControls.vue').get('.filter-chips select')?.['min-height']).toBe('var(--veni-touch-min)');
+    });
+
+    it('la cabecera de la ficha, la guía y los documentos baja el margen del sistema arriba (con viewport-fit=cover), en el CSS de la barra que baja aparte', () => {
+        // El mismo selector que AppLayout.test.ts comprueba sobre la cabecera montada.
+        expect(rules('resources/js/components/TabBar.vue').get("a[href='#contenido'] + header")?.['padding-top']).toBe('env(safe-area-inset-top)');
+        expect(readFileSync('resources/views/app.blade.php', 'utf8')).toContain('viewport-fit=cover');
+    });
+});

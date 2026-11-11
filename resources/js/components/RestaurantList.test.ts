@@ -56,7 +56,8 @@ describe('RestaurantList', () => {
 
         expect(items().map((item) => item.attributes('type'))).toEqual(['button', 'button']);
         expect(names()).toEqual(['Restaurante de Prueba La Ceiba (ficticio)', 'Restaurante de Prueba El Guadual (ficticio)']);
-        expect(statuses()).toEqual(['Abierto ahora · cierra a las 3:00 p. m.', 'Cerrado · abre a las 6:00 p. m.']);
+        // En la píldora del celular, «Abierto» a secas (#147).
+        expect(statuses()).toEqual(['Abierto · cierra a las 3:00 p. m.', 'Cerrado · abre a las 6:00 p. m.']);
     });
 
     it('rotula los datos de ejemplo, y solo esos', async () => {
@@ -149,6 +150,8 @@ describe('RestaurantList', () => {
         const close = wrapper.get('button[aria-label="Cerrar la lista"]');
 
         expect(close.classes()).toContain('size-touch');
+        // A pantalla completa lo oculta el CSS de la barra de pestañas (#147, mobileBase.test.ts).
+        expect(close.attributes()).toHaveProperty('data-close-list');
 
         await close.trigger('click');
 
@@ -160,7 +163,7 @@ describe('RestaurantList', () => {
 
         expect(wrapper.get('h2').text()).toBe('Restaurants');
         expect(wrapper.find('button[aria-label="Close the list"]').exists()).toBe(true);
-        expect(statuses()[0]).toBe('Open now · closes at 3:00 PM');
+        expect(statuses()[0]).toBe('Open · closes at 3:00 PM');
     });
 
     describe('compacta (#81)', () => {
@@ -214,6 +217,16 @@ describe('RestaurantList', () => {
 
             expect(wrapper.findAll('[data-sample]')).toHaveLength(1);
             expect(wrapper.find('li [data-sample]').exists()).toBe(false);
+        });
+
+        it('en el celular, esa nota va arriba de la lista, antes de «Almuerzos de hoy», y no entre las filas (#147)', async () => {
+            const { wrapper } = await mountList();
+            const scroll = wrapper.get('[data-list-scroll]').element;
+            const note = wrapper.get('[data-sample-note]').element;
+
+            expect(note.parentElement).toBe(scroll);
+            expect(scroll.firstElementChild).toBe(note);
+            expect(note.querySelector('[data-sample]')).not.toBeNull();
         });
 
         it('si solo algunos lo son, lo lleva cada uno de ellos', async () => {
@@ -435,15 +448,15 @@ describe('RestaurantList · favoritos (#16)', () => {
             expect(thumbs.every((thumb) => thumb.attributes('aria-hidden') === 'true')).toBe(true);
         });
 
-        it('el estado va en una píldora con texto, de color si está abierto, y lo demás al lado: el lector oye lo mismo que antes', async () => {
+        it('el estado va en una píldora con texto («Abierto» corto, #147), de color si está abierto, y lo demás al lado: el lector oye lo mismo que ve', async () => {
             const { wrapper, statuses } = await mountList();
             const pills = wrapper.findAll('button[data-slug] .list-pill');
 
             expect(pills.map((pill) => [pill.text(), pill.attributes('data-open')])).toEqual([
-                ['Abierto ahora', 'true'],
+                ['Abierto', 'true'],
                 ['Cerrado', undefined],
             ]);
-            expect(statuses()).toEqual(['Abierto ahora · cierra a las 3:00 p. m.', 'Cerrado · abre a las 6:00 p. m.']);
+            expect(statuses()).toEqual(['Abierto · cierra a las 3:00 p. m.', 'Cerrado · abre a las 6:00 p. m.']);
         });
 
         it('una línea con el almuerzo de hoy, si hay, o los precios, y la distancia con «¿Dónde estoy?»', async () => {

@@ -125,6 +125,7 @@
     "directions.attribution": "Ruta calculada en tu teléfono con datos de",
     "directions.attribution_link": "© colaboradores de OpenStreetMap (ODbL)",
     "restaurants.status.open": "Abierto ahora",
+    "restaurants.status.open_short": "Abierto",
     "restaurants.status.closed": "Cerrado",
     "restaurants.status.closes": "cierra a :time",
     "restaurants.status.parts": ":state · :detail",
