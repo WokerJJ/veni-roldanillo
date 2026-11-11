@@ -21,7 +21,7 @@ import type { RestaurantProfile } from '@/restaurants/profile';
  * barra lo vigila desde que se monta y consume solo el pedido de su slug.
  */
 const { restaurant } = defineProps<{
-    restaurant: Pick<RestaurantProfile, 'slug' | 'name' | 'whatsapp' | 'delivery' | 'payment_methods'>;
+    restaurant: Pick<RestaurantProfile, 'slug' | 'name' | 'whatsapp' | 'delivery' | 'payment_methods'> & Partial<Pick<RestaurantProfile, 'menu'>>;
 }>();
 
 const { t, locale } = useI18n();

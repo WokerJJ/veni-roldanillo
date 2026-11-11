@@ -13,7 +13,7 @@ import { quotaExceeded, spyStorage } from '@/testing/storage';
 
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 
-type CartRestaurant = Pick<RestaurantProfile, 'slug' | 'name' | 'whatsapp' | 'delivery' | 'payment_methods'>;
+type CartRestaurant = Pick<RestaurantProfile, 'slug' | 'name' | 'whatsapp' | 'delivery' | 'payment_methods'> & Partial<Pick<RestaurantProfile, 'menu'>>;
 
 const RESTAURANT: CartRestaurant = {
     slug: 'prueba-la-ceiba',
@@ -515,6 +515,62 @@ describe('OrderCart', () => {
         await mountCart(RESTAURANT, []);
 
         expect(window.localStorage.getItem('veni:delivery:prueba-la-ceiba')).toBe(legacy);
+    });
+
+    it('una línea que ya no vale frente a la carta de hoy se avisa y no deja enviar hasta quitarla', async () => {
+        const juice = { name: 'Jugo de prueba', description: null, price: 4500, sold_out_until: null, ingredients: [], groups: [], photo: null };
+        const menu = [{ name: 'Bebidas (prueba)', dishes: [juice] }] as unknown as NonNullable<CartRestaurant['menu']>;
+        const { wrapper, lines } = await mountCart({ ...RESTAURANT, menu }, [JUICE]);
+        await wrapper.get('[data-mode="pickup"]').setValue(true);
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
+
+        expect(wrapper.get('[data-line-problem]').text()).toBe('Este plato cambió desde que lo agregaste. Quitalo y volvé a agregarlo.');
+        expect(wrapper.get('[data-lines-blocked]').text()).toBe('Hay platos de tu pedido que cambiaron. Revisalos antes de enviar.');
+        expect(wrapper.get('[data-send]').element.tagName).toBe('BUTTON');
+        expect(wrapper.html()).not.toContain('wa.me');
+
+        await wrapper.get('[data-send]').trigger('click');
+        expect(wrapper.get('[data-alert]').text()).toBe('Hay platos de tu pedido que cambiaron. Revisalos antes de enviar.');
+        expect(document.activeElement).toBe(wrapper.get('[data-remove]').element);
+
+        await wrapper.get('[data-remove]').trigger('click');
+        expect(lines()).toHaveLength(0);
+        expect(wrapper.find('[data-lines-blocked]').exists()).toBe(false);
+    });
+
+    it('con la carta al día, la línea no lleva aviso y se puede enviar', async () => {
+        const juice = { name: 'Jugo de prueba', description: null, price: 4000, sold_out_until: null, ingredients: [], groups: [], photo: null };
+        const menu = [{ name: 'Bebidas (prueba)', dishes: [juice] }] as unknown as NonNullable<CartRestaurant['menu']>;
+        const { wrapper } = await mountCart({ ...RESTAURANT, menu }, [JUICE]);
+        await wrapper.get('[data-mode="pickup"]').setValue(true);
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
+
+        expect(wrapper.find('[data-line-problem]').exists()).toBe(false);
+        expect(wrapper.get('[data-send]').element.tagName).toBe('A');
+    });
+
+    it('elegir otra dirección quita la ubicación agregada: el pin era de la dirección anterior', async () => {
+        stubCurrentPosition({ latitude: 4.412812, longitude: -76.154734, accuracy: 18.4 });
+        useAddressBook().save({ ...HOME, label: { kind: 'other', text: 'Donde mi mamá' }, address: 'Calle 9', reference: '' }, null, Date.now() - 60_000);
+        useAddressBook().save({ ...HOME, address: 'Cra 5' });
+        const { wrapper, message } = await mountCart();
+        const other = useAddressBook().addresses.value[1];
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
+
+        await wrapper.get('[data-location-add]').trigger('click');
+        await flushPromises();
+        expect(message()).toContain('google.com/maps');
+
+        await wrapper.get(`[data-saved-address="${String(other?.id)}"]`).setValue(true);
+        await flushPromises();
+        expect(message()).not.toContain('google.com/maps');
+        expect(wrapper.find('[data-location-added]').exists()).toBe(false);
+
+        await wrapper.get('[data-location-add]').trigger('click');
+        await flushPromises();
+        await wrapper.get('[data-saved-other]').setValue(true);
+        await flushPromises();
+        expect(wrapper.find('[data-location-added]').exists()).toBe(false);
     });
 
     it('elegir una de la libreta completa el formulario; un barrio que no es de este restaurante se pide de la lista sin perderlo', async () => {

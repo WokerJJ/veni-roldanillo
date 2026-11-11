@@ -46,3 +46,11 @@ Había que decidir dónde se arma el mensaje, qué se guarda en el teléfono y p
 - La dirección recordada es por restaurante. Una libreta global («Casa», «Trabajo») la reemplazaría con su propia decisión.
 - El mensaje sale en el idioma de la interfaz: un turista que usa la app en inglés le escribe al restaurante en inglés.
 - Los restaurantes de ejemplo ya traen WhatsApp ficticio (`57` seguido de `0000…`, que no es un número real), zonas con costo y medios de pago.
+
+## Precisión (#151): el carrito se revisa contra la carta antes de enviar
+
+El carrito guarda una copia de lo que se vio y dura un día, así que podía enviar un plato que ya se agotó, un precio viejo o un «(no hay hoy)» de anoche. Al abrirlo, cada línea se compara con la carta de hoy (`resources/js/order/reconcile.ts`, día de Colombia): si el plato ya no está, hoy no se puede pedir, o cambió su precio, una opción o lo que hoy no hay, la línea lleva un aviso y el enlace a WhatsApp no sale hasta quitarla. No se corrige sola: la persona la quita y la vuelve a agregar, para que vea lo que cambió.
+
+El pedido no guarda ids (ADR 0018): se cruza por nombre. Si dos platos o dos grupos se llaman igual, la línea vale si cuadra con alguno. El plato se reconoce también por su nombre en español, pero los grupos, las opciones y los ingredientes solo viajan en el idioma de la ficha: quien cambia de idioma con platos en el pedido puede tener que quitarlos y volver a agregarlos. Se acepta por lo raro del caso; publicar `name_es` en grupos y opciones lo resolvería. La carta es la de la carga de la página: lo que el dueño cambie con la ficha ya abierta se ve al recargar.
+
+Elegir otra dirección quita la ubicación agregada: el pin era de la dirección anterior.
