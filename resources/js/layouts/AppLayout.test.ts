@@ -105,6 +105,22 @@ describe('AppLayout', () => {
             expect((await mountLayout()).get('header').classes()).not.toContain('max-lg:hidden');
         });
 
+        it('en las demás páginas la cabecera del celular conserva el logo y el idioma (quien llega por un enlace lo cambia ahí); el tema va en «Ajustes» (#147, EVA-072)', async () => {
+            const header = (await mountLayout()).get('header');
+            const hiddenOnPhone = (element: Element) => element.closest('[class~="max-lg:hidden"]') !== null;
+            // El idioma es el grupo de botones; el tema, el botón de la cabecera fuera de ese grupo.
+            const theme = header.findAll('button').filter((button) => button.element.closest('[role="group"]') === null);
+
+            expect(hiddenOnPhone(header.get('[role="group"]').element)).toBe(false);
+            expect(theme.length).toBeGreaterThan(0);
+            expect(theme.every((button) => hiddenOnPhone(button.element))).toBe(true);
+            expect(hiddenOnPhone(header.get('a[href="/"]').element)).toBe(false);
+        });
+
+        it('la cabecera es la que baja el margen del sistema arriba (el selector de TabBar.vue, mobileBase.test.ts)', async () => {
+            expect((await mountLayout()).get('header').element.matches("a[href='#contenido'] + header")).toBe(true);
+        });
+
         it.each([false, true])('con immersive=%s trae la barra de pestañas, que baja aparte; la cabecera chica y el espaciador, solo fuera del mapa', async (immersive) => {
             const wrapper = await mountLayout({ immersive });
             expect(wrapper.find('nav[data-tabbar]').exists()).toBe(false);
