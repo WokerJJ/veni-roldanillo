@@ -14,7 +14,7 @@
 
 Plataforma web instalable (PWA), bilingüe español/inglés, que reúne a **todos los restaurantes de Roldanillo** (Valle del Cauca, Colombia) con menús, precios, mapa, horarios y calificaciones confiables, y permite **pedir a domicilio por WhatsApp sin comisiones** para el negocio.
 
-> Estado: versión 0.1.0 publicada (bases técnicas). MVP en desarrollo: los restaurantes ya se ven sobre el mapa, con datos de ejemplo. Dominio: `veniroldanillo.co`
+> Estado: versión 0.6.0 publicada. La Fase 1 (MVP) está completa: mapa, fichas con menú y fotos, pedido por WhatsApp, panel de dueños y de administración. En curso: rediseño para celular. El detalle está en [docs/05-roadmap.md](docs/05-roadmap.md). Dominio: `veniroldanillo.co`
 
 ## El problema
 
