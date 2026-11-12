@@ -203,12 +203,15 @@ const summary = computed(() => {
                     <button
                         v-if="canQuickAdd(dish)"
                         type="button"
-                        class="menu-quick-add absolute right-0 bottom-3 z-10 inline-flex size-touch items-center justify-center rounded-full bg-veni-ciruela text-veni-blanco dark:bg-veni-mango dark:text-veni-ciruela"
+                        class="menu-quick-add absolute -right-3 -bottom-0.5 z-10 inline-flex size-touch items-center justify-center rounded-full"
                         :aria-label="t('restaurant.menu.quick_add', { name: dish.name })"
                         data-quick-add
                         @click="quickAdd(dish)"
                     >
-                        <Icon name="agregar" :size="20" />
+                        <!-- El área táctil es de 44 px; lo que se ve, 32 px con un anillo del fondo que lo separa de la foto. -->
+                        <span class="menu-quick-add-disc inline-flex size-8 items-center justify-center rounded-full bg-veni-ciruela text-veni-blanco dark:bg-veni-mango dark:text-veni-ciruela" aria-hidden="true">
+                            <Icon name="agregar" :size="20" />
+                        </span>
                     </button>
                     <div v-if="!canOrder(dish)" class="flex items-start justify-between gap-3 py-3">
                         <MenuDishLine :dish="dish" :sold-out="soldOut(dish)" :unavailable="unavailable(dish)" :without="missingEssential(dish)" :notes="soldOut(dish) || missingEssential(dish) !== null ? [] : todayNotes(dish)" :chips="chips(dish)" />
@@ -227,5 +230,17 @@ const summary = computed(() => {
 /* Al saltar desde una pestaña, el título no queda bajo la barra fija. */
 .menu-section {
     scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 4rem);
+}
+
+/* El «+» cuelga de la esquina de la foto: un anillo del color del fondo lo separa de ella, en claro y en oscuro. */
+.menu-quick-add-disc {
+    box-shadow: 0 0 0 2px var(--color-canvas);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .menu-quick-add:active .menu-quick-add-disc {
+        scale: 0.92;
+        transition: scale 120ms cubic-bezier(0.2, 0.9, 0.3, 1);
+    }
 }
 </style>

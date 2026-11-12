@@ -532,13 +532,18 @@ onBeforeUnmount(() => {
     object-fit: cover;
 }
 
-/* El título sobre la imagen: texto blanco sobre un degradado oscuro abajo (contraste de 4,5:1 o más). */
+/*
+ * El título sobre la imagen: texto blanco sobre un degradado oscuro abajo. El
+ * tramo del texto queda en un plano de 0,66 de negro como mínimo: sobre una
+ * imagen toda blanca da #575757 y 7:1 con el texto (antes, con 0,6 que ya se
+ * iba apagando a la altura de la primera línea, bajaba a cerca de 4:1).
+ */
 .ficha-cover-caption {
     position: absolute;
     inset: auto 0 0;
-    padding: 2rem 0.75rem 0.5rem;
+    padding: 1.5rem 0.75rem 0.5rem;
     color: #fff;
-    background: linear-gradient(to top, rgb(0 0 0 / 0.8), rgb(0 0 0 / 0.6) 55%, transparent);
+    background: linear-gradient(to top, rgb(0 0 0 / 0.8), rgb(0 0 0 / 0.66) 80%, transparent);
 }
 
 /*

@@ -562,6 +562,16 @@ onMounted(() => {
     cursor: zoom-in;
 }
 
+/*
+ * El foco de la foto va por dentro: el contorno de afuera lo recortaría el
+ * área que se desplaza, porque la foto llega a sus bordes. Un anillo blanco
+ * pegado al borde y el contorno del acento detrás: se ve sobre cualquier foto.
+ */
+.dish-picker-zoom:focus-visible {
+    outline-offset: -0.25rem;
+    box-shadow: inset 0 0 0 0.125rem #fff;
+}
+
 .dish-picker-icon {
     margin-inline: auto;
 }
