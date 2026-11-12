@@ -147,6 +147,19 @@ function watchSections(): void {
 
     const inBand = new Set<string>();
 
+    /*
+     * Dónde empieza la franja: justo arriba de donde queda el título de una
+     * sección al saltar a ella (el `scroll-padding-top` del documento más su
+     * `scroll-margin-top`, con el margen del sistema ya resuelto). Más arriba,
+     * la franja todavía tocaría el final de la sección anterior y, al tocar
+     * una pestaña, quedaría marcada la de antes. Sin esas medidas, 64 px.
+     */
+    const first = document.getElementById(sections.value[0]?.id ?? '');
+    const landing =
+        (Number.parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0) +
+        (first ? Number.parseFloat(getComputedStyle(first).scrollMarginTop) || 0 : 0);
+    const bandTop = Math.max(64, Math.round(landing) - 8);
+
     spy = new IntersectionObserver(
         (entries) => {
             for (const { target, isIntersecting } of entries) {
@@ -159,7 +172,7 @@ function watchSections(): void {
 
             current.value = sections.value.find(({ id }) => inBand.has(id))?.id ?? current.value;
         },
-        { rootMargin: '-64px 0px -60% 0px' },
+        { rootMargin: `-${String(bandTop)}px 0px -60% 0px` },
     );
 
     for (const { id } of sections.value) {

@@ -1005,12 +1005,29 @@ describe('Restaurants/Show: portada y pestañas fijas del celular (#141, M7)', (
         expect(spy.instances[0]?.disconnect).toHaveBeenCalled();
     });
 
-    it('la franja de lectura va de debajo de la barra (64 px) al 40 % de la pantalla', async () => {
+    it('sin medidas de salto, la franja de lectura va de 64 px al 40 % de la pantalla', async () => {
         const spy = stubObserver();
         await mountShow();
 
         expect(spy.instances).toHaveLength(1);
         expect(spy.instances[0]?.options).toEqual({ rootMargin: '-64px 0px -60% 0px' });
+    });
+
+    it('la franja empieza justo arriba de donde queda una sección al saltar a ella: no toca el final de la anterior', async () => {
+        const spy = stubObserver();
+        const real = window.getComputedStyle.bind(window);
+        // El documento deja 56 px libres arriba (la cabecera chica) y cada sección, 64 más (las pestañas).
+        vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
+            if (element === document.documentElement) {
+                return { scrollPaddingTop: '56px' } as CSSStyleDeclaration;
+            }
+
+            return element.id === 'ficha-menu-0' ? ({ scrollMarginTop: '64px' } as CSSStyleDeclaration) : real(element, pseudo);
+        });
+        await mountShow();
+
+        // 56 + 64 = 120 px es donde queda el título; la sección anterior termina 16 px antes.
+        expect(spy.instances[0]?.options).toEqual({ rootMargin: '-112px 0px -60% 0px' });
     });
 
     it('al desmontar la ficha, deja de mirar las secciones', async () => {
