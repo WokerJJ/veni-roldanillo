@@ -1,8 +1,9 @@
 <script lang="ts">
+import type { ExpressionSpecification } from 'maplibre-gl';
 import type { PropType } from 'vue';
 import { computed, defineComponent, onBeforeUnmount, shallowRef, watch } from 'vue';
 
-import { categoryIcon, CATEGORIES } from '@/icons/food';
+import { categoryIcon, CATEGORIES, GENERIC_FOOD_ICON } from '@/icons/food';
 import { loadIcon } from '@/icons/icons';
 import { iconImage } from '@/map/iconImage';
 import type { MapGeoJson, MapHit, MapImage, MapLayerGroup } from '@/map/layers';
@@ -80,13 +81,20 @@ function featuresOf(restaurants: readonly Restaurant[]): MapGeoJson {
     };
 }
 
+/**
+ * La imagen de cada punto: la de su ícono y, si esa no se registró (falló al
+ * prepararse), la del genérico: nunca un círculo vacío. Si tampoco hay genérico,
+ * `coalesce` no da imagen y MapLibre no dibuja ícono, sin error.
+ */
+const ICON_IMAGE: ExpressionSpecification = ['coalesce', ['image', ['concat', MARKER, ['get', 'icon']]], ['image', `${MARKER}${GENERIC_FOOD_ICON}`]];
+
 /** El ícono dentro del círculo de cada restaurante. */
 const POINT_ICONS: MapLayerGroup['layers'][number] = {
     id: 'restaurants-points-icon',
     type: 'symbol',
     source: SOURCE,
     filter: ['!', ['has', 'point_count']],
-    layout: { 'icon-image': ['concat', MARKER, ['get', 'icon']], 'icon-allow-overlap': true, 'icon-ignore-placement': true },
+    layout: { 'icon-image': ICON_IMAGE, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
 };
 
 /** El mismo ícono sobre el elegido, que va en su propia fuente. */

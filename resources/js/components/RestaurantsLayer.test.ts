@@ -2,6 +2,9 @@ import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
 
+import { CATEGORIES } from '@/icons/food';
+import type { IconArt } from '@/icons/icons';
+import { loadIcon } from '@/icons/icons';
 import type { MapImage } from '@/map/layers';
 import type { Restaurant } from '@/restaurants/api';
 import type { Filters } from '@/restaurants/filterParams';
@@ -20,11 +23,43 @@ vi.mock('pmtiles', () => ({
 
 /** El ícono ya dibujado: happy-dom no decodifica imágenes. */
 const MARKER: MapImage = { data: { width: 36, height: 36, data: new Uint8ClampedArray(36 * 36 * 4) } as ImageData, pixelRatio: 2 };
-/** Una imagen por ícono de categoría (CATEGORIES, resources/js/icons/food.ts). */
-const ICON_IDS = ['restaurants-marker-bandeja-paisa', 'restaurants-marker-empanada', 'restaurants-marker-chicharron', 'restaurants-marker-taza-de-tinto', 'restaurants-marker-pescado-frito', 'restaurants-marker-veni/generico'];
+/** Una imagen por ícono de categoría (CATEGORIES, resources/js/icons/food.ts), derivada de ella. */
+const ICON_IDS = [...new Set(Object.values(CATEGORIES))].map((name) => `restaurants-marker-${name}`);
 
-const iconImage = vi.fn<() => Promise<MapImage>>();
-vi.mock('@/map/iconImage', () => ({ iconImage: () => iconImage() }));
+const iconImage = vi.fn<(art: IconArt) => Promise<MapImage>>();
+vi.mock('@/map/iconImage', () => ({ iconImage: (art: IconArt) => iconImage(art) }));
+
+/** La expresión `icon-image` de una capa de símbolos. */
+const iconImageOf = (layer: (id: string) => object | undefined, id: string): unknown => ((layer(id) as { layout?: Record<string, unknown> } | undefined)?.layout)?.['icon-image'];
+
+/**
+ * Lo que MapLibre resuelve de `icon-image` para un restaurante: el nombre de
+ * la imagen, o null si no hay ninguna registrada (entonces no dibuja ícono).
+ * Solo entiende lo que usa la capa: get, concat, image y coalesce.
+ */
+function resolveImage(expression: unknown, properties: Record<string, unknown>, registered: readonly string[]): string | null {
+    if (!Array.isArray(expression)) {
+        return expression as string;
+    }
+
+    const [operator, ...args] = expression as [string, ...unknown[]];
+
+    switch (operator) {
+        case 'get':
+            return properties[args[0] as string] as string;
+        case 'concat':
+            return args.map((arg) => resolveImage(arg, properties, registered)).join('');
+        case 'image': {
+            const id = resolveImage(args[0], properties, registered);
+
+            return id !== null && registered.includes(id) ? id : null;
+        }
+        case 'coalesce':
+            return args.map((arg) => resolveImage(arg, properties, registered)).find((id) => id !== null) ?? null;
+        default:
+            throw new Error(`Expresión sin soporte en la prueba: ${operator}`);
+    }
+}
 
 const STYLE = { version: 8, center: [-76.1547, 4.4128], zoom: 13.5, metadata: { 'veni:bounds': [-76.3, 4.3, -76.0, 4.55] }, sources: {}, layers: [{ id: 'background' }, { id: 'places' }] };
 /** Lo que puede tardar un import() en frío con la máquina cargada: más que el segundo que espera vi.waitFor. */
@@ -189,6 +224,62 @@ describe('RestaurantsLayer', () => {
 
         expect(map.imageIds()).toEqual(ICON_IDS);
         expect(map.addImage).toHaveBeenCalledWith('restaurants-marker-empanada', MARKER.data, { pixelRatio: 2 });
+    });
+
+    describe('el ícono de cada restaurante (icon-image)', () => {
+        /** La imagen que MapLibre dibujaría sobre ese restaurante en la capa de íconos, o null. */
+        async function drawn(restaurantToDraw: Restaurant) {
+            const { layer, map, source } = await mountLayer([restaurantToDraw]);
+            const [feature] = (source('restaurants')?.data as { features: { properties: Record<string, unknown> }[] }).features;
+
+            return resolveImage(iconImageOf(layer, 'restaurants-points-icon'), feature?.properties ?? {}, map.imageIds());
+        }
+
+        it('enlaza la propiedad icon del punto con la imagen registrada', async () => {
+            expect(await drawn(LA_CEIBA)).toBe('restaurants-marker-bandeja-paisa');
+        });
+
+        it('el elegido usa la misma regla que los demás puntos', async () => {
+            const { layer } = await mountLayer();
+
+            expect(iconImageOf(layer, 'restaurants-selected-icon')).toEqual(iconImageOf(layer, 'restaurants-points-icon'));
+        });
+
+        it('un restaurante sin categorías lleva el ícono genérico', async () => {
+            expect(await drawn(restaurant({ categories: [] }))).toBe('restaurants-marker-veni/generico');
+        });
+
+        it('una categoría que todavía no tiene ícono lleva el genérico', async () => {
+            expect(await drawn(restaurant({ categories: [{ slug: 'categoria-nueva', name: 'Nueva' }] }))).toBe('restaurants-marker-veni/generico');
+        });
+
+        it('con varias categorías usa el ícono de la primera', async () => {
+            // EL_GUADUAL: asados (chicharrón) y comidas rápidas (empanada).
+            expect(await drawn(EL_GUADUAL)).toBe('restaurants-marker-chicharron');
+        });
+
+        it('si un solo ícono no se prepara, los demás conservan el suyo y quien lo perdió muestra el genérico, no un círculo vacío', async () => {
+            vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const failing = (await loadIcon('empanada')).body;
+            iconImage.mockReset().mockImplementation((art) => (art.body === failing ? Promise.reject(new Error('No decodificó.')) : Promise.resolve(MARKER)));
+            const { layer, layerIds, map, source } = await mountLayer([LA_CEIBA, EL_GUADUAL, restaurant({ slug: 'otro', categories: [{ slug: 'comidas-rapidas', name: 'Comidas rápidas' }] })]);
+
+            expect(layerIds()).toContain('restaurants-points-icon');
+            expect(map.imageIds()).toEqual(ICON_IDS.filter((id) => id !== 'restaurants-marker-empanada'));
+
+            const icons = Object.fromEntries(
+                (source('restaurants')?.data as { features: { properties: { slug: string; icon: string } }[] }).features.map(({ properties }) => [
+                    properties.slug,
+                    resolveImage(iconImageOf(layer, 'restaurants-points-icon'), properties, map.imageIds()),
+                ]),
+            );
+
+            expect(icons).toEqual({
+                'prueba-la-ceiba': 'restaurants-marker-bandeja-paisa',
+                'prueba-el-guadual': 'restaurants-marker-chicharron',
+                otro: 'restaurants-marker-veni/generico',
+            });
+        });
     });
 
     it('si el ícono no se puede preparar, quedan los círculos', async () => {
