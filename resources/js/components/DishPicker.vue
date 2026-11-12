@@ -541,7 +541,8 @@ onMounted(() => {
 }
 
 .dish-picker-footer {
-    padding: 0.75rem 1rem;
+    /* Con viewport-fit=cover, el pie no queda bajo el indicador de inicio del iPhone. */
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
 }
 
 /*

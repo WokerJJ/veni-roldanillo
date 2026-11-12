@@ -493,9 +493,17 @@ onBeforeUnmount(() => {
     max-width: 48rem;
 }
 
-/* Al saltar desde la navegación interna, el título de la sección no queda pegado al borde. */
+/*
+ * La altura de la barra fija de pestañas (52 px + el margen del sistema) vive
+ * aquí: la leen estas secciones y las del menú (RestaurantMenu).
+ */
+.ficha {
+    --ficha-tabs-offset: calc(env(safe-area-inset-top, 0px) + 4rem);
+}
+
+/* Al saltar desde las pestañas, el título de la sección no queda bajo la barra fija. */
 .ficha-section {
-    scroll-margin-top: 1rem;
+    scroll-margin-top: var(--ficha-tabs-offset);
 }
 
 /* «¿Es tu negocio?» se lee con el color del texto, no el apagado del pie: es una invitación. */
@@ -592,6 +600,11 @@ onBeforeUnmount(() => {
 }
 
 @media (min-width: 64rem) {
+    /* En computador no hay barra de pestañas: el título queda a 1 rem del borde. */
+    .ficha-section {
+        scroll-margin-top: 1rem;
+    }
+
     .ficha {
         max-width: var(--container-6xl, 72rem);
         /*

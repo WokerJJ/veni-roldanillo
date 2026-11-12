@@ -93,6 +93,24 @@ describe('CSS scoped de los componentes (BUG-033)', () => {
         expect(declarations('resources/js/components/DishPicker.vue', '.dish-picker-zoom')).toMatchObject({ width: 'calc(100% + 2rem)', 'margin-inline': '-1rem' });
     });
 
+    it('el pie del selector deja el espacio del indicador de inicio del iPhone (BUG-001)', () => {
+        expect(declarations('resources/js/components/DishPicker.vue', '.dish-picker-footer')).toMatchObject({
+            padding: '0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px))',
+        });
+    });
+
+    it('las secciones de la ficha saltan por debajo de la barra fija y en computador, sin barra, a 1 rem (EVA-001)', () => {
+        const show = 'resources/js/pages/Restaurants/Show.vue';
+        const bar = 'calc(env(safe-area-inset-top, 0px) + 4rem)';
+
+        expect(declarations(show, '.ficha')).toMatchObject({ '--ficha-tabs-offset': bar });
+        expect(declarations(show, '.ficha-section')).toMatchObject({ 'scroll-margin-top': 'var(--ficha-tabs-offset)' });
+        expect(declarations(show, '.ficha-section', '(min-width: 64rem)')).toMatchObject({ 'scroll-margin-top': '1rem' });
+        expect(declarations('resources/js/components/RestaurantMenu.vue', '.menu-section')).toMatchObject({
+            'scroll-margin-top': `var(--ficha-tabs-offset, ${bar})`,
+        });
+    });
+
     it('en computador la barra del pedido va sobre la columna del menú: la columna de la derecha no se acorta por ella (EVA-037)', () => {
         expect(compiledSelectors('resources/js/pages/Restaurants/Show.vue').filter((selector) => selector.includes('has-order-bar'))).toEqual([]);
     });

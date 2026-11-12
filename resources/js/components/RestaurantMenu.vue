@@ -229,7 +229,7 @@ const summary = computed(() => {
 <style scoped>
 /* Al saltar desde una pestaña, el título no queda bajo la barra fija. */
 .menu-section {
-    scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 4rem);
+    scroll-margin-top: var(--ficha-tabs-offset, calc(env(safe-area-inset-top, 0px) + 4rem));
 }
 
 /* El «+» cuelga de la esquina de la foto: un anillo del color del fondo lo separa de ella, en claro y en oscuro. */
