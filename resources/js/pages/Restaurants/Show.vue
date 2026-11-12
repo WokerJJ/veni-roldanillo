@@ -568,13 +568,18 @@ onBeforeUnmount(() => {
 
 /*
  * Las pestañas: una fila que se desplaza de lado y se queda arriba, sólida
- * (el contenido no es de vidrio), a todo el ancho del celular y bajo el
- * margen del sistema. Sin barra de desplazamiento: el dedo y el foco la
+ * (el contenido no es de vidrio), a todo el ancho del celular y bajo la
+ * cabecera chica. Sin barra de desplazamiento: el dedo y el foco la
  * siguen moviendo.
  */
 .ficha-tabs {
     position: sticky;
-    top: env(safe-area-inset-top, 0px);
+    /*
+     * Debajo de la cabecera chica del celular (CompactHeader, ADR 0041), que
+     * aparece fija arriba al bajar: el margen del sistema, sus 44 px y su
+     * borde. A la altura de las pestañas ya está a la vista.
+     */
+    top: calc(env(safe-area-inset-top, 0px) + var(--veni-touch-min) + 1px);
     z-index: 20;
     margin: 1.5rem -1rem 0;
     padding: 0.25rem 1rem;

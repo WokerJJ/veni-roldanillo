@@ -58,7 +58,7 @@ const shown = computed(() => {
 <template>
     <span v-if="chips.length > 0" class="ingredient-chips" :class="{ 'ingredient-chips-line': limit !== null && !shown.changed }" data-ingredient-chips>
         <span class="sr-only">{{ t('restaurant.menu.ingredients') }} </span>
-        <span v-for="(chip, index) in shown.list" :key="index" class="ingredient-chip" :class="`ingredient-chip-${chip.kind}`" :data-ingredient-chip="chip.kind">
+        <span v-for="(chip, index) in shown.list" :key="index" class="ingredient-chip" :class="[`ingredient-chip-${chip.kind}`, { 'ingredient-chip-last': index === shown.list.length - 1 }]" :data-ingredient-chip="chip.kind">
             <Icon :name="chipIconName(chip)" :size="16" class="ingredient-chip-icon" />
             <span v-if="chip.kind === 'present'">{{ chip.name }}</span>
             <span v-else-if="chip.kind === 'missing'">
@@ -102,9 +102,9 @@ const shown = computed(() => {
 }
 
 /*
- * En una línea (M8): sin partirse. Si no caben, los chips se angostan y su
- * nombre termina en puntos suspensivos (el lector lo oye entero); el «+n» no
- * se angosta: siempre se ve.
+ * En una línea (M8): sin partirse. Si no caben, se angosta primero el último
+ * chip y su nombre termina en puntos suspensivos (el lector lo oye entero);
+ * los demás solo si con eso no alcanza. El «+n» no se angosta: siempre se ve.
  */
 .ingredient-chips-line {
     flex-wrap: nowrap;
@@ -120,6 +120,10 @@ const shown = computed(() => {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.ingredient-chips-line .ingredient-chip-last {
+    flex-shrink: 1000;
 }
 
 .ingredient-chips-line .ingredient-chip-more {

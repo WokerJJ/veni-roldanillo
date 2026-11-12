@@ -111,6 +111,23 @@ describe('CSS scoped de los componentes (BUG-033)', () => {
         });
     });
 
+    it('las pestañas de la ficha se quedan debajo de la cabecera chica del celular, no encima de ella (#141)', () => {
+        const top = declarations('resources/js/pages/Restaurants/Show.vue', '.ficha-tabs').top ?? '';
+
+        expect(declarations('resources/js/pages/Restaurants/Show.vue', '.ficha-tabs').position).toBe('sticky');
+        expect(top).toContain('env(safe-area-inset-top, 0px)');
+        expect(top).toContain('var(--veni-touch-min)');
+        // La cabecera chica mide eso: el margen del sistema, su enlace de 44 px y el borde.
+        expect(declarations('resources/js/components/CompactHeader.vue', '.compact-back')).toMatchObject({ 'min-height': 'var(--veni-touch-min)' });
+    });
+
+    it('en una línea, se angosta primero el último chip y el «+n» nunca (#141)', () => {
+        const file = 'resources/js/components/IngredientChips.vue';
+
+        expect(declarations(file, '.ingredient-chips-line .ingredient-chip-last')).toMatchObject({ 'flex-shrink': '1000' });
+        expect(declarations(file, '.ingredient-chips-line .ingredient-chip-more')).toMatchObject({ 'flex-shrink': '0' });
+    });
+
     it('en computador la barra del pedido va sobre la columna del menú: la columna de la derecha no se acorta por ella (EVA-037)', () => {
         expect(compiledSelectors('resources/js/pages/Restaurants/Show.vue').filter((selector) => selector.includes('has-order-bar'))).toEqual([]);
     });
