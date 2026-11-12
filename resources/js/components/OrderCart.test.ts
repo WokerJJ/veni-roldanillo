@@ -78,7 +78,12 @@ async function mountCart(restaurant: CartRestaurant = RESTAURANT, items: OrderIt
  * Un clic en «Enviar»: devuelve si el carrito lo frenó. Después, un oyente en
  * el documento lo frena siempre, para que la prueba no navegue a wa.me.
  */
-async function clickSend(link: HTMLElement): Promise<boolean> {
+async function clickSend(link: HTMLElement, { defensive = false }: { defensive?: boolean } = {}): Promise<boolean> {
+    // Un toque real solo llega a lo que se ve: «Enviar» vive en el último paso. Solo el caso defensivo lo toca oculto.
+    if (!defensive) {
+        expect(link.closest('[hidden]'), '«Enviar» está oculto: la prueba no llegó al último paso').toBeNull();
+    }
+
     let prevented = false;
     const stop = (event: Event): void => {
         prevented = event.defaultPrevented;
@@ -89,6 +94,39 @@ async function clickSend(link: HTMLElement): Promise<boolean> {
     await flushPromises();
 
     return prevented;
+}
+
+type CartWrapper = Awaited<ReturnType<typeof mountCart>>['wrapper'];
+
+/** Un toque en «Continuar», esperando a que termine el cambio de paso. */
+async function next(wrapper: CartWrapper): Promise<void> {
+    await wrapper.get('[data-next]').trigger('click');
+    await flushPromises();
+}
+
+/** Un toque en «Atrás», esperando a que termine el cambio de paso. */
+async function back(wrapper: CartWrapper): Promise<void> {
+    await wrapper.get('[data-back]').trigger('click');
+    await flushPromises();
+}
+
+/** Lo mínimo para un domicilio: barrio, dirección y Nequi. */
+async function fillDelivery(wrapper: CartWrapper): Promise<void> {
+    await wrapper.get('[data-neighborhood]').setValue('El Mirador (ficticio)');
+    await wrapper.get('[data-address]').setValue('Cra 5 #8-20');
+    await wrapper.get('[data-payment="nequi"]').setValue(true);
+}
+
+/**
+ * Llega al último paso como la persona: «Continuar» a «Entrega», llena lo que
+ * pide `fill` y «Continuar» otra vez. Falla si no llega de verdad.
+ */
+async function reachReview(wrapper: CartWrapper, fill: (wrapper: CartWrapper) => Promise<void> = fillDelivery): Promise<void> {
+    await next(wrapper);
+    await fill(wrapper);
+    await next(wrapper);
+
+    expect(wrapper.get('[data-stage="2"]').attributes('hidden'), 'no llegó a «Revisar y enviar»').toBeUndefined();
 }
 
 function stubCurrentPosition(result: { latitude: number; longitude: number; accuracy: number } | { code: number }) {
@@ -201,7 +239,7 @@ describe('OrderCart', () => {
         expect(total()).toBe('$ 44.000 + domicilio');
     });
 
-    it('si falta algo, «Enviar» no abre WhatsApp: marca cada campo, lo anuncia y lleva el foco al primero', async () => {
+    it('caso defensivo: si falta algo, «Enviar» no abre WhatsApp: marca cada campo, lo anuncia y lleva el foco al primero', async () => {
         const { wrapper } = await mountCart();
 
         // Mientras falta algo no es un enlace: no se puede abrir, copiar ni mantener presionado.
@@ -210,7 +248,7 @@ describe('OrderCart', () => {
         expect(send.attributes('href')).toBeUndefined();
         expect(send.attributes('type')).toBe('button');
 
-        const prevented = await clickSend(send.element as HTMLElement);
+        const prevented = await clickSend(send.element as HTMLElement, { defensive: true });
 
         expect(prevented).toBe(true);
         expect(wrapper.findAll('[data-error]').map((error) => error.text())).toEqual(['Elegí tu barrio.', 'Escribí la dirección.', 'Elegí cómo pagás.']);
@@ -223,12 +261,14 @@ describe('OrderCart', () => {
     it('con todo lo necesario, el enlace es wa.me del restaurante con el mensaje del pedido', async () => {
         const { wrapper, href, message } = await mountCart();
 
-        await wrapper.get('[data-neighborhood]').setValue('El Mirador (ficticio)');
-        await wrapper.get('[data-address]').setValue('Cra 5 #8-20');
-        await wrapper.get('[data-reference]').setValue('casa azul frente a la tienda');
-        await wrapper.get('[data-name]').setValue('Ana');
-        await wrapper.get('[data-payment="cash"]').setValue(true);
-        await wrapper.get('[data-cash]').setValue('50.000');
+        await reachReview(wrapper, async () => {
+            await wrapper.get('[data-neighborhood]').setValue('El Mirador (ficticio)');
+            await wrapper.get('[data-address]').setValue('Cra 5 #8-20');
+            await wrapper.get('[data-reference]').setValue('casa azul frente a la tienda');
+            await wrapper.get('[data-name]').setValue('Ana');
+            await wrapper.get('[data-payment="cash"]').setValue(true);
+            await wrapper.get('[data-cash]').setValue('50.000');
+        });
 
         expect(href()).toMatch(/^https:\/\/wa\.me\/570000722116\?text=/);
         expect(message()).toBe(
@@ -261,12 +301,14 @@ describe('OrderCart', () => {
     it('«Enviar» avisa al servidor sin frenar el enlace, solo con la entrega (#22, ADR 0031)', async () => {
         const stub = stubCurrentPosition({ latitude: 4.412812, longitude: -76.154734, accuracy: 18.4 });
         const { wrapper } = await mountCart();
-        await wrapper.get('[data-neighborhood]').setValue('El Mirador (ficticio)');
-        await wrapper.get('[data-address]').setValue('Cra 5 #8-20');
-        await wrapper.get('[data-name]').setValue('Ana');
-        await wrapper.get('[data-payment="nequi"]').setValue(true);
-        await wrapper.get('[data-location-add]').trigger('click');
-        await flushPromises();
+        await reachReview(wrapper, async () => {
+            await wrapper.get('[data-neighborhood]').setValue('El Mirador (ficticio)');
+            await wrapper.get('[data-address]').setValue('Cra 5 #8-20');
+            await wrapper.get('[data-name]').setValue('Ana');
+            await wrapper.get('[data-payment="nequi"]').setValue(true);
+            await wrapper.get('[data-location-add]').trigger('click');
+            await flushPromises();
+        });
         expect(stub).toHaveBeenCalledOnce();
         const fetchMock = vi.mocked(fetch);
         expect(fetchMock).not.toHaveBeenCalled();
@@ -295,10 +337,10 @@ describe('OrderCart', () => {
         expect(fetchMock).toHaveBeenCalledOnce();
     });
 
-    it('si falta algo, «Enviar» no avisa al servidor', async () => {
+    it('caso defensivo: si falta algo, «Enviar» no avisa al servidor', async () => {
         const { wrapper } = await mountCart();
 
-        await clickSend(wrapper.get('[data-send]').element as HTMLElement);
+        await clickSend(wrapper.get('[data-send]').element as HTMLElement, { defensive: true });
 
         expect(fetch).not.toHaveBeenCalled();
     });
@@ -306,13 +348,14 @@ describe('OrderCart', () => {
     it('«¿con cuánto pagás?» sale solo con efectivo y avisa si no es un valor o no alcanza', async () => {
         const { wrapper } = await mountCart(RESTAURANT, [JUICE]);
 
+        await next(wrapper);
         await wrapper.get('[data-mode="pickup"]').setValue(true);
         await wrapper.get('[data-payment="nequi"]').setValue(true);
         expect(wrapper.find('[data-cash]').exists()).toBe(false);
 
         await wrapper.get('[data-payment="cash"]').setValue(true);
         await wrapper.get('[data-cash]').setValue('mucho');
-        await clickSend(wrapper.get('[data-send]').element as HTMLElement);
+        await next(wrapper);
         expect(wrapper.get('[data-field="cash"] [data-error]').text()).toBe('Escribí el valor en pesos, solo números.');
 
         await wrapper.get('[data-cash]').setValue('2000');
@@ -359,6 +402,7 @@ describe('OrderCart', () => {
         stubCurrentPosition({ latitude: 4.41, longitude: -76.15, accuracy: 10 });
         const { wrapper } = await mountCart();
 
+        await next(wrapper);
         await wrapper.get('[data-address]').setValue('Cra 5 #8-20');
         await wrapper.get('[data-location-add]').trigger('click');
         await wrapper.get('[data-payment="cash"]').setValue(true);
@@ -376,6 +420,7 @@ describe('OrderCart', () => {
         await flushPromises();
         expect(useAddressBook().addresses.value).toMatchObject([{ reference: '', label: { kind: 'home' } }]);
 
+        await next(wrapper);
         await clickSend(wrapper.get('[data-send]').element as HTMLElement);
 
         const saved = window.localStorage.getItem(ADDRESSES_KEY) ?? '';
@@ -414,17 +459,21 @@ describe('OrderCart', () => {
     it('editar «Casa» no la cambia en la libreta hasta enviar el pedido, y solo con la casilla marcada', async () => {
         useAddressBook().save({ ...HOME, address: 'Cra 5' });
         const { wrapper } = await mountCart();
-        await wrapper.get('[data-payment="nequi"]').setValue(true);
 
-        await wrapper.get('[data-address]').setValue('Calle 7');
+        await reachReview(wrapper, async () => {
+            await wrapper.get('[data-payment="nequi"]').setValue(true);
+            await wrapper.get('[data-address]').setValue('Calle 7');
+        });
         await clickSend(wrapper.get('[data-send]').element as HTMLElement);
         expect(useAddressBook().addresses.value).toMatchObject([{ address: 'Cra 5' }]);
 
+        await back(wrapper);
         await wrapper.get('[data-remember]').setValue(true);
         await wrapper.get('[data-address]').setValue('Calle 8');
         await flushPromises();
         expect(useAddressBook().addresses.value).toMatchObject([{ address: 'Cra 5' }]);
 
+        await next(wrapper);
         await clickSend(wrapper.get('[data-send]').element as HTMLElement);
         expect(useAddressBook().addresses.value).toMatchObject([{ label: { kind: 'home' }, address: 'Calle 8' }]);
     });
@@ -434,12 +483,14 @@ describe('OrderCart', () => {
         const before = useAddressBook().addresses.value;
         const { wrapper } = await mountCart();
 
+        await next(wrapper);
         await wrapper.get('[data-remember]').setValue(true);
         await wrapper.get('[data-address]').setValue('Calle 8');
         await wrapper.get('[data-mode="pickup"]').setValue(true);
         await wrapper.get('[data-payment="nequi"]').setValue(true);
         const { setItem, restore } = spyStorage();
         onTestFinished(restore);
+        await next(wrapper);
 
         expect(await clickSend(wrapper.get('[data-send]').element as HTMLElement)).toBe(false);
 
@@ -458,9 +509,11 @@ describe('OrderCart', () => {
         const first = await mountCart();
 
         expect((first.wrapper.get('[data-address]').element as HTMLInputElement).value).toBe('Cra 5');
+        await next(first.wrapper);
         await first.wrapper.get(`[data-saved-address="${String(older)}"]`).setValue(true);
         await first.wrapper.get('[data-payment="nequi"]').setValue(true);
         vi.setSystemTime(new Date('2026-10-21T12:00:00Z'));
+        await next(first.wrapper);
         await clickSend(first.wrapper.get('[data-send]').element as HTMLElement);
 
         expect(useAddressBook().addresses.value[0]).toMatchObject({ id: older, address: 'Calle vieja', usedAt: Date.now() });
@@ -677,5 +730,340 @@ describe('OrderCart', () => {
         await wrapper.get('[data-close]').trigger('click');
 
         expect(wrapper.emitted('close')).toHaveLength(2);
+    });
+});
+
+describe('OrderCart: el pedido en tres pasos (#142, M10)', () => {
+    type Cart = CartWrapper;
+
+    /** Qué paso se ve: los demás llevan `hidden`. */
+    const visibleStage = (wrapper: Cart) => wrapper.findAll('[data-stage]').filter((stage) => stage.attributes('hidden') === undefined).map((stage) => stage.attributes('data-stage'));
+    const steps = (wrapper: Cart) => wrapper.findAll('[data-steps] li').map((step) => `${step.text()}${step.attributes('aria-current') === 'step' ? ' *' : ''} [${step.attributes('data-step') ?? ''}]`);
+    const isHidden = (wrapper: Cart, selector: string) => wrapper.get(selector).attributes('hidden') !== undefined;
+
+    it('abre en «Tu pedido», con la barra de los tres pasos y el primero marcado', async () => {
+        const { wrapper } = await mountCart();
+
+        expect(wrapper.get('[data-steps]').attributes('aria-label')).toBe('Pasos del pedido');
+        expect(steps(wrapper)).toEqual(['1. Tu pedido * [current]', '2. Entrega [next]', '3. Revisar y enviar [next]']);
+        expect(visibleStage(wrapper)).toEqual(['0']);
+        expect(wrapper.get('h2').text()).toBe('Tu pedido');
+        // Los pasos no son botones: se avanza con «Continuar».
+        expect(wrapper.find('[data-steps] button').exists()).toBe(false);
+        expect(wrapper.find('[data-back]').exists()).toBe(false);
+        expect(wrapper.get('[data-next]').text()).toBe('Continuar');
+    });
+
+    it('«Enviar por WhatsApp» solo se ve en el último paso, con el total estimado', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, [JUICE]);
+
+        expect(isHidden(wrapper, '[data-footer-send]')).toBe(true);
+
+        await next(wrapper);
+        expect(isHidden(wrapper, '[data-footer-send]')).toBe(true);
+
+        await wrapper.get('[data-mode="pickup"]').setValue(true);
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
+        await next(wrapper);
+
+        expect(visibleStage(wrapper)).toEqual(['2']);
+        expect(isHidden(wrapper, '[data-footer-send]')).toBe(false);
+        expect(isHidden(wrapper, '[data-footer-totals]')).toBe(false);
+        expect(wrapper.get('[data-footer-send] [data-send]').element.tagName).toBe('A');
+        expect(plain(wrapper.get('[data-total]').text())).toBe('$ 4.000');
+        expect(wrapper.find('[data-next]').exists()).toBe(false);
+    });
+
+    it('«Continuar» lleva a «Entrega»: el foco va al título, que dice el paso, y se anuncia', async () => {
+        const { wrapper } = await mountCart();
+
+        await next(wrapper);
+
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        expect(wrapper.get('h2').text()).toBe('Entrega');
+        expect(document.activeElement).toBe(wrapper.get('h2').element);
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 2 de 3: Entrega.');
+        expect(steps(wrapper)).toEqual(['1. Tu pedido [done]', '2. Entrega * [current]', '3. Revisar y enviar [next]']);
+    });
+
+    it('en «Entrega» el pie es una línea con el total y la fila de botones: no le quita alto a los campos', async () => {
+        const { wrapper } = await mountCart();
+
+        expect(isHidden(wrapper, '[data-footer-totals]')).toBe(false);
+        expect(wrapper.find('[data-footer-total-line]').exists()).toBe(false);
+
+        await next(wrapper);
+
+        // El desglose y la pista salen; queda solo el total.
+        expect(isHidden(wrapper, '[data-footer-totals]')).toBe(false);
+        expect(isHidden(wrapper, '[data-footer-breakdown]')).toBe(true);
+        expect(wrapper.get('[data-footer-total-line]').text()).toContain('Total estimado');
+        expect(wrapper.findAll('[data-footer-nav] button').map((button) => button.text())).toEqual(['Atrás', 'Continuar']);
+        // El pie va fuera de lo que se desplaza: nunca queda encima de un campo.
+        expect(wrapper.get('footer').element.contains(wrapper.get('[data-address]').element)).toBe(false);
+        expect(wrapper.get('[data-stage="1"]').element.parentElement?.classList.contains('overflow-y-auto')).toBe(true);
+    });
+
+    it('en «Entrega» se lee el total estimado mientras se escribe cuánto se paga, con el domicilio del barrio', async () => {
+        const { wrapper } = await mountCart();
+
+        await next(wrapper);
+        const line = () => plain(wrapper.get('[data-footer-total-line] [data-total-line]').text());
+        expect(line()).toBe('$ 44.000 + domicilio');
+
+        await wrapper.get('[data-neighborhood]').setValue('La Esquina Lila (ficticio)');
+        expect(line()).toBe('$ 46.000');
+        expect(wrapper.findAll('[data-footer-total-line]')).toHaveLength(1);
+
+        await wrapper.get('[data-payment="cash"]').setValue(true);
+        expect(line()).toBe('$ 46.000');
+        // En el último paso, el pie trae el desglose completo.
+        await wrapper.get('[data-address]').setValue('Cra 5 #8-20');
+        await wrapper.get('[data-cash]').setValue('50000');
+        await next(wrapper);
+        expect(wrapper.find('[data-footer-total-line]').exists()).toBe(false);
+        expect(isHidden(wrapper, '[data-footer-breakdown]')).toBe(false);
+        expect(plain(wrapper.get('[data-total]').text())).toBe('$ 46.000');
+    });
+
+    it('si falta algo de la entrega, «Continuar» no avanza: marca cada campo, lo anuncia y lleva el foco al primero', async () => {
+        const { wrapper } = await mountCart();
+
+        await next(wrapper);
+        await next(wrapper);
+
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        expect(wrapper.findAll('[data-error]').map((error) => error.text())).toEqual(['Elegí tu barrio.', 'Escribí la dirección.', 'Elegí cómo pagás.']);
+        expect(wrapper.get('[data-alert]').text()).toBe('Revisá lo que falta antes de enviar.');
+        expect(document.activeElement).toBe(wrapper.get('[data-neighborhood]').element);
+    });
+
+    it('antes de intentar continuar no se marca ningún campo', async () => {
+        const { wrapper } = await mountCart();
+
+        await next(wrapper);
+
+        expect(wrapper.findAll('[data-error]')).toHaveLength(0);
+    });
+
+    it('«Revisar y enviar» muestra el mensaje tal como va a salir por WhatsApp', async () => {
+        const { wrapper, message } = await mountCart(RESTAURANT, [JUICE]);
+
+        await next(wrapper);
+        await wrapper.get('[data-mode="pickup"]').setValue(true);
+        await wrapper.get('[data-name]').setValue('Ana');
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
+        await next(wrapper);
+
+        expect(wrapper.get('h2').text()).toBe('Revisar y enviar');
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 3 de 3: Revisar y enviar.');
+        expect(plain(wrapper.get('[data-review-message]').text())).toBe(message());
+        expect(message()).toContain('Nombre: Ana');
+        expect(message()).toContain('Pago: Nequi');
+    });
+
+    it('«Atrás» vuelve al paso anterior sin perder lo escrito', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, [JUICE]);
+
+        await next(wrapper);
+        await wrapper.get('[data-neighborhood]').setValue('El Mirador (ficticio)');
+        await wrapper.get('[data-address]').setValue('Cra 5 #8-20');
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
+        await next(wrapper);
+        await wrapper.get('[data-back]').trigger('click');
+        await flushPromises();
+
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        expect((wrapper.get('[data-address]').element as HTMLInputElement).value).toBe('Cra 5 #8-20');
+        expect(document.activeElement).toBe(wrapper.get('h2').element);
+
+        await wrapper.get('[data-back]').trigger('click');
+        await flushPromises();
+
+        expect(visibleStage(wrapper)).toEqual(['0']);
+        expect(wrapper.findAll('[data-line]')).toHaveLength(1);
+    });
+
+    it('con una línea que ya no vale, «Continuar» no avanza: lo dice y lleva el foco a «Quitar»', async () => {
+        const juice = { name: 'Jugo de prueba', description: null, price: 4500, sold_out_until: null, ingredients: [], groups: [], photo: null };
+        const menu = [{ name: 'Bebidas (prueba)', dishes: [juice] }] as unknown as NonNullable<CartRestaurant['menu']>;
+        const { wrapper } = await mountCart({ ...RESTAURANT, menu }, [JUICE]);
+
+        await next(wrapper);
+
+        expect(visibleStage(wrapper)).toEqual(['0']);
+        expect(wrapper.get('[data-alert]').text()).toBe('Hay platos de tu pedido que cambiaron. Revisalos antes de enviar.');
+        expect(document.activeElement).toBe(wrapper.get('[data-remove]').element);
+    });
+
+    it('caso defensivo: si al enviar falta algo, vuelve al paso de la entrega', async () => {
+        const { wrapper } = await mountCart();
+
+        // El último paso no se alcanza con datos incompletos; si el pedido deja de estar completo, «Enviar» devuelve a la entrega.
+        await wrapper.get('[data-send]').trigger('click');
+        await flushPromises();
+
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        expect(document.activeElement).toBe(wrapper.get('[data-neighborhood]').element);
+    });
+
+    it('sin WhatsApp no hay pasos: solo el pedido, sin «Continuar»', async () => {
+        const { wrapper } = await mountCart({ ...RESTAURANT, whatsapp: null });
+
+        expect(wrapper.find('[data-steps]').exists()).toBe(false);
+        expect(wrapper.find('[data-next]').exists()).toBe(false);
+        expect(wrapper.findAll('[data-stage]').map((stage) => stage.attributes('data-stage'))).toEqual(['0']);
+        expect(isHidden(wrapper, '[data-footer-totals]')).toBe(false);
+    });
+
+    it('con el pedido vacío no hay barra ni pie', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, []);
+
+        expect(wrapper.find('[data-steps]').exists()).toBe(false);
+        expect(wrapper.find('footer').exists()).toBe(false);
+        expect(wrapper.get('[data-empty]').text()).toContain('Tu pedido está vacío');
+    });
+
+    it('un segundo «Continuar» mientras cambia el paso se descarta: no marca la entrega ni salta de paso', async () => {
+        const { wrapper } = await mountCart();
+
+        // Sin esperar entre los dos toques: el segundo entra con el paso ya cambiado.
+        void wrapper.get('[data-next]').trigger('click');
+        void wrapper.get('[data-next]').trigger('click');
+        await flushPromises();
+
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        expect(wrapper.findAll('[data-error]')).toHaveLength(0);
+        expect(wrapper.get('[data-alert]').text()).toBe('');
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 2 de 3: Entrega.');
+    });
+
+    it('con la entrega completa, un doble «Continuar» no salta al último paso', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, [JUICE]);
+        await next(wrapper);
+        await fillDelivery(wrapper);
+
+        void wrapper.get('[data-next]').trigger('click');
+        void wrapper.get('[data-next]').trigger('click');
+        await flushPromises();
+
+        expect(visibleStage(wrapper)).toEqual(['2']);
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 3 de 3: Revisar y enviar.');
+    });
+
+    it('un segundo «Atrás» mientras cambia el paso se descarta: no cae dos pasos', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, [JUICE]);
+        await reachReview(wrapper);
+
+        void wrapper.get('[data-back]').trigger('click');
+        void wrapper.get('[data-back]').trigger('click');
+        await flushPromises();
+
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 2 de 3: Entrega.');
+    });
+
+    it('si el pedido se vacía en el último paso, vuelve a «Tu pedido» y al agregar de nuevo se empieza por el primero', async () => {
+        const { wrapper, order } = await mountCart(RESTAURANT, [JUICE]);
+        await reachReview(wrapper);
+
+        useOrder(RESTAURANT.slug).clear();
+        await flushPromises();
+
+        expect(wrapper.get('h2').text()).toBe('Tu pedido');
+        expect(wrapper.find('[data-empty]').exists()).toBe(true);
+
+        order.add(JUICE);
+        await flushPromises();
+
+        expect(visibleStage(wrapper)).toEqual(['0']);
+        expect(wrapper.get('h2').text()).toBe('Tu pedido');
+        expect(steps(wrapper)[0]).toBe('1. Tu pedido * [current]');
+    });
+
+    it('si el restaurante pierde el WhatsApp con un paso abierto, vuelve a «Tu pedido» con el aviso a la vista', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, [JUICE]);
+        await next(wrapper);
+        expect(visibleStage(wrapper)).toEqual(['1']);
+
+        await wrapper.setProps({ restaurant: { ...RESTAURANT, whatsapp: null } });
+        await flushPromises();
+
+        expect(wrapper.get('h2').text()).toBe('Tu pedido');
+        expect(visibleStage(wrapper)).toEqual(['0']);
+        expect(wrapper.get('[data-no-whatsapp]').text()).toContain('todavía no recibe pedidos por WhatsApp');
+        expect(wrapper.find('[data-next]').exists()).toBe(false);
+    });
+
+    it('al cambiar de paso se cierra la confirmación de «Vaciar pedido»', async () => {
+        const { wrapper } = await mountCart();
+
+        await wrapper.get('[data-clear]').trigger('click');
+        expect(wrapper.find('[data-clear-confirm]').exists()).toBe(true);
+
+        await next(wrapper);
+        await back(wrapper);
+
+        expect(visibleStage(wrapper)).toEqual(['0']);
+        expect(wrapper.find('[data-clear-confirm]').exists()).toBe(false);
+        expect(wrapper.find('[data-clear]').exists()).toBe(true);
+    });
+
+    it('si el último paso deja de valer por el cambio de día, «Enviar» vuelve a ser botón y lleva a las líneas', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        onTestFinished(() => {
+            vi.useRealTimers();
+        });
+        vi.setSystemTime(new Date('2026-10-20T12:00:00Z'));
+        // Hoy no hay cebolla (hasta el 20, incluido) y la línea lo dice; mañana sí hay y el aviso de la línea ya no cuadra.
+        const onion = { name: 'Cebolla (prueba)', essential: false, in_dish: true, sold_out_until: '2026-10-20', substitute: null };
+        const juice = { name: 'Jugo de prueba', description: null, price: 4000, sold_out_until: null, ingredients: [onion], groups: [], photo: null };
+        const menu = [{ name: 'Bebidas (prueba)', dishes: [juice] }] as unknown as NonNullable<CartRestaurant['menu']>;
+        const { wrapper } = await mountCart({ ...RESTAURANT, menu }, [{ ...JUICE, missing: ['Cebolla (prueba)'] }]);
+
+        await reachReview(wrapper);
+        expect(wrapper.get('[data-send]').element.tagName).toBe('A');
+
+        vi.setSystemTime(new Date('2026-10-21T12:00:00Z'));
+        document.dispatchEvent(new Event('visibilitychange'));
+        await flushPromises();
+
+        expect(wrapper.get('[data-send]').element.tagName).toBe('BUTTON');
+        expect(await clickSend(wrapper.get('[data-send]').element as HTMLElement)).toBe(true);
+        expect(visibleStage(wrapper)).toEqual(['0']);
+        expect(wrapper.get('[data-alert]').text()).toBe('Hay platos de tu pedido que cambiaron. Revisalos antes de enviar.');
+        expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    });
+
+    it('con efectivo justo se llega al último paso, pero subir la cantidad y continuar deja el error de efectivo en «Entrega»', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, [JUICE]);
+
+        await reachReview(wrapper, async () => {
+            await wrapper.get('[data-mode="pickup"]').setValue(true);
+            await wrapper.get('[data-payment="cash"]').setValue(true);
+            await wrapper.get('[data-cash]').setValue('4000');
+        });
+        await back(wrapper);
+        await back(wrapper);
+        expect(visibleStage(wrapper)).toEqual(['0']);
+
+        await wrapper.get('[data-increase]').trigger('click');
+        await next(wrapper);
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        await next(wrapper);
+
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        expect(plain(wrapper.get('[data-field="cash"] [data-error]').text())).toBe('Con eso no alcanza para el total estimado ($ 8.000).');
+        expect(wrapper.get('[data-alert]').text()).toBe('Revisá lo que falta antes de enviar.');
+        expect(document.activeElement).toBe(wrapper.get('[data-cash]').element);
+    });
+
+    it('en inglés', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, [JUICE], 'en');
+
+        expect(steps(wrapper)).toEqual(['1. Your order * [current]', '2. Delivery [next]', '3. Review and send [next]']);
+        await next(wrapper);
+        expect(wrapper.get('[data-announcement]').text()).toBe('Step 2 of 3: Delivery.');
+        expect(wrapper.findAll('[data-footer-nav] button').map((button) => button.text())).toEqual(['Back', 'Continue']);
     });
 });

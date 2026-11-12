@@ -92,6 +92,14 @@ describe('CSS scoped de los componentes (BUG-033)', () => {
         expect(declarations('resources/js/components/DishPicker.vue', '.dish-picker-zoom')).toMatchObject({ width: '100%', 'max-width': '45dvh' });
     });
 
+    it('en el pedido, el recuadro de foco sale solo con el teclado (#142)', () => {
+        const selectors = compiledSelectors('resources/js/components/OrderCart.vue');
+
+        // Lo único que toca el foco en el carrito es quitar el recuadro cuando no es de teclado; ninguna regla lo dibuja con :focus a secas.
+        expect(selectors.filter((selector) => selector.includes(':focus')).every((selector) => selector.includes(':not(:focus-visible)'))).toBe(true);
+        expect(selectors.some((selector) => selector.startsWith('.order-cart') && selector.includes(':focus') && selector.includes(':not(:focus-visible)'))).toBe(true);
+    });
+
     it('en computador la barra del pedido va sobre la columna del menú: la columna de la derecha no se acorta por ella (EVA-037)', () => {
         expect(compiledSelectors('resources/js/pages/Restaurants/Show.vue').filter((selector) => selector.includes('has-order-bar'))).toEqual([]);
     });
