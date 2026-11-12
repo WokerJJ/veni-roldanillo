@@ -897,6 +897,15 @@ describe('Restaurants/Show: portada y pestañas fijas del celular (#141, M7)', (
         expect(cover.get('img').attributes('src')).toContain('abcdefabcdefabcdef01-640.webp');
         expect(cover.get('[data-cover-promotion]').text()).toContain('Jugo gratis con el sancocho (prueba)');
         expect(cover.get('[data-cover-promotion]').text()).toContain('Hasta');
+        // Es lo primero que se ve en el celular: se pide con prioridad.
+        expect(cover.get('img').attributes('fetchpriority')).toBe('high');
+    });
+
+    it('el título de la portada no se lee dos veces: la sección «Promociones» ya lo dice', async () => {
+        const { wrapper } = await mountShow();
+
+        expect(wrapper.get('[data-cover-promotion]').attributes('aria-hidden')).toBe('true');
+        expect(wrapper.get('#ficha-promociones').text()).toContain('Jugo gratis con el sancocho (prueba)');
     });
 
     it('sin promoción, el fondo de la marca con el ícono de la categoría', async () => {
@@ -929,7 +938,8 @@ describe('Restaurants/Show: portada y pestañas fijas del celular (#141, M7)', (
         const current = () => wrapper.findAll('nav[data-sections] a[aria-current]').map((link) => link.text());
 
         expect(spy.observed.map((element) => element.id)).toEqual(['ficha-menu-0', 'ficha-menu-1', 'ficha-contacto', 'ficha-domicilios']);
-        expect(current()).toEqual([]);
+        // Al abrir, la primera.
+        expect(current()).toEqual(['Platos fuertes (prueba)']);
 
         spy.cross('ficha-menu-0', true);
         await flushPromises();
@@ -944,6 +954,29 @@ describe('Restaurants/Show: portada y pestañas fijas del celular (#141, M7)', (
         spy.cross('ficha-menu-1', false);
         await flushPromises();
         expect(current()).toEqual(['Bebidas (prueba)']);
+    });
+
+    it('sin IntersectionObserver, la primera pestaña queda marcada', async () => {
+        vi.stubGlobal('IntersectionObserver', undefined);
+        const { wrapper } = await mountShow();
+
+        expect(wrapper.findAll('nav[data-sections] a[aria-current]').map((link) => link.text())).toEqual(['Platos fuertes (prueba)']);
+    });
+
+    it('si la carta cambia y la sección marcada ya no está, se marca la primera: nunca una que no existe (BUG-005)', async () => {
+        const spy = stubObserver();
+        const { wrapper } = await mountShow();
+        const current = () => wrapper.findAll('nav[data-sections] a[aria-current]').map((link) => link.text());
+
+        spy.cross('ficha-domicilios', true);
+        await flushPromises();
+        expect(current()).toEqual(['Domicilios']);
+
+        // La ficha se volvió a pedir y ya no hace domicilios.
+        await wrapper.setProps({ restaurant: profile({ delivery: { available: false, notes: null, zones: [] } }) });
+        await flushPromises();
+
+        expect(current()).toEqual(['Platos fuertes (prueba)']);
     });
 
     it('si dos secciones cruzan la franja, se marca la primera de la página', async () => {

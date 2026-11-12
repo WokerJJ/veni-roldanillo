@@ -101,15 +101,30 @@ const shown = computed(() => {
     flex-shrink: 0;
 }
 
-/* En una línea (M8): sin partirse; lo que no cabe se recorta, y el «+n» dice que hay más. */
+/*
+ * En una línea (M8): sin partirse. Si no caben, los chips se angostan y su
+ * nombre termina en puntos suspensivos (el lector lo oye entero); el «+n» no
+ * se angosta: siempre se ve.
+ */
 .ingredient-chips-line {
     flex-wrap: nowrap;
     overflow: hidden;
 }
 
 .ingredient-chips-line .ingredient-chip {
-    flex-shrink: 0;
+    min-width: 2.5rem;
     white-space: nowrap;
+}
+
+.ingredient-chips-line .ingredient-chip > span:not(.sr-only) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ingredient-chips-line .ingredient-chip-more {
+    flex-shrink: 0;
+    min-width: 0;
 }
 
 /* Atenuado y punteado; «no hay hoy» va escrito al lado. */

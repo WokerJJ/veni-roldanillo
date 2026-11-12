@@ -117,7 +117,7 @@ const sections = computed(() =>
     ].filter(({ show }) => show),
 );
 
-/** La sección que se está leyendo, o null mientras no se sabe. */
+/** La sección que se está leyendo: al abrir, la primera; null sin pestañas. */
 const current = ref<string | null>(null);
 const tabs = useTemplateRef<HTMLElement>('tabs');
 let spy: IntersectionObserver | null = null;
@@ -131,7 +131,17 @@ function watchSections(): void {
     spy?.disconnect();
     spy = null;
 
-    if (desktop.value || sections.value.length < 2 || typeof IntersectionObserver === 'undefined') {
+    if (desktop.value || sections.value.length < 2) {
+        return;
+    }
+
+    // Al abrir, o si la sección marcada ya no está (cambió la carta al volver
+    // del fondo), la primera: nunca queda marcada una pestaña que no existe.
+    if (!sections.value.some(({ id }) => id === current.value)) {
+        current.value = sections.value[0]?.id ?? null;
+    }
+
+    if (typeof IntersectionObserver === 'undefined') {
         return;
     }
 
@@ -247,7 +257,7 @@ onBeforeUnmount(() => {
                 La portada del celular (#141, M7): la promoción vigente con su
                 imagen o, sin ella, el fondo de la marca con el ícono de la
                 categoría. El título de la promoción va escrito: la imagen es
-                decorativa. En computador no hay portada: la ficha va en dos
+                decorativa, y es lo primero que se ve (fetchpriority). En computador no hay portada: la ficha va en dos
                 columnas (ADR 0038).
             -->
             <div v-if="!desktop" class="ficha-cover mt-2" :class="{ 'ficha-cover-brand': !cover }" data-cover>
@@ -260,9 +270,11 @@ onBeforeUnmount(() => {
                         height="360"
                         alt=""
                         decoding="async"
+                        fetchpriority="high"
                         class="ficha-cover-image"
                     >
-                    <p class="ficha-cover-caption" data-cover-promotion>
+                    <!-- La sección «Promociones» de abajo ya dice el título y la fecha: aquí no se leen otra vez. -->
+                    <p class="ficha-cover-caption" aria-hidden="true" data-cover-promotion>
                         <span class="block font-semibold wrap-anywhere">{{ cover.title }}</span>
                         <span class="block text-sm">{{ t('restaurant.promotions.until', { date: formatDay(cover.ends_at.slice(0, 10), locale) }) }}</span>
                     </p>
