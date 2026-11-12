@@ -39,6 +39,14 @@ import { LABEL_KEYS, LABEL_KINDS, labelText, suggestedKind } from '@/saved/label
  * que abre WhatsApp con el mensaje listo. Vení no recibe el pedido: lo envía
  * la persona desde su WhatsApp (ADR 0004).
  *
+ * Va en tres pasos (#142, M10), con una barra que dice en cuál se está: «Tu
+ * pedido» (las líneas), «Entrega» (cómo se recibe, dónde y cómo se paga) y
+ * «Revisar y enviar» (el mensaje tal como va a salir, el total y el enlace a
+ * WhatsApp, que solo está ahí). «Continuar» no avanza si falta algo del paso:
+ * lo marca, lo anuncia y lleva el foco. Los tres pasos quedan montados y los
+ * que no tocan llevan `hidden`: lo escrito no se pierde al ir y volver, y ni
+ * el foco ni el lector entran a lo que no se ve.
+ *
  * Es un <dialog> nativo con showModal(), como el selector de platos: en un
  * celular vertical sale de abajo (ADR 0022) y desde 768 px queda centrado. Lo
  * carga OrderBar recién al tocar «Ver tu pedido»: no pesa en la ficha ni en
@@ -150,6 +158,12 @@ const locationState = ref<LocationState>('idle');
 
 const attempted = ref(false);
 const confirmingClear = ref(false);
+
+/** Los pasos del pedido (#142, M10), con la clave de su nombre. */
+const STEPS = ['order.cart.title', 'order.steps.delivery', 'order.steps.review'] as const;
+/** El paso que se ve: 0, las líneas; 1, la entrega y el pago; 2, revisar y enviar. */
+const stage = ref(0);
+const scroller = useTemplateRef<HTMLElement>('scroller');
 const announcement = ref('');
 const alertText = ref('');
 let pressedOnBackdrop = false;
@@ -454,24 +468,21 @@ async function forgetLocation(): Promise<void> {
  * «Enviar» es un enlace real a wa.me (se puede abrir, copiar o mantener
  * presionado) solo con el pedido completo. Mientras falta algo es un botón,
  * sin la dirección de wa.me que se podría abrir igual desde el menú del
- * enlace: marca cada campo, lo anuncia y lleva el foco al primero.
+ * enlace: marca cada campo, lo anuncia y lleva el foco al primero. Solo se
+ * ve en el último paso (#142).
  */
 async function onSend(event: MouseEvent): Promise<void> {
+    // El pedido pudo dejar de estar completo con el último paso abierto (la carta cambió de día): vuelve al paso que toca.
     if (blocked.value) {
         event.preventDefault();
-        await announce(t('order.cart.lines_blocked'), 'alert');
-        dialog.value?.querySelector<HTMLElement>('[data-line-problem]')?.closest('[data-line]')?.querySelector<HTMLElement>('[data-remove]')?.focus();
+        await showBlockedLines();
 
         return;
     }
 
     if (problems.value.size > 0) {
         event.preventDefault();
-        attempted.value = true;
-        await announce(t('order.form.errors'), 'alert');
-
-        const first = ['neighborhood', 'address', 'payment', 'cash'].find((field) => problems.value.has(field as DetailsField));
-        dialog.value?.querySelector<HTMLElement>(`[data-field="${String(first)}"] :is(input, select)`)?.focus();
+        await showProblems();
 
         return;
     }
@@ -490,6 +501,49 @@ async function onSend(event: MouseEvent): Promise<void> {
     }
 
     await announce(t('order.form.sent'));
+}
+
+/** Cambia de paso: lo de adentro vuelve arriba, el foco va al título (que dice el paso) y se anuncia. */
+async function go(next: number): Promise<void> {
+    stage.value = next;
+    await nextTick();
+    scroller.value?.scrollTo({ top: 0 });
+    title.value?.focus();
+    await announce(t('order.steps.announce', { step: next + 1, total: STEPS.length, name: t(STEPS[next] ?? STEPS[0]) }));
+}
+
+/** Hay líneas que ya no valen: se dice, y el foco va a «Quitar» de la primera (en el primer paso). */
+async function showBlockedLines(): Promise<void> {
+    stage.value = 0;
+    await announce(t('order.cart.lines_blocked'), 'alert');
+    dialog.value?.querySelector<HTMLElement>('[data-line-problem]')?.closest('[data-line]')?.querySelector<HTMLElement>('[data-remove]')?.focus();
+}
+
+/** Falta algo de la entrega o el pago: se marca cada campo, se anuncia y el foco va al primero (en el segundo paso). */
+async function showProblems(): Promise<void> {
+    stage.value = 1;
+    attempted.value = true;
+    await announce(t('order.form.errors'), 'alert');
+
+    const first = ['neighborhood', 'address', 'payment', 'cash'].find((field) => problems.value.has(field as DetailsField));
+    dialog.value?.querySelector<HTMLElement>(`[data-field="${String(first)}"] :is(input, select)`)?.focus();
+}
+
+/** «Continuar»: al paso siguiente, solo si el actual está completo. */
+async function onNext(): Promise<void> {
+    if (blocked.value) {
+        await showBlockedLines();
+
+        return;
+    }
+
+    if (stage.value === 1 && problems.value.size > 0) {
+        await showProblems();
+
+        return;
+    }
+
+    await go(stage.value + 1);
 }
 
 function onPointerDown(event: PointerEvent): void {
@@ -538,7 +592,8 @@ onBeforeUnmount(() => {
     <dialog ref="dialog" class="order-cart text-ink" :aria-labelledby="`${id}-title`" data-order-cart @cancel="onCancel" @pointerdown="onPointerDown" @click="onClick">
         <header class="order-cart-header flex items-start justify-between gap-3 border-b border-line">
             <div class="min-w-0">
-                <h2 :id="`${id}-title`" ref="title" tabindex="-1" class="text-xl">{{ t('order.cart.title') }}</h2>
+                <!-- El título dice el paso: al cambiar, el foco viene aquí y el lector lo oye. -->
+                <h2 :id="`${id}-title`" ref="title" tabindex="-1" class="text-xl">{{ t(STEPS[stage] ?? STEPS[0]) }}</h2>
                 <p class="text-sm wrap-anywhere text-ink-muted">{{ restaurant.name }}</p>
             </div>
             <button
@@ -552,389 +607,448 @@ onBeforeUnmount(() => {
             </button>
         </header>
 
-        <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
+        <!--
+            La barra de progreso (#142, M10): los tres pasos, con el actual
+            marcado (aria-current="step") y los ya hechos rellenos. No son
+            botones: se avanza con «Continuar» y se vuelve con «Atrás».
+        -->
+        <ol v-if="items.length > 0 && href !== null" class="order-cart-steps" :aria-label="t('order.steps.label')" data-steps>
+            <li
+                v-for="(name, index) in STEPS"
+                :key="name"
+                class="order-cart-step-item"
+                :aria-current="index === stage ? 'step' : undefined"
+                :data-step="index < stage ? 'done' : index === stage ? 'current' : 'next'"
+            >
+                <span class="order-cart-step-bar" />
+                <span class="order-cart-step-name">{{ index + 1 }}. {{ t(name) }}</span>
+            </li>
+        </ol>
+
+        <div ref="scroller" class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
             <p v-if="items.length === 0" class="mt-4" data-empty>{{ t('order.cart.empty') }}</p>
 
             <template v-else>
-                <ul class="mt-2 divide-y divide-line" :aria-label="t('order.cart.lines')">
-                    <li v-for="(item, index) in items" :key="lineKeys[index]" class="py-3" data-line>
-                        <div class="flex items-start justify-between gap-3">
-                            <div class="min-w-0">
-                                <p class="font-semibold wrap-anywhere">{{ item.dish }}</p>
-                                <p v-if="lineDetails(item)" class="text-sm wrap-anywhere text-ink-muted" data-line-details>{{ lineDetails(item) }}</p>
-                                <p v-if="item.note" class="text-sm wrap-anywhere text-ink-muted" data-line-note>{{ t('order.cart.note', { note: item.note }) }}</p>
-                                <p v-if="lineProblems[index]" class="mt-1 flex items-start gap-1 text-sm font-semibold" data-line-problem>
-                                    <Icon name="informacion" :size="20" class="mt-0.5 shrink-0" />
-                                    {{ t(`order.cart.line_${lineProblems[index]}`) }}
-                                </p>
+                <!-- Paso 1 · Tu pedido -->
+                <div :hidden="stage !== 0" data-stage="0">
+                    <ul class="mt-2 divide-y divide-line" :aria-label="t('order.cart.lines')">
+                        <li v-for="(item, index) in items" :key="lineKeys[index]" class="py-3" data-line>
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <p class="font-semibold wrap-anywhere">{{ item.dish }}</p>
+                                    <p v-if="lineDetails(item)" class="text-sm wrap-anywhere text-ink-muted" data-line-details>{{ lineDetails(item) }}</p>
+                                    <p v-if="item.note" class="text-sm wrap-anywhere text-ink-muted" data-line-note>{{ t('order.cart.note', { note: item.note }) }}</p>
+                                    <p v-if="lineProblems[index]" class="mt-1 flex items-start gap-1 text-sm font-semibold" data-line-problem>
+                                        <Icon name="informacion" :size="20" class="mt-0.5 shrink-0" />
+                                        {{ t(`order.cart.line_${lineProblems[index]}`) }}
+                                    </p>
+                                </div>
+                                <div class="shrink-0 text-right tabular-nums">
+                                    <p class="font-semibold" data-line-price>{{ money(item.unitPrice * item.quantity) }}</p>
+                                    <p v-if="item.quantity > 1" class="text-sm text-ink-muted">{{ t('order.cart.each', { price: money(item.unitPrice) }) }}</p>
+                                </div>
                             </div>
-                            <div class="shrink-0 text-right tabular-nums">
-                                <p class="font-semibold" data-line-price>{{ money(item.unitPrice * item.quantity) }}</p>
-                                <p v-if="item.quantity > 1" class="text-sm text-ink-muted">{{ t('order.cart.each', { price: money(item.unitPrice) }) }}</p>
-                            </div>
-                        </div>
-                        <div class="mt-1 flex items-center justify-between gap-3">
-                            <div class="flex items-center gap-1" role="group" :aria-label="t('order.cart.quantity_of', { name: item.dish })">
+                            <div class="mt-1 flex items-center justify-between gap-3">
+                                <div class="flex items-center gap-1" role="group" :aria-label="t('order.cart.quantity_of', { name: item.dish })">
+                                    <button
+                                        type="button"
+                                        class="order-cart-step inline-flex size-touch items-center justify-center rounded-full border border-line text-xl"
+                                        :aria-label="t('order.cart.decrease', { name: item.dish })"
+                                        :disabled="item.quantity <= MIN_QUANTITY"
+                                        data-decrease
+                                        @click="step(index, -1)"
+                                    >
+                                        −
+                                    </button>
+                                    <output class="order-cart-quantity text-center font-semibold tabular-nums" aria-live="polite" data-quantity>{{ item.quantity }}</output>
+                                    <button
+                                        type="button"
+                                        class="order-cart-step inline-flex size-touch items-center justify-center rounded-full border border-line text-xl"
+                                        :aria-label="t('order.cart.increase', { name: item.dish })"
+                                        :disabled="item.quantity >= MAX_QUANTITY"
+                                        data-increase
+                                        @click="step(index, 1)"
+                                    >
+                                        +
+                                    </button>
+                                </div>
                                 <button
                                     type="button"
-                                    class="order-cart-step inline-flex size-touch items-center justify-center rounded-full border border-line text-xl"
-                                    :aria-label="t('order.cart.decrease', { name: item.dish })"
-                                    :disabled="item.quantity <= MIN_QUANTITY"
-                                    data-decrease
-                                    @click="step(index, -1)"
+                                    class="inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
+                                    :aria-label="t('order.cart.remove_label', { name: item.dish })"
+                                    data-remove
+                                    @click="remove(index)"
                                 >
-                                    −
-                                </button>
-                                <output class="order-cart-quantity text-center font-semibold tabular-nums" aria-live="polite" data-quantity>{{ item.quantity }}</output>
-                                <button
-                                    type="button"
-                                    class="order-cart-step inline-flex size-touch items-center justify-center rounded-full border border-line text-xl"
-                                    :aria-label="t('order.cart.increase', { name: item.dish })"
-                                    :disabled="item.quantity >= MAX_QUANTITY"
-                                    data-increase
-                                    @click="step(index, 1)"
-                                >
-                                    +
+                                    {{ t('order.cart.remove') }}
                                 </button>
                             </div>
-                            <button
-                                type="button"
-                                class="inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
-                                :aria-label="t('order.cart.remove_label', { name: item.dish })"
-                                data-remove
-                                @click="remove(index)"
-                            >
-                                {{ t('order.cart.remove') }}
-                            </button>
-                        </div>
-                    </li>
-                </ul>
+                        </li>
+                    </ul>
 
-                <div class="flex flex-wrap items-center gap-2 border-t border-line py-2">
-                    <template v-if="confirmingClear">
-                        <p class="font-semibold" data-clear-confirm>{{ t('order.cart.clear_confirm') }}</p>
-                        <button type="button" class="inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold" data-clear-yes @click="clear">
-                            {{ t('order.cart.clear_yes') }}
+                    <div class="flex flex-wrap items-center gap-2 border-t border-line py-2">
+                        <template v-if="confirmingClear">
+                            <p class="font-semibold" data-clear-confirm>{{ t('order.cart.clear_confirm') }}</p>
+                            <button type="button" class="inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold" data-clear-yes @click="clear">
+                                {{ t('order.cart.clear_yes') }}
+                            </button>
+                            <button type="button" class="inline-flex min-h-touch items-center rounded-full px-4 hover:bg-surface" data-clear-no @click="confirmingClear = false">
+                                {{ t('order.cart.clear_no') }}
+                            </button>
+                        </template>
+                        <button v-else type="button" class="inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface" data-clear @click="confirmingClear = true">
+                            {{ t('order.cart.clear') }}
                         </button>
-                        <button type="button" class="inline-flex min-h-touch items-center rounded-full px-4 hover:bg-surface" data-clear-no @click="confirmingClear = false">
-                            {{ t('order.cart.clear_no') }}
-                        </button>
-                    </template>
-                    <button v-else type="button" class="inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface" data-clear @click="confirmingClear = true">
-                        {{ t('order.cart.clear') }}
-                    </button>
+                    </div>
+                    <p class="text-sm text-ink-muted">{{ t('order.cart.saved_hint') }}</p>
+
+                    <p v-if="href === null" class="mt-4 flex items-start gap-2 rounded-veni-sm border border-line bg-surface p-3" data-no-whatsapp>
+                        <Icon name="informacion" :size="20" class="shrink-0" />
+                        <span>{{ t('order.cart.no_whatsapp') }}</span>
+                    </p>
                 </div>
-                <p class="text-sm text-ink-muted">{{ t('order.cart.saved_hint') }}</p>
 
-                <p v-if="href === null" class="mt-4 flex items-start gap-2 rounded-veni-sm border border-line bg-surface p-3" data-no-whatsapp>
-                    <Icon name="informacion" :size="20" class="shrink-0" />
-                    <span>{{ t('order.cart.no_whatsapp') }}</span>
-                </p>
+                <!-- Paso 2 · Entrega -->
+                <div v-if="href !== null" :hidden="stage !== 1" data-stage="1">
+                    <section class="mt-2" :aria-labelledby="`${id}-form`" data-order-form>
+                        <h3 :id="`${id}-form`" class="text-lg">{{ t('order.form.title') }}</h3>
 
-                <section v-else class="mt-4 border-t border-line pt-4" :aria-labelledby="`${id}-form`" data-order-form>
-                    <h3 :id="`${id}-form`" class="text-lg">{{ t('order.form.title') }}</h3>
-
-                    <fieldset v-if="context.deliveryAvailable" class="mt-3" data-field="mode">
-                        <legend class="font-semibold">{{ t('order.form.mode') }}</legend>
-                        <label v-for="mode in MODES" :key="mode" class="flex min-h-touch cursor-pointer items-center gap-3">
-                            <input
-                                type="radio"
-                                class="order-cart-check size-5 shrink-0"
-                                :name="`${id}-mode`"
-                                :checked="details.mode === mode"
-                                :data-mode="mode"
-                                @change="onMode(mode)"
-                            >
-                            <span>{{ t(mode === 'delivery' ? 'order.form.mode_delivery' : 'order.form.mode_pickup') }}</span>
-                        </label>
-                    </fieldset>
-
-                    <template v-if="delivery">
-                        <!-- La libreta (#16): elegir una completa el formulario; lo de abajo se puede cambiar igual. -->
-                        <fieldset v-if="book.addresses.value.length > 0" class="mt-3" data-saved-addresses>
-                            <legend class="font-semibold">{{ t('order.form.saved_addresses') }}</legend>
-                            <label v-for="saved in book.addresses.value" :key="saved.id" class="flex min-h-touch cursor-pointer items-start gap-3 py-1">
-                                <input
-                                    type="radio"
-                                    class="order-cart-check mt-0.5 size-5 shrink-0"
-                                    :name="`${id}-saved`"
-                                    :checked="activeId === saved.id"
-                                    :data-saved-address="saved.id"
-                                    @change="choose(saved)"
-                                >
-                                <span class="min-w-0">
-                                    <span class="block font-semibold wrap-anywhere">{{ labelText(saved.label, t) }}</span>
-                                    <span class="block text-sm wrap-anywhere text-ink-muted">{{ saved.address }}</span>
-                                </span>
-                            </label>
-                            <label class="flex min-h-touch cursor-pointer items-center gap-3">
-                                <input type="radio" class="order-cart-check size-5 shrink-0" :name="`${id}-saved`" :checked="activeId === null" data-saved-other @change="choose(null)">
-                                <span>{{ t('order.form.saved_other') }}</span>
-                            </label>
-                            <button
-                                type="button"
-                                class="inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
-                                data-saved-manage
-                                @click="openManager"
-                            >
-                                {{ t('order.form.saved_manage') }}
-                            </button>
-                        </fieldset>
-
-                        <div class="mt-3" data-field="neighborhood">
-                            <label :for="`${id}-neighborhood`" class="font-semibold">{{ t('order.form.neighborhood') }}</label>
-                            <p :id="`${id}-neighborhood-hint`" class="text-sm text-ink-muted">
-                                {{ t(context.zones.length > 0 ? 'order.form.neighborhood_hint' : 'order.form.neighborhood_free_hint') }}
-                            </p>
-                            <p v-if="missingNeighborhood" :id="`${id}-neighborhood-saved`" class="text-sm font-semibold" data-neighborhood-missing>
-                                {{ t('order.form.saved_neighborhood_missing', { name: missingNeighborhood }) }}
-                            </p>
-                            <select
-                                v-if="context.zones.length > 0"
-                                :id="`${id}-neighborhood`"
-                                class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
-                                :aria-describedby="describedBy('neighborhood', true)"
-                                :aria-invalid="errorFor('neighborhood') !== null"
-                                data-neighborhood
-                                @change="update({ neighborhood: inputValue($event) })"
-                            >
-                                <option value="" :selected="details.neighborhood === ''">{{ t('order.form.neighborhood_choose') }}</option>
-                                <option v-for="zone in context.zones" :key="zone.neighborhood" :value="zone.neighborhood" :selected="details.neighborhood === zone.neighborhood">
-                                    {{ t('order.form.neighborhood_option', { name: zone.neighborhood, fee: money(zone.fee) }) }}
-                                </option>
-                            </select>
-                            <input
-                                v-else
-                                :id="`${id}-neighborhood`"
-                                type="text"
-                                class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
-                                :value="details.neighborhood"
-                                :maxlength="NEIGHBORHOOD_MAX_LENGTH"
-                                :aria-describedby="describedBy('neighborhood', true)"
-                                :aria-invalid="errorFor('neighborhood') !== null"
-                                data-neighborhood
-                                @input="update({ neighborhood: inputValue($event) })"
-                            >
-                            <p v-if="errorFor('neighborhood')" :id="`${id}-neighborhood-error`" class="mt-1 text-sm font-semibold" data-error>{{ errorFor('neighborhood') }}</p>
-                        </div>
-
-                        <div class="mt-3" data-field="address">
-                            <label :for="`${id}-address`" class="font-semibold">{{ t('order.form.address') }}</label>
-                            <p :id="`${id}-address-hint`" class="text-sm text-ink-muted">{{ t('order.form.address_hint') }}</p>
-                            <input
-                                :id="`${id}-address`"
-                                type="text"
-                                autocomplete="street-address"
-                                class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
-                                :value="details.address"
-                                :maxlength="ADDRESS_MAX_LENGTH"
-                                :aria-describedby="describedBy('address', true)"
-                                :aria-invalid="errorFor('address') !== null"
-                                data-address
-                                @input="update({ address: inputValue($event) })"
-                            >
-                            <p v-if="errorFor('address')" :id="`${id}-address-error`" class="mt-1 text-sm font-semibold" data-error>{{ errorFor('address') }}</p>
-                        </div>
-
-                        <div class="mt-3">
-                            <label :for="`${id}-reference`" class="font-semibold">{{ t('order.form.reference') }}</label>
-                            <p :id="`${id}-reference-hint`" class="text-sm text-ink-muted">{{ t('order.form.reference_hint') }}</p>
-                            <input
-                                :id="`${id}-reference`"
-                                type="text"
-                                class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
-                                :value="details.reference"
-                                :maxlength="REFERENCE_MAX_LENGTH"
-                                :aria-describedby="`${id}-reference-hint`"
-                                data-reference
-                                @input="update({ reference: inputValue($event) })"
-                            >
-                        </div>
-
-                        <div class="mt-3" data-location>
-                            <p class="font-semibold">{{ t('order.form.location') }}</p>
-                            <p :id="`${id}-location-hint`" class="text-sm text-ink-muted">{{ t('order.form.location_hint') }}</p>
-                            <template v-if="details.location">
-                                <p class="mt-1 flex items-start gap-2" data-location-added>
-                                    <Icon name="ubicacion" :size="20" class="mt-0.5 shrink-0" />
-                                    <span>{{ t('order.form.location_added', { meters: Math.round(details.location.accuracy) }) }}</span>
-                                </p>
-                                <button type="button" class="mt-1 inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface" data-location-remove @click="forgetLocation">
-                                    {{ t('order.form.location_remove') }}
-                                </button>
-                            </template>
-                            <template v-else>
-                                <button
-                                    type="button"
-                                    class="mt-1 inline-flex min-h-touch items-center gap-2 rounded-full border border-line px-4 font-semibold hover:bg-surface"
-                                    :aria-describedby="`${id}-location-hint`"
-                                    :disabled="locationState === 'locating'"
-                                    data-location-add
-                                    @click="locate"
-                                >
-                                    <Icon name="ubicacion" :size="20" />
-                                    {{ t(locationState === 'locating' ? 'order.form.location_locating' : 'order.form.location_add') }}
-                                </button>
-                                <p v-if="locationState === 'denied' || locationState === 'error'" class="mt-1 text-sm" role="status" data-location-error>
-                                    {{ t(locationState === 'denied' ? 'order.form.location_denied' : 'order.form.location_error') }}
-                                </p>
-                            </template>
-                        </div>
-                    </template>
-
-                    <div class="mt-3">
-                        <label :for="`${id}-name`" class="font-semibold">{{ t('order.form.name') }}</label>
-                        <p :id="`${id}-name-hint`" class="text-sm text-ink-muted">{{ t('order.form.name_hint') }}</p>
-                        <input
-                            :id="`${id}-name`"
-                            type="text"
-                            autocomplete="given-name"
-                            class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
-                            :value="details.name"
-                            :maxlength="NAME_MAX_LENGTH"
-                            :aria-describedby="`${id}-name-hint`"
-                            data-name
-                            @input="update({ name: inputValue($event) })"
-                        >
-                    </div>
-
-                    <fieldset
-                        v-if="context.paymentMethods.length > 0"
-                        class="mt-3"
-                        data-field="payment"
-                        :aria-describedby="errorFor('payment') === null ? undefined : `${id}-payment-error`"
-                    >
-                        <legend class="font-semibold">{{ t('order.form.payment') }}</legend>
-                        <p v-if="errorFor('payment')" :id="`${id}-payment-error`" class="text-sm font-semibold" data-error>{{ errorFor('payment') }}</p>
-                        <label v-for="method in context.paymentMethods" :key="method" class="flex min-h-touch cursor-pointer items-center gap-3">
-                            <input
-                                type="radio"
-                                class="order-cart-check size-5 shrink-0"
-                                :name="`${id}-payment`"
-                                :checked="details.payment === method"
-                                :data-payment="method"
-                                @change="onPayment(method)"
-                            >
-                            <span>{{ t(PAYMENT_METHOD_KEYS[method]) }}</span>
-                        </label>
-                    </fieldset>
-
-                    <div v-if="details.payment === 'cash'" class="mt-3" data-field="cash">
-                        <label :for="`${id}-cash`" class="font-semibold">{{ t('order.form.cash_amount') }}</label>
-                        <p :id="`${id}-cash-hint`" class="text-sm text-ink-muted">{{ t('order.form.cash_hint') }}</p>
-                        <input
-                            :id="`${id}-cash`"
-                            type="text"
-                            inputmode="numeric"
-                            autocomplete="off"
-                            class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
-                            :value="cashText"
-                            maxlength="12"
-                            :aria-describedby="describedBy('cash', true)"
-                            :aria-invalid="errorFor('cash') !== null"
-                            data-cash
-                            @input="onCash"
-                        >
-                        <p v-if="errorFor('cash')" :id="`${id}-cash-error`" class="mt-1 text-sm font-semibold" data-error>{{ errorFor('cash') }}</p>
-                    </div>
-
-                    <div v-if="delivery" class="mt-4" data-remember-block>
-                        <label class="flex min-h-touch cursor-pointer items-start gap-3 py-1">
-                            <input
-                                type="checkbox"
-                                class="order-cart-check mt-0.5 size-5 shrink-0"
-                                :checked="remember"
-                                :aria-describedby="`${id}-remember-hint`"
-                                data-remember
-                                @change="onRemember"
-                            >
-                            <span>{{ t('order.form.remember') }}</span>
-                        </label>
-                        <p :id="`${id}-remember-hint`" class="text-sm text-ink-muted">{{ t('order.form.remember_hint') }}</p>
-                        <p v-if="rememberFull" class="mt-1 text-sm font-semibold" role="status" data-remember-full>{{ t('order.form.remember_full', { max: MAX_ADDRESSES }) }}</p>
-
-                        <fieldset v-if="remember" class="mt-2" data-label>
-                            <legend class="font-semibold">{{ t('address.label') }}</legend>
-                            <label v-for="kind in LABEL_KINDS" :key="kind" class="flex min-h-touch cursor-pointer items-center gap-3">
+                        <fieldset v-if="context.deliveryAvailable" class="mt-3" data-field="mode">
+                            <legend class="font-semibold">{{ t('order.form.mode') }}</legend>
+                            <label v-for="mode in MODES" :key="mode" class="flex min-h-touch cursor-pointer items-center gap-3">
                                 <input
                                     type="radio"
                                     class="order-cart-check size-5 shrink-0"
-                                    :name="`${id}-label`"
-                                    :checked="label.kind === kind"
-                                    :data-label-kind="kind"
-                                    @change="onLabelKind(kind)"
+                                    :name="`${id}-mode`"
+                                    :checked="details.mode === mode"
+                                    :data-mode="mode"
+                                    @change="onMode(mode)"
                                 >
-                                <span>{{ t(LABEL_KEYS[kind]) }}</span>
+                                <span>{{ t(mode === 'delivery' ? 'order.form.mode_delivery' : 'order.form.mode_pickup') }}</span>
                             </label>
-                            <div v-if="label.kind === 'other'" class="mt-1">
-                                <label :for="`${id}-label-text`" class="font-semibold">{{ t('address.label_text') }}</label>
-                                <input
-                                    :id="`${id}-label-text`"
-                                    type="text"
-                                    class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
-                                    :value="label.text"
-                                    :maxlength="LABEL_MAX_LENGTH"
-                                    data-label-text
-                                    @input="onLabelText"
-                                >
-                            </div>
                         </fieldset>
 
-                        <button
-                            v-if="remember"
-                            type="button"
-                            class="mt-1 inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
-                            data-forget
-                            @click="forget"
+                        <template v-if="delivery">
+                            <!-- La libreta (#16): elegir una completa el formulario; lo de abajo se puede cambiar igual. -->
+                            <fieldset v-if="book.addresses.value.length > 0" class="mt-3" data-saved-addresses>
+                                <legend class="font-semibold">{{ t('order.form.saved_addresses') }}</legend>
+                                <label v-for="saved in book.addresses.value" :key="saved.id" class="flex min-h-touch cursor-pointer items-start gap-3 py-1">
+                                    <input
+                                        type="radio"
+                                        class="order-cart-check mt-0.5 size-5 shrink-0"
+                                        :name="`${id}-saved`"
+                                        :checked="activeId === saved.id"
+                                        :data-saved-address="saved.id"
+                                        @change="choose(saved)"
+                                    >
+                                    <span class="min-w-0">
+                                        <span class="block font-semibold wrap-anywhere">{{ labelText(saved.label, t) }}</span>
+                                        <span class="block text-sm wrap-anywhere text-ink-muted">{{ saved.address }}</span>
+                                    </span>
+                                </label>
+                                <label class="flex min-h-touch cursor-pointer items-center gap-3">
+                                    <input type="radio" class="order-cart-check size-5 shrink-0" :name="`${id}-saved`" :checked="activeId === null" data-saved-other @change="choose(null)">
+                                    <span>{{ t('order.form.saved_other') }}</span>
+                                </label>
+                                <button
+                                    type="button"
+                                    class="inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
+                                    data-saved-manage
+                                    @click="openManager"
+                                >
+                                    {{ t('order.form.saved_manage') }}
+                                </button>
+                            </fieldset>
+
+                            <div class="mt-3" data-field="neighborhood">
+                                <label :for="`${id}-neighborhood`" class="font-semibold">{{ t('order.form.neighborhood') }}</label>
+                                <p :id="`${id}-neighborhood-hint`" class="text-sm text-ink-muted">
+                                    {{ t(context.zones.length > 0 ? 'order.form.neighborhood_hint' : 'order.form.neighborhood_free_hint') }}
+                                </p>
+                                <p v-if="missingNeighborhood" :id="`${id}-neighborhood-saved`" class="text-sm font-semibold" data-neighborhood-missing>
+                                    {{ t('order.form.saved_neighborhood_missing', { name: missingNeighborhood }) }}
+                                </p>
+                                <select
+                                    v-if="context.zones.length > 0"
+                                    :id="`${id}-neighborhood`"
+                                    class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
+                                    :aria-describedby="describedBy('neighborhood', true)"
+                                    :aria-invalid="errorFor('neighborhood') !== null"
+                                    data-neighborhood
+                                    @change="update({ neighborhood: inputValue($event) })"
+                                >
+                                    <option value="" :selected="details.neighborhood === ''">{{ t('order.form.neighborhood_choose') }}</option>
+                                    <option v-for="zone in context.zones" :key="zone.neighborhood" :value="zone.neighborhood" :selected="details.neighborhood === zone.neighborhood">
+                                        {{ t('order.form.neighborhood_option', { name: zone.neighborhood, fee: money(zone.fee) }) }}
+                                    </option>
+                                </select>
+                                <input
+                                    v-else
+                                    :id="`${id}-neighborhood`"
+                                    type="text"
+                                    class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
+                                    :value="details.neighborhood"
+                                    :maxlength="NEIGHBORHOOD_MAX_LENGTH"
+                                    :aria-describedby="describedBy('neighborhood', true)"
+                                    :aria-invalid="errorFor('neighborhood') !== null"
+                                    data-neighborhood
+                                    @input="update({ neighborhood: inputValue($event) })"
+                                >
+                                <p v-if="errorFor('neighborhood')" :id="`${id}-neighborhood-error`" class="mt-1 text-sm font-semibold" data-error>{{ errorFor('neighborhood') }}</p>
+                            </div>
+
+                            <div class="mt-3" data-field="address">
+                                <label :for="`${id}-address`" class="font-semibold">{{ t('order.form.address') }}</label>
+                                <p :id="`${id}-address-hint`" class="text-sm text-ink-muted">{{ t('order.form.address_hint') }}</p>
+                                <input
+                                    :id="`${id}-address`"
+                                    type="text"
+                                    autocomplete="street-address"
+                                    class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
+                                    :value="details.address"
+                                    :maxlength="ADDRESS_MAX_LENGTH"
+                                    :aria-describedby="describedBy('address', true)"
+                                    :aria-invalid="errorFor('address') !== null"
+                                    data-address
+                                    @input="update({ address: inputValue($event) })"
+                                >
+                                <p v-if="errorFor('address')" :id="`${id}-address-error`" class="mt-1 text-sm font-semibold" data-error>{{ errorFor('address') }}</p>
+                            </div>
+
+                            <div class="mt-3">
+                                <label :for="`${id}-reference`" class="font-semibold">{{ t('order.form.reference') }}</label>
+                                <p :id="`${id}-reference-hint`" class="text-sm text-ink-muted">{{ t('order.form.reference_hint') }}</p>
+                                <input
+                                    :id="`${id}-reference`"
+                                    type="text"
+                                    class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
+                                    :value="details.reference"
+                                    :maxlength="REFERENCE_MAX_LENGTH"
+                                    :aria-describedby="`${id}-reference-hint`"
+                                    data-reference
+                                    @input="update({ reference: inputValue($event) })"
+                                >
+                            </div>
+
+                            <div class="mt-3" data-location>
+                                <p class="font-semibold">{{ t('order.form.location') }}</p>
+                                <p :id="`${id}-location-hint`" class="text-sm text-ink-muted">{{ t('order.form.location_hint') }}</p>
+                                <template v-if="details.location">
+                                    <p class="mt-1 flex items-start gap-2" data-location-added>
+                                        <Icon name="ubicacion" :size="20" class="mt-0.5 shrink-0" />
+                                        <span>{{ t('order.form.location_added', { meters: Math.round(details.location.accuracy) }) }}</span>
+                                    </p>
+                                    <button type="button" class="mt-1 inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface" data-location-remove @click="forgetLocation">
+                                        {{ t('order.form.location_remove') }}
+                                    </button>
+                                </template>
+                                <template v-else>
+                                    <button
+                                        type="button"
+                                        class="mt-1 inline-flex min-h-touch items-center gap-2 rounded-full border border-line px-4 font-semibold hover:bg-surface"
+                                        :aria-describedby="`${id}-location-hint`"
+                                        :disabled="locationState === 'locating'"
+                                        data-location-add
+                                        @click="locate"
+                                    >
+                                        <Icon name="ubicacion" :size="20" />
+                                        {{ t(locationState === 'locating' ? 'order.form.location_locating' : 'order.form.location_add') }}
+                                    </button>
+                                    <p v-if="locationState === 'denied' || locationState === 'error'" class="mt-1 text-sm" role="status" data-location-error>
+                                        {{ t(locationState === 'denied' ? 'order.form.location_denied' : 'order.form.location_error') }}
+                                    </p>
+                                </template>
+                            </div>
+                        </template>
+
+                        <div class="mt-3">
+                            <label :for="`${id}-name`" class="font-semibold">{{ t('order.form.name') }}</label>
+                            <p :id="`${id}-name-hint`" class="text-sm text-ink-muted">{{ t('order.form.name_hint') }}</p>
+                            <input
+                                :id="`${id}-name`"
+                                type="text"
+                                autocomplete="given-name"
+                                class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
+                                :value="details.name"
+                                :maxlength="NAME_MAX_LENGTH"
+                                :aria-describedby="`${id}-name-hint`"
+                                data-name
+                                @input="update({ name: inputValue($event) })"
+                            >
+                        </div>
+
+                        <fieldset
+                            v-if="context.paymentMethods.length > 0"
+                            class="mt-3"
+                            data-field="payment"
+                            :aria-describedby="errorFor('payment') === null ? undefined : `${id}-payment-error`"
                         >
-                            {{ t('order.form.forget') }}
-                        </button>
-                    </div>
-                </section>
+                            <legend class="font-semibold">{{ t('order.form.payment') }}</legend>
+                            <p v-if="errorFor('payment')" :id="`${id}-payment-error`" class="text-sm font-semibold" data-error>{{ errorFor('payment') }}</p>
+                            <label v-for="method in context.paymentMethods" :key="method" class="flex min-h-touch cursor-pointer items-center gap-3">
+                                <input
+                                    type="radio"
+                                    class="order-cart-check size-5 shrink-0"
+                                    :name="`${id}-payment`"
+                                    :checked="details.payment === method"
+                                    :data-payment="method"
+                                    @change="onPayment(method)"
+                                >
+                                <span>{{ t(PAYMENT_METHOD_KEYS[method]) }}</span>
+                            </label>
+                        </fieldset>
+
+                        <div v-if="details.payment === 'cash'" class="mt-3" data-field="cash">
+                            <label :for="`${id}-cash`" class="font-semibold">{{ t('order.form.cash_amount') }}</label>
+                            <p :id="`${id}-cash-hint`" class="text-sm text-ink-muted">{{ t('order.form.cash_hint') }}</p>
+                            <input
+                                :id="`${id}-cash`"
+                                type="text"
+                                inputmode="numeric"
+                                autocomplete="off"
+                                class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
+                                :value="cashText"
+                                maxlength="12"
+                                :aria-describedby="describedBy('cash', true)"
+                                :aria-invalid="errorFor('cash') !== null"
+                                data-cash
+                                @input="onCash"
+                            >
+                            <p v-if="errorFor('cash')" :id="`${id}-cash-error`" class="mt-1 text-sm font-semibold" data-error>{{ errorFor('cash') }}</p>
+                        </div>
+
+                        <div v-if="delivery" class="mt-4" data-remember-block>
+                            <label class="flex min-h-touch cursor-pointer items-start gap-3 py-1">
+                                <input
+                                    type="checkbox"
+                                    class="order-cart-check mt-0.5 size-5 shrink-0"
+                                    :checked="remember"
+                                    :aria-describedby="`${id}-remember-hint`"
+                                    data-remember
+                                    @change="onRemember"
+                                >
+                                <span>{{ t('order.form.remember') }}</span>
+                            </label>
+                            <p :id="`${id}-remember-hint`" class="text-sm text-ink-muted">{{ t('order.form.remember_hint') }}</p>
+                            <p v-if="rememberFull" class="mt-1 text-sm font-semibold" role="status" data-remember-full>{{ t('order.form.remember_full', { max: MAX_ADDRESSES }) }}</p>
+
+                            <fieldset v-if="remember" class="mt-2" data-label>
+                                <legend class="font-semibold">{{ t('address.label') }}</legend>
+                                <label v-for="kind in LABEL_KINDS" :key="kind" class="flex min-h-touch cursor-pointer items-center gap-3">
+                                    <input
+                                        type="radio"
+                                        class="order-cart-check size-5 shrink-0"
+                                        :name="`${id}-label`"
+                                        :checked="label.kind === kind"
+                                        :data-label-kind="kind"
+                                        @change="onLabelKind(kind)"
+                                    >
+                                    <span>{{ t(LABEL_KEYS[kind]) }}</span>
+                                </label>
+                                <div v-if="label.kind === 'other'" class="mt-1">
+                                    <label :for="`${id}-label-text`" class="font-semibold">{{ t('address.label_text') }}</label>
+                                    <input
+                                        :id="`${id}-label-text`"
+                                        type="text"
+                                        class="order-cart-field mt-1 block w-full border border-line bg-canvas px-2"
+                                        :value="label.text"
+                                        :maxlength="LABEL_MAX_LENGTH"
+                                        data-label-text
+                                        @input="onLabelText"
+                                    >
+                                </div>
+                            </fieldset>
+
+                            <button
+                                v-if="remember"
+                                type="button"
+                                class="mt-1 inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
+                                data-forget
+                                @click="forget"
+                            >
+                                {{ t('order.form.forget') }}
+                            </button>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Paso 3 · Revisar y enviar: el mensaje tal como va a salir. -->
+                <div v-if="href !== null" :hidden="stage !== 2" data-stage="2">
+                    <section class="mt-2" :aria-labelledby="`${id}-review`" data-review>
+                        <h3 :id="`${id}-review`" class="text-lg">{{ t('order.steps.review_title') }}</h3>
+                        <p class="order-cart-message mt-2 border border-line bg-surface p-3 wrap-anywhere" data-review-message>{{ message }}</p>
+                    </section>
+                </div>
             </template>
         </div>
 
         <footer v-if="items.length > 0" class="order-cart-footer border-t border-line">
-            <dl class="order-cart-totals tabular-nums" data-totals>
-                <template v-if="delivery">
-                    <dt>{{ t('order.cart.subtotal') }}</dt>
-                    <dd class="text-right" data-subtotal>{{ money(totals.items) }}</dd>
-                    <dt>{{ t('order.cart.delivery_fee') }}</dt>
-                    <dd class="text-right" data-fee>{{ feeText }}</dd>
-                </template>
-                <dt class="font-semibold">{{ t('order.cart.total') }}</dt>
-                <dd class="text-right font-semibold" data-total>
-                    {{ totals.fee === null ? t('order.cart.total_plus_delivery', { amount: money(totals.total) }) : money(totals.total) }}
-                </dd>
-            </dl>
-            <p class="mt-1 text-sm text-ink-muted">{{ t('order.cart.total_hint') }}</p>
+            <!-- En el paso de la entrega el pie es solo la fila de botones: no le quita alto a los campos. -->
+            <div :hidden="stage === 1 && href !== null" data-footer-totals>
+                <dl class="order-cart-totals tabular-nums" data-totals>
+                    <template v-if="delivery">
+                        <dt>{{ t('order.cart.subtotal') }}</dt>
+                        <dd class="text-right" data-subtotal>{{ money(totals.items) }}</dd>
+                        <dt>{{ t('order.cart.delivery_fee') }}</dt>
+                        <dd class="text-right" data-fee>{{ feeText }}</dd>
+                    </template>
+                    <dt class="font-semibold">{{ t('order.cart.total') }}</dt>
+                    <dd class="text-right font-semibold" data-total>
+                        {{ totals.fee === null ? t('order.cart.total_plus_delivery', { amount: money(totals.total) }) : money(totals.total) }}
+                    </dd>
+                </dl>
+                <p class="mt-1 text-sm text-ink-muted">{{ t('order.cart.total_hint') }}</p>
+            </div>
             <p v-if="blocked" class="mt-2 text-sm font-semibold" data-lines-blocked>{{ t('order.cart.lines_blocked') }}</p>
             <template v-if="href !== null">
-                <a
-                    v-if="problems.size === 0 && !blocked"
-                    :href="href"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="mt-2 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
-                    :aria-describedby="`${id}-send-hint`"
-                    data-send
-                    @click="onSend"
-                >
-                    <Icon name="enlace-externo" :size="20" />
-                    {{ t('order.form.send') }}
-                </a>
-                <button
-                    v-else
-                    type="button"
-                    class="mt-2 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
-                    :aria-describedby="`${id}-send-hint`"
-                    data-send
-                    @click="onSend"
-                >
-                    <Icon name="enlace-externo" :size="20" />
-                    {{ t('order.form.send') }}
-                </button>
-                <p :id="`${id}-send-hint`" class="mt-1 text-center text-sm text-ink-muted">{{ t('order.form.send_hint') }}</p>
+                <!-- «Enviar por WhatsApp», solo en el último paso. -->
+                <div :hidden="stage !== 2" data-footer-send>
+                    <a
+                        v-if="problems.size === 0 && !blocked"
+                        :href="href"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="mt-2 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                        :aria-describedby="`${id}-send-hint`"
+                        data-send
+                        @click="onSend"
+                    >
+                        <Icon name="enlace-externo" :size="20" />
+                        {{ t('order.form.send') }}
+                    </a>
+                    <button
+                        v-else
+                        type="button"
+                        class="mt-2 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                        :aria-describedby="`${id}-send-hint`"
+                        data-send
+                        @click="onSend"
+                    >
+                        <Icon name="enlace-externo" :size="20" />
+                        {{ t('order.form.send') }}
+                    </button>
+                    <p :id="`${id}-send-hint`" class="mt-1 text-center text-sm text-ink-muted">{{ t('order.form.send_hint') }}</p>
+                </div>
+                <div class="mt-2 flex gap-2" data-footer-nav>
+                    <button
+                        v-if="stage > 0"
+                        type="button"
+                        class="inline-flex min-h-touch items-center justify-center rounded-full border border-line px-5 font-semibold hover:bg-surface"
+                        :class="{ 'flex-1': stage === 2 }"
+                        data-back
+                        @click="go(stage - 1)"
+                    >
+                        {{ t('order.steps.back') }}
+                    </button>
+                    <button
+                        v-if="stage < 2"
+                        type="button"
+                        class="inline-flex min-h-touch flex-1 items-center justify-center rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                        data-next
+                        @click="onNext"
+                    >
+                        {{ t('order.steps.next') }}
+                    </button>
+                </div>
             </template>
         </footer>
 
@@ -986,6 +1100,59 @@ onBeforeUnmount(() => {
 
 .order-cart-footer {
     padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+}
+
+/*
+ * La barra de progreso (#142, M10): tres tramos con su nombre debajo. El
+ * hecho y el actual van rellenos con el color de la marca; el actual, además,
+ * con el nombre en negrita: no depende solo del color. Sólida, como todo el
+ * contenido.
+ */
+.order-cart-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    padding: 0.5rem 1rem 0.25rem;
+    border-bottom: 1px solid var(--color-line);
+}
+
+.order-cart-step-bar {
+    display: block;
+    height: 0.25rem;
+    background: color-mix(in srgb, var(--color-ink) 25%, var(--color-canvas));
+}
+
+.order-cart-step-item:not([data-step='next']) .order-cart-step-bar {
+    background: var(--color-veni-ciruela);
+}
+
+[data-theme='dark'] .order-cart-step-item:not([data-step='next']) .order-cart-step-bar {
+    background: var(--color-veni-mango);
+}
+
+.order-cart-step-name {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--color-ink-muted);
+    overflow-wrap: anywhere;
+}
+
+.order-cart-step-item[aria-current] .order-cart-step-name {
+    font-weight: 700;
+    color: var(--color-ink);
+}
+
+/* El mensaje del último paso: con sus saltos de línea, como va a llegar. */
+.order-cart-message {
+    border-radius: var(--veni-radius-sm);
+    white-space: pre-wrap;
+}
+
+/* El recuadro de foco, solo con el teclado: el título recibe el foco al cambiar de paso y no lo dibuja al tocar. */
+.order-cart :focus:not(:focus-visible) {
+    outline: none;
 }
 
 .order-cart-field {

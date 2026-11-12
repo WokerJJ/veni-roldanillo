@@ -679,3 +679,183 @@ describe('OrderCart', () => {
         expect(wrapper.emitted('close')).toHaveLength(2);
     });
 });
+
+describe('OrderCart: el pedido en tres pasos (#142, M10)', () => {
+    type Cart = Awaited<ReturnType<typeof mountCart>>['wrapper'];
+
+    /** Qué paso se ve: los demás llevan `hidden`. */
+    const visibleStage = (wrapper: Cart) => wrapper.findAll('[data-stage]').filter((stage) => stage.attributes('hidden') === undefined).map((stage) => stage.attributes('data-stage'));
+    const steps = (wrapper: Cart) => wrapper.findAll('[data-steps] li').map((step) => `${step.text()}${step.attributes('aria-current') === 'step' ? ' *' : ''} [${step.attributes('data-step') ?? ''}]`);
+    const isHidden = (wrapper: Cart, selector: string) => wrapper.get(selector).attributes('hidden') !== undefined;
+
+    async function next(wrapper: Cart): Promise<void> {
+        await wrapper.get('[data-next]').trigger('click');
+        await flushPromises();
+    }
+
+    it('abre en «Tu pedido», con la barra de los tres pasos y el primero marcado', async () => {
+        const { wrapper } = await mountCart();
+
+        expect(wrapper.get('[data-steps]').attributes('aria-label')).toBe('Pasos del pedido');
+        expect(steps(wrapper)).toEqual(['1. Tu pedido * [current]', '2. Entrega [next]', '3. Revisar y enviar [next]']);
+        expect(visibleStage(wrapper)).toEqual(['0']);
+        expect(wrapper.get('h2').text()).toBe('Tu pedido');
+        // Los pasos no son botones: se avanza con «Continuar».
+        expect(wrapper.find('[data-steps] button').exists()).toBe(false);
+        expect(wrapper.find('[data-back]').exists()).toBe(false);
+        expect(wrapper.get('[data-next]').text()).toBe('Continuar');
+    });
+
+    it('«Enviar por WhatsApp» solo se ve en el último paso, con el total estimado', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, [JUICE]);
+
+        expect(isHidden(wrapper, '[data-footer-send]')).toBe(true);
+
+        await next(wrapper);
+        expect(isHidden(wrapper, '[data-footer-send]')).toBe(true);
+
+        await wrapper.get('[data-mode="pickup"]').setValue(true);
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
+        await next(wrapper);
+
+        expect(visibleStage(wrapper)).toEqual(['2']);
+        expect(isHidden(wrapper, '[data-footer-send]')).toBe(false);
+        expect(isHidden(wrapper, '[data-footer-totals]')).toBe(false);
+        expect(wrapper.get('[data-footer-send] [data-send]').element.tagName).toBe('A');
+        expect(plain(wrapper.get('[data-total]').text())).toBe('$ 4.000');
+        expect(wrapper.find('[data-next]').exists()).toBe(false);
+    });
+
+    it('«Continuar» lleva a «Entrega»: el foco va al título, que dice el paso, y se anuncia', async () => {
+        const { wrapper } = await mountCart();
+
+        await next(wrapper);
+
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        expect(wrapper.get('h2').text()).toBe('Entrega');
+        expect(document.activeElement).toBe(wrapper.get('h2').element);
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 2 de 3: Entrega.');
+        expect(steps(wrapper)).toEqual(['1. Tu pedido [done]', '2. Entrega * [current]', '3. Revisar y enviar [next]']);
+    });
+
+    it('en «Entrega» el pie es solo la fila de botones: no le quita alto a los campos', async () => {
+        const { wrapper } = await mountCart();
+
+        expect(isHidden(wrapper, '[data-footer-totals]')).toBe(false);
+
+        await next(wrapper);
+
+        expect(isHidden(wrapper, '[data-footer-totals]')).toBe(true);
+        expect(wrapper.findAll('[data-footer-nav] button').map((button) => button.text())).toEqual(['Atrás', 'Continuar']);
+        // El pie va fuera de lo que se desplaza: nunca queda encima de un campo.
+        expect(wrapper.get('footer').element.contains(wrapper.get('[data-address]').element)).toBe(false);
+        expect(wrapper.get('[data-stage="1"]').element.parentElement?.classList.contains('overflow-y-auto')).toBe(true);
+    });
+
+    it('si falta algo de la entrega, «Continuar» no avanza: marca cada campo, lo anuncia y lleva el foco al primero', async () => {
+        const { wrapper } = await mountCart();
+
+        await next(wrapper);
+        await next(wrapper);
+
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        expect(wrapper.findAll('[data-error]').map((error) => error.text())).toEqual(['Elegí tu barrio.', 'Escribí la dirección.', 'Elegí cómo pagás.']);
+        expect(wrapper.get('[data-alert]').text()).toBe('Revisá lo que falta antes de enviar.');
+        expect(document.activeElement).toBe(wrapper.get('[data-neighborhood]').element);
+    });
+
+    it('antes de intentar continuar no se marca ningún campo', async () => {
+        const { wrapper } = await mountCart();
+
+        await next(wrapper);
+
+        expect(wrapper.findAll('[data-error]')).toHaveLength(0);
+    });
+
+    it('«Revisar y enviar» muestra el mensaje tal como va a salir por WhatsApp', async () => {
+        const { wrapper, message } = await mountCart(RESTAURANT, [JUICE]);
+
+        await next(wrapper);
+        await wrapper.get('[data-mode="pickup"]').setValue(true);
+        await wrapper.get('[data-name]').setValue('Ana');
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
+        await next(wrapper);
+
+        expect(wrapper.get('h2').text()).toBe('Revisar y enviar');
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 3 de 3: Revisar y enviar.');
+        expect(plain(wrapper.get('[data-review-message]').text())).toBe(message());
+        expect(message()).toContain('Nombre: Ana');
+        expect(message()).toContain('Pago: Nequi');
+    });
+
+    it('«Atrás» vuelve al paso anterior sin perder lo escrito', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, [JUICE]);
+
+        await next(wrapper);
+        await wrapper.get('[data-neighborhood]').setValue('El Mirador (ficticio)');
+        await wrapper.get('[data-address]').setValue('Cra 5 #8-20');
+        await wrapper.get('[data-payment="nequi"]').setValue(true);
+        await next(wrapper);
+        await wrapper.get('[data-back]').trigger('click');
+        await flushPromises();
+
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        expect((wrapper.get('[data-address]').element as HTMLInputElement).value).toBe('Cra 5 #8-20');
+        expect(document.activeElement).toBe(wrapper.get('h2').element);
+
+        await wrapper.get('[data-back]').trigger('click');
+        await flushPromises();
+
+        expect(visibleStage(wrapper)).toEqual(['0']);
+        expect(wrapper.findAll('[data-line]')).toHaveLength(1);
+    });
+
+    it('con una línea que ya no vale, «Continuar» no avanza: lo dice y lleva el foco a «Quitar»', async () => {
+        const juice = { name: 'Jugo de prueba', description: null, price: 4500, sold_out_until: null, ingredients: [], groups: [], photo: null };
+        const menu = [{ name: 'Bebidas (prueba)', dishes: [juice] }] as unknown as NonNullable<CartRestaurant['menu']>;
+        const { wrapper } = await mountCart({ ...RESTAURANT, menu }, [JUICE]);
+
+        await next(wrapper);
+
+        expect(visibleStage(wrapper)).toEqual(['0']);
+        expect(wrapper.get('[data-alert]').text()).toBe('Hay platos de tu pedido que cambiaron. Revisalos antes de enviar.');
+        expect(document.activeElement).toBe(wrapper.get('[data-remove]').element);
+    });
+
+    it('si al enviar falta algo, vuelve al paso de la entrega', async () => {
+        const { wrapper } = await mountCart();
+
+        // El último paso no se alcanza con datos incompletos; si el pedido deja de estar completo, «Enviar» devuelve a la entrega.
+        await wrapper.get('[data-send]').trigger('click');
+        await flushPromises();
+
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        expect(document.activeElement).toBe(wrapper.get('[data-neighborhood]').element);
+    });
+
+    it('sin WhatsApp no hay pasos: solo el pedido, sin «Continuar»', async () => {
+        const { wrapper } = await mountCart({ ...RESTAURANT, whatsapp: null });
+
+        expect(wrapper.find('[data-steps]').exists()).toBe(false);
+        expect(wrapper.find('[data-next]').exists()).toBe(false);
+        expect(wrapper.findAll('[data-stage]').map((stage) => stage.attributes('data-stage'))).toEqual(['0']);
+        expect(isHidden(wrapper, '[data-footer-totals]')).toBe(false);
+    });
+
+    it('con el pedido vacío no hay barra ni pie', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, []);
+
+        expect(wrapper.find('[data-steps]').exists()).toBe(false);
+        expect(wrapper.find('footer').exists()).toBe(false);
+        expect(wrapper.get('[data-empty]').text()).toContain('Tu pedido está vacío');
+    });
+
+    it('en inglés', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, [JUICE], 'en');
+
+        expect(steps(wrapper)).toEqual(['1. Your order * [current]', '2. Delivery [next]', '3. Review and send [next]']);
+        await next(wrapper);
+        expect(wrapper.get('[data-announcement]').text()).toBe('Step 2 of 3: Delivery.');
+        expect(wrapper.findAll('[data-footer-nav] button').map((button) => button.text())).toEqual(['Back', 'Continue']);
+    });
+});
