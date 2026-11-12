@@ -998,7 +998,7 @@ onBeforeUnmount(() => {
                 </dl>
                 <p class="mt-1 text-sm text-ink-muted">{{ t('order.cart.total_hint') }}</p>
             </div>
-            <p v-if="blocked" class="mt-2 text-sm font-semibold" data-lines-blocked>{{ t('order.cart.lines_blocked') }}</p>
+            <p v-if="blocked" class="text-sm font-semibold" data-lines-blocked>{{ t('order.cart.lines_blocked') }}</p>
             <template v-if="href !== null">
                 <!-- «Enviar por WhatsApp», solo en el último paso. -->
                 <div :hidden="stage !== 2" data-footer-send>
@@ -1007,7 +1007,7 @@ onBeforeUnmount(() => {
                         :href="href"
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="mt-2 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                        class="inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
                         :aria-describedby="`${id}-send-hint`"
                         data-send
                         @click="onSend"
@@ -1018,7 +1018,7 @@ onBeforeUnmount(() => {
                     <button
                         v-else
                         type="button"
-                        class="mt-2 inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                        class="inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
                         :aria-describedby="`${id}-send-hint`"
                         data-send
                         @click="onSend"
@@ -1028,7 +1028,7 @@ onBeforeUnmount(() => {
                     </button>
                     <p :id="`${id}-send-hint`" class="mt-1 text-center text-sm text-ink-muted">{{ t('order.form.send_hint') }}</p>
                 </div>
-                <div class="mt-2 flex gap-2" data-footer-nav>
+                <div class="flex gap-2" data-footer-nav>
                     <button
                         v-if="stage > 0"
                         type="button"
@@ -1098,38 +1098,57 @@ onBeforeUnmount(() => {
     padding: 1rem 1rem 0.75rem;
 }
 
+/*
+ * El pie apila sus bloques con una sola separación: los que llevan `hidden`
+ * no la ocupan, y en el paso de la entrega la fila de botones queda con el
+ * mismo aire arriba que abajo.
+ */
 .order-cart-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
     padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
 }
 
 /*
  * La barra de progreso (#142, M10): tres tramos con su nombre debajo. El
- * hecho y el actual van rellenos con el color de la marca; el actual, además,
- * con el nombre en negrita: no depende solo del color. Sólida, como todo el
- * contenido.
+ * hecho y el actual van rellenos con el color de la marca y a todo el alto;
+ * el que falta, más fino y apagado; el actual, además, con el nombre en
+ * negrita: no depende solo del color. Sólida, como todo el contenido.
+ *
+ * El tramo que falta contra el fondo: 3,3:1 en claro (50 %) y 3,2:1 en
+ * oscuro (35 %); el relleno, 16,5:1 y 8,4:1 (WCAG 1.4.11).
  */
 .order-cart-steps {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.5rem;
-    padding: 0.5rem 1rem 0.25rem;
+    padding: 0.5rem 1rem;
     border-bottom: 1px solid var(--color-line);
 }
 
 .order-cart-step-bar {
     display: block;
     height: 0.25rem;
-    background: color-mix(in srgb, var(--color-ink) 25%, var(--color-canvas));
-}
-
-.order-cart-step-item:not([data-step='next']) .order-cart-step-bar {
+    border-radius: var(--veni-radius-sm);
     background: var(--color-veni-ciruela);
 }
 
-[data-theme='dark'] .order-cart-step-item:not([data-step='next']) .order-cart-step-bar {
+[data-theme='dark'] .order-cart-step-bar {
     background: var(--color-veni-mango);
 }
 
+.order-cart-step-item[data-step='next'] .order-cart-step-bar {
+    height: 0.125rem;
+    margin-block: 0.0625rem;
+    background: color-mix(in srgb, var(--color-ink) 50%, var(--color-canvas));
+}
+
+[data-theme='dark'] .order-cart-step-item[data-step='next'] .order-cart-step-bar {
+    background: color-mix(in srgb, var(--color-ink) 35%, var(--color-canvas));
+}
+
+/* El nombre largo («Revisar y enviar») parte en dos renglones parejos a 320 px. */
 .order-cart-step-name {
     display: block;
     margin-top: 0.25rem;
@@ -1137,11 +1156,19 @@ onBeforeUnmount(() => {
     line-height: 1rem;
     color: var(--color-ink-muted);
     overflow-wrap: anywhere;
+    text-wrap: balance;
 }
 
 .order-cart-step-item[aria-current] .order-cart-step-name {
-    font-weight: 700;
+    font-weight: 600;
     color: var(--color-ink);
+}
+
+/* El tramo cambia de color al avanzar; con «Reducir movimiento», de una. */
+@media (prefers-reduced-motion: no-preference) {
+    .order-cart-step-bar {
+        transition: background-color 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
+    }
 }
 
 /* El mensaje del último paso: con sus saltos de línea, como va a llegar. */
