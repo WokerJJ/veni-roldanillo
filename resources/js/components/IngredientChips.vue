@@ -38,8 +38,18 @@ const shown = computed(() => {
         return { list: chips, hidden: 0, changed: false };
     }
 
-    let room = Math.max(0, limit - chips.filter(({ kind }) => kind !== 'present').length);
-    const list = chips.filter(({ kind }) => kind !== 'present' || room-- > 0);
+    // Los cambiados siempre salen; los normales ocupan lo que queda del tope, en orden.
+    const room = Math.max(0, limit - chips.filter(({ kind }) => kind !== 'present').length);
+    let presentShown = 0;
+    const list = chips.filter(({ kind }) => {
+        if (kind !== 'present') {
+            return true;
+        }
+
+        presentShown++;
+
+        return presentShown <= room;
+    });
 
     return { list, hidden: chips.length - list.length, changed: list.some(({ kind }) => kind !== 'present') };
 });

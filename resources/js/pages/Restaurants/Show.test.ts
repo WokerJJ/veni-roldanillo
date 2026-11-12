@@ -860,24 +860,28 @@ describe('Restaurants/Show: portada y pestañas fijas del celular (#141, M7)', (
     /** Un IntersectionObserver de mentira: guarda lo que se le pide observar y deja avisar qué cruza la franja. */
     function stubObserver() {
         const observed: Element[] = [];
+        const instances: { options: IntersectionObserverInit | undefined; disconnect: ReturnType<typeof vi.fn> }[] = [];
         let notify: IntersectionObserverCallback = () => undefined;
 
         vi.stubGlobal(
             'IntersectionObserver',
             class {
-                constructor(callback: IntersectionObserverCallback) {
+                disconnect = vi.fn();
+
+                constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
                     notify = callback;
+                    instances.push({ options, disconnect: this.disconnect });
                 }
                 observe = (element: Element): void => {
                     observed.push(element);
                 };
-                disconnect = vi.fn();
                 unobserve = vi.fn();
             },
         );
 
         return {
             observed,
+            instances,
             cross: (id: string, isIntersecting: boolean): void => {
                 notify([{ target: document.getElementById(id), isIntersecting } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
             },
@@ -964,5 +968,26 @@ describe('Restaurants/Show: portada y pestañas fijas del celular (#141, M7)', (
         await flushPromises();
 
         expect(wrapper.find('nav[data-sections]').exists()).toBe(false);
+        expect(spy.instances).toHaveLength(1);
+        expect(spy.instances[0]?.disconnect).toHaveBeenCalled();
+    });
+
+    it('la franja de lectura va de debajo de la barra (64 px) al 40 % de la pantalla', async () => {
+        const spy = stubObserver();
+        await mountShow();
+
+        expect(spy.instances).toHaveLength(1);
+        expect(spy.instances[0]?.options).toEqual({ rootMargin: '-64px 0px -60% 0px' });
+    });
+
+    it('al desmontar la ficha, deja de mirar las secciones', async () => {
+        const spy = stubObserver();
+        const { wrapper } = await mountShow();
+
+        expect(spy.instances[0]?.disconnect).not.toHaveBeenCalled();
+
+        wrapper.unmount();
+
+        expect(spy.instances[0]?.disconnect).toHaveBeenCalled();
     });
 });
