@@ -205,6 +205,7 @@
     "order.picker.load_error": "Couldn't open the dish. Check your connection and try again.",
     "order.added": ":name is in your order.",
     "order.added_capped": "Only :max of :name fit in the order: :count were added.",
+    "order.at_max": "You already have :count of :name, the maximum.",
     "order.summary_one": "Your order: :count dish · estimated total :total",
     "order.summary_many": "Your order: :count dishes · estimated total :total",
     "order.bar.open": "View your order",

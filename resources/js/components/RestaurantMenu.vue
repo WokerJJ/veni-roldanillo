@@ -134,7 +134,15 @@ function canQuickAdd(dish: MenuDish): boolean {
     );
 }
 
-function quickAdd(dish: MenuDish): void {
+/**
+ * Qué platos tienen «+», como `sección-posición`: se calcula una vez por cambio
+ * de las secciones o del día, y no en cada render por cada plato.
+ */
+const quickAddable = computed(
+    () => new Set(sections.flatMap((section, index) => section.dishes.flatMap((dish, position) => (canQuickAdd(dish) ? [`${String(index)}-${String(position)}`] : [])))),
+);
+
+async function quickAdd(dish: MenuDish): Promise<void> {
     const item = toOrderItem(dish, emptySelection(dish), today.value);
 
     if (item === null) {
@@ -142,8 +150,18 @@ function quickAdd(dish: MenuDish): void {
     }
 
     const added = order?.add(item) ?? item.quantity;
-    announcement.value =
-        added < item.quantity ? t('order.added_capped', { name: item.dish, max: MAX_QUANTITY, count: added }) : t('order.added', { name: item.dish });
+
+    // Vacío y un ciclo después: dos toques seguidos dicen lo mismo y el lector lo repite solo si el texto cambió.
+    announcement.value = '';
+    await nextTick();
+
+    if (added === 0) {
+        announcement.value = t('order.at_max', { name: item.dish, count: MAX_QUANTITY });
+    } else if (added < item.quantity) {
+        announcement.value = t('order.added_capped', { name: item.dish, max: MAX_QUANTITY, count: added });
+    } else {
+        announcement.value = t('order.added', { name: item.dish });
+    }
 }
 
 async function close(): Promise<void> {
@@ -201,7 +219,7 @@ const summary = computed(() => {
                     </button>
                     <!-- Fuera del botón del plato (un botón no lleva otro): encima de la esquina de su foto. -->
                     <button
-                        v-if="canQuickAdd(dish)"
+                        v-if="quickAddable.has(`${index}-${position}`)"
                         type="button"
                         class="menu-quick-add absolute -right-3 -bottom-0.5 z-10 inline-flex size-touch items-center justify-center rounded-full"
                         :aria-label="t('restaurant.menu.quick_add', { name: dish.name })"

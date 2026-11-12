@@ -570,6 +570,49 @@ describe('RestaurantMenu: el «+» y los chips en una línea (#141, M8)', () => 
         expect(wrapper.get('[data-order-summary]').text().replace(/[\u00a0\u202f]/g, ' ')).toBe('Tu pedido: 2 platos · total estimado $ 7.000');
     });
 
+    it('dos toques seguidos al «+» vuelven a anunciarse: el aviso se vacía y se reescribe (BUG-002)', async () => {
+        const { wrapper, dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+        const quick = nth(dishes(), 3).get('[data-quick-add]');
+        const status = wrapper.get('[data-order-announcement]');
+        let changes = 0;
+        const observer = new MutationObserver((records) => {
+            changes += records.length;
+        });
+        observer.observe(status.element, { childList: true, characterData: true, subtree: true });
+        onTestFinished(() => {
+            observer.disconnect();
+        });
+
+        await quick.trigger('click');
+        await flushPromises();
+        const afterFirst = changes;
+        await quick.trigger('click');
+        await flushPromises();
+
+        expect(afterFirst).toBeGreaterThan(0);
+        // Mismo texto dos veces: un lector de pantalla solo lo repite si el nodo cambió entre uno y otro.
+        expect(changes - afterFirst).toBeGreaterThanOrEqual(2);
+        expect(status.text()).toBe('Gaseosa de prueba quedó en tu pedido.');
+    });
+
+    it('con la línea ya en el máximo, el «+» dice que no se agregó nada (BUG-003)', async () => {
+        const { wrapper, dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+        const quick = nth(dishes(), 3).get('[data-quick-add]');
+
+        for (let i = 0; i < 20; i++) {
+            await quick.trigger('click');
+            await flushPromises();
+        }
+
+        expect(wrapper.get('[data-order-announcement]').text()).toBe('Gaseosa de prueba quedó en tu pedido.');
+
+        await quick.trigger('click');
+        await flushPromises();
+
+        expect(wrapper.get('[data-order-announcement]').text()).toBe('Ya tenés 20 de Gaseosa de prueba, el máximo.');
+        expect(wrapper.get('[data-order-summary]').text()).toContain('20 platos');
+    });
+
     it('con un grupo obligatorio, agotado, imposible de pedir o sin restaurante no hay «+»: solo el detalle', async () => {
         const { dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
 

@@ -205,6 +205,7 @@
     "order.picker.load_error": "No se pudo abrir el plato. Revisá la conexión e intentá de nuevo.",
     "order.added": ":name quedó en tu pedido.",
     "order.added_capped": "Solo caben :max de :name en el pedido: se agregaron :count.",
+    "order.at_max": "Ya tenés :count de :name, el máximo.",
     "order.summary_one": "Tu pedido: :count plato · total estimado :total",
     "order.summary_many": "Tu pedido: :count platos · total estimado :total",
     "order.bar.open": "Ver tu pedido",
