@@ -2,6 +2,7 @@
 import type { PropType } from 'vue';
 import { computed, defineComponent, onBeforeUnmount, shallowRef, watch } from 'vue';
 
+import { categoryIcon, CATEGORIES } from '@/icons/food';
 import { loadIcon } from '@/icons/icons';
 import { iconImage } from '@/map/iconImage';
 import type { MapGeoJson, MapHit, MapImage, MapLayerGroup } from '@/map/layers';
@@ -38,14 +39,13 @@ const SOURCE = 'restaurants';
 const SELECTED_SOURCE = 'restaurants-selected';
 const CLUSTERS = 'restaurants-clusters';
 const POINTS = 'restaurants-points';
-const MARKER = 'restaurants-marker';
+/** Cada imagen de ícono se llama así más el nombre del ícono (`restaurants-marker-empanada`). */
+const MARKER = 'restaurants-marker-';
 const SELECTED_POINT = 'restaurants-selected-point';
 
-/** Con qué ícono de colombia-icons se marca un restaurante. */
-const MARKER_ICON = 'sancocho';
 /** Radio del círculo de un restaurante y lado de su ícono, en px. */
-const POINT_RADIUS = 13;
-const MARKER_SIZE = 18;
+const POINT_RADIUS = 15;
+const MARKER_SIZE = 20;
 
 /** Sobre el mapa base; la ruta (#11) irá debajo y la ubicación (#10), encima. */
 const ORDER = 20;
@@ -70,11 +70,12 @@ const EMPTY: MapGeoJson = { type: 'FeatureCollection', features: [] };
 function featuresOf(restaurants: readonly Restaurant[]): MapGeoJson {
     return {
         type: 'FeatureCollection',
-        // Solo el slug: el resto se busca en la lista (MapLibre aplana las propiedades).
-        features: restaurants.map(({ slug, coordinates }) => ({
+        // El slug y el ícono: el resto se busca en la lista (MapLibre aplana las propiedades).
+        features: restaurants.map(({ slug, coordinates, categories }) => ({
             type: 'Feature',
             geometry: { type: 'Point', coordinates },
-            properties: { slug },
+            // El ícono de su primera categoría: el tipo de comida a la vista (#115).
+            properties: { slug, icon: categoryIcon(categories[0]?.slug ?? '') },
         })),
     };
 }
@@ -85,7 +86,7 @@ const POINT_ICONS: MapLayerGroup['layers'][number] = {
     type: 'symbol',
     source: SOURCE,
     filter: ['!', ['has', 'point_count']],
-    layout: { 'icon-image': MARKER, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
+    layout: { 'icon-image': ['concat', MARKER, ['get', 'icon']], 'icon-allow-overlap': true, 'icon-ignore-placement': true },
 };
 
 /** El mismo ícono sobre el elegido, que va en su propia fuente. */
@@ -98,12 +99,14 @@ const POINT_PAINT = {
     'circle-stroke-color': BLANCO,
 };
 
-function group(marker: MapImage | null, onSelect: (hit: MapHit) => void): MapLayerGroup {
+function group(markers: Readonly<Record<string, MapImage>>, onSelect: (hit: MapHit) => void): MapLayerGroup {
+    const hasIcons = Object.keys(markers).length > 0;
+
     return {
         id: SOURCE,
         order: ORDER,
         sources: {
-            [SOURCE]: { type: 'geojson', data: EMPTY, cluster: true, clusterRadius: 32, clusterMaxZoom: CLUSTER_MAX_ZOOM },
+            [SOURCE]: { type: 'geojson', data: EMPTY, cluster: true, clusterRadius: 44, clusterMaxZoom: CLUSTER_MAX_ZOOM },
             [SELECTED_SOURCE]: { type: 'geojson', data: EMPTY },
         },
         layers: [
@@ -136,24 +139,24 @@ function group(marker: MapImage | null, onSelect: (hit: MapHit) => void): MapLay
             },
             { id: POINTS, type: 'circle', source: SOURCE, filter: ['!', ['has', 'point_count']], paint: POINT_PAINT },
             // Sin el ícono (no bajó) quedan los círculos, que ya se pueden tocar.
-            ...(marker === null ? [] : [POINT_ICONS]),
+            ...(hasIcons ? [POINT_ICONS] : []),
             // El elegido, después: encima de los grupos y de los demás.
             {
                 id: 'restaurants-selected',
                 type: 'circle',
                 source: SELECTED_SOURCE,
                 paint: {
-                    'circle-radius': POINT_RADIUS + 9,
+                    'circle-radius': POINT_RADIUS + 11,
                     'circle-color': ARREBOL,
-                    'circle-opacity': 0.25,
-                    'circle-stroke-width': 2,
+                    'circle-opacity': 0.3,
+                    'circle-stroke-width': 3,
                     'circle-stroke-color': ARREBOL,
                 },
             },
             { id: SELECTED_POINT, type: 'circle', source: SELECTED_SOURCE, paint: POINT_PAINT },
-            ...(marker === null ? [] : [SELECTED_ICON]),
+            ...(hasIcons ? [SELECTED_ICON] : []),
         ],
-        images: marker === null ? {} : { [MARKER]: marker },
+        images: markers,
         interaction: { layers: [CLUSTERS, POINTS, SELECTED_POINT], onSelect },
     };
 }
@@ -173,7 +176,7 @@ export default defineComponent({
     },
     setup(props, { emit, expose }) {
         const { map } = useMap();
-        const marker = shallowRef<MapImage | null>(null);
+        const markers = shallowRef<Readonly<Record<string, MapImage>>>({});
         /** El último que se eligió tocando el mapa: ya está a la vista, la cámara no se mueve. */
         let tapped: string | null = null;
         /**
@@ -186,7 +189,7 @@ export default defineComponent({
 
         const layers = useMapLayers(
             computed(() =>
-                group(marker.value, (hit) => {
+                group(markers.value, (hit) => {
                     if (hit.layer === CLUSTERS) {
                         const id = Number(hit.properties.cluster_id);
 
@@ -205,19 +208,28 @@ export default defineComponent({
             ),
         );
 
-        // El ícono llega aparte (su chunk y decodificarlo): los círculos no lo esperan.
-        loadIcon(MARKER_ICON)
-            .then((art) => iconImage(art, { size: MARKER_SIZE, color: BLANCO }))
-            .then((image) => {
-                if (alive) {
-                    marker.value = image;
-                }
-            })
-            .catch((error: unknown) => {
-                if (import.meta.env.DEV) {
-                    console.warn('[mapa] Los restaurantes van sin ícono: no se pudo preparar.', error);
-                }
-            });
+        // Los íconos llegan aparte (su chunk y decodificarlos): los círculos no
+        // los esperan. Uno que falle deja a su tipo de comida sin ícono.
+        const names = [...new Set(Object.values(CATEGORIES))];
+
+        void Promise.all(
+            names.map((name) =>
+                loadIcon(name)
+                    .then((art) => iconImage(art, { size: MARKER_SIZE, color: BLANCO }))
+                    .then((image) => [`${MARKER}${name}`, image] as const)
+                    .catch((error: unknown) => {
+                        if (import.meta.env.DEV) {
+                            console.warn(`[mapa] Sin ícono «${name}» en los restaurantes: no se pudo preparar.`, error);
+                        }
+
+                        return null;
+                    }),
+            ),
+        ).then((loaded) => {
+            if (alive) {
+                markers.value = Object.fromEntries(loaded.filter((entry) => entry !== null));
+            }
+        });
 
         onBeforeUnmount(() => {
             alive = false;

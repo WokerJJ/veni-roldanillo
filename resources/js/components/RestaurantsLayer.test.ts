@@ -20,6 +20,9 @@ vi.mock('pmtiles', () => ({
 
 /** El ícono ya dibujado: happy-dom no decodifica imágenes. */
 const MARKER: MapImage = { data: { width: 36, height: 36, data: new Uint8ClampedArray(36 * 36 * 4) } as ImageData, pixelRatio: 2 };
+/** Una imagen por ícono de categoría (CATEGORIES, resources/js/icons/food.ts). */
+const ICON_IDS = ['restaurants-marker-bandeja-paisa', 'restaurants-marker-empanada', 'restaurants-marker-chicharron', 'restaurants-marker-taza-de-tinto', 'restaurants-marker-pescado-frito', 'restaurants-marker-veni/generico'];
+
 const iconImage = vi.fn<() => Promise<MapImage>>();
 vi.mock('@/map/iconImage', () => ({ iconImage: () => iconImage() }));
 
@@ -154,12 +157,12 @@ describe('RestaurantsLayer', () => {
         expect(slugsIn('restaurants')).toEqual(['prueba-la-ceiba', 'prueba-el-guadual']);
     });
 
-    it('cada restaurante va en su punto, [longitud, latitud], y lleva solo su slug', async () => {
+    it('cada restaurante va en su punto, [longitud, latitud], y lleva su slug y el ícono de su categoría', async () => {
         const { source } = await mountLayer([LA_CEIBA]);
 
         expect(source('restaurants')?.data).toEqual({
             type: 'FeatureCollection',
-            features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [-76.1547, 4.4128] }, properties: { slug: 'prueba-la-ceiba' } }],
+            features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [-76.1547, 4.4128] }, properties: { slug: 'prueba-la-ceiba', icon: 'bandeja-paisa' } }],
         });
     });
 
@@ -181,11 +184,11 @@ describe('RestaurantsLayer', () => {
         expect(layer('restaurants-cluster-count')?.paint).toEqual({ 'text-color': '#2A1638' });
     });
 
-    it('el ícono es una imagen propia del mapa', async () => {
+    it('cada tipo de comida tiene su ícono, una imagen propia del mapa', async () => {
         const { map } = await mountLayer();
 
-        expect(map.imageIds()).toEqual(['restaurants-marker']);
-        expect(map.addImage).toHaveBeenLastCalledWith('restaurants-marker', MARKER.data, { pixelRatio: 2 });
+        expect(map.imageIds()).toEqual(ICON_IDS);
+        expect(map.addImage).toHaveBeenCalledWith('restaurants-marker-empanada', MARKER.data, { pixelRatio: 2 });
     });
 
     it('si el ícono no se puede preparar, quedan los círculos', async () => {
@@ -440,7 +443,7 @@ describe('RestaurantsLayer', () => {
             // El elegido va aparte, también en el estilo nuevo.
             expect(slugsIn('restaurants')).toEqual(['prueba-el-guadual']);
             expect(slugsIn('restaurants-selected')).toEqual(['prueba-la-ceiba']);
-            expect(map.imageIds()).toEqual(['restaurants-marker']);
+            expect(map.imageIds()).toEqual(ICON_IDS);
         });
 
         it('y se pueden seguir tocando', async () => {

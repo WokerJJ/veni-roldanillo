@@ -16,14 +16,28 @@
     outline-offset: -2px;
 }
 
-/* Controles de zoom: áreas táctiles de 44 px (MapLibre las trae de 29 px) y colores del tema. */
+/*
+ * Controles flotantes (M4, ADR 0040): círculos de vidrio, de 44 px. El vidrio
+ * es solo de los controles: con «reducir transparencia» (o sin soporte para
+ * desenfocar) vuelven al fondo sólido del tema, con el mismo contraste.
+ * Los de zoom se quitan donde se pellizca (pantalla táctil): ahí estorban.
+ */
 .maplibregl-ctrl-group {
-    border-radius: var(--veni-radius-sm);
+    border-radius: 9999px;
     background: var(--canvas);
 }
 
 .maplibregl-ctrl-group:not(:empty) {
     box-shadow: 0 0 0 1px var(--line);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+    @media (prefers-reduced-transparency: no-preference) {
+        .maplibregl-ctrl-group {
+            background: color-mix(in srgb, var(--canvas) 72%, transparent);
+            backdrop-filter: blur(14px) saturate(1.4);
+        }
+    }
 }
 
 .maplibregl-ctrl-group button {
@@ -40,16 +54,27 @@
 }
 
 .maplibregl-ctrl-group button:focus:first-child {
-    border-radius: var(--veni-radius-sm) var(--veni-radius-sm) 0 0;
+    border-radius: 9999px 9999px 0 0;
 }
 
 .maplibregl-ctrl-group button:focus:last-child {
-    border-radius: 0 0 var(--veni-radius-sm) var(--veni-radius-sm);
+    border-radius: 0 0 9999px 9999px;
 }
 
 /* Un grupo de un solo botón (la ubicación) redondea las cuatro esquinas. */
 .maplibregl-ctrl-group button:focus:only-child {
-    border-radius: var(--veni-radius-sm);
+    border-radius: 9999px;
+}
+
+@media (pointer: coarse) {
+    .maplibregl-ctrl-group .maplibregl-ctrl-zoom-in,
+    .maplibregl-ctrl-group .maplibregl-ctrl-zoom-out {
+        display: none;
+    }
+
+    .maplibregl-ctrl-group:has(.maplibregl-ctrl-zoom-in) {
+        display: none;
+    }
 }
 
 /* Los íconos de MapLibre son oscuros: en el tema oscuro se invierten. */
@@ -65,7 +90,7 @@
  * regla de :hover, y después, para que no la tape.
  */
 .maplibregl-ctrl button.maplibregl-ctrl-geolocate {
-    border-radius: var(--veni-radius-sm);
+    border-radius: 9999px;
     color: var(--ink);
 }
 
