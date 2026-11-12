@@ -25,7 +25,7 @@ FROM composer:2@sha256:af98f42dfff7c68ba8d53c2164fd9fde1087b7d449514baa38c418b1f
 # ---------------------------------------------------------------------------
 # base: FrankenPHP (PHP 8.4) con las extensiones del proyecto y usuario sin root
 # ---------------------------------------------------------------------------
-FROM dunglas/frankenphp:1.12-php8.4-trixie@sha256:035fcb2fab91aacf77d70ee555d51b9bb084d057b16cf8a644bf1f93e28d4e3e AS base
+FROM dunglas/frankenphp:1.13-php8.4-trixie@sha256:08af88488ce218936d530b80f6f55dc2afe4d0d91f13f9e6ae350a9e7752128e AS base
 
 ARG UID=1000
 ARG GID=1000
@@ -100,7 +100,7 @@ RUN rm -rf docker \
 # ---------------------------------------------------------------------------
 # assets: compilación de Vite
 # ---------------------------------------------------------------------------
-FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS assets
+FROM node:24-alpine@sha256:a34ab6d7f6f4813f4d0c5469d74685604b962fbdbf5793a7bc7b4998ecb867c8 AS assets
 
 WORKDIR /app
 
