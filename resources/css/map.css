@@ -16,14 +16,39 @@
     outline-offset: -2px;
 }
 
-/* Controles de zoom: áreas táctiles de 44 px (MapLibre las trae de 29 px) y colores del tema. */
+/*
+ * Controles flotantes (M4, ADR 0040): círculos de vidrio, de 44 px. El vidrio
+ * es solo de los controles: con «reducir transparencia» (o sin soporte para
+ * desenfocar) vuelven al fondo sólido del tema, con el mismo contraste.
+ * Los de zoom se quitan donde se pellizca (pantalla táctil): ahí estorban.
+ */
+.maplibregl-map {
+    /* El fondo de los controles redondos (los grupos y el botón «i»): sólido por defecto. */
+    --veni-glass: var(--canvas);
+}
+
 .maplibregl-ctrl-group {
-    border-radius: var(--veni-radius-sm);
-    background: var(--canvas);
+    border-radius: 9999px;
+    background: var(--veni-glass);
 }
 
 .maplibregl-ctrl-group:not(:empty) {
     box-shadow: 0 0 0 1px var(--line);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    @media (prefers-reduced-transparency: no-preference) {
+        .maplibregl-map {
+            /* 82 %: el ícono (--ink) sigue por encima de 3:1 aun sobre el relleno más oscuro del mapa. */
+            --veni-glass: color-mix(in srgb, var(--canvas) 82%, transparent);
+        }
+
+        .maplibregl-ctrl-group,
+        .veni-attrib-button {
+            -webkit-backdrop-filter: blur(14px) saturate(1.4);
+            backdrop-filter: blur(14px) saturate(1.4);
+        }
+    }
 }
 
 .maplibregl-ctrl-group button {
@@ -40,16 +65,36 @@
 }
 
 .maplibregl-ctrl-group button:focus:first-child {
-    border-radius: var(--veni-radius-sm) var(--veni-radius-sm) 0 0;
+    border-radius: 9999px 9999px 0 0;
 }
 
 .maplibregl-ctrl-group button:focus:last-child {
-    border-radius: 0 0 var(--veni-radius-sm) var(--veni-radius-sm);
+    border-radius: 0 0 9999px 9999px;
 }
 
 /* Un grupo de un solo botón (la ubicación) redondea las cuatro esquinas. */
 .maplibregl-ctrl-group button:focus:only-child {
-    border-radius: var(--veni-radius-sm);
+    border-radius: 9999px;
+}
+
+/*
+ * Solo en un celular: táctil sin mouse (hover: none) y de pantalla angosta.
+ * Una laptop con pantalla táctil o una tableta ancha conservan el zoom (no se
+ * pellizca con un mouse). Las mismas tres condiciones, en .veni-locate-notice.
+ * `:has()` es el respaldo para ocultar el grupo entero (el vacío dejaría un
+ * círculo de vidrio): MapLibre no le da una clase propia al de zoom y ponérsela
+ * desde engine.ts sería tocar su lógica; sin `:has()` solo quedaría el círculo
+ * vacío, sin botones, y nada se rompe.
+ */
+@media (pointer: coarse) and (hover: none) and (max-width: 767px) {
+    .maplibregl-ctrl-group .maplibregl-ctrl-zoom-in,
+    .maplibregl-ctrl-group .maplibregl-ctrl-zoom-out {
+        display: none;
+    }
+
+    .maplibregl-ctrl-group:has(.maplibregl-ctrl-zoom-in) {
+        display: none;
+    }
 }
 
 /* Los íconos de MapLibre son oscuros: en el tema oscuro se invierten. */
@@ -65,7 +110,7 @@
  * regla de :hover, y después, para que no la tape.
  */
 .maplibregl-ctrl button.maplibregl-ctrl-geolocate {
-    border-radius: var(--veni-radius-sm);
+    border-radius: 9999px;
     color: var(--ink);
 }
 
@@ -144,6 +189,19 @@
     .veni-locate-notice {
         left: auto;
         width: 20rem;
+    }
+}
+
+/*
+ * En el celular (sin los de zoom) el botón de ubicación queda arriba a la
+ * derecha y el botón «i» del crédito, arriba a la izquierda (10 px + 44 px):
+ * el aviso baja justo debajo de ellos (64 px) y no tapa ni el «i» ni el
+ * crédito de OpenStreetMap mientras está abierto. Las mismas condiciones que
+ * el zoom oculto, más arriba; en las demás, 108 px (bajo los de zoom).
+ */
+@media (pointer: coarse) and (hover: none) and (max-width: 767px) {
+    .veni-locate-notice {
+        top: calc(env(safe-area-inset-top, 0px) + 64px);
     }
 }
 
@@ -226,13 +284,14 @@
     width: var(--veni-touch-min);
     height: var(--veni-touch-min);
     border-radius: 9999px;
-    background-color: var(--canvas);
+    background-color: var(--veni-glass);
     color: var(--ink);
     box-shadow: 0 0 0 1px var(--line);
     cursor: pointer;
 }
 
 .veni-attrib-button:focus-visible {
+    border-radius: 9999px;
     outline: none;
     box-shadow: 0 0 0 2px var(--accent);
 }
