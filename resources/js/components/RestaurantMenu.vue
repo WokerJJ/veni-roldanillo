@@ -182,7 +182,8 @@ const summary = computed(() => {
 
         <p v-if="summary" class="mt-2 font-semibold" data-order-summary>{{ summary }}</p>
 
-        <div v-for="(section, index) in sections" :key="index" class="mt-4" data-section>
+        <!-- Con id y foco propios: las pestañas fijas de la ficha (#141, M7) llevan aquí. -->
+        <div v-for="(section, index) in sections" :id="`ficha-menu-${index}`" :key="index" tabindex="-1" class="menu-section mt-4" data-section>
             <h3 :id="`${headingId}-${index}`" class="text-base">{{ section.name }}</h3>
 
             <ul class="divide-y divide-line" :aria-labelledby="`${headingId}-${index}`">
@@ -221,3 +222,10 @@ const summary = computed(() => {
         <DishPicker v-if="DishPicker && picking" :dish="picking" :today="today" :unavailable="unavailableReason(picking, today)" @add="add" @close="close" />
     </section>
 </template>
+
+<style scoped>
+/* Al saltar desde una pestaña, el título no queda bajo la barra fija. */
+.menu-section {
+    scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 4rem);
+}
+</style>

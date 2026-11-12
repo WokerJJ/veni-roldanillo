@@ -640,9 +640,9 @@ describe('Restaurants/Show: dos columnas en computador y lo importante primero e
         });
 
         it.each([
-            ['es', 'En esta ficha', ['Promociones', 'Menú', 'Ubicación y contacto', 'Domicilios']],
-            ['en', 'On this page', ['Promotions', 'Menu', 'Location and contact', 'Delivery']],
-        ] as const)('en %s, una navegación con nombre lleva a cada sección de abajo, con enlaces de 44 px, y el foco va a la sección (EVA-040)', async (locale, label, texts) => {
+            ['es', 'Carta y datos', ['Platos fuertes (prueba)', 'Bebidas (prueba)', 'Ubicación y contacto', 'Domicilios']],
+            ['en', 'Menu and details', ['Platos fuertes (prueba)', 'Bebidas (prueba)', 'Location and contact', 'Delivery']],
+        ] as const)('en %s, unas pestañas con nombre llevan a cada sección de la carta y al contacto, con enlaces de 44 px, y el foco va a la sección (EVA-040)', async (locale, label, texts) => {
             const { wrapper } = await mountShow(profile(), locale);
             const nav = wrapper.get('nav[data-sections]');
             const links = nav.findAll('a');
@@ -653,19 +653,20 @@ describe('Restaurants/Show: dos columnas en computador y lo importante primero e
                 const target = (link.attributes('href') ?? '').slice(1);
 
                 expect(link.classes()).toContain('min-h-touch');
-                expect(document.getElementById(target)?.querySelector('h2')).not.toBeNull();
+                expect(document.getElementById(target)).not.toBeNull();
                 // Un enlace a un ancla solo mueve el foco si el destino lo puede recibir.
                 expect(document.getElementById(target)?.getAttribute('tabindex')).toBe('-1');
             }
         });
 
-        it('la navegación solo lleva las secciones que hay, y con una sola no sale', async () => {
+        it('las pestañas solo llevan las secciones que hay, y con una sola no salen', async () => {
             const some = await mountShow(profile({ delivery: { available: false, notes: null, zones: [] }, promotions: [] }));
-            expect(some.wrapper.findAll('nav[data-sections] a').map((link) => link.text())).toEqual(['Menú', 'Ubicación y contacto']);
+            expect(some.wrapper.findAll('nav[data-sections] a').map((link) => link.text())).toEqual(['Platos fuertes (prueba)', 'Bebidas (prueba)', 'Ubicación y contacto']);
             some.wrapper.unmount();
 
             const none = await mountShow(
                 profile({
+                    menu: [{ name: 'Única', dishes: [] }],
                     delivery: { available: false, notes: null, zones: [] },
                     promotions: [],
                     address: null,
@@ -684,7 +685,7 @@ describe('Restaurants/Show: dos columnas en computador y lo importante primero e
                 profile({ address: null, reference: null, phone: null, whatsapp: null, price_range: null, payment_methods: ['bitcoin' as PaymentMethod] }),
             );
 
-            expect(wrapper.findAll('nav[data-sections] a').map((link) => link.text())).toEqual(['Promociones', 'Menú', 'Domicilios']);
+            expect(wrapper.findAll('nav[data-sections] a').map((link) => link.text())).toEqual(['Platos fuertes (prueba)', 'Bebidas (prueba)', 'Domicilios']);
             expect(wrapper.find('#ficha-contacto').exists()).toBe(false);
         });
 
@@ -852,5 +853,116 @@ describe('Restaurants/Show: dos columnas en computador y lo importante primero e
             expect(details.element.firstElementChild?.tagName).toBe('SUMMARY');
             expect(details.get('summary').classes()).toContain('min-h-touch');
         });
+    });
+});
+
+describe('Restaurants/Show: portada y pestañas fijas del celular (#141, M7)', () => {
+    /** Un IntersectionObserver de mentira: guarda lo que se le pide observar y deja avisar qué cruza la franja. */
+    function stubObserver() {
+        const observed: Element[] = [];
+        let notify: IntersectionObserverCallback = () => undefined;
+
+        vi.stubGlobal(
+            'IntersectionObserver',
+            class {
+                constructor(callback: IntersectionObserverCallback) {
+                    notify = callback;
+                }
+                observe = (element: Element): void => {
+                    observed.push(element);
+                };
+                disconnect = vi.fn();
+                unobserve = vi.fn();
+            },
+        );
+
+        return {
+            observed,
+            cross: (id: string, isIntersecting: boolean): void => {
+                notify([{ target: document.getElementById(id), isIntersecting } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+            },
+        };
+    }
+
+    it('con una promoción con imagen, la portada la muestra con su título y hasta cuándo vale; la imagen es decorativa', async () => {
+        const { wrapper } = await mountShow();
+        const cover = wrapper.get('[data-cover]');
+
+        expect(cover.classes()).not.toContain('ficha-cover-brand');
+        expect(cover.get('img').attributes('alt')).toBe('');
+        expect(cover.get('img').attributes('src')).toContain('abcdefabcdefabcdef01-640.webp');
+        expect(cover.get('[data-cover-promotion]').text()).toContain('Jugo gratis con el sancocho (prueba)');
+        expect(cover.get('[data-cover-promotion]').text()).toContain('Hasta');
+    });
+
+    it('sin promoción, el fondo de la marca con el ícono de la categoría', async () => {
+        const { wrapper } = await mountShow(profile({ promotions: [] }));
+        const cover = wrapper.get('[data-cover]');
+
+        expect(cover.classes()).toContain('ficha-cover-brand');
+        expect(cover.find('img').exists()).toBe(false);
+        expect(cover.find('[data-cover-promotion]').exists()).toBe(false);
+        expect(cover.find('svg').exists()).toBe(true);
+    });
+
+    it('una promoción sin imagen no hace portada: se usa el fondo de la marca', async () => {
+        const { wrapper } = await mountShow(profile({ promotions: [{ title: 'Sin imagen', ends_at: '2026-10-07T22:00:00-05:00', image: null }] }));
+
+        expect(wrapper.get('[data-cover]').classes()).toContain('ficha-cover-brand');
+    });
+
+    it('en computador no hay portada ni pestañas', async () => {
+        stubMedia(desktopWidth);
+        const { wrapper } = await mountShow();
+
+        expect(wrapper.find('[data-cover]').exists()).toBe(false);
+        expect(wrapper.find('nav[data-sections]').exists()).toBe(false);
+    });
+
+    it('la pestaña de la sección que se lee queda marcada (aria-current) y cambia al desplazarse', async () => {
+        const spy = stubObserver();
+        const { wrapper } = await mountShow();
+        const current = () => wrapper.findAll('nav[data-sections] a[aria-current]').map((link) => link.text());
+
+        expect(spy.observed.map((element) => element.id)).toEqual(['ficha-menu-0', 'ficha-menu-1', 'ficha-contacto', 'ficha-domicilios']);
+        expect(current()).toEqual([]);
+
+        spy.cross('ficha-menu-0', true);
+        await flushPromises();
+        expect(current()).toEqual(['Platos fuertes (prueba)']);
+
+        spy.cross('ficha-menu-0', false);
+        spy.cross('ficha-menu-1', true);
+        await flushPromises();
+        expect(current()).toEqual(['Bebidas (prueba)']);
+
+        // Un hueco entre dos secciones: se queda la última.
+        spy.cross('ficha-menu-1', false);
+        await flushPromises();
+        expect(current()).toEqual(['Bebidas (prueba)']);
+    });
+
+    it('si dos secciones cruzan la franja, se marca la primera de la página', async () => {
+        const spy = stubObserver();
+        const { wrapper } = await mountShow();
+
+        spy.cross('ficha-menu-1', true);
+        spy.cross('ficha-menu-0', true);
+        await flushPromises();
+
+        expect(wrapper.get('nav[data-sections] a[aria-current]').text()).toBe('Platos fuertes (prueba)');
+    });
+
+    it('al pasar a computador, deja de mirar las secciones', async () => {
+        const media = stubMedia(phoneWidth);
+        const spy = stubObserver();
+        const { wrapper } = await mountShow();
+
+        expect(spy.observed).not.toHaveLength(0);
+
+        media.change(desktopWidth);
+        await flushPromises();
+
+        expect(wrapper.find('nav[data-sections]').exists()).toBe(false);
     });
 });
