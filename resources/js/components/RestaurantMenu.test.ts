@@ -544,3 +544,121 @@ describe('RestaurantMenu: el ícono no cambia con el idioma (BUG-025)', () => {
         expect(dish.get('[data-ingredient-chip]').text().trim()).toBe('Rice');
     });
 });
+
+describe('RestaurantMenu: el «+» y los chips en una línea (#141, M8)', () => {
+    afterEach(async () => {
+        const { resetOrders } = await import('@/order/useOrder');
+        resetOrders();
+    });
+
+    it('el plato sin nada que elegir tiene su «+»: agrega una unidad sin abrir el detalle y lo anuncia', async () => {
+        const { wrapper, dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+        const quick = nth(dishes(), 3).get('[data-quick-add]');
+
+        expect(quick.attributes('aria-label')).toBe('Agregar Gaseosa de prueba al pedido');
+        expect(quick.classes()).toContain('size-touch');
+
+        await quick.trigger('click');
+        await flushPromises();
+
+        expect(wrapper.find('dialog').exists()).toBe(false);
+        expect(wrapper.get('[data-order-announcement]').text()).toBe('Gaseosa de prueba quedó en tu pedido.');
+        expect(wrapper.get('[data-order-summary]').text().replace(/[\u00a0\u202f]/g, ' ')).toBe('Tu pedido: 1 plato · total estimado $ 3.500');
+
+        await quick.trigger('click');
+
+        expect(wrapper.get('[data-order-summary]').text().replace(/[\u00a0\u202f]/g, ' ')).toBe('Tu pedido: 2 platos · total estimado $ 7.000');
+    });
+
+    it('con un grupo obligatorio, agotado, imposible de pedir o sin restaurante no hay «+»: solo el detalle', async () => {
+        const { dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+
+        expect(dishes().map((dish) => dish.find('[data-quick-add]').exists())).toEqual([false, false, false, true]);
+
+        const { wrapper } = await mountMenu(WITH_OPTIONS);
+
+        expect(wrapper.find('[data-quick-add]').exists()).toBe(false);
+    });
+
+    it('una adición opcional no impide el «+»; un ingrediente con reemplazo, sí', async () => {
+        const dishes: MenuSection[] = [
+            {
+                name: 'Platos fuertes (prueba)',
+                dishes: [
+                    {
+                        name: 'Con adición',
+                        description: null,
+                        price: 10000,
+                        sold_out_until: null,
+                        groups: [{ name: 'Extras', kind: 'choice', min: 0, max: 2, options: [{ name: 'Huevo', price: 2000 }] }],
+                    },
+                    {
+                        name: 'Con reemplazo',
+                        description: null,
+                        price: 12000,
+                        sold_out_until: null,
+                        ingredients: [{ name: 'Tomate', essential: false, in_dish: true, sold_out_until: '2026-10-07', substitute: { name: 'Pepino', price: 500, sold_out_until: null } }],
+                        contains: [{ name: 'Tomate', ingredient: 0 }],
+                        groups: [],
+                    },
+                ],
+            },
+        ];
+        const { dishes: rows } = await mountMenu(dishes, 'es', 'la-ceiba');
+
+        expect(rows().map((dish) => dish.find('[data-quick-add]').exists())).toEqual([true, false]);
+    });
+
+    it('el plato lleva el texto a la izquierda y la foto a la derecha', async () => {
+        const { dishes } = await mountMenu(WITH_OPTIONS, 'es', 'la-ceiba');
+        const children = [...nth(dishes(), 0).get('[data-choose]').element.children];
+
+        expect(children[0]?.querySelector('[data-name]')).not.toBeNull();
+        expect(children[children.length - 1]?.getAttribute('data-photo')).not.toBeNull();
+    });
+
+    const PRESENT = ['Arroz', 'Pollo', 'Papa', 'Cebolla', 'Ajo'].map((name) => ({ name, ingredient: null }));
+
+    it('con más de tres ingredientes, tres y «+n» por el resto, dicho también a un lector de pantalla', async () => {
+        const sections: MenuSection[] = [{ name: 'Platos fuertes (prueba)', dishes: [{ name: 'Plato largo', description: null, price: 9000, sold_out_until: null, contains: PRESENT, groups: [] }] }];
+        const { dishes } = await mountMenu(sections, 'es', 'la-ceiba');
+        const dish = nth(dishes(), 0);
+
+        expect(dish.findAll('[data-ingredient-chip]').map((chip) => chip.text().replaceAll(/\s+/g, ' ').trim())).toEqual(['Arroz,', 'Pollo,', 'Papa,']);
+        expect(dish.get('[data-ingredient-more]').text()).toContain('+2');
+        expect(dish.get('[data-ingredient-more]').text()).toContain('y 2 más');
+        expect(dish.get('[data-ingredient-chips]').classes()).toContain('ingredient-chips-line');
+    });
+
+    it('lo que hoy no hay sale siempre, aunque pase del tope, y la fila puede partirse', async () => {
+        const sections: MenuSection[] = [
+            {
+                name: 'Platos fuertes (prueba)',
+                dishes: [
+                    {
+                        name: 'Plato con falta',
+                        description: null,
+                        price: 9000,
+                        sold_out_until: null,
+                        ingredients: [{ name: 'Ajo', essential: false, in_dish: true, sold_out_until: '2026-10-07', substitute: null }],
+                        contains: [...PRESENT.slice(0, 4), { name: 'Ajo', ingredient: 0 }],
+                        groups: [],
+                    },
+                ],
+            },
+        ];
+        const { dishes } = await mountMenu(sections, 'es', 'la-ceiba');
+        const dish = nth(dishes(), 0);
+
+        expect(dish.findAll('[data-ingredient-chip]').map((chip) => chip.attributes('data-ingredient-chip'))).toEqual(['present', 'present', 'missing']);
+        expect(dish.get('[data-ingredient-more]').text()).toContain('+2');
+        expect(dish.get('[data-ingredient-chips]').classes()).not.toContain('ingredient-chips-line');
+    });
+
+    it('con tres o menos no hay «+n»', async () => {
+        const sections: MenuSection[] = [{ name: 'Platos fuertes (prueba)', dishes: [{ name: 'Plato corto', description: null, price: 9000, sold_out_until: null, contains: PRESENT.slice(0, 3), groups: [] }] }];
+        const { dishes } = await mountMenu(sections, 'es', 'la-ceiba');
+
+        expect(nth(dishes(), 0).find('[data-ingredient-more]').exists()).toBe(false);
+    });
+});

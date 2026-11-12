@@ -164,6 +164,8 @@
     "restaurant.menu.today_swap": "Today with :substitute instead of :name",
     "restaurant.menu.ingredients": "Ingredients:",
     "restaurant.menu.ingredient_missing": "out today",
+    "restaurant.menu.ingredients_more": "and :count more",
+    "restaurant.menu.quick_add": "Add :name to the order",
     "restaurant.menu.ingredient_swap": ":substitute instead of :name",
     "restaurant.menu.ingredient_swap_price": ":substitute instead of :name · +:price",
     "order.picker.close": "Close",

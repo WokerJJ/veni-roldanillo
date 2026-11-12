@@ -11,7 +11,7 @@ import { GENERIC_FOOD_ICON } from '@/icons/food';
 import type { IngredientChip } from '@/order/ingredients';
 import { blockingIngredient, ingredientChips, ingredientEffects, isShownAsChip } from '@/order/ingredients';
 import type { OrderItem } from '@/order/selection';
-import { isOrderable, isSoldOut, MAX_QUANTITY, unavailableReason } from '@/order/selection';
+import { emptySelection, isOrderable, isSoldOut, MAX_QUANTITY, toOrderItem, unavailableReason } from '@/order/selection';
 import { useOrder } from '@/order/useOrder';
 import { businessDay } from '@/restaurants/openStatus';
 import type { MenuDish, MenuSection } from '@/restaurants/profile';
@@ -120,6 +120,32 @@ async function open(dish: MenuDish, event: MouseEvent): Promise<void> {
     picking.value = dish;
 }
 
+/**
+ * El «+» de la carta (#141, M8): agrega una unidad sin abrir el detalle, si el
+ * plato no pide elegir nada: sin grupos obligatorios y sin un ingrediente con
+ * reemplazo, que hay que aceptar o no (ADR 0033). Con alguno de esos, solo
+ * el detalle.
+ */
+function canQuickAdd(dish: MenuDish): boolean {
+    return (
+        canOrder(dish) &&
+        !ingredientEffects(dish, today.value).some((effect) => effect.kind === 'substitute') &&
+        toOrderItem(dish, emptySelection(dish), today.value) !== null
+    );
+}
+
+function quickAdd(dish: MenuDish): void {
+    const item = toOrderItem(dish, emptySelection(dish), today.value);
+
+    if (item === null) {
+        return;
+    }
+
+    const added = order?.add(item) ?? item.quantity;
+    announcement.value =
+        added < item.quantity ? t('order.added_capped', { name: item.dish, max: MAX_QUANTITY, count: added }) : t('order.added', { name: item.dish });
+}
+
 async function close(): Promise<void> {
     picking.value = null;
     await nextTick();
@@ -160,19 +186,30 @@ const summary = computed(() => {
             <h3 :id="`${headingId}-${index}`" class="text-base">{{ section.name }}</h3>
 
             <ul class="divide-y divide-line" :aria-labelledby="`${headingId}-${index}`">
-                <li v-for="(dish, position) in section.dishes" :key="position" data-dish>
+                <li v-for="(dish, position) in section.dishes" :key="position" class="menu-dish relative" data-dish>
                     <!-- Sin <component :is>: sumaría código de Vue al arranque (bundle.test.ts). -->
                     <button
                         v-if="canOrder(dish)"
                         type="button"
                         aria-haspopup="dialog"
-                        class="flex min-h-touch w-full cursor-pointer items-start justify-between gap-4 py-3 text-left hover:bg-surface"
+                        class="flex min-h-touch w-full cursor-pointer items-start justify-between gap-3 py-3 text-left hover:bg-surface"
                         data-choose
                         @click="open(dish, $event)"
                     >
                         <MenuDishLine :dish="dish" :sold-out="false" :unavailable="false" :notes="todayNotes(dish)" :chips="chips(dish)" />
                     </button>
-                    <div v-else class="flex items-start justify-between gap-4 py-3">
+                    <!-- Fuera del botón del plato (un botón no lleva otro): encima de la esquina de su foto. -->
+                    <button
+                        v-if="canQuickAdd(dish)"
+                        type="button"
+                        class="menu-quick-add absolute right-0 bottom-3 z-10 inline-flex size-touch items-center justify-center rounded-full bg-veni-ciruela text-veni-blanco dark:bg-veni-mango dark:text-veni-ciruela"
+                        :aria-label="t('restaurant.menu.quick_add', { name: dish.name })"
+                        data-quick-add
+                        @click="quickAdd(dish)"
+                    >
+                        <Icon name="agregar" :size="20" />
+                    </button>
+                    <div v-if="!canOrder(dish)" class="flex items-start justify-between gap-3 py-3">
                         <MenuDishLine :dish="dish" :sold-out="soldOut(dish)" :unavailable="unavailable(dish)" :without="missingEssential(dish)" :notes="soldOut(dish) || missingEssential(dish) !== null ? [] : todayNotes(dish)" :chips="chips(dish)" />
                     </div>
                 </li>
