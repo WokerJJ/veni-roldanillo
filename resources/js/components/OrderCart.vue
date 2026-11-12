@@ -163,6 +163,8 @@ const confirmingClear = ref(false);
 const STEPS = ['order.cart.title', 'order.steps.delivery', 'order.steps.review'] as const;
 /** El paso que se ve: 0, las líneas; 1, la entrega y el pago; 2, revisar y enviar. */
 const stage = ref(0);
+/** Se está cambiando de paso (go() no terminó): se descartan otros toques en «Continuar» y «Atrás». */
+const moving = ref(false);
 const scroller = useTemplateRef<HTMLElement>('scroller');
 const announcement = ref('');
 const alertText = ref('');
@@ -171,6 +173,8 @@ let pressedOnBackdrop = false;
 const delivery = computed(() => isDelivery(details.value, context.value));
 const totals = computed(() => estimatedTotal(items.value, details.value, context.value));
 const money = (amount: number): string => formatPesos(amount, locale.value);
+/** El «Total estimado», con «+ domicilio» mientras el domicilio no se conoce. */
+const totalText = computed(() => (totals.value.fee === null ? t('order.cart.total_plus_delivery', { amount: money(totals.value.total) }) : money(totals.value.total)));
 
 const cashInvalid = computed(() => details.value.payment === 'cash' && cashText.value.trim() !== '' && details.value.cashAmount === null);
 
@@ -234,6 +238,8 @@ const blocked = computed(() => lineProblems.value.some((problem) => problem !== 
 
 const message = computed(() => orderMessage(items.value, details.value, context.value, t, money));
 const href = computed(() => (number.value === null ? null : whatsappUrl(number.value, message.value)));
+/** En «Entrega» el pie se reduce a una línea con el total: sin desglose ni pista. */
+const compact = computed(() => stage.value === 1 && href.value !== null);
 
 /**
  * Una clave estable por línea, su firma sin la cantidad (lo que la hace
@@ -503,14 +509,41 @@ async function onSend(event: MouseEvent): Promise<void> {
     await announce(t('order.form.sent'));
 }
 
-/** Cambia de paso: lo de adentro vuelve arriba, el foco va al título (que dice el paso) y se anuncia. */
+/**
+ * Cambia de paso: lo de adentro vuelve arriba, el foco va al título (que dice el paso) y se anuncia.
+ * Mientras cambia (`moving`), «Continuar» y «Atrás» descartan otro toque: el paso ya cambió y ese toque
+ * llegaría con el paso nuevo, validando o saltando uno de más.
+ */
 async function go(next: number): Promise<void> {
-    stage.value = next;
-    await nextTick();
-    scroller.value?.scrollTo({ top: 0 });
-    title.value?.focus();
-    await announce(t('order.steps.announce', { step: next + 1, total: STEPS.length, name: t(STEPS[next] ?? STEPS[0]) }));
+    moving.value = true;
+    confirmingClear.value = false;
+
+    try {
+        stage.value = next;
+        await nextTick();
+        scroller.value?.scrollTo({ top: 0 });
+        title.value?.focus();
+        await announce(t('order.steps.announce', { step: next + 1, total: STEPS.length, name: t(STEPS[next] ?? STEPS[0]) }));
+    } finally {
+        moving.value = false;
+    }
 }
+
+/** «Atrás»: al paso anterior, salvo que ya se esté cambiando de paso. */
+async function onBack(): Promise<void> {
+    if (moving.value) {
+        return;
+    }
+
+    await go(stage.value - 1);
+}
+
+// Sin pedido o sin WhatsApp no hay pasos que seguir: solo queda «Tu pedido» (con el aviso, si falta el WhatsApp).
+watch([() => items.value.length, href], ([count, link]) => {
+    if (count === 0 || link === null) {
+        stage.value = 0;
+    }
+});
 
 /** Hay líneas que ya no valen: se dice, y el foco va a «Quitar» de la primera (en el primer paso). */
 async function showBlockedLines(): Promise<void> {
@@ -531,6 +564,10 @@ async function showProblems(): Promise<void> {
 
 /** «Continuar»: al paso siguiente, solo si el actual está completo. */
 async function onNext(): Promise<void> {
+    if (moving.value) {
+        return;
+    }
+
     if (blocked.value) {
         await showBlockedLines();
 
@@ -982,21 +1019,25 @@ onBeforeUnmount(() => {
         </div>
 
         <footer v-if="items.length > 0" class="order-cart-footer border-t border-line">
-            <!-- En el paso de la entrega el pie es solo la fila de botones: no le quita alto a los campos. -->
-            <div :hidden="stage === 1 && href !== null" data-footer-totals>
-                <dl class="order-cart-totals tabular-nums" data-totals>
-                    <template v-if="delivery">
-                        <dt>{{ t('order.cart.subtotal') }}</dt>
-                        <dd class="text-right" data-subtotal>{{ money(totals.items) }}</dd>
-                        <dt>{{ t('order.cart.delivery_fee') }}</dt>
-                        <dd class="text-right" data-fee>{{ feeText }}</dd>
-                    </template>
-                    <dt class="font-semibold">{{ t('order.cart.total') }}</dt>
-                    <dd class="text-right font-semibold" data-total>
-                        {{ totals.fee === null ? t('order.cart.total_plus_delivery', { amount: money(totals.total) }) : money(totals.total) }}
-                    </dd>
-                </dl>
-                <p class="mt-1 text-sm text-ink-muted">{{ t('order.cart.total_hint') }}</p>
+            <!-- En el paso de la entrega el pie es una sola línea con el total (se escribe «¿Con cuánto pagás?» a la vista) y la fila de botones: no le quita alto a los campos. -->
+            <div data-footer-totals>
+                <p v-if="compact" class="flex justify-between gap-4 font-semibold tabular-nums" data-footer-total-line>
+                    <span>{{ t('order.cart.total') }}</span>
+                    <span data-total-line>{{ totalText }}</span>
+                </p>
+                <div :hidden="compact" data-footer-breakdown>
+                    <dl class="order-cart-totals tabular-nums" data-totals>
+                        <template v-if="delivery">
+                            <dt>{{ t('order.cart.subtotal') }}</dt>
+                            <dd class="text-right" data-subtotal>{{ money(totals.items) }}</dd>
+                            <dt>{{ t('order.cart.delivery_fee') }}</dt>
+                            <dd class="text-right" data-fee>{{ feeText }}</dd>
+                        </template>
+                        <dt class="font-semibold">{{ t('order.cart.total') }}</dt>
+                        <dd class="text-right font-semibold" data-total>{{ totalText }}</dd>
+                    </dl>
+                    <p class="mt-1 text-sm text-ink-muted">{{ t('order.cart.total_hint') }}</p>
+                </div>
             </div>
             <p v-if="blocked" class="text-sm font-semibold" data-lines-blocked>{{ t('order.cart.lines_blocked') }}</p>
             <template v-if="href !== null">
@@ -1035,7 +1076,7 @@ onBeforeUnmount(() => {
                         class="inline-flex min-h-touch items-center justify-center rounded-full border border-line px-5 font-semibold hover:bg-surface"
                         :class="{ 'flex-1': stage === 2 }"
                         data-back
-                        @click="go(stage - 1)"
+                        @click="onBack"
                     >
                         {{ t('order.steps.back') }}
                     </button>
