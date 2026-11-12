@@ -179,7 +179,10 @@ describe('movimiento (#138, M11)', () => {
 
         for (const root of roots(file)) {
             root.walkDecls('animation', (decl) => {
-                entries.push(`${mediaAround(decl).join(' | ')} → ${decl.value}`);
+                // La foto del detalle que se encoge al desplazar (#141, M9) no es la entrada de la hoja.
+                if (!decl.value.startsWith('dish-picker-photo')) {
+                    entries.push(`${mediaAround(decl).join(' | ')} → ${decl.value}`);
+                }
             });
         }
 
@@ -192,7 +195,9 @@ describe('movimiento (#138, M11)', () => {
         const [entry] = roots(file).flatMap((root) => {
             const found: string[] = [];
             root.walkDecls('animation', (decl) => {
-                found.push(decl.value);
+                if (!decl.value.startsWith('dish-picker-photo')) {
+                    found.push(decl.value);
+                }
             });
 
             return found;

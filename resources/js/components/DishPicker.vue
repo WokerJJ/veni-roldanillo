@@ -37,9 +37,12 @@ import type { MenuDish, MenuOptionGroup } from '@/restaurants/profile';
  * Es un <dialog> nativo abierto con showModal() (useModalDialog): el
  * navegador encierra el foco, deja el resto de la página inerte y cierra con
  * Escape; si lo cierra por su cuenta, también avisa (EVA-047). En un celular
- * vertical sale de abajo, como el panel del mapa (ADR 0022); desde 768 px
- * queda centrado. Lo carga RestaurantMenu recién cuando se toca un plato:
- * no pesa en la ficha ni en el arranque.
+ * vertical es una hoja que sube de abajo (#141, M9): se cierra con «Cerrar»,
+ * con Escape, con un toque en el fondo y deslizándola hacia abajo desde su
+ * manija (Pointer Events, como el panel del mapa, ADR 0022: lejos o rápido
+ * cierra; si no, vuelve a su lugar). Desde 768 px queda centrado y sin
+ * manija. Lo carga RestaurantMenu recién cuando se toca un plato: no pesa en
+ * la ficha ni en el arranque.
  *
  * `unavailable` lo calcula el menú, con su reloj (unavailableReason): si el
  * plato se agota, se queda sin un ingrediente esencial o sin opciones con el
@@ -52,9 +55,12 @@ import type { MenuDish, MenuOptionGroup } from '@/restaurants/profile';
  * sí o sí. El «Quitar» de un ingrediente con reemplazo no sale: lo decide el
  * reemplazo.
  *
- * Arriba, la foto grande del plato (#126): al tocarla se amplía a pantalla
- * completa (DishPhotoViewer, otro diálogo encima de este) y al cerrar el foco
- * vuelve a ella. Sin foto, el ícono del plato más chico y sin ampliar.
+ * Arriba, la foto del plato a todo lo ancho de la hoja (#126, #141): al
+ * desplazar lo de abajo se encoge (donde el navegador anima con el
+ * desplazamiento; en los demás, simplemente sube con el contenido). Al
+ * tocarla se amplía a pantalla completa (DishPhotoViewer, otro diálogo encima
+ * de este) y al cerrar el foco vuelve a ella. Sin foto, el ícono del plato más
+ * chico y sin ampliar. «Agregar · $X» queda fijo abajo.
  */
 const {
     dish,
@@ -82,6 +88,14 @@ const attempted = ref(false);
 const announcement = ref('');
 /** Si el último toque empezó en el fondo: arrastrar desde la hoja y soltar afuera no cierra. */
 let pressedOnBackdrop = false;
+
+/** Cuánto bajó la hoja mientras se desliza (px); null fuera del deslizamiento. */
+const dragY = ref<number | null>(null);
+/** Lo que baja para cerrar, o la velocidad (px/ms) con la que se suelta, con un mínimo de recorrido. */
+const CLOSE_DISTANCE = 120;
+const CLOSE_VELOCITY = 0.6;
+const CLOSE_MIN_FLICK = 24;
+let grab: { pointer: number; startY: number; lastY: number; lastTime: number; velocity: number } | null = null;
 
 const problems = computed(() => selectionProblems(dish, selection.value, currentDay()));
 const total = computed(() => linePrice(dish, selection.value, currentDay()));
@@ -235,6 +249,53 @@ function onPointerDown(event: PointerEvent): void {
     pressedOnBackdrop = event.target === dialog.value;
 }
 
+function onGrabDown(event: PointerEvent): void {
+    if (!event.isPrimary || event.button !== 0) {
+        return;
+    }
+
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    grab = { pointer: event.pointerId, startY: event.clientY, lastY: event.clientY, lastTime: event.timeStamp, velocity: 0 };
+    dragY.value = 0;
+}
+
+function onGrabMove(event: PointerEvent): void {
+    if (grab === null || event.pointerId !== grab.pointer) {
+        return;
+    }
+
+    const elapsed = event.timeStamp - grab.lastTime;
+
+    if (elapsed > 0) {
+        // Hacia abajo es positiva.
+        grab.velocity = (event.clientY - grab.lastY) / elapsed;
+    }
+
+    grab.lastY = event.clientY;
+    grab.lastTime = event.timeStamp;
+    // Hacia arriba no sube: la hoja ya está a su altura.
+    dragY.value = Math.max(0, event.clientY - grab.startY);
+}
+
+/** Soltar: lejos, o rápido hacia abajo, cierra; si no, vuelve a su lugar. */
+function onGrabEnd(event: PointerEvent): void {
+    if (grab === null || event.pointerId !== grab.pointer) {
+        return;
+    }
+
+    const { velocity, lastTime } = grab;
+    const distance = dragY.value ?? 0;
+    grab = null;
+    dragY.value = null;
+
+    // Quieto un rato antes de soltar: ya no es un gesto rápido.
+    const flick = event.timeStamp - lastTime > 100 ? 0 : velocity;
+
+    if (event.type === 'pointerup' && (distance > CLOSE_DISTANCE || (flick > CLOSE_VELOCITY && distance > CLOSE_MIN_FLICK))) {
+        emit('close');
+    }
+}
+
 /**
  * Un toque en el fondo (fuera de la hoja) cierra, como Escape. Solo si
  * también empezó ahí: al seleccionar texto de la nota y soltar afuera, el
@@ -262,29 +323,46 @@ onMounted(() => {
 </script>
 
 <template>
-    <dialog ref="dialog" class="dish-picker text-ink" :aria-labelledby="`${id}-title`" data-dish-picker @pointerdown="onPointerDown" @click="onClick">
+    <dialog
+        ref="dialog"
+        class="dish-picker text-ink"
+        :aria-labelledby="`${id}-title`"
+        :style="dragY === null ? undefined : { translate: `0 ${String(dragY)}px` }"
+        :data-dragging="dragY === null ? undefined : ''"
+        data-dish-picker
+        @pointerdown="onPointerDown"
+        @click="onClick"
+    >
         <form class="flex min-h-0 flex-1 flex-col" novalidate @submit="submit">
-            <header class="dish-picker-header flex items-start justify-between gap-3 border-b border-line">
-                <div class="min-w-0">
-                    <h2 :id="`${id}-title`" ref="title" tabindex="-1" class="text-xl wrap-anywhere">{{ dish.name }}</h2>
-                    <p v-if="dish.description" class="mt-1 text-sm wrap-anywhere text-ink-muted">{{ dish.description }}</p>
-                    <p class="mt-1 font-semibold tabular-nums">{{ formatPesos(dish.price, locale) }}</p>
-                    <p v-for="name in withoutToday" :key="name" class="mt-1 text-sm font-semibold wrap-anywhere" data-ingredient-note>
-                        {{ t('restaurant.menu.today_without', { name }) }}
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    class="inline-flex size-touch shrink-0 items-center justify-center rounded-full hover:bg-surface"
-                    :aria-label="t('order.picker.close')"
-                    data-close
-                    @click="emit('close')"
-                >
-                    <Icon name="cerrar" :size="20" />
-                </button>
-            </header>
+            <!--
+                La manija de la hoja (#141, M9): solo con el dedo o el mouse, y
+                solo en el celular. Con el teclado y el lector se cierra con
+                «Cerrar» o Escape: por eso no es un control.
+            -->
+            <div
+                class="dish-picker-grab"
+                aria-hidden="true"
+                data-grab
+                @pointerdown="onGrabDown"
+                @pointermove="onGrabMove"
+                @pointerup="onGrabEnd"
+                @pointercancel="onGrabEnd"
+                @lostpointercapture="onGrabEnd"
+            >
+                <span class="dish-picker-grab-bar rounded-full" />
+            </div>
+            <!-- Antes que lo demás en el documento (el teclado lo alcanza enseguida) y encima de la foto, sólido. -->
+            <button
+                type="button"
+                class="dish-picker-close inline-flex size-touch items-center justify-center rounded-full"
+                :aria-label="t('order.picker.close')"
+                data-close
+                @click="emit('close')"
+            >
+                <Icon name="cerrar" :size="20" />
+            </button>
 
-            <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
+            <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4" :class="{ 'pt-12': !dish.photo }">
                 <!--
                     La foto grande va dentro de lo que se desplaza y con un alto tope: en un celular bajo no tapa
                     las opciones ni alarga el diálogo (#113, #126). Tocarla la amplía. Sin foto, el ícono del plato
@@ -294,14 +372,24 @@ onMounted(() => {
                     v-if="dish.photo"
                     ref="zoom"
                     type="button"
-                    class="dish-picker-zoom mt-4"
+                    class="dish-picker-zoom"
                     :aria-label="t('order.picker.photo_zoom', { name: dish.name })"
                     data-zoom
                     @click="zoomed = true"
                 >
                     <DishPhoto :image="dish.photo" :name="dish.name_es ?? dish.name" :alt="dish.name" size="large" />
                 </button>
-                <DishPhoto v-else class="dish-picker-icon mt-4" :image="null" :name="dish.name_es ?? dish.name" alt="" size="thumb" />
+                <DishPhoto v-else class="dish-picker-icon" :image="null" :name="dish.name_es ?? dish.name" alt="" size="thumb" />
+
+                <header class="mt-4">
+                    <h2 :id="`${id}-title`" ref="title" tabindex="-1" class="text-xl wrap-anywhere">{{ dish.name }}</h2>
+                    <p v-if="dish.description" class="mt-1 text-sm wrap-anywhere text-ink-muted">{{ dish.description }}</p>
+                    <p class="mt-1 font-semibold tabular-nums">{{ formatPesos(dish.price, locale) }}</p>
+                    <p v-for="name in withoutToday" :key="name" class="mt-1 text-sm font-semibold wrap-anywhere" data-ingredient-note>
+                        {{ t('restaurant.menu.today_without', { name }) }}
+                    </p>
+                </header>
+
                 <fieldset v-for="effect in substitutes" :key="`swap-${effect.index}`" class="mt-4" :aria-describedby="`${id}-swap-hint-${effect.index}`" data-substitute>
                     <legend class="font-semibold">{{ t('order.picker.swap_legend', { name: effect.name }) }}</legend>
                     <p :id="`${id}-swap-hint-${effect.index}`" class="text-sm text-ink-muted">
@@ -452,29 +540,105 @@ onMounted(() => {
     }
 }
 
-.dish-picker-header {
-    padding: 1rem 1rem 0.75rem;
-}
-
 .dish-picker-footer {
     padding: 0.75rem 1rem;
 }
 
-/* La foto: un botón del ancho de la hoja, con tope de alto para no alargar el diálogo. */
+/*
+ * La foto (#141, M9): un botón de borde a borde de la hoja (con el margen del
+ * contenido, -1 rem), 4:3 y con tope de alto para no tapar las opciones en un
+ * celular bajo. Sube con el contenido.
+ */
 .dish-picker-zoom {
     display: block;
-    width: 100%;
-    max-width: 45dvh;
-    margin-inline: auto;
+    width: calc(100% + 2rem);
+    margin-inline: -1rem;
     padding: 0;
     border: 0;
-    border-radius: var(--veni-radius-md);
+    /* Sigue las esquinas de arriba de la hoja: la foto llega hasta ellas. */
+    border-radius: var(--veni-radius-lg) var(--veni-radius-lg) 0 0;
+    overflow: hidden;
     background: none;
     cursor: zoom-in;
 }
 
 .dish-picker-icon {
     margin-inline: auto;
+}
+
+/*
+ * Donde el navegador anima con el desplazamiento, la foto se encoge y se
+ * apaga un poco al subir el contenido. Sin esa función, o con «Reducir
+ * movimiento», solo sube con él.
+ */
+@supports (animation-timeline: scroll()) {
+    @media (prefers-reduced-motion: no-preference) {
+        .dish-picker-zoom {
+            transform-origin: center bottom;
+            animation: dish-picker-photo linear both;
+            animation-timeline: scroll(nearest block);
+            animation-range: 0 12rem;
+        }
+    }
+}
+
+@keyframes dish-picker-photo {
+    to {
+        scale: 0.9;
+        opacity: 0.35;
+    }
+}
+
+/* «Cerrar»: un círculo sólido arriba a la derecha, encima de la foto; el borde lo separa de ella. */
+.dish-picker-close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    z-index: 20;
+    border: 1px solid var(--color-line);
+    background: var(--color-canvas);
+    color: var(--color-ink);
+}
+
+.dish-picker-close:hover {
+    background: var(--color-surface);
+}
+
+/*
+ * La manija para deslizar la hoja hacia abajo: solo en el celular. La barra
+ * va con el color del texto a medias y un borde claro: se ve sobre la foto y
+ * sobre el fondo.
+ */
+.dish-picker-grab {
+    position: absolute;
+    inset: 0 4rem auto 0;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    height: 2.75rem;
+    padding-top: 0.5rem;
+    cursor: grab;
+    touch-action: none;
+}
+
+.dish-picker-grab-bar {
+    width: 2.5rem;
+    height: 0.25rem;
+    background: color-mix(in srgb, var(--color-ink) 60%, var(--color-canvas));
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.7);
+}
+
+@media (min-width: 768px) {
+    .dish-picker-grab {
+        display: none;
+    }
+}
+
+/* Al soltarla sin cerrar, vuelve a su lugar; mientras se desliza sigue al dedo, sin transición. */
+@media (prefers-reduced-motion: no-preference) {
+    .dish-picker:not([data-dragging]) {
+        transition: translate 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
+    }
 }
 
 .dish-picker-check {

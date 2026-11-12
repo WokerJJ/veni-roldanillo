@@ -88,8 +88,9 @@ describe('CSS scoped de los componentes (BUG-033)', () => {
         expect(declarations(file, '.dish-photo-thumb', '(min-width: 1024px)')).toMatchObject({ width: '6rem', height: '6rem' });
     });
 
-    it('la foto grande del selector tiene un tope de 45dvh: no alarga el diálogo (#126)', () => {
-        expect(declarations('resources/js/components/DishPicker.vue', '.dish-picker-zoom')).toMatchObject({ width: '100%', 'max-width': '45dvh' });
+    it('la foto grande del selector va de borde a borde, en 4:3 y con un tope de 40dvh: no alarga el diálogo ni tapa las opciones (#126, #141)', () => {
+        expect(declarations('resources/js/components/DishPhoto.vue', '.dish-photo-large')).toMatchObject({ width: '100%', 'aspect-ratio': '4 / 3', 'max-height': '40dvh' });
+        expect(declarations('resources/js/components/DishPicker.vue', '.dish-picker-zoom')).toMatchObject({ width: 'calc(100% + 2rem)', 'margin-inline': '-1rem' });
     });
 
     it('en computador la barra del pedido va sobre la columna del menú: la columna de la derecha no se acorta por ella (EVA-037)', () => {
