@@ -88,8 +88,46 @@ describe('CSS scoped de los componentes (BUG-033)', () => {
         expect(declarations(file, '.dish-photo-thumb', '(min-width: 1024px)')).toMatchObject({ width: '6rem', height: '6rem' });
     });
 
-    it('la foto grande del selector tiene un tope de 45dvh: no alarga el diálogo (#126)', () => {
-        expect(declarations('resources/js/components/DishPicker.vue', '.dish-picker-zoom')).toMatchObject({ width: '100%', 'max-width': '45dvh' });
+    it('la foto grande del selector va de borde a borde, en 4:3 y con un tope de 40dvh: no alarga el diálogo ni tapa las opciones (#126, #141)', () => {
+        expect(declarations('resources/js/components/DishPhoto.vue', '.dish-photo-large')).toMatchObject({ width: '100%', 'aspect-ratio': '4 / 3', 'max-height': '40dvh' });
+        expect(declarations('resources/js/components/DishPicker.vue', '.dish-picker-zoom')).toMatchObject({ width: 'calc(100% + 2rem)', 'margin-inline': '-1rem' });
+    });
+
+    it('el pie del selector deja el espacio del indicador de inicio del iPhone (BUG-001)', () => {
+        expect(declarations('resources/js/components/DishPicker.vue', '.dish-picker-footer')).toMatchObject({
+            padding: '0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px))',
+        });
+    });
+
+    it('las secciones de la ficha saltan por debajo de la barra fija y en computador, sin barra, a 1 rem (EVA-001)', () => {
+        const show = 'resources/js/pages/Restaurants/Show.vue';
+        const bar = 'calc(env(safe-area-inset-top, 0px) + 4rem)';
+
+        expect(declarations(show, '.ficha')).toMatchObject({ '--ficha-tabs-offset': bar });
+        expect(declarations(show, '.ficha-section')).toMatchObject({ 'scroll-margin-top': 'var(--ficha-tabs-offset)' });
+        expect(declarations(show, '.ficha-section', '(min-width: 64rem)')).toMatchObject({ 'scroll-margin-top': '1rem' });
+        expect(declarations('resources/js/components/RestaurantMenu.vue', '.menu-section')).toMatchObject({
+            'scroll-margin-top': `var(--ficha-tabs-offset, ${bar})`,
+        });
+    });
+
+    it('las pestañas de la ficha se quedan debajo de la cabecera chica del celular, no encima de ella (#141)', () => {
+        const top = declarations('resources/js/pages/Restaurants/Show.vue', '.ficha-tabs').top ?? '';
+
+        expect(declarations('resources/js/pages/Restaurants/Show.vue', '.ficha-tabs').position).toBe('sticky');
+        expect(top).toContain('env(safe-area-inset-top, 0px)');
+        expect(top).toContain('var(--veni-touch-min)');
+        // La cabecera chica mide eso: el margen del sistema, su enlace de 44 px y el borde.
+        expect(declarations('resources/js/components/CompactHeader.vue', '.compact-back')).toMatchObject({ 'min-height': 'var(--veni-touch-min)' });
+    });
+
+    it('en una línea, los chips conservan su ancho, la fila se recorta desvaneciéndose y el «+n» va afuera de ella (#141)', () => {
+        const file = 'resources/js/components/IngredientChips.vue';
+
+        expect(declarations(file, '.ingredient-chips-list')).toMatchObject({ display: 'contents' });
+        expect(declarations(file, '.ingredient-chips-line .ingredient-chips-list')).toMatchObject({ display: 'flex', overflow: 'hidden', 'min-width': '0', 'padding-right': '1rem' });
+        expect(declarations(file, '.ingredient-chips-line .ingredient-chips-list')['mask-image']).toContain('calc(100% - 1rem)');
+        expect(declarations(file, '.ingredient-chips-line .ingredient-chip')).toMatchObject({ 'flex-shrink': '0' });
     });
 
     it('en computador la barra del pedido va sobre la columna del menú: la columna de la derecha no se acorta por ella (EVA-037)', () => {

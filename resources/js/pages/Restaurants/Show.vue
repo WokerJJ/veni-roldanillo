@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue';
 
 import FavoriteButton from '@/components/FavoriteButton.vue';
 import Icon from '@/components/Icon.vue';
@@ -14,7 +14,7 @@ import SampleDataBadge from '@/components/SampleDataBadge.vue';
 import type { PageMeta } from '@/composables/useI18n';
 import { useI18n } from '@/composables/useI18n';
 import { useNow } from '@/composables/useNow';
-import { formatDate } from '@/i18n/intl';
+import { formatDate, formatDay } from '@/i18n/intl';
 import { categoryIcon } from '@/icons/food';
 import { mapUrl, restaurantUrl } from '@/restaurants/links';
 import { openStatus } from '@/restaurants/openStatus';
@@ -104,17 +104,105 @@ const onWidth = (event: MediaQueryListEvent): void => {
 const hasContact = computed(() => hasContactInfo(restaurant));
 
 /**
- * La navegación interna del celular (#82): a qué secciones se salta desde
- * arriba. El horario no va: ya está arriba. Con una sola no hace falta.
+ * Las pestañas fijas del celular (#141, M7; antes «En esta ficha», #82): las
+ * secciones de la carta, en su orden, y después el contacto y los domicilios,
+ * si los hay. Marcan dónde vas (`current`) según lo que se ve al desplazarse.
+ * El horario no va: ya está arriba. Con una sola no hacen falta.
  */
 const sections = computed(() =>
     [
-        { id: 'ficha-promociones', label: t('restaurant.promotions.title'), show: (restaurant.promotions?.length ?? 0) > 0 },
-        { id: 'ficha-menu', label: t('restaurant.menu.title'), show: true },
+        ...restaurant.menu.map((section, index) => ({ id: `ficha-menu-${String(index)}`, label: section.name, show: true })),
         { id: 'ficha-contacto', label: t('restaurant.contact.title'), show: hasContact.value },
         { id: 'ficha-domicilios', label: t('restaurant.delivery.title'), show: restaurant.delivery.available },
     ].filter(({ show }) => show),
 );
+
+/** La sección que se está leyendo: al abrir, la primera; null sin pestañas. */
+const current = ref<string | null>(null);
+const tabs = useTemplateRef<HTMLElement>('tabs');
+let spy: IntersectionObserver | null = null;
+
+/**
+ * Qué sección se lee: la primera, en el orden de la página, que cruza la
+ * franja de arriba (de debajo de la barra al 40 % de la pantalla). Si
+ * ninguna la cruza (un hueco entre dos), se queda la que estaba.
+ */
+function watchSections(): void {
+    spy?.disconnect();
+    spy = null;
+
+    if (desktop.value || sections.value.length < 2) {
+        return;
+    }
+
+    // Al abrir, o si la sección marcada ya no está (cambió la carta al volver
+    // del fondo), la primera: nunca queda marcada una pestaña que no existe.
+    if (!sections.value.some(({ id }) => id === current.value)) {
+        current.value = sections.value[0]?.id ?? null;
+    }
+
+    if (typeof IntersectionObserver === 'undefined') {
+        return;
+    }
+
+    const inBand = new Set<string>();
+
+    /*
+     * Dónde empieza la franja: justo arriba de donde queda el título de una
+     * sección al saltar a ella (el `scroll-padding-top` del documento más su
+     * `scroll-margin-top`, con el margen del sistema ya resuelto). Más arriba,
+     * la franja todavía tocaría el final de la sección anterior y, al tocar
+     * una pestaña, quedaría marcada la de antes. Sin esas medidas, 64 px.
+     */
+    const first = document.getElementById(sections.value[0]?.id ?? '');
+    const landing =
+        (Number.parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0) +
+        (first ? Number.parseFloat(getComputedStyle(first).scrollMarginTop) || 0 : 0);
+    const bandTop = Math.max(64, Math.round(landing) - 8);
+
+    spy = new IntersectionObserver(
+        (entries) => {
+            for (const { target, isIntersecting } of entries) {
+                if (isIntersecting) {
+                    inBand.add(target.id);
+                } else {
+                    inBand.delete(target.id);
+                }
+            }
+
+            current.value = sections.value.find(({ id }) => inBand.has(id))?.id ?? current.value;
+        },
+        { rootMargin: `-${String(bandTop)}px 0px -60% 0px` },
+    );
+
+    for (const { id } of sections.value) {
+        const element = document.getElementById(id);
+
+        if (element) {
+            spy.observe(element);
+        }
+    }
+}
+
+// La pestaña marcada se centra en la fila, que se desplaza de lado.
+watch(current, async () => {
+    await nextTick();
+    const bar = tabs.value;
+    const tab = bar?.querySelector<HTMLElement>('[aria-current]');
+
+    if (bar && tab) {
+        bar.scrollTo({ left: tab.offsetLeft - (bar.clientWidth - tab.offsetWidth) / 2 });
+    }
+});
+
+watch([desktop, sections], () => void nextTick(watchSections), { flush: 'post' });
+
+/**
+ * La portada del celular (#141, M7): la promoción vigente, con su imagen, o,
+ * sin ella, el fondo de la marca con el ícono de la categoría.
+ */
+const cover = computed(() => restaurant.promotions?.find((promotion) => promotion.image) ?? null);
+const coverIcon = computed(() => categoryIcon(restaurant.categories[0]?.slug ?? ''));
 
 /** Cuándo llegaron las props que se ven, por el reloj del dispositivo. */
 let loadedAt = Date.now();
@@ -156,11 +244,13 @@ function onDirectionsClick(event: MouseEvent): void {
 }
 
 onMounted(() => {
+    watchSections();
     document.addEventListener('visibilitychange', onVisible);
     desktopMedia.addEventListener('change', onWidth);
 });
 
 onBeforeUnmount(() => {
+    spy?.disconnect();
     document.removeEventListener('visibilitychange', onVisible);
     desktopMedia.removeEventListener('change', onWidth);
 });
@@ -176,6 +266,35 @@ onBeforeUnmount(() => {
         </Link>
 
         <article>
+            <!--
+                La portada del celular (#141, M7): la promoción vigente con su
+                imagen o, sin ella, el fondo de la marca con el ícono de la
+                categoría. El título de la promoción va escrito: la imagen es
+                decorativa, y es lo primero que se ve (fetchpriority). En computador no hay portada: la ficha va en dos
+                columnas (ADR 0038).
+            -->
+            <div v-if="!desktop" class="ficha-cover mt-2" :class="{ 'ficha-cover-brand': !cover }" data-cover>
+                <template v-if="cover?.image">
+                    <img
+                        :src="cover.image.src"
+                        :srcset="cover.image.srcset"
+                        sizes="(min-width: 48rem) 44rem, calc(100vw - 2rem)"
+                        width="640"
+                        height="360"
+                        alt=""
+                        decoding="async"
+                        fetchpriority="high"
+                        class="ficha-cover-image"
+                    >
+                    <!-- La sección «Promociones» de abajo ya dice el título y la fecha: aquí no se leen otra vez. -->
+                    <p class="ficha-cover-caption" aria-hidden="true" data-cover-promotion>
+                        <span class="block font-semibold wrap-anywhere">{{ cover.title }}</span>
+                        <span class="block text-sm">{{ t('restaurant.promotions.until', { date: formatDay(cover.ends_at.slice(0, 10), locale) }) }}</span>
+                    </p>
+                </template>
+                <Icon v-else :name="coverIcon" :size="64" />
+            </div>
+
             <!--
                 Una sola columna en el celular; desde 1024 px, dos (ADR 0038).
                 El orden del documento es el mismo en los dos: la cabecera, lo
@@ -285,15 +404,21 @@ onBeforeUnmount(() => {
 
                 <div class="ficha-main">
                     <!--
-                        Navegación interna del celular (#82): enlaces a las
-                        secciones de abajo, con el teclado como cualquier enlace.
-                        Las secciones llevan tabindex="-1": el foco va de verdad
-                        a la sección (el lector la lee y Tab sigue desde ahí).
+                        Pestañas fijas del celular (#141, M7): enlaces a las
+                        secciones de la carta y al contacto, con el teclado como
+                        cualquier enlace. Se quedan arriba al desplazarse y marcan
+                        la sección que se lee (aria-current). Las secciones llevan
+                        tabindex="-1": el foco va de verdad a la sección (el lector
+                        la lee y Tab sigue desde ahí).
                     -->
-                    <nav v-if="!desktop && sections.length > 1" class="mt-6" :aria-label="t('restaurant.sections')" data-sections>
-                        <ul class="flex flex-wrap gap-2">
-                            <li v-for="section in sections" :key="section.id">
-                                <a :href="`#${section.id}`" class="inline-flex min-h-touch items-center rounded-full border border-line px-4 font-semibold hover:bg-surface">
+                    <nav v-if="!desktop && sections.length > 1" ref="tabs" class="ficha-tabs" :aria-label="t('restaurant.sections')" data-sections>
+                        <ul class="flex gap-2">
+                            <li v-for="section in sections" :key="section.id" class="shrink-0">
+                                <a
+                                    :href="`#${section.id}`"
+                                    class="ficha-tab inline-flex min-h-touch items-center rounded-full px-4 font-semibold whitespace-nowrap"
+                                    :aria-current="current === section.id ? 'true' : undefined"
+                                >
                                     {{ section.label }}
                                 </a>
                             </li>
@@ -393,9 +518,17 @@ onBeforeUnmount(() => {
     max-width: 48rem;
 }
 
-/* Al saltar desde la navegación interna, el título de la sección no queda pegado al borde. */
+/*
+ * La altura de la barra fija de pestañas (52 px + el margen del sistema) vive
+ * aquí: la leen estas secciones y las del menú (RestaurantMenu).
+ */
+.ficha {
+    --ficha-tabs-offset: calc(env(safe-area-inset-top, 0px) + 4rem);
+}
+
+/* Al saltar desde las pestañas, el título de la sección no queda bajo la barra fija. */
 .ficha-section {
-    scroll-margin-top: 1rem;
+    scroll-margin-top: var(--ficha-tabs-offset);
 }
 
 /* «¿Es tu negocio?» se lee con el color del texto, no el apagado del pie: es una invitación. */
@@ -407,7 +540,101 @@ onBeforeUnmount(() => {
     margin-top: 0.75rem;
 }
 
+/* La portada (#141, M7): 16:9, sin pasar de 14 rem de alto; la imagen o el fondo de la marca. */
+.ficha-cover {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    max-height: 14rem;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--veni-radius-md);
+    background: var(--color-surface);
+}
+
+.ficha-cover-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-veni-ciruela);
+    color: var(--color-veni-mango);
+}
+
+.ficha-cover-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/*
+ * El título sobre la imagen: texto blanco sobre un degradado oscuro abajo. El
+ * tramo del texto queda en un plano de 0,66 de negro como mínimo: sobre una
+ * imagen toda blanca da #575757 y 7:1 con el texto (antes, con 0,6 que ya se
+ * iba apagando a la altura de la primera línea, bajaba a cerca de 4:1).
+ */
+.ficha-cover-caption {
+    position: absolute;
+    inset: auto 0 0;
+    padding: 1.5rem 0.75rem 0.5rem;
+    color: #fff;
+    background: linear-gradient(to top, rgb(0 0 0 / 0.8), rgb(0 0 0 / 0.66) 80%, transparent);
+}
+
+/*
+ * Las pestañas: una fila que se desplaza de lado y se queda arriba, sólida
+ * (el contenido no es de vidrio), a todo el ancho del celular y bajo la
+ * cabecera chica. Sin barra de desplazamiento: el dedo y el foco la
+ * siguen moviendo.
+ */
+.ficha-tabs {
+    position: sticky;
+    /*
+     * Debajo de la cabecera chica del celular (CompactHeader, ADR 0041), que
+     * aparece fija arriba al bajar: el margen del sistema, sus 44 px y su
+     * borde. A la altura de las pestañas ya está a la vista.
+     */
+    top: calc(env(safe-area-inset-top, 0px) + var(--veni-touch-min) + 1px);
+    z-index: 20;
+    margin: 1.5rem -1rem 0;
+    padding: 0.25rem 1rem;
+    overflow-x: auto;
+    background: var(--color-canvas);
+    border-bottom: 1px solid var(--color-line);
+    scrollbar-width: none;
+}
+
+.ficha-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .ficha-tabs {
+        scroll-behavior: smooth;
+    }
+}
+
+/* Marcada con el fondo de la marca y no solo con el color: la pestaña lleva su borde y cambia de relleno. */
+.ficha-tab {
+    border: 1px solid var(--color-line);
+}
+
+.ficha-tab[aria-current] {
+    background: var(--color-veni-ciruela);
+    border-color: var(--color-veni-ciruela);
+    color: var(--color-veni-blanco);
+}
+
+[data-theme='dark'] .ficha-tab[aria-current] {
+    background: var(--color-veni-mango);
+    border-color: var(--color-veni-mango);
+    color: var(--color-veni-ciruela);
+}
+
 @media (min-width: 64rem) {
+    /* En computador no hay barra de pestañas: el título queda a 1 rem del borde. */
+    .ficha-section {
+        scroll-margin-top: 1rem;
+    }
+
     .ficha {
         max-width: var(--container-6xl, 72rem);
         /*
