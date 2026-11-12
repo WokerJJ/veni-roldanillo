@@ -50,7 +50,7 @@ test('precarga las fuentes autohospedadas', function () {
     $this->get('/')
         ->assertOk()
         ->assertSee('<link rel="preload" href="/fonts/figtree-latin-400-700.woff2" as="font" type="font/woff2" crossorigin>', false)
-        ->assertSee('<link rel="preload" href="/fonts/bricolage-grotesque-latin-700-800.woff2" as="font" type="font/woff2" crossorigin>', false);
+        ->assertSee('<link rel="preload" href="/fonts/bricolage-grotesque-latin-700-800.woff2" as="font" type="font/woff2" crossorigin media="(min-width: 768px)">', false);
 });
 
 test('adelanta la conexión con el host del mapa', function (string $styleUrl, string $origin) {
