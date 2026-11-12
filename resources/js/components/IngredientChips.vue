@@ -58,17 +58,20 @@ const shown = computed(() => {
 <template>
     <span v-if="chips.length > 0" class="ingredient-chips" :class="{ 'ingredient-chips-line': limit !== null && !shown.changed }" data-ingredient-chips>
         <span class="sr-only">{{ t('restaurant.menu.ingredients') }} </span>
-        <span v-for="(chip, index) in shown.list" :key="index" class="ingredient-chip" :class="[`ingredient-chip-${chip.kind}`, { 'ingredient-chip-last': index === shown.list.length - 1 }]" :data-ingredient-chip="chip.kind">
-            <Icon :name="chipIconName(chip)" :size="16" class="ingredient-chip-icon" />
-            <span v-if="chip.kind === 'present'">{{ chip.name }}</span>
-            <span v-else-if="chip.kind === 'missing'">
-                <s>{{ chip.name }}</s><span>{{ ' · ' }}{{ t('restaurant.menu.ingredient_missing') }}</span>
+        <!-- Los chips, en su propia fila: en una línea, es ella la que se recorta, y el «+n» queda afuera, siempre a la vista. -->
+        <span class="ingredient-chips-list">
+            <span v-for="(chip, index) in shown.list" :key="index" class="ingredient-chip" :class="`ingredient-chip-${chip.kind}`" :data-ingredient-chip="chip.kind">
+                <Icon :name="chipIconName(chip)" :size="16" class="ingredient-chip-icon" />
+                <span v-if="chip.kind === 'present'">{{ chip.name }}</span>
+                <span v-else-if="chip.kind === 'missing'">
+                    <s>{{ chip.name }}</s><span>{{ ' · ' }}{{ t('restaurant.menu.ingredient_missing') }}</span>
+                </span>
+                <span v-else-if="chip.price > 0">
+                    {{ t('restaurant.menu.ingredient_swap_price', { substitute: chip.substitute, name: chip.name, price: formatPesos(chip.price, locale) }) }}
+                </span>
+                <span v-else>{{ t('restaurant.menu.ingredient_swap', { substitute: chip.substitute, name: chip.name }) }}</span>
+                <span v-if="index < shown.list.length - 1 || shown.hidden > 0" class="sr-only">, </span>
             </span>
-            <span v-else-if="chip.price > 0">
-                {{ t('restaurant.menu.ingredient_swap_price', { substitute: chip.substitute, name: chip.name, price: formatPesos(chip.price, locale) }) }}
-            </span>
-            <span v-else>{{ t('restaurant.menu.ingredient_swap', { substitute: chip.substitute, name: chip.name }) }}</span>
-            <span v-if="index < shown.list.length - 1 || shown.hidden > 0" class="sr-only">, </span>
         </span>
         <span v-if="shown.hidden > 0" class="ingredient-chip ingredient-chip-more" data-ingredient-more>
             <span aria-hidden="true">+{{ shown.hidden }}</span>
@@ -101,34 +104,34 @@ const shown = computed(() => {
     flex-shrink: 0;
 }
 
+/* Fuera de la línea, la fila de chips no existe para el diseño: se parten como siempre. */
+.ingredient-chips-list {
+    display: contents;
+}
+
 /*
- * En una línea (M8): sin partirse. Si no caben, se angosta primero el último
- * chip y su nombre termina en puntos suspensivos (el lector lo oye entero);
- * los demás solo si con eso no alcanza. El «+n» no se angosta: siempre se ve.
+ * En una línea (M8): sin partirse. Cada chip conserva su ancho; si no caben,
+ * la fila se recorta desvaneciéndose a la derecha (el lector los oye
+ * enteros) y el «+n», que va afuera de ella, siempre se ve. El desvanecido
+ * cae sobre 1 rem de relleno: si todo cabe, no toca ningún chip.
  */
 .ingredient-chips-line {
     flex-wrap: nowrap;
+    gap: 0;
+}
+
+.ingredient-chips-line .ingredient-chips-list {
+    display: flex;
+    gap: 0.25rem;
+    min-width: 0;
     overflow: hidden;
+    padding-right: 1rem;
+    mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent);
 }
 
 .ingredient-chips-line .ingredient-chip {
-    min-width: 2.5rem;
-    white-space: nowrap;
-}
-
-.ingredient-chips-line .ingredient-chip > span:not(.sr-only) {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.ingredient-chips-line .ingredient-chip-last {
-    flex-shrink: 1000;
-}
-
-.ingredient-chips-line .ingredient-chip-more {
     flex-shrink: 0;
-    min-width: 0;
+    white-space: nowrap;
 }
 
 /* Atenuado y punteado; «no hay hoy» va escrito al lado. */

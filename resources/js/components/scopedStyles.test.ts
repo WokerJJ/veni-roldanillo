@@ -121,11 +121,13 @@ describe('CSS scoped de los componentes (BUG-033)', () => {
         expect(declarations('resources/js/components/CompactHeader.vue', '.compact-back')).toMatchObject({ 'min-height': 'var(--veni-touch-min)' });
     });
 
-    it('en una línea, se angosta primero el último chip y el «+n» nunca (#141)', () => {
+    it('en una línea, los chips conservan su ancho, la fila se recorta desvaneciéndose y el «+n» va afuera de ella (#141)', () => {
         const file = 'resources/js/components/IngredientChips.vue';
 
-        expect(declarations(file, '.ingredient-chips-line .ingredient-chip-last')).toMatchObject({ 'flex-shrink': '1000' });
-        expect(declarations(file, '.ingredient-chips-line .ingredient-chip-more')).toMatchObject({ 'flex-shrink': '0' });
+        expect(declarations(file, '.ingredient-chips-list')).toMatchObject({ display: 'contents' });
+        expect(declarations(file, '.ingredient-chips-line .ingredient-chips-list')).toMatchObject({ display: 'flex', overflow: 'hidden', 'min-width': '0', 'padding-right': '1rem' });
+        expect(declarations(file, '.ingredient-chips-line .ingredient-chips-list')['mask-image']).toContain('calc(100% - 1rem)');
+        expect(declarations(file, '.ingredient-chips-line .ingredient-chip')).toMatchObject({ 'flex-shrink': '0' });
     });
 
     it('en computador la barra del pedido va sobre la columna del menú: la columna de la derecha no se acorta por ella (EVA-037)', () => {
