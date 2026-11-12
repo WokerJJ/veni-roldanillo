@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { CONTROLS_REM, settle, SNAP_HEIGHTS, stepSnap } from './sheet';
+import { beginDrag, CONTROLS_REM, releaseSpeed, settle, SNAP_HEIGHTS, stepSnap, trackDrag } from './sheet';
 
 // Un celular de 390 × 844: el mapa mide unos 760 px de alto bajo la cabecera.
 const HEIGHTS = { peek: 120, half: 380, full: 716 };
@@ -56,5 +56,70 @@ describe('las alturas del panel de abajo', () => {
     it('rápido contra un extremo, se queda en él', () => {
         expect(settle(716, 2, HEIGHTS)).toBe('full');
         expect(settle(120, -2, HEIGHTS)).toBe('peek');
+    });
+});
+
+describe('el arrastre común del panel y de la hoja del plato (ADR 0042)', () => {
+    /** Un evento de puntero con su hora y un destino que acepta la captura. */
+    function pointer(type: string, clientY: number, time: number, init: PointerEventInit = {}): { event: PointerEvent; captured: number[] } {
+        const captured: number[] = [];
+        const event = new PointerEvent(type, { pointerId: 1, isPrimary: true, button: 0, clientY, ...init });
+        Object.defineProperty(event, 'timeStamp', { value: time });
+        Object.defineProperty(event, 'currentTarget', { value: { setPointerCapture: (id: number) => captured.push(id) } });
+
+        return { event, captured };
+    }
+
+    it('empieza con el puntero primario y lo captura; con otro botón o un segundo dedo, no', () => {
+        const primary = pointer('pointerdown', 100, 0);
+
+        expect(beginDrag(primary.event)).toEqual({ pointer: 1, startY: 100, lastY: 100, lastTime: 0, velocity: 0, moved: false });
+        expect(primary.captured).toEqual([1]);
+
+        const right = pointer('pointerdown', 100, 0, { button: 2 });
+        const second = pointer('pointerdown', 100, 0, { isPrimary: false });
+
+        expect(beginDrag(right.event)).toBeNull();
+        expect(beginDrag(second.event)).toBeNull();
+        expect([...right.captured, ...second.captured]).toEqual([]);
+    });
+
+    it('dice cuánto bajó (negativo si subió) y guarda la velocidad del último tramo, positiva hacia abajo', () => {
+        const drag = beginDrag(pointer('pointerdown', 100, 0).event);
+
+        expect(trackDrag(drag, pointer('pointermove', 160, 20).event)).toBe(60);
+        expect(drag?.velocity).toBe(3);
+        expect(trackDrag(drag, pointer('pointermove', 80, 40).event)).toBe(-20);
+        expect(drag?.velocity).toBe(-4);
+    });
+
+    it('sin arrastre, o con otro puntero, no sigue nada', () => {
+        const drag = beginDrag(pointer('pointerdown', 100, 0).event);
+
+        expect(trackDrag(null, pointer('pointermove', 160, 20).event)).toBeNull();
+        expect(trackDrag(drag, pointer('pointermove', 160, 20, { pointerId: 2 }).event)).toBeNull();
+        expect(drag?.moved).toBe(false);
+    });
+
+    it('con margen, un toque que tiembla no es un arrastre; pasado el margen, ya sigue aunque vuelva', () => {
+        const drag = beginDrag(pointer('pointerdown', 100, 0).event);
+
+        expect(trackDrag(drag, pointer('pointermove', 103, 10).event, 6)).toBeNull();
+        expect(drag?.moved).toBe(false);
+        expect(trackDrag(drag, pointer('pointermove', 110, 20).event, 6)).toBe(10);
+        expect(trackDrag(drag, pointer('pointermove', 102, 30).event, 6)).toBe(2);
+    });
+
+    it('al soltar, la velocidad es la del último tramo, o cero si estuvo quieto más de 100 ms', () => {
+        const drag = beginDrag(pointer('pointerdown', 100, 0).event);
+
+        if (drag === null) {
+            throw new Error('sin arrastre');
+        }
+
+        trackDrag(drag, pointer('pointermove', 160, 20).event);
+
+        expect(releaseSpeed(drag, pointer('pointerup', 160, 25).event)).toBe(3);
+        expect(releaseSpeed(drag, pointer('pointerup', 160, 500).event)).toBe(0);
     });
 });

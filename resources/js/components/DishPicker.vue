@@ -4,6 +4,8 @@ import { computed, nextTick, onMounted, ref, useId, useTemplateRef } from 'vue';
 import DishPhoto from '@/components/DishPhoto.vue';
 import DishPhotoViewer from '@/components/DishPhotoViewer.vue';
 import Icon from '@/components/Icon.vue';
+import type { SheetDrag } from '@/components/sheet';
+import { beginDrag, releaseSpeed, trackDrag } from '@/components/sheet';
 import { useI18n } from '@/composables/useI18n';
 import { useModalDialog } from '@/composables/useModalDialog';
 import { formatPesos } from '@/i18n/intl';
@@ -95,7 +97,8 @@ const dragY = ref<number | null>(null);
 const CLOSE_DISTANCE = 120;
 const CLOSE_VELOCITY = 0.6;
 const CLOSE_MIN_FLICK = 24;
-let grab: { pointer: number; startY: number; lastY: number; lastTime: number; velocity: number } | null = null;
+/** El arrastre de la manija: el mismo seguimiento que el panel del mapa (components/sheet.ts). */
+let grab: SheetDrag | null = null;
 
 const problems = computed(() => selectionProblems(dish, selection.value, currentDay()));
 const total = computed(() => linePrice(dish, selection.value, currentDay()));
@@ -250,31 +253,20 @@ function onPointerDown(event: PointerEvent): void {
 }
 
 function onGrabDown(event: PointerEvent): void {
-    if (!event.isPrimary || event.button !== 0) {
-        return;
-    }
+    grab = beginDrag(event);
 
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-    grab = { pointer: event.pointerId, startY: event.clientY, lastY: event.clientY, lastTime: event.timeStamp, velocity: 0 };
-    dragY.value = 0;
+    if (grab !== null) {
+        dragY.value = 0;
+    }
 }
 
 function onGrabMove(event: PointerEvent): void {
-    if (grab === null || event.pointerId !== grab.pointer) {
-        return;
+    const lowered = trackDrag(grab, event);
+
+    if (lowered !== null) {
+        // Hacia arriba no sube: la hoja ya está a su altura.
+        dragY.value = Math.max(0, lowered);
     }
-
-    const elapsed = event.timeStamp - grab.lastTime;
-
-    if (elapsed > 0) {
-        // Hacia abajo es positiva.
-        grab.velocity = (event.clientY - grab.lastY) / elapsed;
-    }
-
-    grab.lastY = event.clientY;
-    grab.lastTime = event.timeStamp;
-    // Hacia arriba no sube: la hoja ya está a su altura.
-    dragY.value = Math.max(0, event.clientY - grab.startY);
 }
 
 /** Soltar: lejos, o rápido hacia abajo, cierra; si no, vuelve a su lugar. */
@@ -283,13 +275,10 @@ function onGrabEnd(event: PointerEvent): void {
         return;
     }
 
-    const { velocity, lastTime } = grab;
+    const flick = releaseSpeed(grab, event);
     const distance = dragY.value ?? 0;
     grab = null;
     dragY.value = null;
-
-    // Quieto un rato antes de soltar: ya no es un gesto rápido.
-    const flick = event.timeStamp - lastTime > 100 ? 0 : velocity;
 
     if (event.type === 'pointerup' && (distance > CLOSE_DISTANCE || (flick > CLOSE_VELOCITY && distance > CLOSE_MIN_FLICK))) {
         emit('close');
