@@ -11,7 +11,7 @@
 | Son entre 10 y 15 platos, el rango que pide el issue #21 (lo prueba
 | tests/Feature/DishGuidePageTest.php). Cada sección agrupa platos; la clave
 | de la sección y la de cada plato son sus anclas en la página. `search` es lo que se busca en el inicio con
-| «Buscar dónde lo sirven» (/?q=…): va en español en los dos idiomas, porque
+| «Dónde lo sirven hoy» (/?q=…): va en español en los dos idiomas, porque
 | los menús de los restaurantes están en español.
 */
 
@@ -23,7 +23,7 @@ return [
     'toc' => 'En esta guía',
     'when' => 'Cuándo se come',
     'tip' => 'Si venís de visita',
-    'search_link' => 'Buscar dónde lo sirven',
+    'search_link' => 'Dónde lo sirven hoy',
 
     'sections' => [
         'almuerzo' => [

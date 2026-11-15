@@ -167,11 +167,19 @@ describe('Home', () => {
         expect(credits.text()).toBe('Créditos y datos de OpenStreetMap');
     });
 
-    it('la bienvenida ya no enlaza la guía de platos: en el celular va en la barra de pestañas (#139)', async () => {
-        const { wrapper } = await mountHome({ locale: 'en' });
+    it('la bienvenida muestra la guía de platos en una tarjeta con fotos, no en el enlace subrayado del pie (#139, #143)', async () => {
+        const { wrapper, network } = await mountHome({ locale: 'en' });
+        network.requests[0]?.respond([LA_CEIBA, EL_GUADUAL]);
+        await flushPromises();
         await vi.dynamicImportSettled();
+        await flushPromises();
 
+        // El enlace de texto de antes no vuelve: la guía es una tarjeta.
         expect(wrapper.find('section [data-dish-guide-link]').exists()).toBe(false);
+        const card = wrapper.get('section a[data-guide-teaser]');
+        expect(card.attributes('href')).toBe('/dishes');
+        expect(card.text()).toContain('Typical dishes guide');
+        expect(card.findAll('img')).toHaveLength(3);
     });
 
     it('«Ajustes» del celular, al final de la bienvenida, lleva el idioma y el tema que le da el layout (#139)', async () => {

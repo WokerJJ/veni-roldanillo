@@ -92,6 +92,16 @@ describe('CSS scoped de los componentes (BUG-033)', () => {
         expect(declarations('resources/js/components/DishPicker.vue', '.dish-picker-zoom')).toMatchObject({ width: '100%', 'max-width': '45dvh' });
     });
 
+    it('la guía: los chips quedan bajo la cabecera chica, las tarjetas van en una columna y dos desde 640 px, y el ícono es grande (#143)', () => {
+        const file = 'resources/js/pages/DishGuide.vue';
+
+        expect(declarations(file, '.guide-chips')).toMatchObject({ position: 'sticky', 'overflow-x': 'auto' });
+        expect(declarations(file, '.guide-chips').top).toContain('var(--veni-touch-min)');
+        expect(declarations(file, '.guide-cards')).toMatchObject({ display: 'grid' });
+        expect(declarations(file, '.guide-cards', '(min-width: 40rem)')).toMatchObject({ 'grid-template-columns': 'repeat(2, minmax(0, 1fr))' });
+        expect(declarations(file, '.guide-icon')).toMatchObject({ width: '4.5rem', height: '4.5rem' });
+    });
+
     it('en computador la barra del pedido va sobre la columna del menú: la columna de la derecha no se acorta por ella (EVA-037)', () => {
         expect(compiledSelectors('resources/js/pages/Restaurants/Show.vue').filter((selector) => selector.includes('has-order-bar'))).toEqual([]);
     });

@@ -51,7 +51,8 @@ describe('Créditos', () => {
 
     it('los enlaces de afuera se abren aparte, sin pasar quién los abrió, y lo anuncian', async () => {
         const wrapper = await mountCredits();
-        const external = wrapper.findAll('a[target="_blank"]');
+        // Las de las fotos de la guía tienen su propia prueba: aquí, las de OpenStreetMap.
+        const external = wrapper.findAll('a[target="_blank"]').filter((link) => link.element.closest('[data-photos]') === null);
 
         expect(external).toHaveLength(3);
 
@@ -75,5 +76,33 @@ describe('Créditos', () => {
         expect(wrapper.get('h1').text()).toBe('Credits');
         expect(wrapper.get('[data-osm-copyright]').text()).toContain('© OpenStreetMap contributors');
         expect(wrapper.get('[data-request-link]').text()).toContain('Ask for it on the project repository');
+    });
+
+    it('da el crédito de cada foto de la guía de platos: autor, licencia y su página en Wikimedia Commons (#143)', async () => {
+        const wrapper = await mountCredits();
+        const section = wrapper.get('[data-photos]');
+
+        expect(section.attributes('id')).toBe('fotos');
+        expect(section.get('h2').text()).toBe('Fotos de la guía de platos');
+        expect(section.text()).toContain('CC BY-SA se comparten con esa misma licencia');
+
+        const cholado = section.get('[data-photo-credit="cholado"]');
+        expect(cholado.get('a').attributes('href')).toBe('https://commons.wikimedia.org/wiki/File:Cholado_jamundi.jpg');
+        expect(cholado.text()).toContain('C arango');
+        // Dominio público: sin enlace a una licencia.
+        expect(cholado.findAll('a')).toHaveLength(1);
+
+        const sancocho = section.get('[data-photo-credit="sancocho-de-gallina"]');
+        expect(sancocho.findAll('a').map((link) => link.attributes('href'))).toEqual([
+            'https://commons.wikimedia.org/wiki/File:Sancocho_de_gallina_yopal.jpg',
+            'https://creativecommons.org/licenses/by-sa/4.0/',
+        ]);
+        // Los enlaces de afuera se abren aparte y lo anuncian.
+        for (const link of sancocho.findAll('a')) {
+            expect(link.attributes('target')).toBe('_blank');
+            expect(link.attributes('rel')).toBe('noopener noreferrer');
+            expect(link.get('.sr-only').text()).toBe('(se abre en otra pestaña)');
+        }
+        expect(section.findAll('li')).toHaveLength(14);
     });
 });
