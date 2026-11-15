@@ -53,13 +53,9 @@
             })();
         </script>
 
-        {{--
-            Fuentes autohospedadas: se precargan para evitar el salto de texto.
-            Los títulos (Bricolage) solo se precargan donde son grandes: en el
-            celular el inicio casi no los usa y la descarga compite con el JS.
-        --}}
+        {{-- Fuentes autohospedadas: se precargan para evitar el salto de texto. --}}
         <link rel="preload" href="/fonts/figtree-latin-400-700.woff2" as="font" type="font/woff2" crossorigin>
-        <link rel="preload" href="/fonts/bricolage-grotesque-latin-700-800.woff2" as="font" type="font/woff2" crossorigin media="(min-width: 768px)">
+        <link rel="preload" href="/fonts/bricolage-grotesque-latin-700-800.woff2" as="font" type="font/woff2" crossorigin>
 
         {{--
             El mapa (estilo, tiles, fuentes y sprites) se pide con fetch a otro
