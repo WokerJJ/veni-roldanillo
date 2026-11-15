@@ -121,6 +121,10 @@ describe('CSS scoped de los componentes (BUG-033)', () => {
         expect(declarations('resources/js/components/CompactHeader.vue', '.compact-back')).toMatchObject({ 'min-height': 'var(--veni-touch-min)' });
     });
 
+    it('el título de la portada se corta en dos renglones: el degradado oscuro solo cubre hasta ahí (#141)', () => {
+        expect(declarations('resources/js/pages/Restaurants/Show.vue', '.ficha-cover-title')).toMatchObject({ '-webkit-line-clamp': '2', 'line-clamp': '2', overflow: 'hidden' });
+    });
+
     it('en una línea, los chips conservan su ancho, la fila se recorta desvaneciéndose y el «+n» va afuera de ella (#141)', () => {
         const file = 'resources/js/components/IngredientChips.vue';
 

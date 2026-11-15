@@ -44,5 +44,6 @@ El arranque tenía unos 1,8 kB de margen (`bundle.test.ts`). La ficha y el selec
 - Tres textos nuevos en `lang/` («y n más», «Agregar X al pedido» y el aviso del máximo). El presupuesto del arranque sigue en verde.
 - En navegadores sin `animation-timeline` la foto no se encoge; sin `IntersectionObserver`, queda marcada la primera pestaña y no cambia al bajar. En los dos casos todo lo demás funciona.
 - El panel del mapa (`BottomSheet`) cambia por dentro: usa el mismo seguimiento del arrastre que la hoja del plato. Su comportamiento y sus pruebas no cambian.
-- Cuando la fila de chips se recorta, el «+n» cuenta los que pasan del tope de tres, no los que el recorte dejó fuera de la vista.
+- El «+n» cuenta los chips que pasan del tope de tres, no los que el desvanecido deja fuera de la vista: no se mide el ancho de cada fila (ver Alternativas). Lo que se recorta sigue dicho entero al lector de pantalla.
+- El título de la portada se corta en dos renglones (el degradado oscuro solo cubre hasta ahí); el título entero está en «Promociones».
 - La ficha se miró en un navegador a 390 y 320 px, en claro y oscuro, con los datos de ejemplo: de ahí salieron las pestañas bajo la cabecera chica, el recorte de los chips y dónde empieza la franja. Los datos de ejemplo no traen fotos de platos ni imágenes de promoción, y ese navegador no entregaba los avisos de `IntersectionObserver`: quedan por ver en un celular real la portada con imagen, la foto del detalle y la pestaña marcada al desplazarse.

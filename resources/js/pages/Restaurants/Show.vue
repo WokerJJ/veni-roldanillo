@@ -288,7 +288,7 @@ onBeforeUnmount(() => {
                     >
                     <!-- La sección «Promociones» de abajo ya dice el título y la fecha: aquí no se leen otra vez. -->
                     <p class="ficha-cover-caption" aria-hidden="true" data-cover-promotion>
-                        <span class="block font-semibold wrap-anywhere">{{ cover.title }}</span>
+                        <span class="ficha-cover-title block font-semibold wrap-anywhere">{{ cover.title }}</span>
                         <span class="block text-sm">{{ t('restaurant.promotions.until', { date: formatDay(cover.ends_at.slice(0, 10), locale) }) }}</span>
                     </p>
                 </template>
@@ -563,6 +563,15 @@ onBeforeUnmount(() => {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+/* Un título largo se corta en dos renglones: el degradado oscuro cubre solo hasta ahí (el título entero está en «Promociones»). */
+.ficha-cover-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
 }
 
 /*
