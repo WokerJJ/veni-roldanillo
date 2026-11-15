@@ -285,6 +285,65 @@ describe('Home', () => {
             expect(layer().props('restaurants')).toEqual([]);
         });
 
+        it('mientras llegan, el panel asomado ya tiene la forma de la bienvenida: siluetas del buscador y de un botón, sin la presentación', async () => {
+            const { wrapper, status, panel } = await mountHome();
+
+            const skeleton = wrapper.get('[data-welcome-skeleton]');
+            expect(skeleton.attributes('aria-hidden')).toBe('true');
+            expect(skeleton.findAll('span')).toHaveLength(2);
+            // Sin botones de verdad todavía: lo único que se toca es la manija.
+            expect(skeleton.findAll('button')).toHaveLength(0);
+            // El título y la presentación ya no ocupan el panel asomado (siguen para el lector); el estado, solo para el lector.
+            expect(panel().get('h1').classes()).toContain('sheet:sr-only');
+            expect(panel().get('p.text-ink-muted').classes()).toContain('sheet:hidden');
+            expect(status().classes()).toContain('sheet:sr-only');
+            expect(status().text()).toBe('Cargando los restaurantes…');
+        });
+
+        it('al llegar, las siluetas dan paso al buscador de verdad sin que la forma cambie', async () => {
+            const { wrapper, network, listButton, status } = await mountHome();
+
+            network.last()?.respond([LA_CEIBA, EL_GUADUAL]);
+            await flushPromises();
+
+            expect(wrapper.find('[data-welcome-skeleton]').exists()).toBe(false);
+            expect(listButton()?.text()).toBe('Buscá dónde comer');
+            // La misma región de estado, ahora con el recuento y siempre solo para el lector.
+            expect(status().classes()).toContain('sheet:sr-only');
+            expect(status().text()).toBe('2 restaurantes en el mapa');
+        });
+
+        it('sin restaurantes (error), no hay siluetas: el aviso y la presentación salen como antes', async () => {
+            const { wrapper, network, panel } = await mountHome();
+
+            network.last()?.respondWith({ status: 503 });
+            await flushPromises();
+
+            expect(wrapper.find('[data-welcome-skeleton]').exists()).toBe(false);
+            expect(panel().get('[role="alert"]').text()).toContain('Reintentar');
+            expect(panel().get('p.text-ink-muted').classes()).not.toContain('sheet:hidden');
+        });
+
+        it('el mapa espera los restaurantes: su esqueleto sigue hasta que llegan o fallan', async () => {
+            const { wrapper, network } = await mountHome();
+            const map = () => wrapper.getComponent({ name: 'MapView' });
+
+            expect(map().props('holding')).toBe(true);
+
+            network.last()?.respond([LA_CEIBA, EL_GUADUAL]);
+            await flushPromises();
+            expect(map().props('holding')).toBe(false);
+        });
+
+        it('si los restaurantes fallan, el mapa no se queda esperando', async () => {
+            const { wrapper, network } = await mountHome();
+
+            network.last()?.respondWith({ status: 503 });
+            await flushPromises();
+
+            expect(wrapper.getComponent({ name: 'MapView' }).props('holding')).toBe(false);
+        });
+
         it.each([
             ['es', '2 restaurantes en el mapa', 'Buscá dónde comer'],
             ['en', '2 restaurants on the map', 'Find where to eat'],
@@ -306,13 +365,19 @@ describe('Home', () => {
             expect(status().text()).toBe(text);
         });
 
-        it('con restaurantes en el mapa, en un celular vertical la presentación les deja el lugar', async () => {
+        it('con restaurantes en el mapa, y mientras llegan, en un celular vertical la presentación les deja el lugar', async () => {
+            // Mientras llegan: el panel asomado ya tiene la forma de la bienvenida y no se ve cortado ni cambia de golpe.
             const loading = await mountHome();
-            expect(loading.panel().get('h1 + p').classes()).not.toContain('sheet:hidden');
+            expect(loading.panel().get('h1 + p').classes()).toContain('sheet:hidden');
             loading.wrapper.unmount();
 
             const ready = await mountHome({ answer: [LA_CEIBA] });
             expect(ready.panel().get('h1 + p').classes()).toContain('sheet:hidden');
+            ready.wrapper.unmount();
+
+            // Sin restaurantes (error o ninguno) no hay buscador que mostrar: la presentación sale.
+            const none = await mountHome({ answer: [] });
+            expect(none.panel().get('h1 + p').classes()).not.toContain('sheet:hidden');
         });
     });
 
