@@ -3,6 +3,7 @@ import { Head, Link } from '@inertiajs/vue3';
 
 import Icon from '@/components/Icon.vue';
 import { useI18n } from '@/composables/useI18n';
+import { LICENSES, PHOTO_CREDITS, sourceUrl } from '@/guide/photoCredits';
 
 /**
  * Créditos (#58, ADR 0021): la atribución a OpenStreetMap y su licencia
@@ -58,6 +59,24 @@ const linkClass = 'inline-flex min-h-touch items-center gap-1 font-semibold unde
                 {{ t('credits.request_link') }}
                 <span class="sr-only">{{ t('credits.opens_new_tab') }}</span>
             </a>
+        </section>
+
+        <!-- Las fotos de la guía de platos (#143, ADR 0045): cada una con su autor, su licencia y su página en Wikimedia Commons. -->
+        <section id="fotos" class="mt-8 border-t border-line pt-6" aria-labelledby="creditos-fotos" data-photos>
+            <h2 id="creditos-fotos" class="text-xl">{{ t('credits.photos_heading') }}</h2>
+            <p class="mt-3 max-w-prose">{{ t('credits.photos_body') }}</p>
+            <ul class="mt-3 max-w-prose">
+                <li v-for="credit in PHOTO_CREDITS" :key="credit.dish" class="mt-2" :data-photo-credit="credit.dish">
+                    <a :href="sourceUrl(credit.file)" target="_blank" rel="noopener noreferrer" class="font-semibold underline">
+                        {{ credit.file }}<span class="sr-only"> {{ t('credits.opens_new_tab') }}</span>
+                    </a>
+                    · {{ credit.author }} ·
+                    <a v-if="LICENSES[credit.license].url" :href="LICENSES[credit.license].url ?? undefined" target="_blank" rel="noopener noreferrer" class="underline">
+                        {{ LICENSES[credit.license].label }}<span class="sr-only"> {{ t('credits.opens_new_tab') }}</span>
+                    </a>
+                    <template v-else>{{ LICENSES[credit.license].label }}</template>
+                </li>
+            </ul>
         </section>
 
         <section class="mt-8 border-t border-line pt-6" aria-labelledby="creditos-legales" data-legal-links>

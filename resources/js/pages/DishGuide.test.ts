@@ -12,7 +12,7 @@ const GUIDE: DishGuide = {
     title: 'Guía de platos típicos',
     intro: 'Lo que se come en el Valle.',
     note: 'La escribió el equipo de Vení.',
-    labels: { toc: 'En esta guía', when: 'Cuándo se come', tip: 'Si venís de visita', search_link: 'Buscar dónde lo sirven' },
+    labels: { toc: 'En esta guía', when: 'Cuándo se come', tip: 'Si venís de visita', search_link: 'Dónde lo sirven hoy' },
     sections: [
         {
             id: 'almuerzo',
@@ -88,42 +88,94 @@ describe('Guía de platos típicos', () => {
         expect(wrapper.findAll('h3')).toHaveLength(4);
     });
 
-    it('cada plato lleva el ícono del típico si lo hay, y si no el genérico, sin que el lector lo lea (#115)', async () => {
+    it('cada plato con foto la muestra en su tarjeta, con el autor y la licencia; sin foto, su ícono grande (#115, #143)', async () => {
         const wrapper = await mountGuide();
-        const icons = wrapper.findAll('h3').map((heading) => [heading.text(), heading.get('svg').attributes('data-icon'), heading.get('svg').attributes('aria-hidden')]);
 
-        expect(icons).toEqual([
-            [expect.stringContaining('ancocho') as string, 'sancocho', 'true'],
-            ['Arroz atollado', 'veni/generico', 'true'],
-            ['Champús', 'veni/generico', 'true'],
-            ['Raro', 'veni/generico', 'true'],
-        ]);
+        const sancocho = wrapper.get('[data-dish="sancocho-de-gallina"]');
+        const photo = sancocho.get('img[data-dish-photo]');
+        expect(photo.attributes('srcset')).toMatch(/480w, .+960w$/);
+        // Decorativa: el nombre del plato está justo debajo.
+        expect(photo.attributes('alt')).toBe('');
+        expect(photo.attributes('loading')).toBe('lazy');
+        expect(photo.attributes('width')).toBe('960');
+        expect(photo.attributes('height')).toBe('720');
+        expect(sancocho.get('[data-photo-credit]').text()).toBe('Foto: Daniestrella123 · CC BY-SA 4.0');
+        expect(sancocho.find('[data-dish-icon]').exists()).toBe(false);
+
+        const raro = wrapper.get('[data-dish="raro"]');
+        const svg = raro.get('[data-dish-icon] svg');
+        expect([svg.attributes('data-icon'), svg.attributes('aria-hidden'), svg.attributes('width')]).toEqual(['veni/generico', 'true', '64']);
+        expect(raro.find('img').exists()).toBe(false);
+        expect(raro.find('[data-photo-credit]').exists()).toBe(false);
+        // El ícono no está dentro del título: el nombre del plato es solo texto.
+        expect(wrapper.findAll('h3 svg')).toHaveLength(0);
     });
 
-    it('el índice enlaza cada sección y cada plato con anclas que existen y no se repiten', async () => {
+    it('la portada dice cuántos platos hay, lleva el título y un mosaico decorativo con las primeras fotos', async () => {
+        const wrapper = await mountGuide();
+        const hero = wrapper.get('[data-hero]');
+
+        expect(hero.get('[data-count]').text()).toBe('Hay 4 platos y bebidas típicos');
+        expect(hero.get('h1').text()).toBe('Guía de platos típicos');
+        // Tres platos de la prueba tienen foto: el mosaico las muestra y las lee nadie.
+        const mosaic = hero.get('[data-mosaic]');
+        expect(mosaic.attributes('aria-hidden')).toBe('true');
+        expect(mosaic.findAll('img')).toHaveLength(3);
+        expect(mosaic.findAll('img').every((image) => image.attributes('alt') === '')).toBe(true);
+        // La primera se pide ya (la ve quien abre la guía); no hay nada que pedir de más.
+        expect(mosaic.findAll('img').map((image) => image.attributes('loading'))).toEqual(['eager', 'eager', 'eager']);
+    });
+
+    it('en inglés la portada y el crédito de la foto salen en inglés', async () => {
+        const wrapper = await mountGuide('en');
+
+        expect(wrapper.get('[data-count]').text()).toBe('4 typical dishes and drinks');
+        expect(wrapper.get('[data-dish="sancocho-de-gallina"] [data-photo-credit]').text()).toBe('Photo: Daniestrella123 · CC BY-SA 4.0');
+    });
+
+    it('cada plato es una tarjeta con qué es, cuándo se come, la nota y su enlace, y las tarjetas van en una rejilla', async () => {
+        const wrapper = await mountGuide();
+        const card = wrapper.get('[data-dish="sancocho-de-gallina"]');
+
+        expect(card.classes()).toContain('guide-card');
+        expect(card.get('[data-summary]').text()).toBe('Una sopa espesa.');
+        expect(card.find('[data-search-link]').exists()).toBe(true);
+        expect(wrapper.findAll('.guide-cards')).toHaveLength(2);
+        expect(wrapper.findAll('.guide-cards')[0]?.findAll('[data-dish]')).toHaveLength(2);
+    });
+
+    it('las secciones son chips con nombre que llevan a su ancla, y cada plato conserva la suya; ningún id se repite', async () => {
         const wrapper = await mountGuide();
 
         const toc = wrapper.get('nav[data-toc]');
-        expect(toc.attributes('aria-labelledby')).toBe('guia-indice');
-        expect(toc.get('h2').text()).toBe('En esta guía');
+        expect(toc.attributes('aria-label')).toBe('En esta guía');
 
-        const hrefs = toc.findAll('a').map((link) => link.attributes('href') ?? '');
-        expect(hrefs).toEqual([
-            '#guia-almuerzo',
-            '#guia-sancocho-de-gallina',
-            '#guia-arroz-atollado',
-            '#guia-bebidas',
-            '#guia-champus',
-            '#guia-raro',
-        ]);
+        const links = toc.findAll('a');
+        expect(links.map((link) => link.text())).toEqual(['Para almorzar', 'Bebidas, frutas y dulces']);
+        for (const link of links) {
+            // Un chip de 44 px de alto, redondo.
+            expect(link.classes()).toEqual(expect.arrayContaining(['min-h-touch', 'rounded-full']));
+        }
+
+        const hrefs = links.map((link) => link.attributes('href') ?? '');
+        expect(hrefs).toEqual(['#guia-almuerzo', '#guia-bebidas']);
 
         const ids = wrapper.findAll('[id]').map((element) => element.attributes('id'));
         expect(new Set(ids).size).toBe(ids.length);
-        for (const href of hrefs) {
+        for (const href of [...hrefs, '#guia-sancocho-de-gallina', '#guia-arroz-atollado', '#guia-champus', '#guia-raro']) {
             expect(wrapper.find(href).exists()).toBe(true);
         }
+        // Las secciones reciben el foco al saltar a ellas.
+        expect(wrapper.get('#guia-almuerzo').attributes('tabindex')).toBe('-1');
         // Los id llevan prefijo: ninguno choca con el destino de «Saltar al contenido».
         expect(ids).not.toContain('contenido');
+    });
+
+    it('«Dónde lo sirven hoy» es un botón de 44 px a todo el ancho de la tarjeta, y los chips se desplazan de lado bajo la cabecera chica', async () => {
+        const wrapper = await mountGuide();
+
+        expect(wrapper.get('[data-search-link]').classes()).toEqual(expect.arrayContaining(['min-h-touch', 'w-full', 'rounded-full']));
+        expect(wrapper.get('nav[data-toc]').classes()).toContain('guide-chips');
     });
 
     it('cada plato busca en el inicio dónde lo sirven, con lo que busca bien escapado', async () => {
@@ -144,7 +196,7 @@ describe('Guía de platos típicos', () => {
         const wrapper = await mountGuide();
 
         const link = wrapper.get('[data-dish="champus"] [data-search-link]');
-        expect(link.text()).toMatch(/^Buscar dónde lo sirven/);
+        expect(link.text()).toMatch(/^Dónde lo sirven hoy/);
         expect(link.get('.sr-only').text()).toBe(': Champús');
     });
 });

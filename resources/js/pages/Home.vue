@@ -52,6 +52,7 @@ const RestaurantList: FunctionalComponent = (_props, { attrs }) => (panelParts.v
 const RestaurantDistances: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.distances, attrs) : null);
 const WelcomeActions: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.welcome, attrs) : null);
 const LegalLinks: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.links.LegalLinks, attrs) : null);
+const GuideTeaser: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.links.GuideTeaser, attrs) : null);
 /** «Ajustes» (#139): el idioma y el tema, que el layout comparte (navigation/tabs.ts). */
 const settingsControls = inject(SETTINGS, []);
 const SettingsMenu: FunctionalComponent = (_props, { attrs }) =>
@@ -726,6 +727,8 @@ onBeforeUnmount(() => {
                             @expand="expandSheet"
                         />
                         <SampleDataBadge v-if="hasSampleData" />
+                        <!-- La guía de platos típicos, a la vista (#143): una tarjeta con fotos que lleva a /dishes. -->
+                        <GuideTeaser class="w-full" />
                     </div>
 
                     <div v-if="panelPartsFailed" role="alert" class="mt-3 flex flex-wrap items-center justify-end gap-x-3 gap-y-2" data-panel-offline>

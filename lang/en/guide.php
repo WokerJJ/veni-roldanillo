@@ -14,7 +14,7 @@ return [
     'toc' => 'In this guide',
     'when' => 'When people eat it',
     'tip' => 'For visitors',
-    'search_link' => 'Find where it is served',
+    'search_link' => 'Where it is served today',
 
     'sections' => [
         'almuerzo' => [
