@@ -25,6 +25,7 @@
 .maplibregl-map {
     /* El fondo de los controles redondos (los grupos y el botón «i»): sólido por defecto. */
     --veni-glass: var(--canvas);
+    --veni-glass-text: var(--canvas);
 }
 
 .maplibregl-ctrl-group {
@@ -39,14 +40,44 @@
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
     @media (prefers-reduced-transparency: no-preference) {
         .maplibregl-map {
-            /* 82 %: el ícono (--ink) sigue por encima de 3:1 aun sobre el relleno más oscuro del mapa. */
-            --veni-glass: color-mix(in srgb, var(--canvas) 82%, transparent);
+            /*
+             * 46 %: se ve lo que hay debajo (un parque, una calle) y el ícono
+             * (--ink) sigue a más de 12:1 aun sobre el relleno más oscuro de
+             * los dos estilos del mapa (medido, ADR 0044). La píldora del
+             * crédito lleva texto: más cerrada, 70 %.
+             */
+            --veni-glass: color-mix(in srgb, var(--canvas) 46%, transparent);
+            --veni-glass-text: color-mix(in srgb, var(--canvas) 70%, transparent);
         }
 
         .maplibregl-ctrl-group,
-        .veni-attrib-button {
-            -webkit-backdrop-filter: blur(14px) saturate(1.4);
-            backdrop-filter: blur(14px) saturate(1.4);
+        .veni-attrib-button,
+        .veni-attrib-text {
+            -webkit-backdrop-filter: blur(12px) saturate(1.6);
+            backdrop-filter: blur(12px) saturate(1.6);
+        }
+
+        /* El borde de cristal: un filo claro arriba y una sombra suave, en lugar del borde plano. */
+        .maplibregl-ctrl-group:not(:empty),
+        .veni-attrib-button,
+        .veni-attrib-text {
+            box-shadow:
+                0 0 0 1px color-mix(in srgb, var(--canvas) 65%, transparent),
+                0 2px 10px rgb(42 22 56 / 16%),
+                inset 0 1px 0 rgb(255 255 255 / 60%);
+        }
+
+        [data-theme='dark'] .maplibregl-ctrl-group:not(:empty),
+        [data-theme='dark'] .veni-attrib-button,
+        [data-theme='dark'] .veni-attrib-text {
+            box-shadow:
+                0 0 0 1px color-mix(in srgb, var(--ink) 22%, transparent),
+                0 2px 10px rgb(0 0 0 / 35%),
+                inset 0 1px 0 rgb(255 255 255 / 18%);
+        }
+
+        .veni-attrib-text {
+            background-color: var(--veni-glass-text);
         }
     }
 }
@@ -302,7 +333,7 @@
     min-height: var(--veni-touch-min);
     padding: 0 14px;
     border-radius: 9999px;
-    background-color: var(--canvas);
+    background-color: var(--veni-glass-text);
     color: var(--ink);
     font-size: 0.8125rem;
     line-height: 1.25rem;

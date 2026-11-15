@@ -20,7 +20,7 @@ Tercera etapa del rediseño del celular aprobado el 2026-11-06 (#140, M4). Los b
 
 ## Decisión
 
-- **Controles de vidrio**: círculos de 44 px (el zoom, «¿Dónde estoy?» y el botón «i») con el fondo del tema al 82 % y desenfoque, definido una vez (`--veni-glass`) con el prefijo `-webkit-`. Con «Reducir transparencia» o sin soporte para desenfocar, el fondo sólido del tema.
+- **Controles de vidrio**: círculos de 44 px (el zoom, «¿Dónde estoy?» y el botón «i») con el fondo del tema al 46 % (la píldora del crédito, que lleva texto, al 70 %), desenfoque y saturación, y un filo claro arriba con una sombra suave en lugar del borde plano; el color se define una vez (`--veni-glass`) y los filtros llevan el prefijo `-webkit-`. Al 82 %, como estuvo al principio, no se veía nada a través del botón: era casi un círculo blanco. Con «Reducir transparencia» o sin soporte para desenfocar, el fondo sólido del tema.
 - **Zoom**: se oculta solo con `(pointer: coarse) and (hover: none) and (max-width: 767px)`. El aviso de ubicación baja bajo el botón «i», que ya no tapa, y respeta el margen del sistema a los lados; su sombra pesada pasa a un borde fino, como los controles.
 - **Marcadores**: cada restaurante se dibuja con el ícono de su primera categoría, en blanco sobre el círculo arrebol; un ícono que no baja cae al genérico y no deja un círculo vacío. Los grupos se forman a 44 px (antes 50) y el aro del elegido es más grande.
 - **Fuente de títulos**: precargada en todos los anchos (ver arriba).
@@ -31,11 +31,12 @@ Calculado con los colores de relleno de los estilos claro y oscuro publicados (1
 
 | Qué | Claro | Oscuro |
 | --- | --- | --- |
-| Ícono (`--ink`) sobre el vidrio al 82 %, en el peor relleno | 15,3:1 | 15,9:1 |
+| Ícono (`--ink`) sobre el vidrio al 46 %, en el peor relleno | 13,1:1 | 14,5:1 |
+| Texto del crédito sobre su píldora al 70 %, en el peor relleno | 14,5:1 | 15,4:1 |
 | Ícono blanco sobre el círculo arrebol | 3,5:1 | 3,5:1 |
 | Círculo arrebol contra los rellenos | 2,3 a 3,0:1 | 3,6 a 5,3:1 |
 
-- El vidrio y el ícono pasan con mucho margen: el 82 % se puede bajar sin riesgo si se quiere más transparencia.
+- El vidrio y el ícono pasan con mucho margen aun al 46 %. Se midió contra los rellenos, no contra las calles ni los rótulos que pasen por debajo: el desenfoque de 12 px los difumina, pero hay que mirarlo en un celular real.
 - En el tema claro el círculo arrebol y su aro quedan entre 2,3 y 3,0:1 contra los rellenos: por debajo de 3:1 (WCAG 1.4.11) en el fondo del mapa (2,99) y en parques y agua. No es lo único que dice cuál restaurante es: el resumen se abre con su nombre, el mapa lo centra y el ícono blanco va dentro del círculo a 3,5:1. Se acepta como énfasis redundante; si se quiere cumplirlo en el mapa mismo, hace falta un contorno que dependa del tema (la capa hoy no lo conoce).
 
 ## Consecuencias
