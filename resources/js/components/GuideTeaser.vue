@@ -16,7 +16,8 @@ import sancocho from '../../images/guia/sancocho-de-gallina-480.webp';
  * estilos van aquí, con alcance: viajan con la tarjeta y no en la hoja de
  * estilos del arranque. Las fotos son decorativas (el título y la frase ya
  * dicen de qué es la tarjeta); de quién son, en /credits#fotos y en cada
- * tarjeta de la guía.
+ * tarjeta de la guía. Se piden ya (`eager`): son tres de unos 10 kB, y con
+ * `lazy` el panel, que se desplaza por dentro, las dejaba sin pedir.
  */
 const { t } = useI18n();
 
@@ -26,7 +27,7 @@ const PHOTOS = [empanada, cholado, sancocho] as const;
 <template>
     <Link href="/dishes" class="guide-teaser" data-guide-teaser>
         <span class="guide-teaser-photos" aria-hidden="true">
-            <img v-for="photo in PHOTOS" :key="photo" :src="photo" width="480" height="360" alt="" loading="lazy" decoding="async">
+            <img v-for="photo in PHOTOS" :key="photo" :src="photo" width="480" height="360" alt="" loading="eager" decoding="async">
         </span>
         <span class="guide-teaser-text">
             <span class="guide-teaser-title">{{ t('layout.dish_guide_link') }}</span>

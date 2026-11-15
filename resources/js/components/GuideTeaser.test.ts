@@ -33,7 +33,7 @@ describe('GuideTeaser', () => {
 
         const photos = card.get('span[aria-hidden="true"]').findAll('img');
         expect(photos).toHaveLength(3);
-        expect(photos.every((photo) => photo.attributes('alt') === '' && photo.attributes('loading') === 'lazy')).toBe(true);
+        expect(photos.every((photo) => photo.attributes('alt') === '' && photo.attributes('loading') === 'eager')).toBe(true);
         expect(new Set(photos.map((photo) => photo.attributes('src'))).size).toBe(3);
         // El ícono de la flecha es decorativo.
         expect(card.get('svg').attributes('aria-hidden')).toBe('true');
