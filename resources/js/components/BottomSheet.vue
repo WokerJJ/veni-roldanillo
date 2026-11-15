@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
-import type { SheetSnap } from '@/components/sheet';
-import { CONTROLS_REM, DRAG_SLOP, PEEK_REM, settle, SNAP_HEIGHTS, stepSnap } from '@/components/sheet';
+import type { SheetDrag, SheetSnap } from '@/components/sheet';
+import { beginDrag, CONTROLS_REM, DRAG_SLOP, PEEK_REM, releaseSpeed, settle, SNAP_HEIGHTS, stepSnap, trackDrag } from '@/components/sheet';
 import { useI18n } from '@/composables/useI18n';
 
 /**
@@ -58,7 +58,9 @@ function heights(): Record<SheetSnap, number> {
     return { peek: PEEK_REM * rem, half: parent.clientHeight / 2, full: free };
 }
 
-let drag: { pointer: number; startY: number; startHeight: number; lastY: number; lastTime: number; velocity: number; moved: boolean } | null = null;
+let drag: SheetDrag | null = null;
+/** El alto del panel al empezar el arrastre (px). */
+let startHeight = 0;
 /**
  * Con el mouse, el arrastre termina con un clic sobre la manija: ese no cambia
  * de altura. Con el dedo ese clic no llega: el próximo toque lo olvida.
@@ -68,43 +70,28 @@ let skipClick = false;
 function onPointerDown(event: PointerEvent): void {
     skipClick = false;
 
-    if (!event.isPrimary || event.button !== 0 || !root.value) {
+    if (!root.value) {
         return;
     }
 
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
-    drag = {
-        pointer: event.pointerId,
-        startY: event.clientY,
-        startHeight: root.value.getBoundingClientRect().height,
-        lastY: event.clientY,
-        lastTime: event.timeStamp,
-        velocity: 0,
-        moved: false,
-    };
+    drag = beginDrag(event);
+
+    if (drag !== null) {
+        startHeight = root.value.getBoundingClientRect().height;
+    }
 }
 
 function onPointerMove(event: PointerEvent): void {
-    if (drag === null || event.pointerId !== drag.pointer) {
-        return;
-    }
+    const lowered = trackDrag(drag, event, DRAG_SLOP);
 
-    if (!drag.moved && Math.abs(event.clientY - drag.startY) < DRAG_SLOP) {
+    if (lowered === null) {
         return;
     }
 
     const { peek, full } = heights();
-    const elapsed = event.timeStamp - drag.lastTime;
 
-    if (elapsed > 0) {
-        // Hacia arriba crece: la velocidad es positiva.
-        drag.velocity = (drag.lastY - event.clientY) / elapsed;
-    }
-
-    drag.moved = true;
-    drag.lastY = event.clientY;
-    drag.lastTime = event.timeStamp;
-    dragHeight.value = Math.min(full, Math.max(peek, drag.startHeight + drag.startY - event.clientY));
+    // Lo que baja el dedo, lo pierde de alto el panel.
+    dragHeight.value = Math.min(full, Math.max(peek, startHeight - lowered));
 }
 
 function onPointerEnd(event: PointerEvent): void {
@@ -112,13 +99,14 @@ function onPointerEnd(event: PointerEvent): void {
         return;
     }
 
-    const { moved, velocity, lastTime } = drag;
+    const { moved } = drag;
+    // Hacia arriba crece: para el panel, la velocidad positiva es la que sube.
+    const growing = -releaseSpeed(drag, event);
     drag = null;
 
     if (moved && dragHeight.value !== null) {
         skipClick = event.type === 'pointerup';
-        // Quieto un rato antes de soltar: ya no es un gesto rápido.
-        choose(settle(dragHeight.value, event.timeStamp - lastTime > 100 ? 0 : velocity, heights()));
+        choose(settle(dragHeight.value, growing, heights()));
     }
 
     dragHeight.value = null;
