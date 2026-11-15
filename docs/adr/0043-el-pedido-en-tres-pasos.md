@@ -36,4 +36,8 @@ El ADR 0024 fijó dos cosas que esta etapa cambia: que los errores del formulari
 - Siete textos nuevos en `lang/` (`order.steps.*`), con paridad ES/EN. El arranque no cambia: el carrito baja aparte, al tocar «Ver tu pedido».
 - Enviar un pedido pide ahora tocar dos veces «Continuar»; a cambio se ve el mensaje completo antes de abrir WhatsApp.
 - Con `hidden`, las pruebas de jsdom/happy-dom ven los elementos ocultos (no aplican `display: none`): las del flujo pasan por «Continuar» (`reachReview`) y el clic en «Enviar» exige que el enlace no esté dentro de un `[hidden]`.
-- Queda pendiente, por decisión: el pie del último paso mide unos 240 px y en un celular de 320 × 568 deja poca altura al mensaje (se puede mover «Atrás» junto a «Enviar»); el lector oye el paso dos veces (por el foco y por el anuncio); el título «Entrega» seguido del subtítulo «Entrega y pago»; y mirar el carrito en un celular real a 320 y 390 px, en claro y oscuro.
+- «Entrega» tiene un solo encabezado (el título del paso, que nombra la sección); en inglés el paso se llama «Details», porque también sirve para recoger en el local. El anuncio del cambio de paso dice solo «Paso 2 de 3.»: el título ya lo lee el foco.
+- En el último paso «Atrás» y «Enviar» van en la misma fila, «Atrás» primero en el documento: el pie ocupa menos alto y el foco sigue lo que se ve. La nota del total («El restaurante te confirma el total…») se queda en los pasos donde se ve el desglose: es la frase que dice que en Vení no se paga nada.
+- En pantallas angostas la barra reserva dos renglones para los nombres de los pasos, para que no crezca al llegar al último.
+- Los botones del carrito ya tienen transición de color y respuesta al toque: vienen de la capa base de `app.css` (ADR 0040), no hace falta nada propio.
+- Queda pendiente mirar el carrito en un celular real a 320 y 390 px, en claro y oscuro.

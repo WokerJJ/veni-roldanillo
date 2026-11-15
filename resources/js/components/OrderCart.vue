@@ -521,9 +521,14 @@ async function go(next: number): Promise<void> {
     try {
         stage.value = next;
         await nextTick();
-        scroller.value?.scrollTo({ top: 0 });
+        // Sin scrollTo(): hay navegadores que no lo traen en un elemento.
+        if (scroller.value) {
+            scroller.value.scrollTop = 0;
+        }
+
+        // El foco ya hace decir el título (el nombre del paso): el anuncio solo dice cuántos van.
         title.value?.focus();
-        await announce(t('order.steps.announce', { step: next + 1, total: STEPS.length, name: t(STEPS[next] ?? STEPS[0]) }));
+        await announce(t('order.steps.announce', { step: next + 1, total: STEPS.length }));
     } finally {
         moving.value = false;
     }
@@ -653,12 +658,12 @@ onBeforeUnmount(() => {
             <li
                 v-for="(name, index) in STEPS"
                 :key="name"
-                class="order-cart-step-item"
+                class="order-cart-progress-item"
                 :aria-current="index === stage ? 'step' : undefined"
                 :data-step="index < stage ? 'done' : index === stage ? 'current' : 'next'"
             >
-                <span class="order-cart-step-bar" />
-                <span class="order-cart-step-name">{{ index + 1 }}. {{ t(name) }}</span>
+                <span class="order-cart-progress-bar" />
+                <span class="order-cart-progress-name">{{ index + 1 }}. {{ t(name) }}</span>
             </li>
         </ol>
 
@@ -746,9 +751,8 @@ onBeforeUnmount(() => {
 
                 <!-- Paso 2 · Entrega -->
                 <div v-if="href !== null" :hidden="stage !== 1" data-stage="1">
-                    <section class="mt-2" :aria-labelledby="`${id}-form`" data-order-form>
-                        <h3 :id="`${id}-form`" class="text-lg">{{ t('order.form.title') }}</h3>
-
+                    <!-- Se nombra con el título del paso («Entrega»): otro encabezado igual de largo repetiría lo mismo. -->
+                    <section class="mt-2" :aria-labelledby="`${id}-title`" data-order-form>
                         <fieldset v-if="context.deliveryAvailable" class="mt-3" data-field="mode">
                             <legend class="font-semibold">{{ t('order.form.mode') }}</legend>
                             <label v-for="mode in MODES" :key="mode" class="flex min-h-touch cursor-pointer items-center gap-3">
@@ -1041,40 +1045,12 @@ onBeforeUnmount(() => {
             </div>
             <p v-if="blocked" class="text-sm font-semibold" data-lines-blocked>{{ t('order.cart.lines_blocked') }}</p>
             <template v-if="href !== null">
-                <!-- «Enviar por WhatsApp», solo en el último paso. -->
-                <div :hidden="stage !== 2" data-footer-send>
-                    <a
-                        v-if="problems.size === 0 && !blocked"
-                        :href="href"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
-                        :aria-describedby="`${id}-send-hint`"
-                        data-send
-                        @click="onSend"
-                    >
-                        <Icon name="enlace-externo" :size="20" />
-                        {{ t('order.form.send') }}
-                    </a>
-                    <button
-                        v-else
-                        type="button"
-                        class="inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
-                        :aria-describedby="`${id}-send-hint`"
-                        data-send
-                        @click="onSend"
-                    >
-                        <Icon name="enlace-externo" :size="20" />
-                        {{ t('order.form.send') }}
-                    </button>
-                    <p :id="`${id}-send-hint`" class="mt-1 text-center text-sm text-ink-muted">{{ t('order.form.send_hint') }}</p>
-                </div>
+                <!-- «Atrás» antes que lo demás, siempre a la izquierda: en el último paso «Enviar» va a su lado, no debajo. -->
                 <div class="flex gap-2" data-footer-nav>
                     <button
                         v-if="stage > 0"
                         type="button"
-                        class="inline-flex min-h-touch items-center justify-center rounded-full border border-line px-5 font-semibold hover:bg-surface"
-                        :class="{ 'flex-1': stage === 2 }"
+                        class="inline-flex min-h-touch shrink-0 items-center justify-center rounded-full border border-line px-5 font-semibold hover:bg-surface"
                         data-back
                         @click="onBack"
                     >
@@ -1089,7 +1065,35 @@ onBeforeUnmount(() => {
                     >
                         {{ t('order.steps.next') }}
                     </button>
+                    <!-- «Enviar por WhatsApp», solo en el último paso. -->
+                    <div :hidden="stage !== 2" class="min-w-0 flex-1" data-footer-send>
+                        <a
+                            v-if="problems.size === 0 && !blocked"
+                            :href="href"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full text-center bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                            :aria-describedby="`${id}-send-hint`"
+                            data-send
+                            @click="onSend"
+                        >
+                            <Icon name="enlace-externo" :size="20" />
+                            {{ t('order.form.send') }}
+                        </a>
+                        <button
+                            v-else
+                            type="button"
+                            class="inline-flex min-h-touch w-full items-center justify-center gap-2 rounded-full text-center bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
+                            :aria-describedby="`${id}-send-hint`"
+                            data-send
+                            @click="onSend"
+                        >
+                            <Icon name="enlace-externo" :size="20" />
+                            {{ t('order.form.send') }}
+                        </button>
+                    </div>
                 </div>
+                <p :id="`${id}-send-hint`" :hidden="stage !== 2" class="text-center text-sm text-ink-muted">{{ t('order.form.send_hint') }}</p>
             </template>
         </footer>
 
@@ -1168,29 +1172,29 @@ onBeforeUnmount(() => {
     border-bottom: 1px solid var(--color-line);
 }
 
-.order-cart-step-bar {
+.order-cart-progress-bar {
     display: block;
     height: 0.25rem;
     border-radius: var(--veni-radius-sm);
     background: var(--color-veni-ciruela);
 }
 
-[data-theme='dark'] .order-cart-step-bar {
+[data-theme='dark'] .order-cart-progress-bar {
     background: var(--color-veni-mango);
 }
 
-.order-cart-step-item[data-step='next'] .order-cart-step-bar {
+.order-cart-progress-item[data-step='next'] .order-cart-progress-bar {
     height: 0.125rem;
     margin-block: 0.0625rem;
     background: color-mix(in srgb, var(--color-ink) 50%, var(--color-canvas));
 }
 
-[data-theme='dark'] .order-cart-step-item[data-step='next'] .order-cart-step-bar {
+[data-theme='dark'] .order-cart-progress-item[data-step='next'] .order-cart-progress-bar {
     background: color-mix(in srgb, var(--color-ink) 35%, var(--color-canvas));
 }
 
 /* El nombre largo («Revisar y enviar») parte en dos renglones parejos a 320 px. */
-.order-cart-step-name {
+.order-cart-progress-name {
     display: block;
     margin-top: 0.25rem;
     font-size: 0.75rem;
@@ -1200,14 +1204,25 @@ onBeforeUnmount(() => {
     text-wrap: balance;
 }
 
-.order-cart-step-item[aria-current] .order-cart-step-name {
+/*
+ * En una pantalla angosta «3. Revisar y enviar» parte en dos renglones solo
+ * cuando es el paso actual (en negrita): se reservan los dos, para que la
+ * barra no crezca al llegar al último paso.
+ */
+@media (max-width: 26.25rem) {
+    .order-cart-progress-name {
+        min-height: 2rem;
+    }
+}
+
+.order-cart-progress-item[aria-current] .order-cart-progress-name {
     font-weight: 600;
     color: var(--color-ink);
 }
 
 /* El tramo cambia de color al avanzar; con «Reducir movimiento», de una. */
 @media (prefers-reduced-motion: no-preference) {
-    .order-cart-step-bar {
+    .order-cart-progress-bar {
         transition: background-color 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
     }
 }

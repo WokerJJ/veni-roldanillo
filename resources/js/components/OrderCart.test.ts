@@ -772,6 +772,13 @@ describe('OrderCart: el pedido en tres pasos (#142, M10)', () => {
         expect(wrapper.get('[data-footer-send] [data-send]').element.tagName).toBe('A');
         expect(plain(wrapper.get('[data-total]').text())).toBe('$ 4.000');
         expect(wrapper.find('[data-next]').exists()).toBe(false);
+        // «Atrás» y «Enviar» en la misma fila, «Atrás» antes en el documento: el foco sigue lo que se ve.
+        const row = wrapper.get('[data-footer-nav]').element;
+        const back = row.querySelector('[data-back]');
+        const send = row.querySelector('[data-send]');
+        expect(back).not.toBeNull();
+        expect(send).not.toBeNull();
+        expect(back?.compareDocumentPosition(send as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     });
 
     it('«Continuar» lleva a «Entrega»: el foco va al título, que dice el paso, y se anuncia', async () => {
@@ -782,7 +789,7 @@ describe('OrderCart: el pedido en tres pasos (#142, M10)', () => {
         expect(visibleStage(wrapper)).toEqual(['1']);
         expect(wrapper.get('h2').text()).toBe('Entrega');
         expect(document.activeElement).toBe(wrapper.get('h2').element);
-        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 2 de 3: Entrega.');
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 2 de 3.');
         expect(steps(wrapper)).toEqual(['1. Tu pedido [done]', '2. Entrega * [current]', '3. Revisar y enviar [next]']);
     });
 
@@ -798,7 +805,7 @@ describe('OrderCart: el pedido en tres pasos (#142, M10)', () => {
         expect(isHidden(wrapper, '[data-footer-totals]')).toBe(false);
         expect(isHidden(wrapper, '[data-footer-breakdown]')).toBe(true);
         expect(wrapper.get('[data-footer-total-line]').text()).toContain('Total estimado');
-        expect(wrapper.findAll('[data-footer-nav] button').map((button) => button.text())).toEqual(['Atrás', 'Continuar']);
+        expect(wrapper.findAll('[data-footer-nav] button:not([data-send])').map((button) => button.text())).toEqual(['Atrás', 'Continuar']);
         // El pie va fuera de lo que se desplaza: nunca queda encima de un campo.
         expect(wrapper.get('footer').element.contains(wrapper.get('[data-address]').element)).toBe(false);
         expect(wrapper.get('[data-stage="1"]').element.parentElement?.classList.contains('overflow-y-auto')).toBe(true);
@@ -856,7 +863,7 @@ describe('OrderCart: el pedido en tres pasos (#142, M10)', () => {
         await next(wrapper);
 
         expect(wrapper.get('h2').text()).toBe('Revisar y enviar');
-        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 3 de 3: Revisar y enviar.');
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 3 de 3.');
         expect(plain(wrapper.get('[data-review-message]').text())).toBe(message());
         expect(message()).toContain('Nombre: Ana');
         expect(message()).toContain('Pago: Nequi');
@@ -935,7 +942,7 @@ describe('OrderCart: el pedido en tres pasos (#142, M10)', () => {
         expect(visibleStage(wrapper)).toEqual(['1']);
         expect(wrapper.findAll('[data-error]')).toHaveLength(0);
         expect(wrapper.get('[data-alert]').text()).toBe('');
-        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 2 de 3: Entrega.');
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 2 de 3.');
     });
 
     it('con la entrega completa, un doble «Continuar» no salta al último paso', async () => {
@@ -948,7 +955,7 @@ describe('OrderCart: el pedido en tres pasos (#142, M10)', () => {
         await flushPromises();
 
         expect(visibleStage(wrapper)).toEqual(['2']);
-        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 3 de 3: Revisar y enviar.');
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 3 de 3.');
     });
 
     it('un segundo «Atrás» mientras cambia el paso se descarta: no cae dos pasos', async () => {
@@ -960,7 +967,7 @@ describe('OrderCart: el pedido en tres pasos (#142, M10)', () => {
         await flushPromises();
 
         expect(visibleStage(wrapper)).toEqual(['1']);
-        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 2 de 3: Entrega.');
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 2 de 3.');
     });
 
     it('si el pedido se vacía en el último paso, vuelve a «Tu pedido» y al agregar de nuevo se empieza por el primero', async () => {
@@ -1058,12 +1065,45 @@ describe('OrderCart: el pedido en tres pasos (#142, M10)', () => {
         expect(document.activeElement).toBe(wrapper.get('[data-cash]').element);
     });
 
+    it('«Entrega» tiene un solo encabezado: la sección se nombra con el título del paso', async () => {
+        const { wrapper } = await mountCart();
+
+        await next(wrapper);
+
+        expect(wrapper.findAll('h3')).toHaveLength(1);
+        expect(wrapper.get('h3').text()).toBe('Así va tu mensaje');
+        expect(wrapper.get('[data-order-form]').attributes('aria-labelledby')).toBe(wrapper.get('h2').attributes('id'));
+    });
+
+    it('el anuncio del paso no repite el nombre que ya dice el foco', async () => {
+        const { wrapper } = await mountCart();
+
+        await next(wrapper);
+
+        expect(document.activeElement).toBe(wrapper.get('h2').element);
+        expect(wrapper.get('h2').text()).toBe('Entrega');
+        expect(wrapper.get('[data-announcement]').text()).toBe('Paso 2 de 3.');
+    });
+
+    it('cambia de paso aunque el navegador no tenga scrollTo en los elementos', async () => {
+        const { wrapper } = await mountCart();
+        const scroller = wrapper.get('.overflow-y-auto').element as HTMLElement & { scrollTo?: unknown };
+        Object.defineProperty(scroller, 'scrollTo', { value: undefined, configurable: true });
+        scroller.scrollTop = 120;
+
+        await next(wrapper);
+
+        expect(visibleStage(wrapper)).toEqual(['1']);
+        expect(scroller.scrollTop).toBe(0);
+        expect(document.activeElement).toBe(wrapper.get('h2').element);
+    });
+
     it('en inglés', async () => {
         const { wrapper } = await mountCart(RESTAURANT, [JUICE], 'en');
 
-        expect(steps(wrapper)).toEqual(['1. Your order * [current]', '2. Delivery [next]', '3. Review and send [next]']);
+        expect(steps(wrapper)).toEqual(['1. Your order * [current]', '2. Details [next]', '3. Review and send [next]']);
         await next(wrapper);
-        expect(wrapper.get('[data-announcement]').text()).toBe('Step 2 of 3: Delivery.');
-        expect(wrapper.findAll('[data-footer-nav] button').map((button) => button.text())).toEqual(['Back', 'Continue']);
+        expect(wrapper.get('[data-announcement]').text()).toBe('Step 2 of 3.');
+        expect(wrapper.findAll('[data-footer-nav] button:not([data-send])').map((button) => button.text())).toEqual(['Back', 'Continue']);
     });
 });
