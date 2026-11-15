@@ -1,5 +1,6 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 
 import type { OrderItem } from '@/order/selection';
 import type { MenuDish } from '@/restaurants/profile';
@@ -394,7 +395,7 @@ describe('DishPicker: la foto grande del plato (#126)', () => {
         expect(zoom.attributes('aria-label')).toBe('Ver la foto de Sancocho de prueba en grande');
         expect(img.attributes()).toMatchObject({
             srcset: PHOTO.srcset,
-            sizes: '(min-width: 32rem) 30rem, calc(100vw - 2rem)',
+            sizes: '(min-width: 32rem) 32rem, 100vw',
             alt: 'Sancocho de prueba',
             width: '480',
             height: '480',
@@ -510,5 +511,131 @@ describe('DishPicker: la foto grande del plato (#126)', () => {
 
         await icon.trigger('click');
         expect(wrapper.find('[data-photo-viewer]').exists()).toBe(false);
+    });
+});
+
+describe('DishPicker: la hoja del celular (#141, M9)', () => {
+    /** Un evento de puntero con su hora (happy-dom no deja pasarla al crearlo). */
+    async function pointer(target: { element: Element }, type: string, clientY: number, time: number): Promise<void> {
+        const event = new PointerEvent(type, { pointerId: 1, isPrimary: true, button: 0, clientY, bubbles: true });
+        Object.defineProperty(event, 'timeStamp', { value: time });
+        target.element.dispatchEvent(event);
+        await nextTick();
+    }
+
+    /** Desliza la manija de `from` a `to`; despacio, quieta medio segundo antes de soltar. */
+    async function slide(wrapper: Awaited<ReturnType<typeof mountPicker>>['wrapper'], from: number, to: number, { slow = false } = {}): Promise<void> {
+        const grab = wrapper.get('[data-grab]');
+
+        await pointer(grab, 'pointerdown', from, 0);
+        await pointer(grab, 'pointermove', (from + to) / 2, Math.abs(to - from) / 2);
+        await pointer(grab, 'pointermove', to, Math.abs(to - from));
+        await pointer(grab, 'pointerup', to, Math.abs(to - from) + (slow ? 500 : 5));
+    }
+
+    beforeEach(() => {
+        // La captura del puntero, sin efecto: aquí no hay un dedo que se salga de la manija.
+        Object.assign(Element.prototype, { setPointerCapture: () => undefined });
+    });
+
+    it('la manija es decorativa para el lector y no es un control: el teclado cierra con «Cerrar» o Escape', async () => {
+        const { wrapper } = await mountPicker();
+        const grab = wrapper.get('[data-grab]');
+
+        expect(grab.attributes('aria-hidden')).toBe('true');
+        expect(grab.element.tagName).toBe('DIV');
+        expect(wrapper.get('[data-close]').attributes('aria-label')).toBe('Cerrar');
+        // El «Cerrar» va antes que lo demás en el documento.
+        expect(wrapper.get('form').element.querySelector('[data-close]')?.compareDocumentPosition(wrapper.get('[data-add]').element)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+
+    it('mientras se desliza, la hoja sigue al dedo hacia abajo y no sube', async () => {
+        const { wrapper } = await mountPicker();
+        const dialog = wrapper.get('dialog');
+        const grab = wrapper.get('[data-grab]');
+
+        await pointer(grab, 'pointerdown', 100, 0);
+        await pointer(grab, 'pointermove', 160, 20);
+
+        expect(dialog.attributes('style')).toContain('translate: 0 60px');
+        expect(dialog.attributes('data-dragging')).toBeDefined();
+
+        await pointer(grab, 'pointermove', 40, 40);
+
+        expect(dialog.attributes('style')).toContain('translate: 0 0px');
+    });
+
+    it('deslizada lejos, se cierra', async () => {
+        const { wrapper } = await mountPicker();
+
+        await slide(wrapper, 100, 300, { slow: true });
+
+        expect(wrapper.emitted('close')).toHaveLength(1);
+        expect(wrapper.get('dialog').attributes('style')).toBeUndefined();
+    });
+
+    it('deslizada corta y despacio, vuelve a su lugar y no cierra', async () => {
+        const { wrapper } = await mountPicker();
+
+        await slide(wrapper, 100, 150, { slow: true });
+
+        expect(wrapper.emitted('close')).toBeUndefined();
+        expect(wrapper.get('dialog').attributes('style')).toBeUndefined();
+        expect(wrapper.get('dialog').attributes('data-dragging')).toBeUndefined();
+    });
+
+    it('un golpe rápido hacia abajo cierra aunque sea corto', async () => {
+        const { wrapper } = await mountPicker();
+
+        // 60 px en 5 ms.
+        await slide(wrapper, 100, 160);
+
+        expect(wrapper.emitted('close')).toHaveLength(1);
+    });
+
+    it('un toque quieto o un gesto cancelado no cierran', async () => {
+        const { wrapper } = await mountPicker();
+        const grab = wrapper.get('[data-grab]');
+
+        await pointer(grab, 'pointerdown', 100, 0);
+        await pointer(grab, 'pointerup', 100, 5);
+        await pointer(grab, 'pointerdown', 100, 10);
+        await pointer(grab, 'pointermove', 400, 15);
+        await pointer(grab, 'pointercancel', 400, 20);
+
+        expect(wrapper.emitted('close')).toBeUndefined();
+        expect(wrapper.get('dialog').attributes('style')).toBeUndefined();
+    });
+
+    it('un botón que no es el primario no empieza el deslizamiento', async () => {
+        const { wrapper } = await mountPicker();
+        const grab = wrapper.get('[data-grab]');
+        const event = new PointerEvent('pointerdown', { pointerId: 1, isPrimary: true, button: 2, clientY: 100, bubbles: true });
+
+        grab.element.dispatchEvent(event);
+        await nextTick();
+
+        expect(wrapper.get('dialog').attributes('data-dragging')).toBeUndefined();
+    });
+
+    it('con foto, va de borde a borde arriba y el contenido —nombre, precio— después; sin foto, el ícono con aire para «Cerrar»', async () => {
+        const photo = { src: '/storage/media/dishes/0123456789abcdef0123-480.webp', srcset: '/storage/media/dishes/0123456789abcdef0123-480.webp 480w' };
+        const withPhoto = await mountPicker({ ...SANCOCHO, photo });
+        const scroll = withPhoto.wrapper.get('form > div.overflow-y-auto');
+
+        expect(scroll.element.firstElementChild?.matches('[data-zoom]')).toBe(true);
+        expect(scroll.classes()).not.toContain('pt-12');
+        withPhoto.wrapper.unmount();
+
+        const without = await mountPicker();
+
+        expect(without.wrapper.get('form > div.overflow-y-auto').classes()).toContain('pt-12');
+    });
+
+    it('«Agregar · $X» queda fuera de lo que se desplaza, fijo abajo', async () => {
+        const { wrapper } = await mountPicker();
+
+        expect(wrapper.get('form > div.overflow-y-auto').find('[data-add]').exists()).toBe(false);
+        expect(wrapper.get('form > footer').find('[data-add]').exists()).toBe(true);
     });
 });

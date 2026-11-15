@@ -48,7 +48,7 @@ describe('DishPhoto', () => {
         const img = mount(DishPhoto, { props: { image: PHOTO, name: 'Sancocho de prueba', alt: 'Sancocho de prueba', size: 'large' } }).get('img');
 
         expect(img.attributes('alt')).toBe('Sancocho de prueba');
-        expect(img.attributes('sizes')).toBe('(min-width: 32rem) 30rem, calc(100vw - 2rem)');
+        expect(img.attributes('sizes')).toBe('(min-width: 32rem) 32rem, 100vw');
         expect([img.attributes('width'), img.attributes('height')]).toEqual(['480', '480']);
     });
 
