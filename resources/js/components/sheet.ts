@@ -38,6 +38,66 @@ export const SNAP_HEIGHTS: Readonly<Record<SheetSnap, string>> = {
 /** Menos que esto (px) entre apoyar y soltar es un toque, no un arrastre. */
 export const DRAG_SLOP = 6;
 
+/**
+ * Un arrastre vertical en curso, con Pointer Events: lo comparten el panel
+ * del mapa (BottomSheet) y la hoja del plato (DishPicker, ADR 0042). Cada uno
+ * decide qué hace con lo que se movió; aquí va lo común: qué puntero es, la
+ * captura, cuánto bajó y a qué velocidad.
+ */
+export interface SheetDrag {
+    pointer: number;
+    startY: number;
+    lastY: number;
+    lastTime: number;
+    /** px/ms del último tramo; positiva hacia abajo. */
+    velocity: number;
+    /** Ya pasó del margen de un toque. */
+    moved: boolean;
+}
+
+/** Empieza un arrastre con el puntero primario (el dedo, o el botón principal del mouse) y lo captura; con otro, null. */
+export function beginDrag(event: PointerEvent): SheetDrag | null {
+    if (!event.isPrimary || event.button !== 0) {
+        return null;
+    }
+
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+
+    return { pointer: event.pointerId, startY: event.clientY, lastY: event.clientY, lastTime: event.timeStamp, velocity: 0, moved: false };
+}
+
+/**
+ * Sigue el arrastre: devuelve cuánto bajó desde donde empezó (px; negativo si
+ * subió), o null si el evento es de otro puntero o todavía no pasó de `slop`
+ * (un toque que tiembla no es un arrastre).
+ */
+export function trackDrag(drag: SheetDrag | null, event: PointerEvent, slop = 0): number | null {
+    if (drag === null || event.pointerId !== drag.pointer) {
+        return null;
+    }
+
+    if (!drag.moved && Math.abs(event.clientY - drag.startY) < slop) {
+        return null;
+    }
+
+    const elapsed = event.timeStamp - drag.lastTime;
+
+    if (elapsed > 0) {
+        drag.velocity = (event.clientY - drag.lastY) / elapsed;
+    }
+
+    drag.moved = true;
+    drag.lastY = event.clientY;
+    drag.lastTime = event.timeStamp;
+
+    return event.clientY - drag.startY;
+}
+
+/** La velocidad con la que se suelta (px/ms, positiva hacia abajo): 0 si estuvo quieto un rato antes, que ya no es un gesto rápido. */
+export function releaseSpeed(drag: SheetDrag, event: PointerEvent): number {
+    return event.timeStamp - drag.lastTime > 100 ? 0 : drag.velocity;
+}
+
 /** Más rápido que esto (px/ms), soltar lleva a la altura siguiente en esa dirección, aunque no se haya llegado a la mitad. */
 const FLICK_SPEED = 0.5;
 

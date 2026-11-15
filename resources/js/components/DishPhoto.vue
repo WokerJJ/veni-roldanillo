@@ -9,7 +9,7 @@ import type { ProfileImage } from '@/restaurants/profile';
  * La foto cuadrada de un plato (#113, ADR 0034), igual para todos los
  * platos en cada lugar: `thumb`, la miniatura del menú (64 px en el celular
  * y 96 px desde 1024 px, #126), y `large`, la grande del selector, a lo
- * ancho de la hoja.
+ * ancho de la hoja (4:3, #141).
  *
  * Sin foto sale el mismo cuadro con un ícono, así el menú no se mueve según
  * quién subió foto y quién no. El ícono sale del nombre del plato en español
@@ -39,8 +39,8 @@ const placeholder = computed(() => dishIcon(name));
 const SIZES = {
     // 96 px desde 1024 px (la ficha en dos columnas, ADR 0038), 64 px antes.
     thumb: '(min-width: 1024px) 96px, 64px',
-    // El selector mide 32 rem como mucho y deja 1 rem de margen a cada lado.
-    large: '(min-width: 32rem) 30rem, calc(100vw - 2rem)',
+    // La hoja del selector mide 32 rem como mucho y la foto va de borde a borde (#141, M9).
+    large: '(min-width: 32rem) 32rem, 100vw',
 } as const;
 </script>
 
@@ -75,10 +75,11 @@ const SIZES = {
     border-radius: var(--veni-radius-sm);
 }
 
+/* La del detalle del plato (#141, M9): de borde a borde de la hoja, 4:3, sin pasar del 40 % del alto para no tapar las opciones. */
 .dish-photo-large {
     width: 100%;
-    aspect-ratio: 1;
-    border-radius: var(--veni-radius-md);
+    aspect-ratio: 4 / 3;
+    max-height: 40dvh;
 }
 
 /* En computador la carta tiene lugar: la miniatura crece y el ícono con ella (#126). */
