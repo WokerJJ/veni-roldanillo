@@ -45,3 +45,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0039](0039-rango-de-precios-de-la-carta.md) | El rango de precios de la carta en lugar del nivel 1–4: calculado en la consulta, sin bebidas ni postres, y el filtro «platos hasta $X» | Aceptada |
 | [0040](0040-base-visual-y-movimiento-del-celular.md) | La base visual y el movimiento del celular: radios de la marca, un resorte solo sin «Reducir movimiento» y la lista a la altura completa | Aceptada |
 | [0041](0041-navegacion-del-celular.md) | La navegación del celular: barra de pestañas de vidrio, el mapa sin cabecera, el panel sólido y el resumen en una fila | Aceptada |
+| [0044](0044-controles-del-mapa-de-vidrio-y-marcadores-con-icono.md) | Los controles del mapa de vidrio y los marcadores con el ícono de su comida | Aceptada |
