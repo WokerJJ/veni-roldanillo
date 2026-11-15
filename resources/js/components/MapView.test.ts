@@ -1,7 +1,7 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Component } from 'vue';
-import { defineComponent, h } from 'vue';
+import { defineComponent, h, ref } from 'vue';
 
 import type { MapHandle } from '@/map/engine';
 import type { MapGeoJson, MapLayerGroup } from '@/map/layers';
@@ -116,6 +116,7 @@ async function mountMap({
     attachTo,
     inside,
     overlay,
+    holding: startsHolding = false,
 }: {
     theme?: 'light' | 'dark';
     locale?: 'es' | 'en';
@@ -125,6 +126,8 @@ async function mountMap({
     inside?: () => Component[];
     /** Lo que la página pone encima del mapa (su panel). */
     overlay?: HTMLElement;
+    /** La página todavía espera lo que pinta encima (los restaurantes). */
+    holding?: boolean;
 } = {}) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     const maplibre = (await import('maplibre-gl')) as unknown as typeof FakeMapLibre;
@@ -139,9 +142,13 @@ async function mountMap({
 
     const { default: MapView } = await import('./MapView.vue');
     const { default: ThemeToggle } = await import('./ThemeToggle.vue');
+    const holding = ref(startsHolding);
     const wrapper = mount(
         defineComponent({
-            render: () => [h(ThemeToggle), h(MapView, overlay ? { overlay } : null, { default: () => (inside?.() ?? []).map((layer) => h(layer)) })],
+            render: () => [
+                h(ThemeToggle),
+                h(MapView, { ...(overlay ? { overlay } : {}), holding: holding.value }, { default: () => (inside?.() ?? []).map((layer) => h(layer)) }),
+            ],
         }),
         attachTo ? { attachTo } : {},
     );
@@ -166,6 +173,8 @@ async function mountMap({
         inertia,
         maplibre,
         map,
+        /** Lo que espera la página: `false` cuando llegó lo que se pinta encima. */
+        holding,
         /** El mapa ya pintado: MapLibre avisó «load». */
         loadedMap: async (index = 0) => {
             const created = await map(index);
@@ -234,6 +243,53 @@ describe('MapView', () => {
             expect(skeleton().classes()).toContain('motion-safe:animate-pulse');
             expect(alert().exists()).toBe(false);
             expect(maplibre.maps).toHaveLength(0);
+        });
+
+        it('con el mapa listo pero la página esperando lo de encima, el esqueleto sigue, sobre los botones, hasta que llegue', async () => {
+            const { loadedMap, region, skeleton, holding } = await mountMap({ holding: true });
+            await loadedMap();
+
+            expect(skeleton().exists()).toBe(true);
+            expect(skeleton().text()).toBe('Cargando el mapa…');
+            expect(skeleton().attributes('data-map-skeleton')).toBeDefined();
+            // Debajo del panel (z-10) y encima de los botones del mapa.
+            expect(skeleton().attributes('style')).toContain('z-index: 5');
+            expect(region().attributes('aria-busy')).toBe('true');
+
+            holding.value = false;
+            await flushPromises();
+
+            expect(skeleton().exists()).toBe(false);
+            expect(region().attributes('aria-busy')).toBe('false');
+        });
+
+        it('sin esperar nada, el esqueleto se va con el mapa, como siempre', async () => {
+            const { loadedMap, skeleton, region } = await mountMap();
+            await loadedMap();
+
+            expect(skeleton().exists()).toBe(false);
+            expect(region().attributes('aria-busy')).toBe('false');
+        });
+
+        it('mientras el mapa carga, el esqueleto no lleva z-index propio: la espera de la página no cambia lo de antes', async () => {
+            styles.hold();
+            const { skeleton } = await mountMap({ holding: true });
+
+            await vi.waitFor(() => {
+                expect(styles.pending).toHaveLength(1);
+            });
+
+            expect(skeleton().attributes('style')).toBeUndefined();
+        });
+
+        it('si el mapa falla, su aviso sale aunque la página siga esperando', async () => {
+            const { alert, skeleton } = await mountMap({ holding: true, mapError: new Error('sin WebGL') });
+
+            await vi.waitFor(() => {
+                expect(alert().exists()).toBe(true);
+            });
+
+            expect(skeleton().exists()).toBe(false);
         });
 
         it('crea el mapa con el estilo del tema y el idioma, y la cámara y los límites del estilo', async () => {

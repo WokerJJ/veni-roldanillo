@@ -33,6 +33,13 @@ const props = defineProps<{
      * «¿Dónde estoy?», la cámara deja la ubicación a la vista, fuera de él.
      */
     overlay?: HTMLElement | null;
+    /**
+     * La página todavía espera lo que pinta encima (los restaurantes): el
+     * esqueleto de «Cargando el mapa…» sigue hasta que llegue, y el mapa sale
+     * con todo puesto en lugar de pelado y con los marcadores después.
+     * Un error del mapa no espera: su aviso sale igual.
+     */
+    holding?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -219,7 +226,7 @@ defineExpose({
         tabindex="-1"
         class="relative size-full overflow-hidden bg-surface focus:outline-none"
         :aria-label="t('map.label')"
-        :aria-busy="status === 'loading'"
+        :aria-busy="status === 'loading' || (holding && status === 'ready')"
     >
         <!--
             Oculto hasta que empieza a pintar: ni el lienzo ni los botones
@@ -237,10 +244,16 @@ defineExpose({
         -->
         <div ref="container" class="absolute inset-0 size-full" :style="{ visibility: status === 'ready' ? undefined : 'hidden' }" />
 
+        <!--
+            Con el mapa ya listo pero esperando lo de encima (`holding`) el
+            esqueleto sube sobre sus botones (z 5: debajo del panel, que es z-10).
+        -->
         <div
-            v-if="status === 'loading'"
+            v-if="status === 'loading' || (holding && status === 'ready')"
             role="status"
             class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface text-ink-muted motion-safe:animate-pulse"
+            :style="status === 'ready' ? { zIndex: 5 } : undefined"
+            data-map-skeleton
         >
             <Icon name="mapa" :size="40" />
             <p class="text-sm">{{ t('map.loading') }}</p>

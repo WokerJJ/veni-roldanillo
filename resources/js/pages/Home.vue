@@ -231,6 +231,13 @@ const directionsOpen = computed(() => selected.value !== null && directionsFor.v
 /** Sin mapa no hay ubicación ni dónde dibujar: el panel solo ofrece las otras apps. */
 const shownRouteState = computed<RouteState>(() => (mapFailed.value ? { status: 'unavailable' } : routeState.value));
 const hasRestaurants = computed(() => status.value === 'ready' && restaurants.value.length > 0);
+/**
+ * En el celular, el panel asomado tiene siempre la forma de la bienvenida con
+ * restaurantes (el buscador y una fila de botones), también mientras llegan:
+ * con el título, la presentación y «Cargando…» de antes, que son más altos que
+ * el panel, el contenido se veía cortado y cambiaba de golpe al llegar.
+ */
+const quietPanel = computed(() => hasRestaurants.value || status.value === 'loading');
 const hasSampleData = computed(() => restaurants.value.some(({ fictitious }) => fictitious));
 
 /**
@@ -621,7 +628,7 @@ onBeforeUnmount(() => {
             :class="classes.sheet"
         >
             <!-- El título de la página sigue en el documento aunque el panel muestre otra cosa. -->
-            <h1 :class="[!desktop && panelParts && (selected || listOpen) ? 'sr-only' : 'text-lg md:text-2xl', { 'sheet:sr-only': hasRestaurants }]">{{ t('home.heading') }}</h1>
+            <h1 :class="[!desktop && panelParts && (selected || listOpen) ? 'sr-only' : 'text-lg md:text-2xl', { 'sheet:sr-only': quietPanel }]">{{ t('home.heading') }}</h1>
 
             <RestaurantSummary
                 v-if="selected && panelParts && !desktop"
@@ -674,9 +681,9 @@ onBeforeUnmount(() => {
                     botones (#139). El título, la presentación y cuántos hay
                     quedan para el lector de pantalla.
                 -->
-                <p class="mt-1 text-sm text-ink-muted" :class="{ 'sheet:hidden': hasRestaurants }">{{ t('home.intro') }}</p>
+                <p class="mt-1 text-sm text-ink-muted" :class="{ 'sheet:hidden': quietPanel }">{{ t('home.intro') }}</p>
 
-                <div class="text-sm" :class="[desktop && hasRestaurants ? 'contents' : 'mt-3 border-t border-line pt-3', { 'sheet:mt-0 sheet:border-0 sheet:pt-0': hasRestaurants }]">
+                <div class="text-sm" :class="[desktop && hasRestaurants ? 'contents' : 'mt-3 border-t border-line pt-3', { 'sheet:mt-0 sheet:border-0 sheet:pt-0': quietPanel }]">
                     <!-- Siempre en la página: el lector de pantalla anuncia cuando cambia. -->
                     <p
                         ref="statusRegion"
@@ -685,7 +692,7 @@ onBeforeUnmount(() => {
                         class="focus:outline-none"
                         :class="{
                             'sr-only': status === 'error' || (desktop && hasRestaurants),
-                            'sheet:sr-only': hasRestaurants,
+                            'sheet:sr-only': quietPanel,
                             'motion-safe:animate-pulse': status === 'loading',
                         }"
                         :aria-busy="status === 'loading'"
@@ -729,6 +736,17 @@ onBeforeUnmount(() => {
                         <SampleDataBadge v-if="hasSampleData" />
                         <!-- La guía de platos típicos, a la vista (#143): una tarjeta con fotos que lleva a /dishes. -->
                         <GuideTeaser class="w-full" />
+                    </div>
+
+                    <!--
+                        Mientras llegan los restaurantes: el buscador y un botón
+                        como siluetas, del alto de los de verdad (decorativas: el
+                        estado, «Cargando…», lo dice la región de arriba al
+                        lector). Así el panel no cambia de forma al llegar.
+                    -->
+                    <div v-else-if="status === 'loading' && !desktop" class="mt-2 flex flex-wrap items-center gap-2" aria-hidden="true" data-welcome-skeleton>
+                        <span class="block min-h-touch w-full rounded-full bg-surface motion-safe:animate-pulse" />
+                        <span class="block min-h-touch rounded-full bg-surface motion-safe:animate-pulse" style="width: 10.5rem" />
                     </div>
 
                     <div v-if="panelPartsFailed" role="alert" class="mt-3 flex flex-wrap items-center justify-end gap-x-3 gap-y-2" data-panel-offline>
@@ -792,7 +810,7 @@ onBeforeUnmount(() => {
             con menos del que necesita. Con mapa, el panel va encima: al
             ubicarse, la cámara deja la ubicación fuera de él.
         -->
-        <MapView ref="mapView" :overlay="layout === 'floating' ? panel : null" :class="classes.map" @status="mapFailed = $event === 'error'">
+        <MapView ref="mapView" :overlay="layout === 'floating' ? panel : null" :holding="status === 'loading'" :class="classes.map" @status="mapFailed = $event === 'error'">
             <RestaurantsOnMap :restaurants="restaurants" :filters="filters" :selected="selectedSlug" @select="selectFromMap" />
             <!-- Las distancias de la lista: la ubicación queda dentro, solo salen los metros. -->
             <RestaurantDistances v-if="listShown" :restaurants="restaurants" @distances="distances = $event" />
