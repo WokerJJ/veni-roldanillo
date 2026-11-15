@@ -167,8 +167,9 @@
 .veni-locate-notice {
     position: absolute;
     top: 108px;
-    right: 62px;
-    left: 12px;
+    /* Los 62 px de siempre (el botón de ubicación y su margen) más el margen del sistema, si lo hay: el iPhone acostado. */
+    right: calc(62px + env(safe-area-inset-right, 0px));
+    left: calc(12px + env(safe-area-inset-left, 0px));
     z-index: 10;
     display: flex;
     align-items: flex-start;
@@ -180,9 +181,8 @@
     color: var(--ink);
     font-size: 0.875rem;
     line-height: 1.25rem;
-    box-shadow:
-        0 10px 15px -3px rgb(0 0 0 / 10%),
-        0 4px 6px -4px rgb(0 0 0 / 10%);
+    /* Como los controles del mapa: un borde fino, sin sombra pesada (la única que había). */
+    box-shadow: 0 0 0 1px var(--line);
 }
 
 @media (min-width: 480px) {
