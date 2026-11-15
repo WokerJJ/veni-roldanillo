@@ -46,3 +46,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0040](0040-base-visual-y-movimiento-del-celular.md) | La base visual y el movimiento del celular: radios de la marca, un resorte solo sin «Reducir movimiento» y la lista a la altura completa | Aceptada |
 | [0041](0041-navegacion-del-celular.md) | La navegación del celular: barra de pestañas de vidrio, el mapa sin cabecera, el panel sólido y el resumen en una fila | Aceptada |
 | [0042](0042-ficha-del-celular-portada-pestanas-y-hoja-del-plato.md) | La ficha del celular: portada, pestañas fijas de la carta, el «+» y el detalle del plato como hoja | Aceptada |
+| [0044](0044-controles-del-mapa-de-vidrio-y-marcadores-con-icono.md) | Los controles del mapa de vidrio y los marcadores con el ícono de su comida | Aceptada |
