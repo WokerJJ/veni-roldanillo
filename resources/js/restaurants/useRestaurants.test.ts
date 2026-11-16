@@ -35,12 +35,23 @@ async function setUp(locale: 'es' | 'en' = 'es') {
 
 /** Deja pasar el fallo del pedido y la bajada del módulo de la copia guardada (#144). */
 async function settle(): Promise<void> {
-    await flushPromises();
-    await vi.dynamicImportSettled();
+    // El import() del módulo termina en otra vuelta del reloj, no en una microtarea: se le dan varias.
+    for (let round = 0; round < 5; round += 1) {
+        await flushPromises();
+        await vi.dynamicImportSettled();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
     await flushPromises();
 }
 
 enableAutoUnmount(afterEach);
+
+// Una lista que llegó se guarda con un import() que puede terminar después de la prueba: se espera, para que no caiga en la siguiente.
+afterEach(async () => {
+    await settle();
+    window.localStorage.clear();
+});
 
 beforeEach(() => {
     vi.resetModules();
