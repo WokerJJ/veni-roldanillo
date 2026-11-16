@@ -11,17 +11,14 @@
 | librería de verdad.
 */
 
-interface Client {
-    withSerializer: () => Client;
-    withXsrfCookieName: () => Client;
-    withXsrfHeaderName: () => Client;
-}
+/** Cualquier método: devuelve el mismo cliente, como el encadenado de la librería. */
+type Client = Record<string, (...args: unknown[]) => Client>;
 
-export const client: Client = {
-    withSerializer: () => client,
-    withXsrfCookieName: () => client,
-    withXsrfHeaderName: () => client,
-};
+// Un Proxy y no tres métodos: si una versión nueva de Inertia encadena otro
+// (`withCredentials`, …), el arranque no puede romperse por eso.
+export const client: Client = new Proxy({}, {
+    get: (_target, property) => (typeof property === 'symbol' || property === 'then' ? undefined : () => client),
+});
 
 export function createValidator(): never {
     throw new Error('laravel-precognition no viaja en Vení (resources/js/build/noPrecognition.ts): quitá el alias de vite.config.ts para usarla.');
