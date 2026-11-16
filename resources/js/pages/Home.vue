@@ -53,6 +53,7 @@ const RestaurantDistances: FunctionalComponent = (_props, { attrs }) => (panelPa
 const WelcomeActions: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.welcome, attrs) : null);
 const LegalLinks: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.links.LegalLinks, attrs) : null);
 const GuideTeaser: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.links.GuideTeaser, attrs) : null);
+const StaleNotice: FunctionalComponent = (_props, { attrs }) => (panelParts.value ? h(panelParts.value.links.Old, attrs as { since: number }) : null);
 /** «Ajustes» (#139): el idioma y el tema, que el layout comparte (navigation/tabs.ts). */
 const settingsControls = inject(SETTINGS, []);
 const SettingsMenu: FunctionalComponent = (_props, { attrs }) =>
@@ -165,7 +166,7 @@ function loadRouteParts(): void {
 defineOptions({ layout: { immersive: true } });
 
 const { t } = useI18n();
-const { status, restaurants, retry } = useRestaurants();
+const { status, restaurants, staleSince, retry } = useRestaurants();
 /**
  * En computador (desde 1024 px, ADR 0037) el panel no flota: es una barra
  * lateral fija con el título, la lista con su buscador siempre a la vista y
@@ -810,6 +811,9 @@ onBeforeUnmount(() => {
             con menos del que necesita. Con mapa, el panel va encima: al
             ubicarse, la cámara deja la ubicación fuera de él.
         -->
+        <!-- La lista es la última que llegó a este teléfono (#144): «Sin señal: datos de hace …». -->
+        <StaleNotice v-if="staleSince" :since="staleSince" @retry="retry" />
+
         <MapView ref="mapView" :overlay="layout === 'floating' ? panel : null" :holding="status === 'loading'" :class="classes.map" @status="mapFailed = $event === 'error'">
             <RestaurantsOnMap :restaurants="restaurants" :filters="filters" :selected="selectedSlug" @select="selectFromMap" />
             <!-- Las distancias de la lista: la ubicación queda dentro, solo salen los metros. -->

@@ -34,6 +34,13 @@
                     <h1>{{ __('offline.title', [], $locale->value) }}</h1>
                     <p>{{ __('offline.message', [], $locale->value) }}</p>
                     <button type="button" data-retry>{{ __('offline.retry', [], $locale->value) }}</button>
+
+                    {{-- Lo llena offline.ts con la última lista guardada en el teléfono (#144, ADR 0046), si hay una. --}}
+                    <div class="saved" data-saved hidden>
+                        <h2>{{ __('offline.saved_title', [], $locale->value) }}</h2>
+                        <p data-saved-ago data-template="{{ __('offline.saved_ago', [], $locale->value) }}"></p>
+                        <ul data-saved-list></ul>
+                    </div>
                 </section>
             @endforeach
         </main>

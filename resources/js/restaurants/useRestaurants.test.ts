@@ -1,6 +1,7 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Component } from 'vue';
+import { watch } from 'vue';
 
 import type * as FakeInertia from '@/testing/inertia';
 import { EL_GUADUAL, LA_CEIBA, restaurant, stubRestaurantsFetch } from '@/testing/restaurants';
@@ -32,10 +33,19 @@ async function setUp(locale: 'es' | 'en' = 'es') {
     return { inertia, wrapper, ...used.state };
 }
 
+/** Deja pasar el fallo del pedido y la bajada del módulo de la copia guardada (#144). */
+async function settle(): Promise<void> {
+    await flushPromises();
+    await vi.dynamicImportSettled();
+    await flushPromises();
+}
+
 enableAutoUnmount(afterEach);
 
 beforeEach(() => {
     vi.resetModules();
+    // La copia guardada (#144) es del teléfono: ninguna prueba hereda la de otra.
+    window.localStorage.clear();
 });
 
 describe('los restaurantes del inicio', () => {
@@ -74,7 +84,7 @@ describe('los restaurantes del inicio', () => {
         const { status } = await setUp();
 
         network.last()?.fail();
-        await flushPromises();
+        await settle();
 
         expect(status.value).toBe('error');
         expect(error).toHaveBeenCalledOnce();
@@ -97,6 +107,137 @@ describe('los restaurantes del inicio', () => {
 
         expect(status.value).toBe('ready');
         expect(restaurants.value).toEqual([LA_CEIBA]);
+    });
+
+    describe('sin señal (#144)', () => {
+        const NOW = new Date('2026-10-07T12:00:00-05:00').getTime();
+
+        beforeEach(() => {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        });
+
+        it('cada lista que llega se guarda en el teléfono', async () => {
+            const network = stubRestaurantsFetch();
+            await setUp();
+            network.last()?.respond([LA_CEIBA]);
+            await settle();
+
+            const { loadSaved } = await import('./savedList');
+
+            expect(loadSaved()?.restaurants).toEqual([LA_CEIBA]);
+        });
+
+        it('sin lista a la vista, muestra la guardada con su hora, y no es un error', async () => {
+            const { saveList } = await import('./savedList');
+            saveList('es', [LA_CEIBA, EL_GUADUAL], NOW - 3_600_000);
+            vi.useFakeTimers({ toFake: ['Date'] });
+            vi.setSystemTime(NOW);
+
+            const network = stubRestaurantsFetch();
+            const { status, restaurants, staleSince } = await setUp();
+            network.last()?.fail();
+            await settle();
+            vi.useRealTimers();
+
+            expect(status.value).toBe('ready');
+            expect(restaurants.value).toEqual([LA_CEIBA, EL_GUADUAL]);
+            expect(staleSince.value).toBe(NOW - 3_600_000);
+        });
+
+        it('sin lista a la vista ni guardada, es el error de siempre', async () => {
+            const network = stubRestaurantsFetch();
+            const { status, staleSince } = await setUp();
+            network.last()?.fail();
+            await settle();
+
+            expect(status.value).toBe('error');
+            expect(staleSince.value).toBeNull();
+        });
+
+        it('con la señal de vuelta (reintentar), llega la de verdad y el aviso se va', async () => {
+            const { saveList } = await import('./savedList');
+            saveList('es', [LA_CEIBA], Date.now() - 60_000);
+
+            const network = stubRestaurantsFetch();
+            const { staleSince, restaurants, retry } = await setUp();
+            network.last()?.fail();
+            await settle();
+
+            expect(staleSince.value).not.toBeNull();
+
+            retry();
+            network.last()?.respond([EL_GUADUAL]);
+            await flushPromises();
+
+            expect(staleSince.value).toBeNull();
+            expect(restaurants.value).toEqual([EL_GUADUAL]);
+        });
+
+        it('la copia en otro idioma que la interfaz sirve la lista, pero sin categorías ni almuerzo', async () => {
+            const { saveList } = await import('./savedList');
+            saveList('es', [LA_CEIBA, EL_GUADUAL], Date.now() - 60_000);
+
+            const network = stubRestaurantsFetch();
+            const { status, restaurants } = await setUp('en');
+            network.last()?.fail();
+            await settle();
+
+            expect(status.value).toBe('ready');
+            expect(restaurants.value.map(({ slug }) => slug)).toEqual([LA_CEIBA.slug, EL_GUADUAL.slug]);
+            expect(restaurants.value.every(({ categories, lunch }) => categories.length === 0 && lunch === null)).toBe(true);
+        });
+
+        it('la lista se guarda con el idioma en que se pidió, aunque la interfaz cambie antes de guardarla', async () => {
+            const network = stubRestaurantsFetch();
+            const { inertia, status } = await setUp('es');
+            // La interfaz cambia de idioma justo cuando llega la lista, antes de que baje el módulo que la guarda.
+            watch(status, () => {
+                inertia.receiveFromServer('en', { replace: true });
+            }, { flush: 'sync' });
+            network.last()?.respond([LA_CEIBA]);
+            await settle();
+
+            const { loadSaved } = await import('./savedList');
+
+            expect(loadSaved()?.locale).toBe('es');
+        });
+
+        it('si el módulo de la copia guardada no baja, es el error de siempre y nada queda sin manejar', async () => {
+            vi.doMock('./savedList', () => {
+                throw new Error('chunk roto');
+            });
+            const unhandled = vi.fn();
+            process.on('unhandledRejection', unhandled);
+
+            const network = stubRestaurantsFetch();
+            const { status, staleSince } = await setUp();
+            network.last()?.fail();
+            await settle();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            process.off('unhandledRejection', unhandled);
+            vi.doUnmock('./savedList');
+
+            expect(status.value).toBe('error');
+            expect(staleSince.value).toBeNull();
+            expect(unhandled).not.toHaveBeenCalled();
+        });
+
+        it('una lista de ahora que falla al volver a pedir no se cambia por la guardada', async () => {
+            const { saveList } = await import('./savedList');
+            saveList('es', [EL_GUADUAL], Date.now() - 60_000);
+
+            const network = stubRestaurantsFetch();
+            const { inertia, restaurants, staleSince } = await setUp();
+            network.last()?.respond([LA_CEIBA]);
+            await settle();
+            inertia.receiveFromServer('en', { replace: true });
+            await flushPromises();
+            network.last()?.fail();
+            await settle();
+
+            expect(restaurants.value).toEqual([LA_CEIBA]);
+            expect(staleSince.value).toBeNull();
+        });
     });
 
     describe('al cambiar el idioma', () => {
