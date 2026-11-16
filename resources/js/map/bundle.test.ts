@@ -323,7 +323,7 @@ describe('presupuesto de descarga', () => {
         expect(comments.filter((line) => initialChunks().some((chunk) => chunk.code.includes(line)))).toEqual([]);
     });
 
-    it('el arranque (entrada, página de inicio y sus estilos) no pasa de 83 kB comprimidos', () => {
+    it('el arranque (entrada, página de inicio y sus estilos) no pasa de 83,5 kB comprimidos', () => {
         // Medido al fijarlo en 80: 70 kB (Vue e Inertia son casi todo). Con
         // los restaurantes sobre el mapa (#9) llegó a 79, y con la ficha (#13),
         // a 80,5: de los 1,5 kB que suma, 0,6 son sus estilos, porque el CSS
@@ -502,7 +502,16 @@ describe('presupuesto de descarga', () => {
         // computador (EVA-072), 82,191: la clase pasa del contenedor al tema.
         // Un atributo para las pruebas en ese contenedor sumaba 0,018; la
         // cabecera baja el margen del sistema arriba con el CSS de la barra.
-        expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83);
+        //
+        // Con la última lista guardada sin señal (#144, ADR 0046): 82,19 antes
+        // y 82,994 después (83,006 en CI). Es lo que no se pudo sacar: el
+        // estado `staleSince` y qué hacer cuando el pedido falla (usar la
+        // copia o el error) tienen que estar en el arranque; el módulo de la
+        // copia, el aviso y la página sin conexión bajan aparte. Se probaron
+        // varias formas de recortar y ninguna dejó margen: el margen de un
+        // puñado de bytes hace fallar el CI por diferencias de la compilación.
+        // El tope sube a 83,5.
+        expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83.5);
     });
 
     it('el resumen y la lista (con sus distancias, la búsqueda, los filtros, los almuerzos y los platos) no bajan con el arranque: el inicio los pide con import() apenas monta', () => {
