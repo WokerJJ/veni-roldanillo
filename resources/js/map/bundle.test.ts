@@ -9,6 +9,7 @@ import { gzipSync } from 'node:zlib';
 
 import { build } from 'vite';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { babelParse, parse as parseSfc } from 'vue/compiler-sfc';
 
 /*
 | MapLibre GL y PMTiles pesan más de 1 MB: solo los descarga quien abre una
@@ -54,6 +55,32 @@ const MAP_MODULES = /\/node_modules\/(?:maplibre-gl|pmtiles)\/|\/resources\/js\/
 
 /** Así deja Rolldown el nombre de un archivo mientras todavía no calculó su hash. */
 const UNRESOLVED_HASH = /!~\{[^}]+\}~/;
+
+/**
+ * Las opciones de la API de opciones de Vue escritas como propiedad o método de
+ * un objeto: con `__VUE_OPTIONS_API__: false` (ADR 0047) no hacen nada. Solo
+ * las que no se confunden con una llamada de `setup` (`watch(…)`, `provide(…)`)
+ * ni con un campo llamado `data` (`data: string[]`, `data: x.map(…)`): de las
+ * `data` solo `data()`, `data: () =>`, `data: function` y `data: x =>`. Los
+ * componentes de un `<script>` normal los revisa la prueba de después, sin regex.
+ */
+const OPTIONS_API =
+    /^\s*(?:data\s*(?:\(|:\s*(?:\(|function\b|async\b|\w+\s*=>))|(?:methods|computed|watch|mixins|extends|components|provide|inject|remember)\s*:|(?:async\s+)?(?:beforeCreate|created|beforeMount|mounted|beforeUpdate|updated|beforeUnmount|unmounted|activated|deactivated|errorCaptured)\s*[(:])/m;
+
+/** Las claves del objeto que exporta un `<script>` normal (con o sin `defineComponent`). */
+function exportedOptions(script: string): string[] {
+    const program = babelParse(script, { sourceType: 'module', plugins: ['typescript'] }).program;
+    const exported = program.body.find((node) => node.type === 'ExportDefaultDeclaration');
+    let value = exported?.type === 'ExportDefaultDeclaration' ? exported.declaration : null;
+
+    if (value?.type === 'CallExpression') {
+        value = value.arguments[0] as typeof value;
+    }
+
+    return value?.type === 'ObjectExpression'
+        ? value.properties.map((property) => (property.type === 'SpreadElement' ? '...' : 'key' in property && property.key.type === 'Identifier' ? property.key.name : '?'))
+        : [];
+}
 
 let chunks: Chunk[];
 let assets: Asset[];
@@ -526,8 +553,19 @@ describe('presupuesto de descarga', () => {
             .map((chunk) => chunk.code)
             .join(' ');
 
-        expect(code).not.toContain('withPrecognition');
-        expect(code).not.toContain('validatingChanged');
+        // Si falla: vite.config.ts (dropInertiaForms) ya no quita `router.form = useForm` o algo importó useForm.
+        // Importarlo en la entrada sube el arranque; hay que cargarlo con import() o subir el tope (ADR 0047).
+        expect(code, 'useForm entró a la entrada: ver ADR 0047 y dropInertiaForms()').not.toContain('withPrecognition');
+        expect(code, 'useForm entró a la entrada: ver ADR 0047 y dropInertiaForms()').not.toContain('validatingChanged');
+    });
+
+    it('la entrada compilada no trae la API de opciones de Vue (ADR 0047, __VUE_OPTIONS_API__)', () => {
+        const code = initialChunks()
+            .map((chunk) => chunk.code)
+            .join(' ');
+
+        // `beforeCreate` solo aparece en el código que atiende esa API (applyOptions); la prueba de arriba confirma que los plugins de vite.config.ts corrieron en esta compilación.
+        expect(code, '__VUE_OPTIONS_API__: false ya no aplica: ver ADR 0047 y vite.config.ts').not.toContain('beforeCreate');
     });
 
     it('nadie usa lo que se sacó de la entrada: `router.form`, la validación en vivo ni la API de opciones de Vue (ADR 0047)', () => {
@@ -540,7 +578,31 @@ describe('presupuesto de descarga', () => {
         // `router.form` no existe (vite.config.ts quita la línea que lo pone) y la validación en vivo es un sustituto que falla.
         expect(using(/router\.form\b|\$inertia\.form\b|withPrecognition|laravel-precognition/)).toEqual([]);
         // Sin la API de opciones, `data()`, `methods`, `computed: {`, `watch: {`, los mixins y los ganchos como opción no hacen nada.
-        expect(using(/^\s*(?:data\s*\(\)|methods\s*:|computed\s*:\s*\{|watch\s*:\s*\{|mixins\s*:|(?:created|mounted|beforeUnmount|unmounted|updated|beforeMount)\s*\(\)\s*\{)/m)).toEqual([]);
+        expect(using(OPTIONS_API)).toEqual([]);
+    });
+
+    it('la expresión que busca la API de opciones reconoce sus formas y no confunde las llamadas de setup', () => {
+        for (const option of ['data() {', 'data: () => ({})', 'data: function () {', 'data: async () => ({})', '    provide: { a: 1 },', 'async mounted() {', 'mounted: function () {', '    methods: {', 'computed: {', 'watch: {', 'mixins: [a],', 'extends: Base,', 'components: { A },', 'inject: ["a"],', 'remember: "x",', 'beforeCreate() {', 'async errorCaptured(error) {']) {
+            expect(OPTIONS_API.test(option), option).toBe(true);
+        }
+
+        for (const call of ['    watch(() => props.a, run);', '    provide(KEY, value);', 'const data = ref(1);', '    computed(() => 1);', 'onMounted(() => {});', 'const created = 1;', '    data: Map<string, number>;', '        data: items.map((item) => item),']) {
+            expect(OPTIONS_API.test(call), call).toBe(false);
+        }
+    });
+
+    it('ningún componente exporta opciones fuera de las que Vue atiende sin la API de opciones (ADR 0047)', () => {
+        const components = Object.entries(import.meta.glob<string>('/resources/js/**/*.vue', { query: '?raw', import: 'default', eager: true }));
+        const allowed = ['name', 'props', 'emits', 'setup', 'expose', 'inheritAttrs'];
+        const unsupported = components.flatMap(([file, source]) => {
+            const script = parseSfc(source, { filename: file }).descriptor.script;
+
+            return script ? exportedOptions(script.content).filter((key) => !allowed.includes(key)).map((key) => `${file}: ${key}`) : [];
+        });
+
+        // Los tres que exportan un objeto con setup() (los que usan `defineComponent`) tienen que verse.
+        expect(components.filter(([, source]) => /<script lang="ts">/.test(source))).toHaveLength(3);
+        expect(unsupported).toEqual([]);
     });
 
     it('el resumen y la lista (con sus distancias, la búsqueda, los filtros, los almuerzos y los platos) no bajan con el arranque: el inicio los pide con import() apenas monta', () => {
