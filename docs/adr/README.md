@@ -50,3 +50,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0044](0044-controles-del-mapa-de-vidrio-y-marcadores-con-icono.md) | Los controles del mapa de vidrio y los marcadores con el ícono de su comida | Aceptada |
 | [0045](0045-guia-de-platos-con-fotos-de-licencia-abierta.md) | La guía de platos con fotos de licencia abierta de Wikimedia Commons, tarjetas grandes y a la vista en el inicio | Aceptada |
 | [0046](0046-mapa-y-lista-sin-senal-con-la-ultima-lista-guardada.md) | Mapa y lista sin señal: la última lista de restaurantes que llegó, guardada en el teléfono y a la vista con su hora | Aceptada |
+| [0047](0047-arranque-sin-lo-que-veni-no-usa-de-inertia-y-vue.md) | El arranque sin lo que Vení no usa de Inertia y de Vue | Aceptada |
