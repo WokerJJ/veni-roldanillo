@@ -20,12 +20,12 @@ ARG VITE_MAP_ROUTES_URL="https://wokerjj.github.io/veni-mapa/roldanillo-rutas.js
 # ---------------------------------------------------------------------------
 # composer: solo aporta el binario a las etapas que instalan dependencias
 # ---------------------------------------------------------------------------
-FROM composer:2@sha256:af98f42dfff7c68ba8d53c2164fd9fde1087b7d449514baa38c418b1f6bc4bac AS composer
+FROM composer:2@sha256:ca11f643d7791ebdd90a34fc20caf11380d434007ae539a9ea75cd9212e13dca AS composer
 
 # ---------------------------------------------------------------------------
 # base: FrankenPHP (PHP 8.4) con las extensiones del proyecto y usuario sin root
 # ---------------------------------------------------------------------------
-FROM dunglas/frankenphp:1.12-php8.4-trixie@sha256:035fcb2fab91aacf77d70ee555d51b9bb084d057b16cf8a644bf1f93e28d4e3e AS base
+FROM dunglas/frankenphp:1.13-php8.4-trixie@sha256:8f0d509ad824fa86da88b55c5ea9f1605380f423ab55ec3a72864cc223491bfd AS base
 
 ARG UID=1000
 ARG GID=1000
@@ -100,7 +100,7 @@ RUN rm -rf docker \
 # ---------------------------------------------------------------------------
 # assets: compilación de Vite
 # ---------------------------------------------------------------------------
-FROM node:24-alpine@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS assets
+FROM node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS assets
 
 WORKDIR /app
 
