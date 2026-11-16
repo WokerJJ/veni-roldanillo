@@ -323,7 +323,7 @@ describe('presupuesto de descarga', () => {
         expect(comments.filter((line) => initialChunks().some((chunk) => chunk.code.includes(line)))).toEqual([]);
     });
 
-    it('el arranque (entrada, página de inicio y sus estilos) no pasa de 83,5 kB comprimidos', () => {
+    it('el arranque (entrada, página de inicio y sus estilos) no pasa de 76 kB comprimidos', () => {
         // Medido al fijarlo en 80: 70 kB (Vue e Inertia son casi todo). Con
         // los restaurantes sobre el mapa (#9) llegó a 79, y con la ficha (#13),
         // a 80,5: de los 1,5 kB que suma, 0,6 son sus estilos, porque el CSS
@@ -504,14 +504,43 @@ describe('presupuesto de descarga', () => {
         // cabecera baja el margen del sistema arriba con el CSS de la barra.
         //
         // Con la última lista guardada sin señal (#144, ADR 0046): 82,19 antes
-        // y 82,994 después (83,006 en CI). Es lo que no se pudo sacar: el
-        // estado `staleSince` y qué hacer cuando el pedido falla (usar la
-        // copia o el error) tienen que estar en el arranque; el módulo de la
-        // copia, el aviso y la página sin conexión bajan aparte. Se probaron
-        // varias formas de recortar y ninguna dejó margen: el margen de un
-        // puñado de bytes hace fallar el CI por diferencias de la compilación.
-        // El tope sube a 83,5.
-        expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(83.5);
+        // y 82,994 después (83,006 en CI, sobre el tope de 83). Lo que tiene
+        // que estar en el arranque (`staleSince` y qué hacer si el pedido
+        // falla) no se pudo recortar más; el módulo de la copia, el aviso y
+        // la página sin conexión bajan aparte.
+        //
+        // En vez de subir el tope se miró qué pesaba de verdad (ADR 0047): de
+        // los 83 kB, 65 eran la entrada, y ahí viajaba código que Vení no
+        // usa. `useForm` de Inertia con su validación en vivo (el plugin hace
+        // `router.form = useForm` y con esa línea queda todo): −3,7 kB. El
+        // cliente de laravel-precognition, que @inertiajs/core configura al
+        // cargarse: −2,7 kB. Y la API de opciones de Vue
+        // (`__VUE_OPTIONS_API__: false`): −1,7 kB. Quedó en 74,888 y el tope
+        // baja de 83 a 76. Las tres cosas están en vite.config.ts y las
+        // pruebas de abajo vigilan que nadie use lo que se sacó.
+        expect(gzipKb(withStyles(initialChunks()))).toBeLessThan(76);
+    });
+
+    it('la entrada no trae los formularios de Inertia ni la validación en vivo, que Vení no usa (ADR 0047)', () => {
+        const code = initialChunks()
+            .map((chunk) => chunk.code)
+            .join(' ');
+
+        expect(code).not.toContain('withPrecognition');
+        expect(code).not.toContain('validatingChanged');
+    });
+
+    it('nadie usa lo que se sacó de la entrada: `router.form`, la validación en vivo ni la API de opciones de Vue (ADR 0047)', () => {
+        const sources = Object.entries(import.meta.glob<string>('/resources/js/**/*.{ts,vue}', { query: '?raw', import: 'default', eager: true })).filter(
+            ([file]) => !/\.test\.ts$|\/testing\/|\/build\/noPrecognition\.ts$/.test(file),
+        );
+        const using = (pattern: RegExp): string[] => sources.filter(([, source]) => pattern.test(source)).map(([file]) => file);
+
+        expect(sources.length).toBeGreaterThan(100);
+        // `router.form` no existe (vite.config.ts quita la línea que lo pone) y la validación en vivo es un sustituto que falla.
+        expect(using(/router\.form\b|\$inertia\.form\b|withPrecognition|laravel-precognition/)).toEqual([]);
+        // Sin la API de opciones, `data()`, `methods`, `computed: {`, `watch: {`, los mixins y los ganchos como opción no hacen nada.
+        expect(using(/^\s*(?:data\s*\(\)|methods\s*:|computed\s*:\s*\{|watch\s*:\s*\{|mixins\s*:|(?:created|mounted|beforeUnmount|unmounted|updated|beforeMount)\s*\(\)\s*\{)/m)).toEqual([]);
     });
 
     it('el resumen y la lista (con sus distancias, la búsqueda, los filtros, los almuerzos y los platos) no bajan con el arranque: el inicio los pide con import() apenas monta', () => {
