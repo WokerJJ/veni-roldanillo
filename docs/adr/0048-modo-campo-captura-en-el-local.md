@@ -1,0 +1,119 @@
+# ADR 0048 · Modo «Campo»: captura de fichas en el local desde el celular, sin señal, con dos firmas antes de publicar
+
+- Estado: aceptada
+- Fecha: 2026-11-16
+- Precisa: ADR 0009 (roles, Policies y el modelo de `restaurants`), ADR 0015 (qué guarda el service worker), ADR 0021 (borradores de OpenStreetMap), ADR 0025 y 0027 (paneles, acciones de dominio, CSP de los paneles), ADR 0026 (autorización y versión del aviso de privacidad), ADR 0030 (versiones de los documentos legales) y ADR 0040 a 0044 (estilo del celular).
+- Afecta a (etapa 1): `routes/web.php` y `routes/api.php`, `app/Http/Controllers/Field/`, `app/Http/Requests/Field/`, `app/Models/FieldSubmission.php`, `app/Enums/FieldSubmissionStatus.php`, `app/Policies/FieldSubmissionPolicy.php`, `app/Actions/Restaurants/` (`ApproveFieldSubmission`, `ReturnFieldSubmission`, `RejectFieldSubmission`, `IssueConfirmationLink`, `ConfirmFieldSubmission`), `app/Support/Field/` (duplicados, horario semanal, mensaje de WhatsApp), `app/Filament/Admin/Resources/FieldSubmissions/`, `app/Providers/AppServiceProvider.php` (límites), las migraciones de `field_submissions` y de `pg_trgm`/`unaccent`, `resources/js/campo/` y `resources/js/pwa/runtimeCaching.ts`, `resources/views/campo.blade.php`, `lang/{es,en}.json`, `docs/03-arquitectura.md`, `docs/04-seguridad-y-legal.md`.
+
+## Contexto
+
+El directorio arranca vacío y hay que llenarlo con fichas reales: el administrador visita cada local y debe dejar una ficha completa en unos tres minutos, de pie, con datos móviles malos o sin ellos. Hoy solo existen el alta manual de `/admin` (pensada para un escritorio con señal), los borradores de OpenStreetMap (nombre, tipo y punto, sin contacto) y el panel del dueño.
+
+Faltan tres cosas: (1) capturar en el local sin perder lo escrito si se cae la señal; (2) que lo que se publica tenga el visto bueno del dueño del negocio, no solo de quien visita (Ley 1581 y derechos de autor: la información del negocio se publica con autorización); (3) no crear una ficha nueva cuando el local ya está (como borrador de OpenStreetMap o publicado).
+
+Decisiones del producto ya tomadas y que este ADR no discute: vive dentro de la app (ruta `/campo`, PWA de celular por pasos); solo la usa el administrador (`users.role = admin`, sin rol nuevo); la etapa 1 es la ficha base; el menú y el catálogo de marcas (etapa 2) y corregir fichas existentes con una propuesta de cambios (etapa 3) quedan fuera; las fotos también; no hay API de WhatsApp.
+
+## Alternativas
+
+- **Ampliar el alta manual de `/admin`.** Cero código nuevo de captura, pero Filament es un panel de escritorio: formularios largos, Livewire que necesita señal en cada clic y `'unsafe-eval'` en la CSP. Sin señal no guarda nada. Se descarta para la captura; `/admin` sigue siendo el lugar de la **revisión**.
+- **Una app aparte (Flutter/React Native).** Resolvería el offline con almacenamiento nativo y sincronización en segundo plano, pero duplica la autenticación, el modelo y el estilo, suma otra publicación y otro repositorio para algo que usa una sola persona. Se descarta.
+- **Una página de Inertia en caché.** Es lo más parecido al resto de la app, pero el HTML de Inertia lleva la sesión, el token CSRF y el nonce de la CSP, y por eso el ADR 0015 no guarda ninguna navegación. Relajarlo para una página que depende de la sesión repetiría el riesgo que esa regla evita. Se descarta.
+- **Un shell estático de Vue con una API JSON (se elige).** Es la forma de la página sin conexión (`/offline`): HTML sin sesión y sin script en línea, que el service worker puede guardar sin servir datos de nadie. La lógica pesada (validar, buscar duplicados, guardar) va en endpoints JSON con la sesión del administrador.
+- **Guardar los borradores en `localStorage`.** Tiene tope de unos 5 MB, es síncrono y se pierde sin aviso. IndexedDB es el sitio para datos que no se pueden perder (como ya hace la libreta del ADR 0032).
+- **Sincronizar con Background Sync.** No existe en Safari de iPhone. El envío es explícito y automático solo mientras la app esté abierta: un botón «Enviar pendientes» y el evento `online`.
+- **Un identificador de captura generado por el servidor.** No sirve si el envío se corta a la mitad: el reintento no sabría de qué captura se trata. **Lo genera el teléfono** (UUID v4 al crear el borrador) y es la dirección del recurso: `PUT /campo/api/submissions/{uuid}`. Repetir el envío da el mismo resultado y no duplica.
+- **Aprobación con la sola firma del administrador** (como las fichas de OpenStreetMap). Publicaría datos de un negocio y un celular personal sin que su dueño lo sepa. Se descarta: nada llega al público sin las dos firmas.
+- **Confirmación del dueño por la API de WhatsApp Business.** Cuesta, exige verificación de empresa y plantillas. **Un mensaje `wa.me` que arma `/campo` y manda el administrador desde su propio WhatsApp** (la misma mecánica de los pedidos, ADR 0004 y 0024).
+- **Un rol «captador» nuevo.** Útil si más adelante hay más gente en la calle; hoy sería una tabla de permisos para una sola persona. Queda como cambio localizado: `FieldSubmissionPolicy` es el único lugar que decide quién captura.
+- **Buscar duplicados solo en el teléfono, con el GeoJSON ya guardado.** Ese archivo solo tiene fichas publicadas, y los duplicados que importan (borradores de OpenStreetMap, fichas ocultas, otras capturas) no están ahí. Se busca en el servidor cuando hay señal, y se vuelve a buscar siempre al recibir.
+
+## Decisión
+
+### 1. Forma de la herramienta
+
+1. **`/campo` es un shell estático**: una vista Blade sin el grupo `web` (sin sesión, cookies ni idioma de la petición, como `/offline`), sin script ni estilo en línea y con los textos de `lang/` en los dos idiomas. Carga su propia entrada de Vite (`resources/js/campo/main.ts`), con Vue y los componentes de la marca, **sin Inertia**. Es una excepción de forma al «Inertia en todas partes» del ADR 0002 y existe solo por el offline. La página y todo lo que baja son un chunk aparte: **no suma al arranque ni a la página de inicio**.
+2. **Presupuesto del arranque** (`resources/js/map/bundle.test.ts`, tope de 76 kB tras el ADR 0047): el riesgo es que la entrada de `/campo` use partes de Vue que el arranque no usa (`v-model` en elementos nativos, `.prevent`, transiciones) y que Rollup las deje en un chunk compartido con el arranque. Regla heredada del ADR 0026: en `campo/` no se usa `v-model` en elementos nativos ni `.prevent`. La prueba del arranque se extiende para fallar si el grafo del arranque llega a algo de `resources/js/campo/`. Si aun así sube, se separa la copia de Vue de `/campo` antes de tocar el tope.
+3. **El service worker** guarda el shell de `/campo` en una caché propia (`veni-campo-shell`, una entrada), red primero con plazo de 3 s y copia guardada si falla; los assets de `/campo` caen en `veni-assets` (cache first, con hash), como cualquier chunk. Solo se guarda esa URL: ninguna otra navegación, ni `/api/`, ni `/campo/api/` (sigue valiendo el ADR 0015). El shell no lleva datos de nadie: al abrir, pide `GET /campo/api/me`, que responde 200 con el token CSRF y el nombre del administrador, o 401 y el shell manda a `/admin/login`. El primer uso tiene que ser con señal y con la sesión iniciada; desde ahí abre sin señal. Una sesión vencida o un 419 al enviar **no** borran nada: los borradores esperan a que la persona vuelva a entrar.
+4. **Autorización.** Los endpoints exigen sesión (`auth`) y `FieldSubmissionPolicy` (solo `users.role = admin`, Policy y rol exigido además en cada acción). El servidor nunca confía en un id del cliente: `captured_by` sale de la sesión, y un uuid que ya pertenece a otra cuenta responde 404. Los JSON pasan por `RequireSameOriginJson` (ADR 0031) y llevan CSRF.
+
+### 2. Lo que se captura (ficha base)
+
+Un borrador tiene, en cada paso: **nombre**; **categorías** (las del catálogo; al menos una); **dirección y referencia**; **ubicación**; **WhatsApp y teléfono** (se normalizan a `57` + diez dígitos con `ColombianMobile`, como la base; un fijo solo va como teléfono); **horario semanal** (franjas por día; una franja que cruza la medianoche termina al día siguiente, como las de `opening_hours`; sin franjas solapadas ni de duración cero: el servidor las valida con la misma regla que el `EXCLUDE` de la base, y la base queda como última barrera); **domicilio** (sí/no); **medios de pago** (`PaymentMethod`); y el **contacto del dueño**: nombre, rol (`owner` o `manager`, `ClaimantRole`) y celular. No hay «nivel de precios» (desde el ADR 0039 el rango sale de la carta, que llega en la etapa 2). El texto libre es UTF-8 sin caracteres de control (`PlainText`, ADR 0026) y con tope de longitud; el borrador entero, con tope de tamaño.
+
+El paso de contacto lleva un recordatorio al administrador: explicarle al dueño para qué se usan sus datos antes de pedírselos (ver «Riesgos legales»).
+
+### 3. La ubicación del negocio
+
+- El punto es **la ubicación del negocio, no la de la persona**. El administrador se para en la puerta, toma el punto con la geolocalización del teléfono (la API ya está permitida para este origen) y lo confirma sobre el mapa; el teléfono dice la precisión del GPS y avisa si pasa de 30 m. Con un mapa que no carga (sin señal, los PMTiles no se guardan, ADR 0015) se puede aceptar el punto del GPS con su precisión y la revisión posterior en `/admin` lo muestra con un enlace al punto en openstreetmap.org, como los borradores.
+- **La regla de producto 3 no cambia.** Habla de la ubicación de las personas que usan la app (visitantes y comensales). Aquí la coordenada es un dato de la ficha, igual que el punto del alta manual: se guarda el **punto final** y de dónde salió (`device` o `map`), nunca un recorrido, ni la posición al enviar, ni una lista de lecturas. `watchPosition` solo vive mientras el paso está abierto y no se escribe en IndexedDB.
+- El punto va a una columna `geography(Point,4326)` (cast `AsGeoPoint`, ADR 0009), con la restricción de caer dentro del recuadro de Roldanillo y sus alrededores que ya usa el alta manual, para frenar un punto en otro país por un GPS sin fijar.
+
+### 4. Duplicados
+
+- **En línea**, antes de enviar: `POST /campo/api/duplicates` con el nombre y el punto devuelve (solo al administrador) los candidatos: nombre parecido (`pg_trgm` sobre el nombre sin tildes ni mayúsculas, por encima de 0,4) o a menos de 50 m (`ST_DWithin` sobre `geography`, con el índice GiST). Busca en fichas publicadas, ocultas, **borradores de OpenStreetMap** y otras capturas en curso. De cada una devuelve nombre, estado, tipo, distancia y si viene de OpenStreetMap; nada más.
+- **Qué se ofrece:** si el candidato es un **borrador de OpenStreetMap** u otra ficha oculta sin dueño, «Completar esta ficha»: la captura queda vinculada a ella (`restaurant_id`) y al aprobar la **completa** en vez de crear otra. Si es una ficha **publicada**, la etapa 1 solo avisa «ya existe» y no deja crear otra, salvo «Es otro negocio» (queda registrado); corregirla es la etapa 3. Si es una captura en curso, avisa a quién y cuándo.
+- **Sin señal** no hay búsqueda: el borrador se marca «sin revisar duplicados». **Al recibir, el servidor siempre vuelve a buscar** y guarda los candidatos con la captura; `/admin` no deja aprobar mientras haya candidatos sin resolver (completar, o marcar «es otro negocio»).
+
+### 5. Estados y las dos firmas
+
+```
+borrador (solo en el teléfono)
+   │ enviar (PUT con uuid)
+   ▼
+enviada, en espera ──── devolver ────► devuelta ──(se corrige y se reenvía, revision+1)──► enviada
+   │ el dueño toca «Confirmo»            ▲
+   ▼                                     │ devolver (borra la confirmación)
+confirmada por el dueño ─────────────────┘
+   │ aprobar            rechazar (desde enviada, confirmada o devuelta; terminal)
+   ▼
+aprobada (ficha OCULTA y verificada)  ──► se publica con PublishRestaurant
+```
+
+1. **Primera firma, en el local:** el administrador envía la captura (`submitted`, «enviada, en espera»). Mientras no haya señal queda en el teléfono; «Enviar pendientes» y el evento `online` la mandan. `PUT /campo/api/submissions/{uuid}`: crea (201); el mismo uuid con el mismo contenido responde igual (200, sin duplicar); con otro contenido y la captura ya enviada, 409; con una captura `returned` del mismo usuario, la reemplaza como una revisión nueva. El servidor guarda la hora del teléfono (`captured_at`, solo informativa) y la suya (`received_at`).
+2. **Segunda firma, el dueño, sin cuenta.** Con la captura recibida, `/campo` pide «Pedir confirmación» (`POST …/confirmation-link`): el servidor genera un código de 32 bytes aleatorios, guarda **solo su SHA-256** y su vencimiento (**7 días**, un solo enlace vigente: pedir otro invalida el anterior), y responde con el enlace `https://<APP_URL>/confirmar/<código>` **una sola vez**. El teléfono arma el mensaje `https://wa.me/<celular del dueño>?text=<resumen + enlace>` y el administrador lo manda desde su WhatsApp. El código nunca se guarda en claro ni en el teléfono: si se pierde, se pide otro.
+3. **`/confirmar/{código}`** (pública, de una página, con su propio chunk): `GET` muestra el resumen de lo que se va a publicar, el aviso de privacidad y el texto de la autorización, **sin consumir nada** (las vistas previas de WhatsApp y los antivirus abren enlaces); `POST` con el botón «Confirmo» lo consume. Un código que no existe, venció, ya se usó o es de una captura devuelta o rechazada responde igual (404 con la página de error), sin pistas. Respuestas con `Cache-Control: no-store`, `noindex`, sin recursos de terceros y con la política de contenido pública (sin perfil nuevo). Al confirmar, en una transacción con la fila bloqueada (`FOR UPDATE`): `owner_confirmed_at`, la versión del aviso (`LegalDocument::PRIVACY_VERSION`, como en ADR 0026), la versión del texto de autorización (`FieldSubmission::AUTHORIZATION_VERSION`), el **celular al que se mandó el enlace** y la **huella del contenido confirmado** (`payload_hash`); se borra el hash del código (un solo uso) y el estado pasa a `owner_confirmed`. **No se guarda la IP** ni el dispositivo del dueño. Límite por IP real (20 por hora, también los intentos fallidos).
+4. **Tercera comprobación, en `/admin`:** un recurso nuevo de Filament, `FieldSubmissionResource` («Capturas de campo», al estilo de `OsmDraftResource`): lista con estado, nombre, quién la capturó, cuándo llegó, si el dueño ya confirmó y los duplicados sin resolver; vista con todo lo capturado y el punto en un enlace. Acciones: **Aprobar** (solo con la confirmación vigente, ver abajo), **Devolver** con una nota (vuelve al teléfono como borrador editable y borra la confirmación) y **Rechazar** con motivo (terminal). El contenido de una captura enviada **no se edita** en `/admin`: si algo está mal se devuelve, así la confirmación del dueño siempre corresponde a lo que se aprueba.
+5. **`ApproveFieldSubmission`** (acción de dominio en `app/Actions/Restaurants`, como las demás): en una transacción lee la captura y la ficha vinculada bloqueadas; exige administración (`AuthorizationException`), estado `owner_confirmed`, que el `payload_hash` actual sea igual al confirmado, que el enlace no haya sido invalidado y los duplicados resueltos. Crea la ficha **oculta** y con `verified_at` de ahora (o completa la ficha oculta vinculada), con el slug de `RestaurantSlug::unique`, las categorías, los horarios y el punto; valida con `RestaurantStatusRules` y rechaza con `ActionRefused` y un motivo estable. Deja `restaurant_id`, `reviewed_by` y `reviewed_at`. Quién la capturó y cuándo se ven en `/admin` desde la captura vinculada; no se agrega nada a `restaurants`. **No publica**: se publica con `PublishRestaurant`, la acción de siempre. Un CHECK de la base impide que una captura quede `approved` sin confirmación del dueño, sin ficha y sin revisor.
+6. **Quién ve qué.** El contacto del dueño y los datos de la captura no salen en la ficha pública, el mapa ni el GeoJSON (las pruebas lo comprueban), y no se mandan a terceros más que en el mensaje de WhatsApp que el propio administrador envía al dueño.
+
+### 6. Datos
+
+Tabla `field_submissions`: `id`, `uuid` (único, el del teléfono), `kind` (`new_restaurant`; las etapas 2 y 3 suman valores con su CHECK), `status`, `revision`, `captured_by` (FK a `users`, `RESTRICT`), `captured_at`, `received_at`, `payload` (jsonb validado por el servidor, con `payload_version`), `payload_hash`, `location` y `location_source`, `owner_name`, `owner_role`, `owner_phone` (CHECK `^57[0-9]{10}$`), `confirmation_token_hash` (único, nulo después de usarse o invalidarse), `confirmation_expires_at`, `confirmation_phone`, `owner_confirmed_at`, `owner_confirmed_hash`, `owner_privacy_notice_version`, `owner_authorization_version`, `duplicates` (jsonb), `restaurant_id` (FK a `restaurants`, `SET NULL`: la ficha elegida para completar y, al aprobar, la resultante; único parcial entre las aprobadas), `reviewed_by`, `reviewed_at`, `review_note` (CHECK: obligatoria al devolver o rechazar). Estados como `varchar` con CHECK (ADR 0009). Migraciones reversibles; la de las extensiones `pg_trgm` y `unaccent` usa `IF NOT EXISTS` y su `down` no las quita (son de toda la base, como `postgis`). Índices: GiST sobre `location`, único sobre `uuid`, y `(status, received_at)` para la lista de `/admin`.
+
+### 7. Abuso y límites
+
+Límites con nombre en `AppServiceProvider`: `field-submissions` (60 por hora por cuenta), `field-lookup` (120 por hora por cuenta) y `owner-confirmation` (20 por hora por IP real, ADR 0014). Tope de tamaño del cuerpo y de franjas por día. Ningún valor del cliente llega a un 500 (el UTF-8 inválido, los tipos raros y los arreglos fallan la validación). Los registros del servidor no llevan el nombre ni el celular del dueño.
+
+### 8. Retención
+
+Las capturas **devueltas o rechazadas** se borran a los seis meses de resueltas (`model:prune`, como el ADR 0026). Las **aprobadas** conservan el contacto y la confirmación mientras la ficha exista: son la **prueba de la autorización** del dueño para publicar. Si el dueño pide su supresión (Ley 1581), se anonimiza su contacto y se conserva solo el hecho de la confirmación (fecha y versiones). Estos plazos entran a la revisión jurídica.
+
+### 9. Lo que este ADR anticipa (no se construye ahora)
+
+- **Etapa 2 · menú y catálogo de marcas.** Un catálogo propio de marcas y productos para capturar la carta por nombre en vez de escribir cada precio; el `payload` versionado y `kind` están para eso. **Las bebidas alcohólicas entran con un aviso de «solo para mayores de 18 años»** y no se muestran ni se piden sin él; el texto y su fundamento (Ley 124 de 1994, Código de Infancia y Adolescencia) se revisan con el jurídico antes de esa etapa.
+- **Etapa 3 · corregir fichas existentes.** Una captura `kind = change` apunta a una ficha publicada con una propuesta de cambios que el dueño confirma por el mismo enlace y administración aprueba como diferencias, no sobrescribiendo.
+- **Fotos.** Con la guarda de procesamiento del ADR 0034 y la declaración de autoría de cada foto.
+- **Más de un capturador.** Un rol propio y el filtro por `captured_by`.
+
+## Consecuencias
+
+- Hay dos formas de entrar a lo que ve el público: la ficha que crea `ApproveFieldSubmission` (siempre oculta) y `PublishRestaurant`. **Ninguna ficha de campo se vuelve pública sin la confirmación del dueño y la aprobación y publicación de administración.**
+- `/campo` obliga a un primer uso con señal y sesión para guardar el shell, y a volver a entrar si la sesión vence; ningún borrador se pierde por eso. En iPhone no hay envío en segundo plano: hay que abrir la app para que salga lo pendiente. Los borradores viven en el navegador del teléfono: si se borran los datos del sitio, se pierden (el aviso del paso final lo dice y muestra cuántos hay sin enviar).
+- El service worker suma una excepción acotada (una URL del shell de `/campo`) a «las navegaciones no se guardan»; las pruebas de `runtimeCaching.ts` la fijan y comprueban que ninguna otra navegación ni `/api/` o `/campo/api/` reciben caché.
+- El peso de `/campo` (formulario por pasos, IndexedDB, cola de envío, mapa del pin) es un chunk que solo baja quien lo abre. Reutiliza el motor del mapa ya guardado en `veni-map-engine`.
+- `/admin` tiene un recurso más (y una insignia con las confirmadas por revisar); la lógica de aprobar queda en una acción de dominio con pruebas propias.
+- La detección de duplicados por nombre exige las extensiones `pg_trgm` y `unaccent` (vienen con la imagen `postgis/postgis`; las pruebas lo comprueban al migrar).
+- Si el dueño no tiene WhatsApp o no contesta, la captura se queda en «enviada, en espera»; no hay otro camino de confirmación en la etapa 1.
+
+## Riesgos legales y de producto
+
+- **Autorización del dueño.** El formato de autorización de uso de información e imágenes sigue pendiente (`docs/04-seguridad-y-legal.md`, «Documentos pendientes»). Entre tanto, la página de confirmación muestra un texto **provisional** (versión `0.1`, con el aviso de borrador pendiente de revisión jurídica, como los documentos del ADR 0030) que autoriza publicar la información del negocio que se resume, y la captura guarda esa versión. La etapa 1 **no se usa con negocios reales** hasta que el texto lo revise un abogado; mientras tanto se prueba con datos de ejemplo. Si el texto cambia, se sube la versión y una huella en `tests/fixtures/` obliga a hacerlo, como en el ADR 0030.
+- **Contacto del dueño (Ley 1581).** El nombre y el celular se piden en persona antes de que el dueño lea el aviso. Mitigación: finalidad única (verificar quién autoriza y contactarlo por la ficha), recordatorio obligatorio al administrador para explicarla, el aviso y la versión aceptada en la página de confirmación, y retención mínima (sección 8). Queda para la revisión jurídica si el aviso debe mostrarse antes de capturar.
+- **Autoridad de quien firma.** Quien toca «Confirmo» puede no ser el dueño (un empleado, otra persona con el enlace reenviado). El enlace es de un solo uso, vence y va al celular que dio el negocio; el rol queda limitado a `owner` o `manager`. Es un control de buena fe, no una verificación de identidad: igual que en los reclamos (ADR 0026), administración puede llamar antes de aprobar.
+- **Ubicación del negocio.** Es un dato de la ficha, no de una persona (sección 3). Se guarda solo el punto elegido y su origen; no se guardan recorridos ni coordenadas del administrador distintas de la del local.
+- **Datos de OpenStreetMap.** Completar un borrador no cambia su procedencia (`restaurant_sources`), y editarlo lo «suelta» de la importación, como dice el ADR 0021.
+- **Enlace en WhatsApp.** El mensaje lleva un código que da acceso a ver y confirmar los datos de esa ficha: se manda solo al celular del dueño y por eso vence y es de un solo uso. Si el dueño lo reenvía, quien lo reciba podría confirmar; el riesgo se acepta por la revisión final de administración.
+
+## Plan de la etapa 1
+
+Una rama y un PR, con commits pequeños: ADR → migración, modelo y acciones con pruebas → endpoints, duplicados y límites → página de confirmación → recurso de `/admin` → shell de `/campo` (borradores, pasos, cola, service worker) → documentación. Pruebas de Pest sobre las acciones, la idempotencia, el código de un solo uso, los límites, la autorización y los datos que no se filtran; de Vitest sobre los borradores y la cola; la del tope del arranque.

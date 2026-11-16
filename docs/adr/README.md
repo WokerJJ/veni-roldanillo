@@ -49,3 +49,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0043](0043-el-pedido-en-tres-pasos.md) | El pedido en tres pasos: Tu pedido, Entrega y Revisar y enviar, con los pasos montados y «Enviar» solo en el último | Aceptada |
 | [0044](0044-controles-del-mapa-de-vidrio-y-marcadores-con-icono.md) | Los controles del mapa de vidrio y los marcadores con el ícono de su comida | Aceptada |
 | [0045](0045-guia-de-platos-con-fotos-de-licencia-abierta.md) | La guía de platos con fotos de licencia abierta de Wikimedia Commons, tarjetas grandes y a la vista en el inicio | Aceptada |
+| [0048](0048-modo-campo-captura-en-el-local.md) | Modo «Campo»: captura de fichas en el local desde el celular, sin señal, con dos firmas (administración y dueño) antes de publicar | Aceptada |
