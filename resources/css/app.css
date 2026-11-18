@@ -9,6 +9,8 @@
 
 @source '../js';
 @source '../views';
+/* Las vistas de los paneles (Filament) usan las utilidades del propio panel: no suman las suyas al CSS del arranque (ADR 0048). */
+@source not '../views/admin';
 /* Las pruebas no viajan: una palabra en ellas (`transition`) no suma su utilidad al arranque (#138). */
 @source not '../js/**/*.test.ts';
 /*

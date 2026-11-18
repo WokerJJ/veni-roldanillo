@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\ClaimantRole;
+use App\Enums\FieldSubmissionStatus;
 use App\Enums\Locale;
 use App\Enums\OptionGroupKind;
 use App\Enums\PaymentMethod;
@@ -76,7 +78,9 @@ function langFilesKeysUsedInCode(): array
         ->name(['*.php', '*.ts', '*.vue'])
         // Las pruebas y sus dobles usan claves inventadas a propósito.
         ->notName('*.test.ts')
-        ->notPath('js/testing');
+        ->notPath('js/testing')
+        // /campo trae sus textos en su propio HTML (lang/{idioma}/campo.php, ADR 0048): su prueba va abajo.
+        ->notPath('#^campo/#');
 
     $keys = [];
 
@@ -200,4 +204,48 @@ test('los textos del modo Campo tienen las mismas claves en los dos idiomas y ex
 
     expect($used)->not->toBeEmpty()
         ->and(array_values(array_diff(array_unique($used), $keys)))->toBe([]);
+});
+
+test('los textos de /campo tienen las mismas claves en los dos idiomas y existen las que usa su código', function () {
+    $flatten = fn (string $locale): array => Arr::dot(require lang_path("{$locale}/campo.php"));
+    $keys = array_keys($flatten(Locale::DEFAULT->value));
+
+    foreach (langFilesLocales() as $locale) {
+        expect(array_keys($flatten($locale)))->toBe($keys, "lang/{$locale}/campo.php no tiene las mismas claves");
+    }
+
+    // Los marcadores (:nombre) también tienen que coincidir.
+    $placeholders = fn (array $texts): array => array_map(fn ($text): array => (function () use ($text): array {
+        preg_match_all('/:[a-z_]+/', (string) $text, $m);
+        sort($m[0]);
+
+        return $m[0];
+    })(), $texts);
+    foreach (langFilesLocales() as $locale) {
+        expect($placeholders($flatten($locale)))->toBe($placeholders($flatten(Locale::DEFAULT->value)), "Marcadores distintos en lang/{$locale}/campo.php");
+    }
+
+    // La lista de días se llega como arreglo: sus siete elementos cuentan como una clave `days`.
+    $roots = array_unique(array_map(fn (string $key): string => preg_replace('/\.\d+$/', '', $key) ?? $key, $keys));
+
+    $used = [];
+    foreach (Finder::create()->files()->in(base_path('resources/campo'))->name(['*.ts', '*.vue'])->notName('*.test.ts') as $file) {
+        preg_match_all("/\b(?:t|list)\('([a-z_]+(?:\.[a-z_]+)+|days)'/", $file->getContents(), $matches);
+        array_push($used, ...$matches[1]);
+    }
+
+    expect($used)->not->toBeEmpty()
+        ->and(array_values(array_diff(array_unique($used), $roots)))->toBe([], 'Claves de resources/campo que no están en lang/es/campo.php');
+
+    // Las que /campo arma con un valor: estados, medios de pago, pasos y errores de validación.
+    $dynamic = [
+        ...array_map(fn (FieldSubmissionStatus $s): string => "status.{$s->value}", FieldSubmissionStatus::cases()),
+        'status.editing', 'status.ready', 'status.error',
+        ...array_map(fn (PaymentMethod $m): string => "payment.{$m->value}", PaymentMethod::cases()),
+        ...array_map(fn (ClaimantRole $r): string => "fields.owner_role_{$r->value}", ClaimantRole::cases()),
+        ...array_map(fn (string $step): string => "steps.{$step}", ['basics', 'place', 'duplicates', 'contact', 'hours', 'owner', 'review']),
+        ...array_map(fn (string $code): string => "errors.{$code}", ['required', 'invalid', 'too_short', 'whatsapp', 'phone', 'hours', 'location', 'categories', 'purpose']),
+        ...array_map(fn (string $status): string => "duplicates.status_{$status}", ['hidden', 'unclaimed', 'claimed', 'submitted', 'owner_confirmed']),
+    ];
+    expect(array_values(array_diff($dynamic, $keys)))->toBe([], 'Faltan claves de /campo que el código arma con un valor');
 });

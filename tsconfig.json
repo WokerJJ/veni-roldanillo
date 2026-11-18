@@ -22,5 +22,5 @@
             "@brand/*": ["./brand/*"]
         }
     },
-    "include": ["resources/js/**/*.ts", "resources/js/**/*.vue"]
+    "include": ["resources/js/**/*.ts", "resources/js/**/*.vue", "resources/campo/**/*.ts", "resources/campo/**/*.vue"]
 }

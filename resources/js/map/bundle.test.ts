@@ -160,6 +160,30 @@ describe('reparto del bundle', () => {
         expect(loadedWith(engine).some((chunk) => has(chunk, /\/node_modules\/pmtiles\//))).toBe(true);
     });
 
+    it('el shell de /campo es una entrada aparte: el arranque no trae su código ni comparte chunks con él (ADR 0048)', () => {
+        const campo = loadedWith(chunkOf('/resources/campo/main.ts'));
+        const initial = initialChunks();
+
+        expect(campo.some((chunk) => has(chunk, /\/resources\/campo\/App\.vue/))).toBe(true);
+        expect(initial.filter((chunk) => has(chunk, /\/resources\/campo\//)).map((chunk) => chunk.fileName)).toEqual([]);
+        // Solo el ayudante de import() es común: lo demás, incluido Vue, es de cada lado.
+        expect(
+            campo
+                .filter((chunk) => initial.some((other) => other.fileName === chunk.fileName) && !has(chunk, /vite\/preload-helper/))
+                .map((chunk) => chunk.fileName),
+        ).toEqual([]);
+    });
+
+    it('el mapa del punto del negocio es un chunk que /campo pide con import(), y baja el motor solo si se pide', () => {
+        const pin = chunkOf('/resources/campo/components/PinMap.vue');
+        const engine = chunkOf('/resources/js/map/engine.ts');
+        const campo = loadedWith(chunkOf('/resources/campo/main.ts'));
+
+        expect(campo.some((chunk) => has(chunk, /\/resources\/campo\/components\/PinMap\.vue/))).toBe(false);
+        expect(campo.filter((chunk) => has(chunk, MAP_MODULES))).toEqual([]);
+        expect(pin.dynamicImports).toContain(engine.fileName);
+    });
+
     it('el carrito es un chunk que la ficha pide con import() al tocar la barra del pedido (ADR 0024)', () => {
         const cart = chunkOf('/resources/js/components/OrderCart.vue');
         const show = loadedWith(chunkOf('/resources/js/pages/Restaurants/Show.vue'));
@@ -309,6 +333,11 @@ describe('página sin conexión', () => {
 | en el mismo cambio que lo justifica.
 */
 describe('presupuesto de descarga', () => {
+    it('el shell de /campo (su entrada, su Vue y su estilo) no pasa de 50 kB comprimidos (ADR 0048)', () => {
+        // Solo lo baja el administrador, una vez: el service worker lo guarda.
+        expect(gzipKb(withStyles(loadedWith(chunkOf('/resources/campo/main.ts'))))).toBeLessThan(50);
+    });
+
     it('se mide como compila `npm run build`: ningún chunk del arranque trae los comentarios de las plantillas', () => {
         const vueFiles = new Set(initialChunks().flatMap((chunk) => chunk.moduleIds.map(normalize).filter((id) => id.endsWith('.vue') && !id.includes('/node_modules/'))));
         // La primera línea de cada comentario de las plantillas de esos componentes.

@@ -258,3 +258,22 @@ test('pasado el límite de envíos por cuenta, 429', function () {
 
     $this->putJson('/campo/api/submissions/'.Str::uuid(), fieldBody())->assertTooManyRequests();
 });
+
+test('el shell lleva los textos en los dos idiomas, para abrir sin señal, y ningún script en línea', function () {
+    $this->withoutVite();
+
+    $html = $this->get('/campo')->assertOk()->getContent() ?: '';
+
+    expect($html)->toContain('id="campo-texts"')
+        ->and(preg_match('#<script type="application/json" id="campo-texts">(.*?)</script>#s', $html, $match))->toBe(1);
+
+    $texts = json_decode($match[1], true, flags: JSON_THROW_ON_ERROR);
+
+    expect($texts['es']['home']['new'])->toBe('Nueva ficha')
+        ->and($texts['en']['home']['new'])->toBe('New listing')
+        ->and($texts['es']['days'])->toHaveCount(7);
+
+    // Los demás scripts son de archivo (módulos): sin código en línea que la CSP bloquearía.
+    preg_match_all('#<script(?![^>]*application/json)[^>]*>(.*?)</script>#s', $html, $scripts);
+    expect(array_filter(array_map('trim', $scripts[1])))->toBe([]);
+});
