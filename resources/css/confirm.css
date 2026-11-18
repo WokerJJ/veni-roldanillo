@@ -1,0 +1,166 @@
+/*
+ * La página con que el dueño confirma su ficha (ADR 0048,
+ * resources/views/field/). HTML del servidor con un formulario común, sin
+ * Tailwind ni JavaScript: abre en cualquier celular, no suma peso al arranque
+ * y no depende de lo que haya guardado el service worker. Los colores por
+ * rol siguen a resources/css/offline.css; el tema es el del sistema.
+ */
+@import '../../brand/tokens.css';
+@import './fonts.css';
+
+:root {
+    color-scheme: light dark;
+    --canvas: var(--veni-blanco);
+    --surface: var(--veni-lila);
+    --ink: var(--veni-ciruela);
+    --ink-muted: var(--veni-ciruela-suave);
+    --accent: var(--veni-ciruela);
+    --accent-ink: var(--veni-blanco);
+    --warn-bg: #fff4d9;
+    --warn-ink: #5a3a00;
+    --error: #a3202a;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --canvas: var(--veni-ciruela);
+        --surface: #3a2549;
+        --ink: var(--veni-blanco);
+        --ink-muted: var(--veni-lila);
+        --accent: var(--veni-mango);
+        --accent-ink: var(--veni-ciruela);
+        --warn-bg: #4a3512;
+        --warn-ink: #ffe3a8;
+        --error: #ff9aa0;
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--ink);
+    font: 1.0625rem/1.5 var(--veni-font-body);
+    -webkit-font-smoothing: antialiased;
+}
+
+main {
+    max-width: 34rem;
+    margin: 0 auto;
+    padding: 1.25rem 1rem 3rem;
+}
+
+.logo {
+    display: block;
+    height: 2.25rem;
+    width: auto;
+    margin-bottom: 1.25rem;
+}
+
+h1 {
+    margin: 0 0 0.5rem;
+    font: 700 1.75rem/1.15 var(--veni-font-display);
+    text-wrap: balance;
+}
+
+h2 {
+    margin: 0 0 0.5rem;
+    font: 700 1.125rem/1.25 var(--veni-font-display);
+}
+
+p {
+    margin: 0 0 1rem;
+}
+
+.draft {
+    margin: 0 0 1rem;
+    padding: 0.625rem 0.875rem;
+    border-radius: var(--veni-radius-sm);
+    background: var(--warn-bg);
+    color: var(--warn-ink);
+    font-size: 0.9375rem;
+    font-weight: 600;
+}
+
+.card {
+    margin: 0 0 1.25rem;
+    padding: 1rem;
+    border-radius: var(--veni-radius-lg);
+    background: var(--surface);
+}
+
+dl {
+    margin: 0;
+}
+
+dt {
+    margin-top: 0.75rem;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+dt:first-child {
+    margin-top: 0;
+}
+
+dd {
+    margin: 0.125rem 0 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+dd ul {
+    margin: 0;
+    padding-left: 1.125rem;
+    font-weight: 500;
+}
+
+.muted {
+    color: var(--ink-muted);
+    font-size: 0.9375rem;
+}
+
+.error {
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--error);
+    border-radius: var(--veni-radius-sm);
+    color: var(--error);
+    font-weight: 600;
+}
+
+button {
+    display: block;
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.75rem 1rem;
+    border: 0;
+    border-radius: var(--veni-radius-md);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font: 700 1.125rem/1.2 var(--veni-font-body);
+    cursor: pointer;
+}
+
+button:focus-visible,
+a:focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: 3px;
+}
+
+a {
+    display: inline-flex;
+    min-height: var(--veni-touch-min);
+    align-items: center;
+    color: inherit;
+    font-weight: 600;
+    text-underline-offset: 4px;
+}
+
+.footnote {
+    margin-top: 1.25rem;
+}

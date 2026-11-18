@@ -2,11 +2,14 @@
 
 use App\Enums\LegalDocument;
 use App\Http\Controllers\DishGuideController;
+use App\Http\Controllers\Field\FieldSubmissionController;
+use App\Http\Controllers\Field\OwnerConfirmationController;
 use App\Http\Controllers\LegalDocumentController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\RestaurantController;
 use App\Http\Controllers\RestaurantRequestController;
 use App\Http\Controllers\WebManifestController;
+use App\Http\Middleware\PrivateResponse;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Home')->name('home');
@@ -29,6 +32,34 @@ Route::controller(RestaurantRequestController::class)
         Route::post('/claim', 'storeClaim')->middleware('throttle:restaurant-requests')->name('restaurants.claim.store');
         Route::get('/removal', 'removal')->name('restaurants.removal');
         Route::post('/removal', 'storeRemoval')->middleware('throttle:restaurant-requests')->name('restaurants.removal.store');
+    });
+
+// Modo Campo (ADR 0048). El shell es estático, sin sesión ni datos de nadie
+// (como /offline): así el service worker puede guardarlo y abrir sin señal.
+// Lo que trabaja con datos es la API JSON de abajo, solo para administración.
+Route::view('/campo', 'campo')
+    ->withoutMiddleware('web')
+    ->name('field.shell');
+
+Route::prefix('/campo/api')
+    ->middleware(['auth', PrivateResponse::class])
+    ->controller(FieldSubmissionController::class)
+    ->group(function (): void {
+        Route::get('/me', 'me')->name('field.me');
+        Route::get('/submissions', 'index')->name('field.submissions.index');
+        Route::post('/duplicates', 'duplicates')->middleware('throttle:field-lookup')->name('field.duplicates');
+        Route::put('/submissions/{uuid}', 'store')->middleware('throttle:field-submissions')->whereUuid('uuid')->name('field.submissions.store');
+        Route::post('/submissions/{uuid}/confirmation-link', 'confirmationLink')->middleware('throttle:field-submissions')->whereUuid('uuid')->name('field.confirmation-link');
+    });
+
+// La confirmación del dueño, sin cuenta: el código va en la dirección, vale
+// una vez y vence. Nada de lo que responde se guarda ni se indexa.
+Route::prefix('/confirmar')
+    ->middleware(['throttle:owner-confirmation', PrivateResponse::class])
+    ->group(function (): void {
+        Route::get('/listo', [OwnerConfirmationController::class, 'done'])->name('field.confirm.done');
+        Route::get('/{code}', [OwnerConfirmationController::class, 'show'])->where('code', '[A-Za-z0-9_-]{43}')->name('field.confirm.show');
+        Route::post('/{code}', [OwnerConfirmationController::class, 'store'])->where('code', '[A-Za-z0-9_-]{43}')->name('field.confirm.store');
     });
 
 // Créditos (#58, ADR 0021): la atribución a OpenStreetMap (ODbL) y cómo pedir

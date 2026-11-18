@@ -130,6 +130,10 @@ const ROOT = fileURLToPath(new URL('.', import.meta.url));
  */
 const OFFLINE_ENTRIES = ['resources/js/offline.ts', 'resources/css/offline.css'];
 
+// El modo Campo (ADR 0048): su shell y la página con que el dueño confirma son
+// entradas aparte. Nada de esto entra al shell que se guarda al instalar.
+const FIELD_ENTRIES = ['resources/css/confirm.css'];
+
 /**
  * El shell que el service worker guarda al instalarse: la entrada y la página
  * de inicio con sus imports estáticos, CSS y logos (lo que vigila el
@@ -204,7 +208,7 @@ function serviceWorker(env: Record<string, string>): PluginOption {
 export default defineConfig(({ mode }) => ({
     plugins: [
         laravel({
-            input: ['resources/js/app.ts', ...OFFLINE_ENTRIES],
+            input: ['resources/js/app.ts', ...OFFLINE_ENTRIES, ...FIELD_ENTRIES],
             refresh: true,
         }),
         // Sin los comentarios de las plantillas, como en producción: así

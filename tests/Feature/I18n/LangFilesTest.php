@@ -90,7 +90,7 @@ function langFilesKeysUsedInCode(): array
     // LegalPagesTest y LegalReadinessTest. Las claves con
     // «::» son de un paquete (las vistas de Filament copiadas en
     // resources/views/vendor) y las trae el paquete.
-    $keys = array_values(array_unique(array_filter($keys, fn (string $key): bool => ! str_starts_with($key, 'panel.') && ! str_starts_with($key, 'documents.') && ! str_contains($key, '::'))));
+    $keys = array_values(array_unique(array_filter($keys, fn (string $key): bool => ! str_starts_with($key, 'panel.') && ! str_starts_with($key, 'documents.') && ! str_starts_with($key, 'field.') && ! str_contains($key, '::'))));
     sort($keys);
 
     return $keys;
@@ -182,4 +182,22 @@ test('existen las claves del panel que el código arma con un valor (medios de p
 
         expect(array_values(array_diff($dynamic, $keys)))->toBe([], "lang/{$locale}/panel.php no tiene todas las claves armadas con un valor");
     }
+});
+
+test('los textos del modo Campo tienen las mismas claves en los dos idiomas y existen las que usa el código', function () {
+    $flatten = fn (string $locale): array => array_keys(Arr::dot(require lang_path("{$locale}/field.php")));
+    $keys = $flatten(Locale::DEFAULT->value);
+
+    foreach (langFilesLocales() as $locale) {
+        expect($flatten($locale))->toBe($keys, "lang/{$locale}/field.php no tiene las mismas claves");
+    }
+
+    $used = [];
+    foreach (Finder::create()->files()->in(app_path())->name('*.php') as $file) {
+        preg_match_all("/__\(['\"]field\.([a-z_.]+[a-z])['\"]/", $file->getContents(), $matches);
+        array_push($used, ...$matches[1]);
+    }
+
+    expect($used)->not->toBeEmpty()
+        ->and(array_values(array_diff(array_unique($used), $keys)))->toBe([]);
 });
