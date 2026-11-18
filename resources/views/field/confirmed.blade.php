@@ -11,7 +11,10 @@
     </head>
     <body>
         <main>
-            <img class="logo" src="{{ $build('brand/logo/veni-wordmark.svg') }}" alt="{{ \App\Support\WebApp::SHORT_NAME }}" width="72" height="40">
+            <picture>
+                <source media="(prefers-color-scheme: dark)" srcset="{{ $build('brand/logo/veni-wordmark-blanco.svg') }}">
+                <img class="logo" src="{{ $build('brand/logo/veni-wordmark.svg') }}" alt="{{ \App\Support\WebApp::SHORT_NAME }}" width="72" height="40">
+            </picture>
             <h1>{{ __('field.confirm.done_title') }}</h1>
             <p role="status">{{ __('field.confirm.done') }}</p>
         </main>

@@ -51,6 +51,12 @@ class FieldSubmissionResource extends AdminResource
         return __('panel.admin.field.plural');
     }
 
+    /** El título de la página con el plural tal cual, sin mayúsculas en cada palabra. */
+    public static function getTitleCasePluralModelLabel(): string
+    {
+        return static::getPluralModelLabel();
+    }
+
     public static function canCreate(): bool
     {
         return false;
