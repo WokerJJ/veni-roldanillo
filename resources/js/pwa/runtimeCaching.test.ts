@@ -310,7 +310,7 @@ describe('rutas del service worker', () => {
 
         expect(routeFor(withoutMap, { url: `${MAP}/style/veni-claro-es.json` })).toBeUndefined();
         expect(routeFor(withoutMap, { url: `${MAP}/v0.2.0/style/veni-claro-es.json` })).toBeUndefined();
-        expect(withoutMap.map((route) => route.options?.cacheName)).toEqual([undefined, 'veni-map-engine', 'veni-assets', 'veni-media', 'veni-fonts']);
+        expect(withoutMap.map((route) => route.options?.cacheName)).toEqual([undefined, undefined, 'veni-map-engine', 'veni-assets', 'veni-media', 'veni-fonts']);
     });
 
     it('el grafo de rutas guarda solo ese archivo: otro .json del mismo origen no entra en su caché', () => {
@@ -329,5 +329,110 @@ describe('rutas del service worker', () => {
 
     it('del grafo guarda la publicación actual y la anterior, no más', () => {
         expect(routeFor(routes, { url: ENV.VITE_MAP_ROUTES_URL })?.options?.expiration?.maxEntries).toBe(2);
+    });
+});
+
+/*
+| El shell de /campo (ADR 0048) es la única navegación que se guarda: HTML
+| estático, sin sesión ni datos de nadie. Corre como en el service worker, con
+| su red, su reloj y una Cache API de mentira que cuenta lo que se guarda.
+*/
+describe('shell de /campo', () => {
+    const NETWORK_PAGE = { status: 200, headers: { get: () => 'text/html; charset=utf-8' }, clone: () => ({ copy: true }), from: 'la red' };
+    const SAVED_SHELL = { from: 'la copia del shell' };
+    const OFFLINE_PAGE = { from: 'el precache' };
+    const NETWORK_ERROR = { from: 'Response.error()' };
+    const never = new Promise<never>(() => undefined);
+
+    function open(network: { fetch: () => Promise<unknown>; saved?: unknown; url?: string }) {
+        const route = routeFor(runtimeCaching(ENV), { url: network.url ?? '/campo', mode: 'navigate' });
+        const put = vi.fn(() => Promise.resolve());
+        const opened = vi.fn(() => Promise.resolve({ put }));
+        const match = vi.fn((url: string, options: { cacheName?: string }) => Promise.resolve(options.cacheName === 'veni-campo-shell' ? network.saved : url === '/offline' ? OFFLINE_PAGE : undefined));
+        const handler = inWorker(route?.handler, {
+            fetch: vi.fn(network.fetch),
+            caches: { match, open: opened },
+            Response: { error: () => NETWORK_ERROR },
+            setTimeout: (callback: () => void, delay: number) => setTimeout(callback, delay),
+            clearTimeout: (timer: ReturnType<typeof setTimeout>) => {
+                clearTimeout(timer);
+            },
+        }) as (context: { event: object; request: { url: string; mode: string } }) => Promise<unknown>;
+        const result: { answer?: unknown } = {};
+
+        void handler({ event: {}, request: { url: `${APP}/campo`, mode: 'navigate' } }).then((answer) => {
+            result.answer = answer;
+        });
+
+        return { result, put, opened, route };
+    }
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('/campo tiene su propia ruta y las demás navegaciones siguen con la general', () => {
+        const routes = runtimeCaching(ENV);
+
+        expect(routeFor(routes, { url: '/campo', mode: 'navigate' })?.handler).not.toBe(routeFor(routes, { url: '/restaurants/la-ceiba', mode: 'navigate' })?.handler);
+        // Ni /campo/api ni otra página que empiece igual: solo la dirección exacta.
+        expect(routeFor(routes, { url: '/campo/api/me', mode: 'navigate' })?.handler).toBe(routeFor(routes, { url: '/', mode: 'navigate' })?.handler);
+        expect(routeFor(routes, { url: '/campos', mode: 'navigate' })?.handler).toBe(routeFor(routes, { url: '/', mode: 'navigate' })?.handler);
+        // La API no tiene ruta: sale a la red sin guardarse, también la de /campo.
+        expect(routeFor(routes, { url: '/campo/api/me', mode: 'cors' })).toBeUndefined();
+        expect(routeFor(routes, { url: '/campo/api/submissions', mode: 'cors' })).toBeUndefined();
+        // El shell no es una ruta con caché de Workbox: no hay una caché que se llene sola.
+        expect(caching(routes).map((route) => route.options?.cacheName)).not.toContain('veni-campo-shell');
+    });
+
+    it('con red, responde la página y deja una sola copia, en la misma clave', async () => {
+        const { result, put, opened } = open({ fetch: () => Promise.resolve(NETWORK_PAGE) });
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(result.answer).toBe(NETWORK_PAGE);
+        expect(opened).toHaveBeenCalledWith('veni-campo-shell');
+        expect(put).toHaveBeenCalledWith('/campo', { copy: true });
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('no guarda lo que no es HTML 200: un error o una redirección no pisan la copia buena', async () => {
+        for (const response of [{ ...NETWORK_PAGE, status: 500 }, { ...NETWORK_PAGE, status: 302 }, { ...NETWORK_PAGE, headers: { get: () => 'application/json' } }]) {
+            const { result, put } = open({ fetch: () => Promise.resolve(response) });
+            await vi.advanceTimersByTimeAsync(0);
+
+            expect(result.answer).toBe(response);
+            expect(put).not.toHaveBeenCalled();
+        }
+    });
+
+    it('sin red, abre la copia guardada', async () => {
+        const { result } = open({ fetch: () => Promise.reject(new TypeError('Failed to fetch')), saved: SAVED_SHELL });
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(result.answer).toBe(SAVED_SHELL);
+    });
+
+    it('con una copia guardada y la red colgada, espera solo 3 segundos', async () => {
+        const { result } = open({ fetch: () => never, saved: SAVED_SHELL });
+
+        await vi.advanceTimersByTimeAsync(2_999);
+        expect(result.answer).toBeUndefined();
+
+        await vi.advanceTimersByTimeAsync(1);
+        expect(result.answer).toBe(SAVED_SHELL);
+    });
+
+    it('sin copia guardada, espera los 10 segundos de siempre y cae en la página sin conexión', async () => {
+        const { result } = open({ fetch: () => never });
+
+        await vi.advanceTimersByTimeAsync(9_999);
+        expect(result.answer).toBeUndefined();
+
+        await vi.advanceTimersByTimeAsync(1);
+        expect(result.answer).toBe(OFFLINE_PAGE);
     });
 });
