@@ -22,6 +22,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 
 uses(RefreshDatabase::class);
 
@@ -382,4 +383,31 @@ test('devueltas y rechazadas se borran a los seis meses; las aprobadas se conser
     expect(FieldSubmission::query()->whereKey($rejected->id)->exists())->toBeFalse()
         ->and(FieldSubmission::query()->whereKey($recent->id)->exists())->toBeTrue()
         ->and(FieldSubmission::query()->whereKey($approved->id)->exists())->toBeTrue();
+});
+
+test('el contacto del dueño no sale en la ficha pública, el GeoJSON ni las props de Inertia tras publicar', function () {
+    $admin = User::factory()->admin()->create();
+    $submission = confirmedSubmission($admin, ['owner_name' => 'Zacarias Privadez', 'owner_phone' => '573009876543']);
+
+    $restaurant = app(ApproveFieldSubmission::class)->handle($submission, $admin);
+    app(PublishRestaurant::class)->handle($restaurant);
+    $slug = $restaurant->refresh()->slug;
+
+    $html = $this->get("/restaurants/{$slug}")->assertOk()->getContent() ?: '';
+    $inertia = '';
+    $this->get("/restaurants/{$slug}")->assertInertia(function (Assert $page) use (&$inertia): void {
+        $inertia = json_encode($page->toArray(), JSON_UNESCAPED_UNICODE) ?: '';
+    });
+    $geojson = $this->get('/api/restaurants.geojson')->assertOk()->getContent() ?: '';
+
+    expect($geojson)->toContain('Sazón del Parque');
+
+    foreach ([$html, $inertia, $geojson] as $surface) {
+        expect($surface)->not->toContain('Zacarias')
+            ->and($surface)->not->toContain('Privadez')
+            ->and($surface)->not->toContain('573009876543')
+            ->and($surface)->not->toContain('3009876543')
+            ->and($surface)->not->toContain('owner_name')
+            ->and($surface)->not->toContain('owner_phone');
+    }
 });
