@@ -8,6 +8,7 @@ use App\Actions\Restaurants\ReceiveFieldSubmission;
 use App\Enums\FieldSubmissionStatus;
 use App\Enums\PaymentMethod;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Field\DuplicateLookupRequest;
 use App\Http\Requests\Field\StoreFieldSubmissionRequest;
 use App\Models\Category;
 use App\Models\FieldSubmission;
@@ -18,6 +19,7 @@ use App\Support\GeoPoint;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 
 /**
  * La API JSON del modo Campo (ADR 0048): solo para administración, con la
@@ -48,17 +50,8 @@ class FieldSubmissionController extends Controller
     }
 
     /** Duplicados posibles antes de enviar (con señal). */
-    public function duplicates(Request $request, DuplicateFinder $finder): JsonResponse
+    public function duplicates(DuplicateLookupRequest $request, DuplicateFinder $finder): JsonResponse
     {
-        Gate::authorize('create', FieldSubmission::class);
-
-        $request->validate([
-            'name' => ['required', 'string', 'min:2', 'max:120'],
-            'latitude' => ['required', 'numeric', 'between:-90,90'],
-            'longitude' => ['required', 'numeric', 'between:-180,180'],
-            'uuid' => ['nullable', 'uuid'],
-        ]);
-
         return response()->json([
             'candidates' => $finder->find(
                 $request->string('name')->trim()->toString(),
@@ -130,16 +123,34 @@ class FieldSubmissionController extends Controller
 
     private function refused(ActionRefused $refused): JsonResponse
     {
+        // Cada motivo con su estado, a propósito: un motivo nuevo no queda en un 409
+        // por accidente. Los de aquí son los que salen de recibir y de pedir el enlace.
         [$status, $field] = match ($refused->reason) {
             ActionRefused::NOT_YOURS => [404, null],
             ActionRefused::INVALID_TARGET => [422, 'restaurant_id'],
-            default => [409, null],
+            ActionRefused::CONTENT_CONFLICT,
+            ActionRefused::CONTENT_UNCHANGED,
+            ActionRefused::NOT_OPEN => [409, null],
+            default => $this->unmapped($refused),
         };
 
         return response()->json(
             ['message' => $refused->reason, 'errors' => $field === null ? (object) [] : [$field => [$refused->reason]]],
             $status,
         );
+    }
+
+    /**
+     * Un motivo que esta API no esperaba: se anota (solo el motivo, nunca datos
+     * de la captura ni del dueño) y responde 409.
+     *
+     * @return array{int, null}
+     */
+    private function unmapped(ActionRefused $refused): array
+    {
+        Log::warning('Modo Campo: motivo de rechazo sin estado propio.', ['reason' => $refused->reason]);
+
+        return [409, null];
     }
 
     /**

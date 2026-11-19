@@ -312,3 +312,15 @@ test('reenviar una devuelta con el mismo contenido da 409 content_unchanged; cor
 
     $this->putJson("/campo/api/submissions/{$uuid}", fieldBody(['reference' => 'Frente a la plaza']))->assertOk()->assertJsonPath('revision', 2);
 });
+
+test('la búsqueda de duplicados acepta solo puntos de Roldanillo, como el envío', function (array $override, string $field) {
+    $this->actingAs(User::factory()->admin()->create());
+
+    $this->postJson('/campo/api/duplicates', [...['name' => 'Sazón', 'latitude' => 4.41, 'longitude' => -76.15], ...$override])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors($field);
+})->with([
+    'latitud fuera del recuadro' => [['latitude' => 40.4], 'latitude'],
+    'longitud fuera del recuadro' => [['longitude' => -3.7], 'longitude'],
+    'sin coordenadas' => [['latitude' => null], 'latitude'],
+]);
