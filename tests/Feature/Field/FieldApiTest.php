@@ -277,3 +277,21 @@ test('el shell lleva los textos en los dos idiomas, para abrir sin señal, y nin
     preg_match_all('#<script(?![^>]*application/json)[^>]*>(.*?)</script>#s', $html, $scripts);
     expect(array_filter(array_map('trim', $scripts[1])))->toBe([]);
 });
+
+test('los envíos y el enlace solo se aceptan desde la propia app y en JSON; el GET de me no lleva cuerpo', function () {
+    $this->actingAs(User::factory()->admin()->create());
+    $uuid = (string) Str::uuid();
+    $plain = ['HTTP_ACCEPT' => 'application/json', 'CONTENT_TYPE' => 'text/plain'];
+
+    $this->withHeaders(['Origin' => 'https://otro-sitio.example'])->putJson("/campo/api/submissions/{$uuid}", fieldBody())->assertForbidden();
+    $this->withHeaders(['Sec-Fetch-Site' => 'cross-site'])->postJson("/campo/api/submissions/{$uuid}/confirmation-link")->assertForbidden();
+    $this->withHeaders(['Origin' => 'https://otro-sitio.example'])->postJson('/campo/api/duplicates', ['name' => 'x y', 'latitude' => 4.41, 'longitude' => -76.15])->assertForbidden();
+    $this->call('PUT', "/campo/api/submissions/{$uuid}", [], [], [], $plain, 'name=x')->assertStatus(415);
+    $this->call('POST', '/campo/api/duplicates', [], [], [], $plain, 'name=x')->assertStatus(415);
+    $this->getJson('/campo/api/me')->assertOk();
+
+    expect(FieldSubmission::query()->count())->toBe(0);
+
+    $this->withHeaders(['Origin' => rtrim(config()->string('app.url'), '/'), 'Sec-Fetch-Site' => 'same-origin'])
+        ->putJson("/campo/api/submissions/{$uuid}", fieldBody())->assertCreated();
+});

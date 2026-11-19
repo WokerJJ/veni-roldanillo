@@ -145,7 +145,7 @@ export function createApi(doFetch: typeof fetch = (...args) => fetch(...args)): 
             return { created: response.status === 201, submission: await json<ServerSubmission>(response) };
         },
         async confirmationLink(uuid) {
-            const response = await call('POST', `/submissions/${uuid}/confirmation-link`);
+            const response = await call('POST', `/submissions/${uuid}/confirmation-link`, {});
 
             if (!response.ok) {
                 return rejected(response);

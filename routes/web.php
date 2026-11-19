@@ -10,6 +10,7 @@ use App\Http\Controllers\RestaurantController;
 use App\Http\Controllers\RestaurantRequestController;
 use App\Http\Controllers\WebManifestController;
 use App\Http\Middleware\PrivateResponse;
+use App\Http\Middleware\RequireSameOriginJson;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Home')->name('home');
@@ -36,7 +37,9 @@ Route::controller(RestaurantRequestController::class)
 
 // Modo Campo (ADR 0048). El shell es estático, sin sesión ni datos de nadie
 // (como /offline): así el service worker puede guardarlo y abrir sin señal.
-// Lo que trabaja con datos es la API JSON de abajo, solo para administración.
+// Lo que trabaja con datos es la API JSON de abajo, solo para administración:
+// los POST y PUT, además del CSRF, exigen venir de la propia app y en JSON
+// (RequireSameOriginJson); el GET de /me no lleva cuerpo.
 Route::view('/campo', 'campo')
     ->withoutMiddleware('web')
     ->name('field.shell');
@@ -47,9 +50,9 @@ Route::prefix('/campo/api')
     ->group(function (): void {
         Route::get('/me', 'me')->name('field.me');
         Route::get('/submissions', 'index')->name('field.submissions.index');
-        Route::post('/duplicates', 'duplicates')->middleware('throttle:field-lookup')->name('field.duplicates');
-        Route::put('/submissions/{uuid}', 'store')->middleware('throttle:field-submissions')->whereUuid('uuid')->name('field.submissions.store');
-        Route::post('/submissions/{uuid}/confirmation-link', 'confirmationLink')->middleware('throttle:field-submissions')->whereUuid('uuid')->name('field.confirmation-link');
+        Route::post('/duplicates', 'duplicates')->middleware([RequireSameOriginJson::class, 'throttle:field-lookup'])->name('field.duplicates');
+        Route::put('/submissions/{uuid}', 'store')->middleware([RequireSameOriginJson::class, 'throttle:field-submissions'])->whereUuid('uuid')->name('field.submissions.store');
+        Route::post('/submissions/{uuid}/confirmation-link', 'confirmationLink')->middleware([RequireSameOriginJson::class, 'throttle:field-submissions'])->whereUuid('uuid')->name('field.confirmation-link');
     });
 
 // La confirmación del dueño, sin cuenta: el código va en la dirección, vale

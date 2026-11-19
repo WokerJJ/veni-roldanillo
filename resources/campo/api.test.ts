@@ -67,6 +67,14 @@ describe('createApi', () => {
         await expect(conflict.send('u', {} as never)).rejects.toBeInstanceOf(RejectedError);
     });
 
+    it('el enlace del dueño se pide con un cuerpo JSON (el servidor exige JSON en los POST)', async () => {
+        const doFetch = vi.fn<typeof fetch>().mockResolvedValue(json(200, { url: 'u', expires_at: null, whatsapp_url: 'w' }));
+
+        await createApi(doFetch).confirmationLink('u');
+
+        expect(doFetch.mock.calls[0]?.[1]).toMatchObject({ method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } });
+    });
+
     it('busca duplicados con el uuid para no contarse a sí misma', async () => {
         const doFetch = vi.fn<typeof fetch>().mockResolvedValue(json(200, { candidates: [{ name: 'Otro' }] }));
 
