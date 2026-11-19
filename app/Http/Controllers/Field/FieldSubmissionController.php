@@ -35,7 +35,7 @@ class FieldSubmissionController extends Controller
         $user = $request->user();
 
         return response()->json([
-            'user' => ['name' => $user->name],
+            'user' => ['id' => $user->id, 'name' => $user->name],
             'csrf' => csrf_token(),
             'categories' => Category::query()->orderBy('position')->get(['id', 'slug', 'name_es', 'name_en'])
                 ->map(fn (Category $c): array => ['id' => $c->id, 'slug' => $c->slug, 'name_es' => $c->name_es, 'name_en' => $c->name_en])->all(),

@@ -6,7 +6,7 @@ function json(status: number, body: unknown): Response {
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-const ME = { user: { name: 'Jhon' }, csrf: 'token-1', categories: [], payment_methods: [] };
+const ME = { user: { id: 1, name: 'Jhon' }, csrf: 'token-1', categories: [], payment_methods: [] };
 
 describe('createApi', () => {
     it('manda la sesión, JSON y el token CSRF que dio /me', async () => {

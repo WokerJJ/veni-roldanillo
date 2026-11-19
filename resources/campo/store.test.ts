@@ -43,7 +43,7 @@ function serverSubmission(uuid: string, overrides: Partial<ServerSubmission> = {
 
 function fakeApi(overrides: Partial<CampoApi> = {}): CampoApi {
     return {
-        me: vi.fn(() => Promise.resolve({ user: { name: 'Jhon' }, csrf: 't', categories: [{ id: 1, slug: 'pizzas', name_es: 'Pizzas', name_en: 'Pizza' }], payment_methods: ['cash'] })),
+        me: vi.fn(() => Promise.resolve({ user: { id: 1, name: 'Jhon' }, csrf: 't', categories: [{ id: 1, slug: 'pizzas', name_es: 'Pizzas', name_en: 'Pizza' }], payment_methods: ['cash'] })),
         duplicates: vi.fn(() => Promise.resolve([])),
         list: vi.fn(() => Promise.resolve([])),
         send: vi.fn((uuid: string) => Promise.resolve({ created: true, submission: serverSubmission(uuid) })),
@@ -270,6 +270,51 @@ describe('actualizar con señal', () => {
         await campo.refresh();
 
         expect(campo.state.drafts[0]?.name).toBe('Ya corregida');
+    });
+});
+
+describe('cuentas distintas en el mismo teléfono', () => {
+    const OTHER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+    it('guarda el id de la cuenta en meta', async () => {
+        const campo = build(fakeApi());
+        await campo.refresh();
+
+        expect((await storage.getMeta())?.userId).toBe(1);
+    });
+
+    it('si entra otra cuenta, vacía borradores, enviados y meta de la anterior antes de seguir', async () => {
+        const first = build(fakeApi());
+        await first.refresh();
+        await storage.putDraft(ready(OTHER));
+        await storage.putSent({ uuid: OTHER, name: 'De la cuenta 1', status: 'submitted', revision: 1, received_at: '2026-11-18T15:05:00Z', owner_confirmed_at: null, link_expires_at: null, review_note: null, duplicates: 0 });
+
+        const second = build(fakeApi({
+            me: vi.fn(() => Promise.resolve({ user: { id: 2, name: 'Otra' }, csrf: 't', categories: [], payment_methods: [] })),
+            list: vi.fn(() => Promise.resolve([])),
+        }));
+        await second.load();
+        expect(second.state.drafts).toHaveLength(1);
+
+        await second.refresh();
+
+        expect(second.state.drafts).toEqual([]);
+        expect(second.state.sent).toEqual([]);
+        expect(await storage.listDrafts()).toEqual([]);
+        expect(await storage.listSent()).toEqual([]);
+        expect(second.state.meta).toMatchObject({ userId: 2, userName: 'Otra' });
+    });
+
+    it('con la misma cuenta no borra nada', async () => {
+        const campo = build(fakeApi());
+        await campo.refresh();
+        await storage.putDraft(ready(OTHER));
+
+        const again = build(fakeApi());
+        await again.load();
+        await again.refresh();
+
+        expect(again.state.drafts).toHaveLength(1);
     });
 });
 

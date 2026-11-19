@@ -73,10 +73,12 @@ test('sin sesión es 401 y una cuenta que no es de administración, 403', functi
 
 test('me da lo que el shell necesita para trabajar sin señal y no se guarda en ninguna caché', function () {
     Category::factory()->create(['name_es' => 'Pizzas']);
-    $this->actingAs(User::factory()->admin()->create(['name' => 'Jhon']));
+    $admin = User::factory()->admin()->create(['name' => 'Jhon']);
+    $this->actingAs($admin);
 
     $response = $this->getJson('/campo/api/me')->assertOk()
         ->assertJsonPath('user.name', 'Jhon')
+        ->assertJsonPath('user.id', $admin->id)
         ->assertJsonPath('categories.0.name_es', 'Pizzas')
         ->assertJsonPath('payment_methods', ['cash', 'nequi', 'daviplata', 'card']);
 

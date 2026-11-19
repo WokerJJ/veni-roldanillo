@@ -24,7 +24,7 @@ export class RejectedError extends Error {
 }
 
 export interface Me {
-    user: { name: string };
+    user: { id: number; name: string };
     csrf: string;
     categories: Category[];
     payment_methods: string[];

@@ -109,7 +109,18 @@ export function createCampo(deps: CampoDeps) {
             const me = await api.me();
             state.auth = 'ok';
             state.online = true;
-            state.meta = { userName: me.user.name, categories: me.categories, paymentMethods: me.payment_methods };
+
+            // Otra cuenta en el mismo teléfono: lo guardado no es suyo ni se le muestra ni se le envía.
+            const previous = await storage.getMeta();
+
+            if (previous?.userId !== undefined && previous.userId !== me.user.id) {
+                await storage.clearAll();
+                state.drafts = [];
+                state.sent = [];
+                state.meta = null;
+            }
+
+            state.meta = { userId: me.user.id, userName: me.user.name, categories: me.categories, paymentMethods: me.payment_methods };
             await storage.putMeta(plain(state.meta));
 
             const server = await api.list();

@@ -32,6 +32,8 @@ export interface Category {
 }
 
 export interface MetaCache {
+    /** La cuenta a la que pertenece lo guardado: si entra otra, se vacía todo. */
+    userId: number;
     userName: string;
     categories: Category[];
     paymentMethods: string[];
@@ -54,6 +56,8 @@ export interface CampoStorage {
     replaceSent(summaries: readonly SentSummary[]): Promise<void>;
     getMeta(): Promise<MetaCache | null>;
     putMeta(meta: MetaCache): Promise<void>;
+    /** Borradores, enviados y meta: lo que dejó otra cuenta en este teléfono. */
+    clearAll(): Promise<void>;
 }
 
 /** En memoria: lo que usa la app si IndexedDB no está, y las pruebas. */
@@ -89,6 +93,13 @@ export function memoryStorage(): CampoStorage {
         getMeta: () => Promise.resolve(meta),
         putMeta: (next) => {
             meta = structuredClone(next);
+
+            return Promise.resolve();
+        },
+        clearAll: () => {
+            drafts.clear();
+            sent.clear();
+            meta = null;
 
             return Promise.resolve();
         },
@@ -193,5 +204,12 @@ export async function openStorage(given?: IDBFactory): Promise<CampoStorage> {
             return row?.value ?? null;
         },
         putMeta: (meta) => put('meta', { key: 'cache', value: meta }),
+        clearAll: async () => {
+            const tx = db.transaction(['drafts', 'sent', 'meta'], 'readwrite');
+            tx.objectStore('drafts').clear();
+            tx.objectStore('sent').clear();
+            tx.objectStore('meta').clear();
+            await done(tx);
+        },
     };
 }
