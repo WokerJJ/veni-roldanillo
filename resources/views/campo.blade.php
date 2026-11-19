@@ -11,6 +11,8 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="robots" content="noindex, nofollow">
+        {{-- La marca con que el service worker reconoce este shell y no guarda otra página (un portal cautivo). --}}
+        <meta name="veni-campo-shell" content="1">
         <meta name="theme-color" content="{{ \App\Support\WebApp::themeColor('light') }}" media="(prefers-color-scheme: light)">
         <meta name="theme-color" content="{{ \App\Support\WebApp::themeColor('dark') }}" media="(prefers-color-scheme: dark)">
         <title>Campo · {{ \App\Support\WebApp::NAME }}</title>

@@ -77,9 +77,12 @@ export async function navigation({ event, request }: Navigation): Promise<Respon
  * Sin red abre la copia guardada, para capturar fichas sin señal.
  *
  * Red primero: con una copia guardada, la red tiene 3 segundos; sin ella, los
- * 10 de siempre. Solo se guarda una respuesta 200 de HTML, y siempre en la misma
- * clave: la caché nunca pasa de una entrada. Se copia como texto en
- * public/sw.js: repite los nombres en vez de usar constantes del módulo.
+ * 10 de siempre. Solo se guarda una respuesta 200 de HTML que lleve la marca del
+ * shell (`<meta name="veni-campo-shell">`, resources/views/campo.blade.php): un
+ * portal cautivo de un wifi también responde 200 de HTML y no debe pisar la
+ * copia buena. Siempre en la misma clave: la caché nunca pasa de una entrada.
+ * Se copia como texto en public/sw.js: repite los nombres en vez de usar
+ * constantes del módulo.
  */
 export async function campoShell({ event, request }: Navigation): Promise<Response> {
     const options = { ignoreSearch: true, cacheName: 'veni-campo-shell' };
@@ -109,8 +112,12 @@ export async function campoShell({ event, request }: Navigation): Promise<Respon
         }
 
         if (response.status === 200 && (response.headers.get('Content-Type') ?? '').startsWith('text/html')) {
-            const cache = await caches.open('veni-campo-shell');
-            await cache.put('/campo', response.clone());
+            const body = await response.clone().text();
+
+            if (body.includes('<meta name="veni-campo-shell" content="1">')) {
+                const cache = await caches.open('veni-campo-shell');
+                await cache.put('/campo', response.clone());
+            }
         }
 
         return response;
@@ -143,6 +150,20 @@ export function runtimeCaching(env: Readonly<Record<string, string | undefined>>
             // Va después del shell: ninguna ruta con caché llega a ver una navegación.
             urlPattern: ({ request }) => request.mode === 'navigate',
             handler: navigation,
+        },
+        {
+            // La entrada de /campo y su estilo (vite.config.ts les da el prefijo
+            // `campo-`): sin lo que el shell carga, no abre sin señal. En su
+            // propia caché: en veni-assets, con 120 lugares para los chunks y los
+            // íconos, otros archivos podrían sacarlos. Cada compilación suma dos;
+            // el tope deja unas tres compilaciones y el resto vence.
+            urlPattern: ({ sameOrigin, url }) => sameOrigin && /^\/build\/assets\/campo-[\w-]+\.(?:js|css)$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+                cacheName: 'veni-campo-assets',
+                expiration: { maxEntries: 8, maxAgeSeconds: 60 * DAY, purgeOnQuotaError: true },
+                cacheableResponse: { statuses: [200] },
+            },
         },
         {
             // MapLibre: el motor y lo que comparte con su worker, más de

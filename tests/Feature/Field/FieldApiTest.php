@@ -56,7 +56,9 @@ test('el shell abre sin sesión ni cookies: no lleva datos de nadie', function (
     $response = $this->get('/campo')->assertOk();
 
     expect($response->headers->getCookies())->toBe([])
-        ->and($response->headers->get('Content-Security-Policy'))->toContain("default-src 'self'");
+        ->and($response->headers->get('Content-Security-Policy'))->toContain("default-src 'self'")
+        // La marca con que el service worker reconoce el shell (runtimeCaching.ts: campoShell).
+        ->and($response->getContent())->toContain('<meta name="veni-campo-shell" content="1">');
 });
 
 test('sin sesión es 401 y una cuenta que no es de administración, 403', function () {

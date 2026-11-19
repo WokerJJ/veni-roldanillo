@@ -236,6 +236,9 @@ describe('rutas del service worker', () => {
 
     it.each([
         ['un chunk del build', '/build/assets/Home-C0ffee12.js', 'CacheFirst', 'veni-assets'],
+        // El shell de /campo y su estilo, en su caché: sin ella, los 120 chunks y íconos de arriba los sacarían y /campo no abriría sin señal.
+        ['la entrada de /campo', '/build/assets/campo-C0ffee12.js', 'CacheFirst', 'veni-campo-assets'],
+        ['el estilo de /campo', '/build/assets/campo-DnA4_LsO.css', 'CacheFirst', 'veni-campo-assets'],
         ['una fuente', '/fonts/figtree-latin.woff2', 'StaleWhileRevalidate', 'veni-fonts'],
         // Fotos de los platos (#113): con hash en el nombre, solo las ya vistas y con tope.
         ['la foto de un plato', '/storage/media/dishes/0123456789abcdef0123-160.webp', 'CacheFirst', 'veni-media'],
@@ -310,7 +313,7 @@ describe('rutas del service worker', () => {
 
         expect(routeFor(withoutMap, { url: `${MAP}/style/veni-claro-es.json` })).toBeUndefined();
         expect(routeFor(withoutMap, { url: `${MAP}/v0.2.0/style/veni-claro-es.json` })).toBeUndefined();
-        expect(withoutMap.map((route) => route.options?.cacheName)).toEqual([undefined, undefined, 'veni-map-engine', 'veni-assets', 'veni-media', 'veni-fonts']);
+        expect(withoutMap.map((route) => route.options?.cacheName)).toEqual([undefined, undefined, 'veni-campo-assets', 'veni-map-engine', 'veni-assets', 'veni-media', 'veni-fonts']);
     });
 
     it('el grafo de rutas guarda solo ese archivo: otro .json del mismo origen no entra en su caché', () => {
@@ -338,7 +341,11 @@ describe('rutas del service worker', () => {
 | su red, su reloj y una Cache API de mentira que cuenta lo que se guarda.
 */
 describe('shell de /campo', () => {
-    const NETWORK_PAGE = { status: 200, headers: { get: () => 'text/html; charset=utf-8' }, clone: () => ({ copy: true }), from: 'la red' };
+    // El shell lleva su marca (resources/views/campo.blade.php): sin ella, un 200 de HTML
+    // (el portal cautivo de un wifi) no es el shell y no se guarda.
+    const SHELL_HTML = '<!DOCTYPE html><html><head><meta name="veni-campo-shell" content="1"></head><body><div id="campo"></div></body></html>';
+    const page = (html: string) => ({ status: 200, headers: { get: () => 'text/html; charset=utf-8' }, clone: () => ({ copy: true, text: () => Promise.resolve(html) }), from: 'la red' });
+    const NETWORK_PAGE = page(SHELL_HTML);
     const SAVED_SHELL = { from: 'la copia del shell' };
     const OFFLINE_PAGE = { from: 'el precache' };
     const NETWORK_ERROR = { from: 'Response.error()' };
@@ -395,7 +402,7 @@ describe('shell de /campo', () => {
 
         expect(result.answer).toBe(NETWORK_PAGE);
         expect(opened).toHaveBeenCalledWith('veni-campo-shell');
-        expect(put).toHaveBeenCalledWith('/campo', { copy: true });
+        expect(put).toHaveBeenCalledWith('/campo', expect.objectContaining({ copy: true }));
         expect(vi.getTimerCount()).toBe(0);
     });
 
@@ -407,6 +414,16 @@ describe('shell de /campo', () => {
             expect(result.answer).toBe(response);
             expect(put).not.toHaveBeenCalled();
         }
+    });
+
+    it('un 200 de HTML sin la marca del shell (un portal cautivo) se muestra pero no pisa la copia buena', async () => {
+        const portal = page('<html><body><form action="/login">Inicia sesión en el wifi</form></body></html>');
+        const { result, put, opened } = open({ fetch: () => Promise.resolve(portal), saved: SAVED_SHELL });
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(result.answer).toBe(portal);
+        expect(opened).not.toHaveBeenCalled();
+        expect(put).not.toHaveBeenCalled();
     });
 
     it('sin red, abre la copia guardada', async () => {

@@ -258,6 +258,14 @@ export default defineConfig(({ mode }) => ({
         },
     },
     build: {
+        rollupOptions: {
+            output: {
+                // La entrada de /campo (ADR 0048) lleva el prefijo `campo-`, como su
+                // estilo: el service worker la guarda en su propia caché por ese
+                // nombre (resources/js/pwa/runtimeCaching.ts). El resto, como siempre.
+                entryFileNames: (chunk) => (chunk.facadeModuleId?.replaceAll('\\', '/').endsWith('/resources/campo/main.ts') === true ? 'assets/campo-[hash].js' : 'assets/[name]-[hash].js'),
+            },
+        },
         // Los dos chunks de MapLibre (su código y el que comparte con el worker)
         // rondan los 570 kB y solo se descargan al abrir un mapa: el aviso de
         // Vite (500 kB) se sube para que salte con lo que crezca de más.
