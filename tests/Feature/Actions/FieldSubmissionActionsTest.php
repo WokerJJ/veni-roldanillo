@@ -387,6 +387,7 @@ test('devueltas y rechazadas se borran a los seis meses; las aprobadas se conser
 });
 
 test('el contacto del dueño no sale en la ficha pública, el GeoJSON ni las props de Inertia tras publicar', function () {
+    $this->withoutVite();
     $admin = User::factory()->admin()->create();
     $submission = confirmedSubmission($admin, ['owner_name' => 'Zacarias Privadez', 'owner_phone' => '573009876543']);
 
