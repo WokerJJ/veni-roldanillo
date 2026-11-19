@@ -295,3 +295,16 @@ test('los envíos y el enlace solo se aceptan desde la propia app y en JSON; el 
     $this->withHeaders(['Origin' => rtrim(config()->string('app.url'), '/'), 'Sec-Fetch-Site' => 'same-origin'])
         ->putJson("/campo/api/submissions/{$uuid}", fieldBody())->assertCreated();
 });
+
+test('reenviar una devuelta con el mismo contenido da 409 content_unchanged; corregida, se acepta', function () {
+    $admin = User::factory()->admin()->create();
+    $this->actingAs($admin);
+    $uuid = (string) Str::uuid();
+    $this->putJson("/campo/api/submissions/{$uuid}", fieldBody())->assertCreated();
+    FieldSubmission::query()->where('uuid', $uuid)->update(['status' => 'returned', 'review_note' => 'Corregí', 'reviewed_at' => now()]);
+
+    $this->putJson("/campo/api/submissions/{$uuid}", fieldBody())->assertStatus(409)->assertJsonPath('message', 'content_unchanged');
+    expect(FieldSubmission::query()->where('uuid', $uuid)->firstOrFail()->status)->toBe(FieldSubmissionStatus::Returned);
+
+    $this->putJson("/campo/api/submissions/{$uuid}", fieldBody(['reference' => 'Frente a la plaza']))->assertOk()->assertJsonPath('revision', 2);
+});

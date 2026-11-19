@@ -19,7 +19,8 @@ use Illuminate\Support\Facades\DB;
  * teléfono: repetir el envío con el mismo contenido da el mismo resultado y
  * no duplica; con otro contenido y la captura ya enviada, se rechaza; una
  * captura devuelta se reemplaza como una revisión nueva (y su confirmación
- * del dueño ya no vale). Siempre vuelve a buscar duplicados en el servidor.
+ * del dueño ya no vale), pero solo si cambió algo: reenviarla igual se rechaza.
+ * Siempre vuelve a buscar duplicados en el servidor.
  *
  * Los datos llegan validados y normalizados por StoreFieldSubmissionRequest.
  * No confía en nada del cliente que no sea el contenido: quién captura sale
@@ -74,6 +75,12 @@ final class ReceiveFieldSubmission
             }
 
             return ['submission' => $existing, 'created' => false];
+        }
+
+        // Devuelta y reenviada tal cual (un borrador viejo del teléfono): no es una
+        // corrección. Aceptarla borraría la confirmación del dueño sin cambiar nada.
+        if ($existing !== null && $existing->payload_hash === $hash) {
+            throw new ActionRefused(ActionRefused::CONTENT_UNCHANGED);
         }
 
         $this->assertTarget($data['restaurant_id']);

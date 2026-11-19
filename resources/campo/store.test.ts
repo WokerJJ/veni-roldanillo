@@ -239,6 +239,38 @@ describe('actualizar con señal', () => {
 
         expect(campo.state.drafts[0]).toMatchObject({ uuid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', returnNote: 'Falta algo', name: 'Sazón' });
     });
+
+    it('si el servidor la devolvió y el teléfono aún tiene el borrador viejo del mismo uuid, lo reemplaza por lo devuelto', async () => {
+        const uuid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        const content = {
+            name: 'Sazón devuelta', category_ids: [1], address: 'Calle 1 # 2-3', reference: null, phone: null, whatsapp: null, delivery: true, payment_methods: [], hours: [],
+            latitude: 4.41, longitude: -76.15, location_source: 'device' as const, owner_name: 'Marta', owner_role: 'owner' as const, owner_phone: '573004445566', restaurant_id: null, distinct_from: [],
+        };
+        await storage.putDraft(ready(uuid, { name: 'Sazón vieja' }));
+        const campo = build(fakeApi({ list: vi.fn(() => Promise.resolve([serverSubmission(uuid, { status: 'returned', review_note: 'Falta algo', content })])) }));
+        await campo.load();
+
+        await campo.refresh();
+
+        expect(campo.state.drafts).toHaveLength(1);
+        expect(campo.state.drafts[0]).toMatchObject({ uuid, name: 'Sazón devuelta', returnNote: 'Falta algo', state: 'editing' });
+        expect((await storage.listDrafts())[0]?.name).toBe('Sazón devuelta');
+    });
+
+    it('un borrador que ya nació de la devolución y se está corrigiendo no se pisa al actualizar', async () => {
+        const uuid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        const content = {
+            name: 'Sazón devuelta', category_ids: [1], address: 'Calle 1 # 2-3', reference: null, phone: null, whatsapp: null, delivery: true, payment_methods: [], hours: [],
+            latitude: 4.41, longitude: -76.15, location_source: 'device' as const, owner_name: 'Marta', owner_role: 'owner' as const, owner_phone: '573004445566', restaurant_id: null, distinct_from: [],
+        };
+        await storage.putDraft(ready(uuid, { name: 'Ya corregida', returnNote: 'Falta algo' }));
+        const campo = build(fakeApi({ list: vi.fn(() => Promise.resolve([serverSubmission(uuid, { status: 'returned', review_note: 'Falta algo', content })])) }));
+        await campo.load();
+
+        await campo.refresh();
+
+        expect(campo.state.drafts[0]?.name).toBe('Ya corregida');
+    });
 });
 
 describe('enlace del dueño', () => {

@@ -45,6 +45,8 @@ final class ActionRefused extends RuntimeException
 
     public const CONTENT_CONFLICT = 'content_conflict';
 
+    public const CONTENT_UNCHANGED = 'content_unchanged';
+
     public const INVALID_TARGET = 'invalid_target';
 
     public const NOT_OPEN = 'not_open';

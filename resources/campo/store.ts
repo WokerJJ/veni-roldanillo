@@ -116,9 +116,19 @@ export function createCampo(deps: CampoDeps) {
             state.sent = server.map(summaryOf).sort(byRecent);
             await storage.replaceSent(plain(state.sent));
 
-            // Una captura devuelta vuelve como borrador para corregirla.
+            // Una captura devuelta vuelve como borrador para corregirla. Si el teléfono
+            // aún tiene el borrador viejo del mismo uuid (el que se envió y administración
+            // devolvió), se reemplaza por lo devuelto: reenviarlo igual lo rechaza el
+            // servidor. El que ya nació de la devolución (tiene su nota) se está corrigiendo
+            // y no se pisa.
             for (const item of server) {
-                if (item.status === 'returned' && item.content && draftIndex(item.uuid) === -1) {
+                if (item.status !== 'returned' || !item.content) {
+                    continue;
+                }
+
+                const local = state.drafts[draftIndex(item.uuid)];
+
+                if (local === undefined || local.returnNote === null) {
                     await putDraft(draftFromReturned(item.uuid, item.content, item.review_note, now()));
                 }
             }

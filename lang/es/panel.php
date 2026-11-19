@@ -312,6 +312,7 @@ return [
             'unclaimed_has_owner' => 'Esta ficha tiene dueño: no puede quedar «sin reclamar».',
             'not_yours' => 'Esta captura es de otra cuenta.',
             'content_conflict' => 'Esta captura ya se envió con otro contenido.',
+            'content_unchanged' => 'La captura devuelta se reenvió sin cambios: corregila antes de enviarla de nuevo.',
             'invalid_target' => 'La ficha vinculada ya no sirve para completarla: está publicada, tiene dueño o ya la completó otra captura.',
             'not_open' => 'Esta captura ya se resolvió (quizás desde otra pestaña).',
             'not_confirmed' => 'Falta la confirmación del dueño: sin ella no se aprueba.',

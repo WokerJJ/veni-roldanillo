@@ -427,3 +427,19 @@ test('una segunda captura sobre una ficha que ya completó otra aprobada se rech
     expect($second->refresh()->status)->toBe(FieldSubmissionStatus::OwnerConfirmed)
         ->and(FieldSubmission::query()->where('status', 'approved')->where('restaurant_id', $draft->id)->count())->toBe(1);
 });
+
+test('reenviar una captura devuelta sin cambiarle nada se rechaza con CONTENT_UNCHANGED y no revive la confirmación', function () {
+    $admin = User::factory()->admin()->create();
+    $data = fieldData();
+    $submission = confirmedSubmission($admin, $data);
+    app(CloseFieldSubmission::class)->sendBack($submission, $admin, 'Falta la referencia');
+
+    expect(fn () => app(ReceiveFieldSubmission::class)->handle($admin, $submission->uuid, $data))
+        ->toThrow(fn (ActionRefused $e) => $e->reason === ActionRefused::CONTENT_UNCHANGED);
+
+    $submission->refresh();
+
+    expect($submission->status)->toBe(FieldSubmissionStatus::Returned)
+        ->and($submission->revision)->toBe(1)
+        ->and($submission->review_note)->toBe('Falta la referencia');
+});
