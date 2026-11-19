@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\FieldSubmission;
 use App\Models\OrderIntent;
 use App\Models\RestaurantClaim;
 use App\Models\RestaurantRemovalRequest;
@@ -14,10 +15,11 @@ Artisan::command('inspire', function () {
 // Retención (#20, ADR 0026, Ley 1581): a los seis meses de resueltos, los
 // reclamos y pedidos de retiro rechazados se borran y los aprobados se
 // anonimizan (PrunedAfterReview). Los registros de «Enviar pedido por
-// WhatsApp» (#22, ADR 0031) se borran a los 13 meses. Lo corre el contenedor
-// scheduler.
+// WhatsApp» (#22, ADR 0031) se borran a los 13 meses. Las capturas del modo
+// Campo (ADR 0048) devueltas o rechazadas, a los seis meses; las aprobadas se
+// conservan. Lo corre el contenedor scheduler.
 Schedule::command('model:prune', [
-    '--model' => [RestaurantClaim::class, RestaurantRemovalRequest::class, OrderIntent::class],
+    '--model' => [RestaurantClaim::class, RestaurantRemovalRequest::class, OrderIntent::class, FieldSubmission::class],
 ])->daily()->onOneServer();
 
 // Las sesiones inactivas y la caché vencida (#23): la política de datos dice
