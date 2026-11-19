@@ -13,13 +13,16 @@ use Illuminate\Support\Facades\DB;
  * el celular al que se mandó el enlace y la huella de lo que vio. No guarda la
  * IP ni el dispositivo. Un código que no existe, venció, ya se usó o es de una
  * captura que dejó de esperar falla igual: sin pistas.
+ *
+ * La huella de lo que el dueño vio es obligatoria: confirmar sin ella sería
+ * firmar a ciegas lo que haya en ese momento.
  */
 final class ConfirmFieldSubmission
 {
     /**
      * @throws ActionRefused
      */
-    public function handle(string $code, ?string $seenHash = null): FieldSubmission
+    public function handle(string $code, string $seenHash): FieldSubmission
     {
         if (preg_match('/^[A-Za-z0-9_-]{43}$/', $code) !== 1) {
             throw new ActionRefused(ActionRefused::CODE_INVALID);
@@ -40,7 +43,7 @@ final class ConfirmFieldSubmission
             $hash = $locked->contentHash();
 
             // Lo que el dueño vio en pantalla tiene que ser lo que hay ahora.
-            if ($seenHash !== null && ! hash_equals($hash, $seenHash)) {
+            if (! hash_equals($hash, $seenHash)) {
                 throw new ActionRefused(ActionRefused::CONTENT_CHANGED);
             }
 

@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Support\GeoPoint;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -81,7 +82,7 @@ function confirmedSubmission(User $admin, array $data = []): FieldSubmission
 {
     $submission = receive($admin, null, $data);
     $code = app(IssueConfirmationLink::class)->handle($submission, $admin);
-    app(ConfirmFieldSubmission::class)->handle($code);
+    app(ConfirmFieldSubmission::class)->handle($code, $submission->payload_hash);
 
     return $submission->refresh();
 }
@@ -202,7 +203,7 @@ test('confirmar registra fecha, versiones, celular y huella, y consume el códig
         ->and($confirmed->confirmation_phone)->toBe('573004445566')
         ->and($confirmed->confirmation_token_hash)->toBeNull();
 
-    expect(fn () => app(ConfirmFieldSubmission::class)->handle($code))
+    expect(fn () => app(ConfirmFieldSubmission::class)->handle($code, $submission->payload_hash))
         ->toThrow(fn (ActionRefused $e) => $e->reason === ActionRefused::CODE_INVALID);
 });
 
@@ -214,7 +215,7 @@ test('un código inventado, vencido o de otra captura falla igual', function () 
     $this->travel(FieldSubmission::CONFIRMATION_DAYS + 1)->days();
 
     foreach ([$code, 'no-es-un-codigo', str_repeat('a', 43)] as $bad) {
-        expect(fn () => app(ConfirmFieldSubmission::class)->handle($bad))
+        expect(fn () => app(ConfirmFieldSubmission::class)->handle($bad, $submission->payload_hash))
             ->toThrow(fn (ActionRefused $e) => $e->reason === ActionRefused::CODE_INVALID);
     }
 
@@ -442,4 +443,40 @@ test('reenviar una captura devuelta sin cambiarle nada se rechaza con CONTENT_UN
     expect($submission->status)->toBe(FieldSubmissionStatus::Returned)
         ->and($submission->revision)->toBe(1)
         ->and($submission->review_note)->toBe('Falta la referencia');
+});
+
+test('la huella de lo que el dueño vio es obligatoria: sin ella no hay confirmación a ciegas', function () {
+    $seenHash = (new ReflectionMethod(ConfirmFieldSubmission::class, 'handle'))->getParameters()[1];
+
+    expect($seenHash->isOptional())->toBeFalse()
+        ->and((string) $seenHash->getType())->toBe('string');
+
+    $admin = User::factory()->admin()->create();
+    $submission = receive($admin);
+    $code = app(IssueConfirmationLink::class)->handle($submission, $admin);
+
+    expect(fn () => app(ConfirmFieldSubmission::class)->handle($code, ''))
+        ->toThrow(fn (ActionRefused $e) => $e->reason === ActionRefused::CONTENT_CHANGED);
+    expect($submission->refresh()->status)->toBe(FieldSubmissionStatus::Submitted);
+});
+
+test('si dos envíos del mismo uuid chocan en el índice único, el perdedor reintenta y no duplica', function () {
+    $admin = User::factory()->admin()->create();
+    $uuid = (string) Str::uuid();
+    $data = fieldData();
+    $collisions = 0;
+
+    // El primer intento de crear la fila choca con el índice único (el otro envío ganó la carrera).
+    FieldSubmission::creating(function () use (&$collisions): void {
+        if ($collisions++ === 0) {
+            throw new UniqueConstraintViolationException('pgsql', 'insert into "field_submissions"', [], new Exception('duplicate key value violates unique constraint'));
+        }
+    });
+
+    $result = app(ReceiveFieldSubmission::class)->handle($admin, $uuid, $data);
+
+    expect($collisions)->toBe(2)
+        ->and($result['created'])->toBeTrue()
+        ->and($result['submission']->uuid)->toBe($uuid)
+        ->and(FieldSubmission::query()->where('uuid', $uuid)->count())->toBe(1);
 });
