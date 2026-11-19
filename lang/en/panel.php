@@ -310,7 +310,7 @@ return [
             'unclaimed_has_owner' => 'This listing has an owner: it cannot be “unclaimed”.',
             'not_yours' => 'This capture belongs to another account.',
             'content_conflict' => 'This capture was already sent with different content.',
-            'invalid_target' => 'The linked listing can no longer be completed: it is published or has an owner.',
+            'invalid_target' => 'The linked listing can no longer be completed: it is published, has an owner or another capture already completed it.',
             'not_open' => 'This capture was already resolved (maybe from another tab).',
             'not_confirmed' => 'The owner has not confirmed yet: it cannot be approved without that.',
             'content_changed' => 'The content changed after the owner confirmed: send it back so they confirm again.',

@@ -411,3 +411,19 @@ test('el contacto del dueño no sale en la ficha pública, el GeoJSON ni las pro
             ->and($surface)->not->toContain('owner_phone');
     }
 });
+
+test('una segunda captura sobre una ficha que ya completó otra aprobada se rechaza con INVALID_TARGET, sin 500', function () {
+    $admin = User::factory()->admin()->create();
+    $draft = Restaurant::factory()->hidden()->create(['name' => 'Sazon del parque', 'location' => new GeoPoint(4.4121, -76.1540)]);
+    fieldOsmSource($draft);
+
+    $first = confirmedSubmission($admin, ['restaurant_id' => $draft->id]);
+    $second = confirmedSubmission($admin, ['restaurant_id' => $draft->id]);
+
+    app(ApproveFieldSubmission::class)->handle($first, $admin);
+
+    expect(fn () => app(ApproveFieldSubmission::class)->handle($second, $admin))
+        ->toThrow(fn (ActionRefused $e) => $e->reason === ActionRefused::INVALID_TARGET);
+    expect($second->refresh()->status)->toBe(FieldSubmissionStatus::OwnerConfirmed)
+        ->and(FieldSubmission::query()->where('status', 'approved')->where('restaurant_id', $draft->id)->count())->toBe(1);
+});

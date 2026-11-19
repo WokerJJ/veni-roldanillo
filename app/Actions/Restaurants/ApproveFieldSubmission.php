@@ -61,6 +61,12 @@ final class ApproveFieldSubmission
                 throw new ActionRefused(ActionRefused::INVALID_TARGET);
             }
 
+            // La ficha ya la completó otra captura aprobada: queda bloqueada (la fila de
+            // la ficha está tomada, así que dos aprobaciones a la vez se turnan).
+            if ($target !== null && FieldSubmission::query()->where('status', FieldSubmissionStatus::Approved->value)->where('restaurant_id', $target->getKey())->whereKeyNot($locked->getKey())->exists()) {
+                throw new ActionRefused(ActionRefused::INVALID_TARGET);
+            }
+
             $declared = array_values(array_unique(array_map('intval', [...($locked->duplicates['distinct_from'] ?? []), ...$distinctFrom])));
 
             $this->assertDuplicatesResolved($locked, $target, $declared);
