@@ -151,6 +151,7 @@ test('lo inválido se rechaza con 422 y el campo que falló, sin llegar a un 500
     'categoría que no existe' => [['category_ids' => [999999]], 'category_ids.0'],
     'sin categorías' => [['category_ids' => []], 'category_ids'],
     'franjas que se cruzan' => [['hours' => [['weekday' => 2, 'opens' => '10:00', 'closes' => '14:00'], ['weekday' => 2, 'opens' => '13:00', 'closes' => '16:00']]], 'hours'],
+    'la noche del sábado pisa la madrugada del domingo' => [['hours' => [['weekday' => 6, 'opens' => '22:00', 'closes' => '02:00'], ['weekday' => 0, 'opens' => '01:00', 'closes' => '03:00']]], 'hours'],
     'abre y cierra a la misma hora' => [['hours' => [['weekday' => 2, 'opens' => '10:00', 'closes' => '10:00']]], 'hours'],
     'hora mal escrita' => [['hours' => [['weekday' => 2, 'opens' => '25:00', 'closes' => '10:00']]], 'hours.0.opens'],
     'día inexistente' => [['hours' => [['weekday' => 7, 'opens' => '10:00', 'closes' => '12:00']]], 'hours.0.weekday'],
@@ -324,3 +325,17 @@ test('la búsqueda de duplicados acepta solo puntos de Roldanillo, como el enví
     'longitud fuera del recuadro' => [['longitude' => -3.7], 'longitude'],
     'sin coordenadas' => [['latitude' => null], 'latitude'],
 ]);
+
+test('la lista va de la más reciente a la más antigua y desempata por id, siempre en el mismo orden', function () {
+    $admin = User::factory()->admin()->create();
+    $this->actingAs($admin);
+    $at = now()->subHour();
+    $oldest = FieldSubmission::factory()->create(['captured_by' => $admin->id, 'received_at' => $at->copy()->subDay()]);
+    $first = FieldSubmission::factory()->create(['captured_by' => $admin->id, 'received_at' => $at]);
+    $second = FieldSubmission::factory()->create(['captured_by' => $admin->id, 'received_at' => $at]);
+    $newest = FieldSubmission::factory()->create(['captured_by' => $admin->id, 'received_at' => $at->copy()->addMinute()]);
+
+    $uuids = array_column($this->getJson('/campo/api/submissions')->assertOk()->json('submissions'), 'uuid');
+
+    expect($uuids)->toBe([$newest->uuid, $second->uuid, $first->uuid, $oldest->uuid]);
+});

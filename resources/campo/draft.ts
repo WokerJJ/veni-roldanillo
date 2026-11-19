@@ -120,9 +120,17 @@ function minutes(time: string): number | null {
     return match?.[1] === undefined || match[2] === undefined ? null : Number(match[1]) * 60 + Number(match[2]);
 }
 
-/** Las franjas de un día no se cruzan ni abren y cierran a la misma hora (como el EXCLUDE de la base). */
+const DAY = 1440;
+const WEEK = 7 * DAY;
+
+/**
+ * Las franjas no se cruzan ni abren y cierran a la misma hora. La semana es
+ * circular (más que el EXCLUDE de la base, que mira solo cada día): la noche que
+ * pasa la medianoche no pisa la madrugada del día siguiente, y la del sábado
+ * tampoco la del domingo. La misma regla que WeeklyHours.php en el servidor.
+ */
 export function hoursAreValid(slots: readonly HourSlot[]): boolean {
-    const byDay = new Map<number, [number, number][]>();
+    const ranges: [number, number][] = [];
 
     for (const slot of slots) {
         const opens = minutes(slot.opens);
@@ -132,23 +140,27 @@ export function hoursAreValid(slots: readonly HourSlot[]): boolean {
             return false;
         }
 
-        byDay.set(slot.weekday, [...(byDay.get(slot.weekday) ?? []), [opens, closes < opens ? closes + 1440 : closes]]);
+        // Minutos desde el domingo 00:00 (weekday 0).
+        const start = slot.weekday * DAY + opens;
+        ranges.push([start, start + (closes < opens ? closes + DAY : closes) - opens]);
     }
 
-    for (const ranges of byDay.values()) {
-        const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
+    ranges.sort((a, b) => a[0] - b[0]);
 
-        for (let i = 1; i < sorted.length; i++) {
-            const previous = sorted[i - 1];
-            const current = sorted[i];
+    for (let i = 1; i < ranges.length; i++) {
+        const previous = ranges[i - 1];
+        const current = ranges[i];
 
-            if (previous && current && current[0] < previous[1]) {
-                return false;
-            }
+        if (previous && current && current[0] < previous[1]) {
+            return false;
         }
     }
 
-    return true;
+    // El cierre de la última franja de la semana no pasa de la apertura de la primera.
+    const first = ranges[0];
+    const last = ranges[ranges.length - 1];
+
+    return first === undefined || last === undefined || last[1] <= first[0] + WEEK;
 }
 
 export type Errors = Record<string, string>;

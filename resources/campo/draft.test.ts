@@ -56,8 +56,13 @@ describe('hoursAreValid', () => {
         expect(hoursAreValid([slot(2, '18:00', '02:00'), slot(2, '23:00', '03:00')])).toBe(false);
     });
 
-    it('un día no choca con otro: 22-02 el lunes no cruza 01-03 del martes', () => {
-        expect(hoursAreValid([slot(1, '22:00', '02:00'), slot(2, '01:00', '03:00')])).toBe(true);
+    it('la semana es circular: la noche que pasa la medianoche no pisa la madrugada del día siguiente', () => {
+        expect(hoursAreValid([slot(1, '22:00', '02:00'), slot(2, '01:00', '03:00')])).toBe(false);
+        expect(hoursAreValid([slot(6, '22:00', '02:00'), slot(0, '01:00', '03:00')])).toBe(false);
+        expect(hoursAreValid([slot(0, '01:00', '03:00'), slot(6, '22:00', '02:00')])).toBe(false);
+        expect(hoursAreValid([slot(1, '22:00', '02:00'), slot(2, '02:00', '04:00')])).toBe(true);
+        expect(hoursAreValid([slot(6, '22:00', '02:00'), slot(0, '02:00', '04:00')])).toBe(true);
+        expect(hoursAreValid([slot(0, '10:00', '14:00'), slot(6, '10:00', '23:00')])).toBe(true);
     });
 });
 

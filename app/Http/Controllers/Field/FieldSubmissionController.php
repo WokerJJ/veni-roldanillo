@@ -70,6 +70,7 @@ class FieldSubmissionController extends Controller
         $submissions = FieldSubmission::query()
             ->where('captured_by', $request->user()?->id)
             ->latest('received_at')
+            ->latest('id')
             ->limit(200)
             ->get();
 
