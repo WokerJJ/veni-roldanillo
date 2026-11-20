@@ -41,6 +41,9 @@ const { t, locale } = useI18n();
         <!-- El precio debajo del nombre, con el aviso de agotado al lado: con la foto a la derecha, el texto tiene todo el ancho. -->
         <span class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span class="font-semibold tabular-nums" data-price>{{ formatPesos(dish.price, locale) }}</span>
+            <span v-if="dish.alcohol === true" class="inline-block rounded-full border border-line px-2 py-0.5 text-xs font-semibold whitespace-nowrap" :aria-label="t('restaurant.menu.alcohol_note')" data-alcohol>
+                {{ t('restaurant.menu.alcohol_badge') }}
+            </span>
             <span v-if="soldOut" class="inline-block rounded-full border border-line px-2 py-0.5 text-xs font-semibold whitespace-nowrap" data-sold-out>
                 {{ t('restaurant.menu.sold_out') }}
             </span>

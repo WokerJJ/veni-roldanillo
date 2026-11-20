@@ -154,6 +154,8 @@ export interface MenuDish {
     description: string | null;
     /** En pesos, sin decimales. */
     price: number;
+    /** Bebida alcohólica (ADR 0049): sale con el aviso de mayores de 18. Opcional: una ficha guardada antes no lo trae. */
+    alcohol?: boolean;
     /**
      * «Agotado hoy»: sigue en el menú, pero no hay hasta esta fecha
      * (`YYYY-MM-DD`), incluida. Si hoy está agotado lo calcula el

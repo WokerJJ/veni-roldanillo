@@ -142,6 +142,7 @@ function parseItem(value: unknown): OrderItem | null {
     return {
         dish,
         unitPrice,
+        ...(value.alcohol === true ? { alcohol: true } : {}),
         quantity: clampQuantity(value.quantity),
         choices: choices.filter((choice): choice is ChosenOption => choice !== null),
         removed: removed.filter((name): name is string => name !== null),

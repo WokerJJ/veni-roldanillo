@@ -48,6 +48,7 @@
                     "name": "Sancocho de prueba",
                     "description": "Con arroz y aguacate.",
                     "price": 18500,
+                    "alcohol": false,
                     "sold_out_until": null,
                     "photo": { "src": "/storage/media/dishes/0123456789abcdef0123-480.webp", "srcset": "/storage/media/dishes/0123456789abcdef0123-192.webp 192w, /storage/media/dishes/0123456789abcdef0123-480.webp 480w, /storage/media/dishes/0123456789abcdef0123-960.webp 960w" },
                     "ingredients": [
@@ -96,7 +97,7 @@
                         }
                     ]
                 },
-                { "name": "Bandeja de prueba", "description": null, "price": 22000, "sold_out_until": "2026-10-07", "photo": null, "ingredients": [], "contains": [], "groups": [] }
+                { "name": "Bandeja de prueba", "description": null, "price": 22000, "alcohol": false, "sold_out_until": "2026-10-07", "photo": null, "ingredients": [], "contains": [], "groups": [] }
             ]
         },
         {
@@ -106,6 +107,7 @@
                     "name": "Jugo de prueba",
                     "description": "En agua o en leche.",
                     "price": 4000,
+                    "alcohol": false,
                     "sold_out_until": null,
                     "photo": null,
                     "ingredients": [],

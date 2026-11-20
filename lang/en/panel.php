@@ -157,6 +157,8 @@ return [
         'available' => 'On the menu',
         'available_help' => 'Off, the dish is not shown on the profile.',
         'sold_out_today' => 'Sold out today',
+        'alcohol' => 'Alcoholic drink',
+        'alcohol_help' => 'It shows the over-18 notice on the listing, the cart and the order.',
         'sold_out_help' => 'Shown as “Sold out today” and back on its own tomorrow.',
         'mark_sold_out' => 'Sold out today',
         'back_in_stock' => 'Back in stock',

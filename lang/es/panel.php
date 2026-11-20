@@ -159,6 +159,8 @@ return [
         'available' => 'En el menú',
         'available_help' => 'Apagado, el plato no sale en la ficha.',
         'sold_out_today' => 'Agotado hoy',
+        'alcohol' => 'Bebida alcohólica',
+        'alcohol_help' => 'Sale con el aviso de mayores de 18 años en la ficha, el carrito y el pedido.',
         'sold_out_help' => 'Sale como «Agotado hoy» y vuelve solo mañana.',
         'mark_sold_out' => 'Agotado hoy',
         'back_in_stock' => 'Ya hay',

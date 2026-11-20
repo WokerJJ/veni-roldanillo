@@ -70,6 +70,8 @@ export interface OrderItem {
     dish: string;
     /** Precio del plato más sus adiciones, por unidad. */
     unitPrice: number;
+    /** Bebida alcohólica (ADR 0049); solo si lo es: el pedido lleva el aviso de mayores de 18. */
+    alcohol?: boolean;
     quantity: number;
     choices: ChosenOption[];
     /** Ingredientes que se quitan («sin cebolla»). */
@@ -310,6 +312,7 @@ export function toOrderItem(dish: MenuDish, selection: DishSelection, today?: st
     return {
         dish: dish.name,
         unitPrice: unitPrice(dish, selection, today),
+        ...(dish.alcohol === true ? { alcohol: true } : {}),
         quantity: clampQuantity(selection.quantity),
         choices: chosenOptions(dish, selection, today),
         removed,
