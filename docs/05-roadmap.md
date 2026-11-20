@@ -33,6 +33,9 @@ Cerrada: versión 0.1.0.
 - [x] Guía de platos típicos (ES/EN) en `/dishes`, con un enlace por plato a la búsqueda del inicio (#21, patrón del ADR 0030)
 - [x] Registro de clics en "Pedir por WhatsApp" (order_intents, sin identificador) y estadísticas básicas del dueño (#22, ADR 0031). Pendiente: «¿Al final sí pediste?»
 - [x] Páginas legales: tratamiento de datos, términos, política de reseñas (#23, ADR 0030; borradores pendientes de revisión jurídica)
+- [x] Mapa y lista sin señal: la última lista de restaurantes guardada en el teléfono, con su hora, también en la página sin conexión (#144, ADR 0046); arranque más liviano (ADR 0047)
+- [x] Modo Campo, etapa 1: fichas levantadas en el local con dos firmas, la del administrador y la del dueño por enlace (#165, ADR 0048). El texto de autorización es provisional hasta una revisión jurídica
+- [ ] Modo Campo, etapa 2 (menú y catálogo de marcas, con aviso de mayores de 18 en las bebidas alcohólicas) y etapa 3 (corregir fichas existentes con una propuesta de cambios)
 
 ## Piloto
 
