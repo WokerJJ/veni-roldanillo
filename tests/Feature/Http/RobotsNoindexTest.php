@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\StrictBoolean;
 use Illuminate\Http\Middleware\TrustHosts;
 
 /*
@@ -67,34 +68,23 @@ it('las rutas privadas siguen sin indexarse aunque la variable esté apagada', f
     expect($this->get('/confirmar/listo')->headers->get('X-Robots-Tag'))->toBe(NOINDEX_HEADER);
 });
 
-it('lee la variable como booleano', function (string $value, bool $expected) {
-    expect(robotsNoindexFromEnv($value)['robots_noindex'])->toBe($expected);
+it('lee la variable como booleano', function (mixed $value, bool $expected) {
+    expect(StrictBoolean::parse('ROBOTS_NOINDEX', $value))->toBe($expected);
 })->with([
     'true' => ['true', true],
+    'true booleano' => [true, true],
     '1' => ['1', true],
     'false' => ['false', false],
+    'false booleano' => [false, false],
     'off' => ['off', false],
     'vacía' => ['', false],
 ]);
 
 it('un valor que no es booleano detiene la carga de la configuración, en vez de dejar el sitio indexable', function (string $value) {
-    expect(fn () => robotsNoindexFromEnv($value))->toThrow(InvalidArgumentException::class, 'ROBOTS_NOINDEX');
+    expect(fn () => StrictBoolean::parse('ROBOTS_NOINDEX', $value))
+        ->toThrow(InvalidArgumentException::class, 'ROBOTS_NOINDEX');
 })->with(['ture', 'quizás', 'si-claro']);
 
-/**
- * config/app.php tal como lo cargaría Laravel con ese valor en el entorno.
- *
- * @return array<string, mixed>
- */
-function robotsNoindexFromEnv(string $value): array
-{
-    putenv("ROBOTS_NOINDEX={$value}");
-    $_ENV['ROBOTS_NOINDEX'] = $value;
-
-    try {
-        return require config_path('app.php');
-    } finally {
-        putenv('ROBOTS_NOINDEX');
-        unset($_ENV['ROBOTS_NOINDEX']);
-    }
-}
+it('config/app.php usa ese valor', function () {
+    expect(config('app.robots_noindex'))->toBeBool();
+});

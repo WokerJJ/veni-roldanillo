@@ -1,5 +1,7 @@
 <?php
 
+use App\Support\StrictBoolean;
+
 return [
 
     /*
@@ -79,17 +81,7 @@ return [
     |
     */
 
-    'robots_noindex' => (function (): bool {
-        $value = filter_var(env('ROBOTS_NOINDEX', false), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-
-        // Un error de escritura («ture») no se lee como false en silencio: el
-        // dominio de pruebas quedaría indexable sin que nadie se entere.
-        if ($value === null) {
-            throw new InvalidArgumentException('ROBOTS_NOINDEX tiene que ser true o false.');
-        }
-
-        return $value;
-    })(),
+    'robots_noindex' => StrictBoolean::parse('ROBOTS_NOINDEX', env('ROBOTS_NOINDEX', false)),
 
     /*
     |--------------------------------------------------------------------------
