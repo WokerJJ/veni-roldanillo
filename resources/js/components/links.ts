@@ -12,5 +12,7 @@ export { default as DishGuideLink } from '@/components/DishGuideLink.vue';
 export { default as GuideTeaser } from '@/components/GuideTeaser.vue';
 export { default as LegalLinks } from '@/components/LegalLinks.vue';
 export { default as MainNav } from '@/components/MainNav.vue';
+// `Old` es StaleNotice (el aviso «Sin señal»): el nombre corto es por el presupuesto del arranque (bundle.test.ts).
+export { default as Old } from '@/components/StaleNotice.vue';
 export { default as SettingsMenu } from '@/components/SettingsMenu.vue';
 export { default as TabBar } from '@/components/TabBar.vue';

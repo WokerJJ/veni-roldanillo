@@ -50,6 +50,41 @@ function shareMapWorkerCode(): Plugin {
     };
 }
 
+/** La línea de @inertiajs/vue3 que ata `useForm` a toda app: `router.form = useForm`, al instalar el plugin. */
+const INERTIA_FORM_HOOK = 'router4.form = useForm;';
+
+/**
+ * Vení no usa los formularios de Inertia (`useForm`, `<Form>`, `router.form`):
+ * sus formularios van con el router (resources/js/requests/useRequestForm.ts).
+ * Pero @inertiajs/vue3, al instalarse, hace `router.form = useForm`, y esa
+ * sola línea deja en la entrada `useForm`, su estado, la validación en vivo
+ * (laravel-precognition) y lo que arrastran, que baja todo el que abre la app.
+ * Este plugin quita esa línea al compilar: lo que nadie más usa se descarta.
+ *
+ * Si la línea ya no está (una versión nueva de Inertia), la compilación se
+ * detiene: hay que volver a mirar cómo quedó. Y si alguna vez hace falta
+ * `useForm`, se importa y vuelve solo al bundle; lo único que no vuelve es
+ * `router.form`, que una prueba vigila que nadie use
+ * (resources/js/map/bundle.test.ts).
+ */
+function dropInertiaForms(): Plugin {
+    return {
+        name: 'veni:drop-inertia-forms',
+        apply: 'build',
+        transform(code, id) {
+            if (!/@inertiajs[\\/]vue3[\\/]dist[\\/]index\.js$/.test(id)) {
+                return null;
+            }
+
+            if (!code.includes(INERTIA_FORM_HOOK)) {
+                this.error(`@inertiajs/vue3 ya no trae «${INERTIA_FORM_HOOK}»: revisá dropInertiaForms() en vite.config.ts.`);
+            }
+
+            return { code: code.replace(INERTIA_FORM_HOOK, ''), map: null };
+        },
+    };
+}
+
 /**
  * `VITE_MAP_STYLE_URL` es una plantilla con `{theme}` y `{locale}` (ADR 0007).
  * Con una URL fija, como la de un `.env` anterior a los marcadores, el mapa se
@@ -246,6 +281,7 @@ export default defineConfig(({ mode }) => ({
         vue({ template: { compilerOptions: { comments: false } } }),
         tailwindcss(),
         shareMapWorkerCode(),
+        dropInertiaForms(),
         isolateCampoVue(),
         checkMapStyleUrl(),
         copyBrandIcons(),
@@ -255,7 +291,18 @@ export default defineConfig(({ mode }) => ({
         alias: {
             '@': fileURLToPath(new URL('./resources/js', import.meta.url)),
             '@brand': fileURLToPath(new URL('./brand', import.meta.url)),
+            // La validación en vivo de useForm, que Vení no usa y que Inertia
+            // carga igual: en su lugar, lo mínimo (resources/js/build/noPrecognition.ts).
+            'laravel-precognition': fileURLToPath(new URL('./resources/js/build/noPrecognition.ts', import.meta.url)),
         },
+    },
+    define: {
+        // Vení no tiene componentes con la API de opciones (data, methods,
+        // mixins): todos son <script setup> o `setup()`, y los de Inertia que
+        // usa también. Sin ella, Vue deja fuera de la entrada el código que
+        // la atiende. Un componente escrito con `data()` o `methods` dejaría
+        // de funcionar sin avisar: lo vigila resources/js/map/bundle.test.ts.
+        __VUE_OPTIONS_API__: 'false',
     },
     build: {
         rollupOptions: {

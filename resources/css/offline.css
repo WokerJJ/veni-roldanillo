@@ -87,3 +87,32 @@ button:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
 }
+
+/* Lo último que se vio, guardado en el teléfono (#144): una lista de nombres, sin enlaces (el HTML no se guarda). */
+.saved {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid color-mix(in oklab, var(--ink) 20%, transparent);
+}
+
+h2 {
+    margin: 0 0 0.25rem;
+    font: 800 1.25rem/1.2 var(--veni-font-display);
+}
+
+.saved p {
+    margin: 0 0 1rem;
+    font-size: 1rem;
+}
+
+.saved ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 1rem;
+}
+
+.saved li {
+    padding: 0.5rem 0;
+    overflow-wrap: anywhere;
+}
