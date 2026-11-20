@@ -163,6 +163,19 @@ describe('pedir los restaurantes del mapa', () => {
         await expect(pending).rejects.toThrow('FeatureCollection');
     });
 
+    it('con elementos pero ninguno válido, falla; con features vacío, es una lista vacía de verdad', async () => {
+        const network = stubRestaurantsFetch();
+        const broken = fetchRestaurants('es', new AbortController().signal);
+        network.last()?.respondWith({ status: 200, body: { type: 'FeatureCollection', features: [{ roto: true }] } });
+
+        await expect(broken).rejects.toThrow('ningún elemento');
+
+        const empty = fetchRestaurants('es', new AbortController().signal);
+        network.last()?.respond([]);
+
+        await expect(empty).resolves.toEqual([]);
+    });
+
     it('sin señal, falla con el error de la red', async () => {
         const network = stubRestaurantsFetch();
         const pending = fetchRestaurants('es', new AbortController().signal);

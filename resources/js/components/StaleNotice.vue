@@ -7,7 +7,8 @@ import { agoText } from '@/restaurants/savedList';
 
 /**
  * El aviso de que la lista de restaurantes es la última que llegó a este
- * teléfono (#144, ADR 0046): «Sin señal: datos de hace 2 horas», con
+ * teléfono (#144, ADR 0046): «Sin señal: datos de hace 2 horas» (o, si el servidor
+ * respondió con un error, «No pudimos actualizar: datos de hace …»), con
  * «Reintentar». Sale sobre el mapa mientras la lista es la guardada; con la
  * señal de vuelta (o al reintentar) llega la de verdad y el aviso se va solo.
  *
@@ -15,7 +16,8 @@ import { agoText } from '@/restaurants/savedList';
  * arranque, con los demás componentes del inicio (components/links.ts). Los
  * estilos van aquí, con alcance, y no en la hoja de estilos del arranque.
  */
-const { since } = defineProps<{ since: number }>();
+/** `answered`: el servidor respondió con un error (hay señal): el texto no dice «sin señal». `busy`: hay un reintento en curso. */
+const { since, answered, busy } = defineProps<{ since: number; answered?: boolean; busy?: boolean }>();
 const emit = defineEmits<{ retry: [] }>();
 
 const { t, locale } = useI18n();
@@ -26,8 +28,8 @@ const time = computed(() => agoText(since, now.value.getTime(), locale.value));
 
 <template>
     <div role="status" class="stale-notice" data-stale>
-        <span class="stale-text">{{ t('restaurants.stale', { time }) }}</span>
-        <button type="button" class="stale-retry" data-stale-retry @click="emit('retry')">{{ t('restaurants.retry') }}</button>
+        <span class="stale-text">{{ t(answered ? 'restaurants.staleFailed' : 'restaurants.stale', { time }) }}</span>
+        <button type="button" class="stale-retry" data-stale-retry :disabled="busy" :aria-busy="busy" @click="emit('retry')">{{ t(busy ? 'restaurants.retrying' : 'restaurants.retry') }}</button>
     </div>
 </template>
 
@@ -82,6 +84,10 @@ const time = computed(() => agoText(since, now.value.getTime(), locale.value));
 
 .stale-retry:active {
     opacity: 0.85;
+}
+
+.stale-retry:disabled {
+    opacity: 0.6;
 }
 
 :global([data-theme='dark']) .stale-retry {

@@ -37,6 +37,10 @@ export function useRestaurants() {
     const restaurants = shallowRef<Restaurant[]>([]);
     /** Cuándo llegó la lista guardada que se muestra porque no hay señal (ms), o null si la lista es de ahora. */
     const staleSince = ref<number | null>(null);
+    /** Si la copia se muestra porque no hubo respuesta del servidor (red o plazo): «sin señal». Con una respuesta de error es false: el aviso dice «No pudimos actualizar». */
+    const offline = ref(true);
+    /** Hay un «Reintentar» en curso: el botón del aviso se desactiva hasta que el pedido termine. */
+    const retrying = ref(false);
     /** El pedido en curso: al abortarlo, su respuesta ya no cuenta. */
     let request: AbortController | null = null;
     /** Cuándo llegó la lista que se ve, por el reloj del dispositivo. */
@@ -64,6 +68,7 @@ export function useRestaurants() {
             restaurants.value = list;
             status.value = 'ready';
             staleSince.value = null;
+            offline.value = true;
             loadedAt = Date.now();
             void saved().then((module) => module?.saveList(asked, list));
         } catch (error) {
@@ -74,15 +79,23 @@ export function useRestaurants() {
 
             console.error('[restaurantes] No se pudieron cargar los restaurantes.', error);
 
-            if (status.value !== 'ready') {
-                // Sin lista a la vista: la guardada, con su hora, o el error.
+            if (status.value !== 'ready' || staleSince.value !== null) {
+                // Sin lista de ahora a la vista: la guardada, con su hora, o el error.
+                // «Sin señal» solo si no hubo respuesta: un TypeError de fetch o el plazo.
+                const noReply = error instanceof TypeError || (error instanceof DOMException && error.name === 'TimeoutError');
                 const last = await saved().then((module) => module?.savedIn(locale.value));
 
                 if (request === current) {
                     restaurants.value = last?.restaurants ?? [];
                     staleSince.value = loadedAt = last?.savedAt ?? null;
                     status.value = last ? 'ready' : 'error';
+                    offline.value = noReply;
                 }
+            }
+        } finally {
+            // Si otro pedido tomó su lugar (o se desmontó), a ese le toca apagarlo.
+            if (request === current) {
+                retrying.value = false;
             }
         }
     }
@@ -111,8 +124,11 @@ export function useRestaurants() {
         status,
         restaurants,
         staleSince,
+        offline,
+        retrying,
         /** Vuelve a pedir la lista (el botón «Reintentar»). */
         retry: (): void => {
+            retrying.value = true;
             void load();
         },
     };
