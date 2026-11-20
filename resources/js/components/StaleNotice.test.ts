@@ -7,14 +7,14 @@ vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 
 const NOW = new Date('2026-10-07T12:00:00-05:00').getTime();
 
-async function mountNotice(since: number, locale: 'es' | 'en' = 'es') {
+async function mountNotice(since: number, locale: 'es' | 'en' = 'es', extra: { answered?: boolean; busy?: boolean } = {}) {
     const inertia = (await import('@inertiajs/vue3')) as unknown as typeof FakeInertia;
     inertia.reset();
     inertia.receiveFromServer(locale, { replace: true });
 
     const { default: StaleNotice } = await import('./StaleNotice.vue');
 
-    return mount(StaleNotice, { props: { since } });
+    return mount(StaleNotice, { props: { since, ...extra } });
 }
 
 enableAutoUnmount(afterEach);
@@ -50,6 +50,22 @@ describe('StaleNotice', () => {
         await wrapper.get('[data-stale-retry]').trigger('click');
 
         expect(wrapper.emitted('retry')).toHaveLength(1);
+    });
+
+    it('con respuesta de error del servidor, no dice «sin señal» (BUG-005)', async () => {
+        const wrapper = await mountNotice(NOW - 2 * 3_600_000, 'es', { answered: true });
+
+        expect(wrapper.text()).toContain('No pudimos actualizar: datos de hace 2 horas');
+        expect(wrapper.text()).not.toContain('Sin señal');
+    });
+
+    it('mientras reintenta, el botón se desactiva, queda ocupado y lo dice (EVA-015)', async () => {
+        const wrapper = await mountNotice(NOW - 60_000, 'es', { busy: true });
+        const button = wrapper.get('[data-stale-retry]');
+
+        expect(button.attributes('disabled')).toBeDefined();
+        expect(button.attributes('aria-busy')).toBe('true');
+        expect(button.text()).toBe('Reintentando…');
     });
 
     it('el tiempo se actualiza solo con los minutos', async () => {
