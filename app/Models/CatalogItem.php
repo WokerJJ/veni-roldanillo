@@ -49,9 +49,17 @@ class CatalogItem extends Model
         return ['name'];
     }
 
-    /** El nombre de un plato: producto, marca y presentación («Manzana Postobón 400 ml»). */
+    /**
+     * El nombre de un plato: producto, marca y presentación («Manzana Postobón
+     * 400 ml»). La marca no se repite si el producto ya la nombra («Cerveza
+     * Águila» de la marca «Águila» queda «Cerveza Águila 330 ml»). Lo mismo hace
+     * resources/campo/catalog.ts en el teléfono: el nombre que se ve al capturar
+     * es el que se guarda.
+     */
     public static function dishName(string $name, ?string $brand, ?string $label): string
     {
+        $brand = $brand === null || trim($brand) === '' || mb_stripos($name, trim($brand)) !== false ? null : $brand;
+
         return trim(implode(' ', array_filter([$name, $brand, $label], fn (?string $part): bool => $part !== null && trim($part) !== '')));
     }
 

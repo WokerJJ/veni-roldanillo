@@ -10,6 +10,7 @@
 | punto del negocio que se confirmó.
 */
 
+import type { Catalog } from './catalog';
 import type { Draft } from './draft';
 
 export interface SentSummary {
@@ -37,6 +38,8 @@ export interface MetaCache {
     userName: string;
     categories: Category[];
     paymentMethods: string[];
+    /** El catálogo de productos (ADR 0049), para armar la carta sin señal. Opcional: lo guardado antes no lo trae. */
+    catalog?: Catalog;
 }
 
 type StoreName = 'drafts' | 'sent' | 'meta';

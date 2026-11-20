@@ -4,9 +4,11 @@ import { computed, nextTick, onBeforeUnmount, ref, toRaw } from 'vue';
 import type { Draft, Errors } from './draft';
 import { firstInvalidStep, STEPS, validateStep } from './draft';
 import StepBasics from './steps/StepBasics.vue';
+import StepCatalog from './steps/StepCatalog.vue';
 import StepContact from './steps/StepContact.vue';
 import StepDuplicates from './steps/StepDuplicates.vue';
 import StepHours from './steps/StepHours.vue';
+import StepMenu from './steps/StepMenu.vue';
 import StepOwner from './steps/StepOwner.vue';
 import StepPlace from './steps/StepPlace.vue';
 import StepReview from './steps/StepReview.vue';
@@ -118,6 +120,8 @@ function leave(): void {
         <StepDuplicates v-else-if="name === 'duplicates'" :draft="draft" :errors="errors" :online="campo.state.online" :check="check" :patch="patch" />
         <StepContact v-else-if="name === 'contact'" :draft="draft" :errors="errors" :meta="campo.state.meta" :patch="patch" />
         <StepHours v-else-if="name === 'hours'" :draft="draft" :errors="errors" :patch="patch" />
+        <StepMenu v-else-if="name === 'menu'" :draft="draft" :errors="errors" :patch="patch" />
+        <StepCatalog v-else-if="name === 'catalog'" :draft="draft" :errors="errors" :meta="campo.state.meta" :patch="patch" />
         <StepOwner v-else-if="name === 'owner'" :draft="draft" :errors="errors" :patch="patch" />
         <StepReview v-else :draft="draft" :meta="campo.state.meta" @goto="goTo" />
 

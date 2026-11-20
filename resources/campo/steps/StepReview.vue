@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Draft, StepName } from '../draft';
-import { STEPS } from '../draft';
+import { dishCount, STEPS } from '../draft';
 import type { MetaCache } from '../storage';
 import { currentLocale, list, t } from '../texts';
 
@@ -65,6 +65,16 @@ function go(step: StepName): void {
         <section class="summary">
             <div class="summary__head"><h4>{{ t('steps.hours') }}</h4><button type="button" class="btn btn--quiet" @click="go('hours')">{{ t('review.edit') }}</button></div>
             <p v-for="line in hoursLines()" :key="line">{{ line }}</p>
+        </section>
+
+        <section class="summary">
+            <div class="summary__head"><h4>{{ t('steps.menu') }}</h4><button type="button" class="btn btn--quiet" @click="go('menu')">{{ t('review.edit') }}</button></div>
+            <p v-if="draft.menu.length === 0">{{ t('review.no_menu') }}</p>
+            <template v-else>
+                <p>{{ t('menu.count', { dishes: dishCount(draft.menu), sections: draft.menu.length }) }}</p>
+                <p v-for="section in draft.menu" :key="section.name_es">{{ section.name_es }}: {{ section.dishes.length }}</p>
+                <p v-if="draft.menu.some((section) => section.dishes.some((dish) => dish.is_alcohol))" class="muted">{{ t('menu.alcohol_review') }}</p>
+            </template>
         </section>
 
         <section class="summary">

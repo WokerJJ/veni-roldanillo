@@ -26,6 +26,25 @@ export interface Candidate {
     from_osm: boolean;
 }
 
+export interface MenuDish {
+    name_es: string;
+    name_en: string | null;
+    /** Pesos enteros; null mientras no se ha puesto. */
+    price: number | null;
+    is_alcohol: boolean;
+    /** De qué presentación del catálogo salió, si salió de ahí. */
+    catalog_variant_id: number | null;
+}
+
+export interface MenuSection {
+    name_es: string;
+    name_en: string | null;
+    dishes: MenuDish[];
+}
+
+/** Los límites de la carta: los mismos del servidor (FieldMenu). */
+export const MENU_LIMITS = { sections: 12, dishesPerSection: 60, dishes: 300, price: 9_999_999 } as const;
+
 export interface Draft {
     uuid: string;
     createdAt: string;
@@ -47,6 +66,7 @@ export interface Draft {
     delivery: boolean | null;
     paymentMethods: string[];
     hours: HourSlot[];
+    menu: MenuSection[];
     latitude: number | null;
     longitude: number | null;
     accuracy: number | null;
@@ -62,7 +82,7 @@ export interface Draft {
 }
 
 /** Los pasos, en orden. */
-export const STEPS = ['basics', 'place', 'duplicates', 'contact', 'hours', 'owner', 'review'] as const;
+export const STEPS = ['basics', 'place', 'duplicates', 'contact', 'hours', 'menu', 'catalog', 'owner', 'review'] as const;
 export type StepName = (typeof STEPS)[number];
 
 /** Alrededor de Roldanillo: lo mismo que acepta el servidor. */
@@ -89,6 +109,7 @@ export function newDraft(uuid: string, now: Date = new Date()): Draft {
         delivery: null,
         paymentMethods: [],
         hours: [],
+        menu: [],
         latitude: null,
         longitude: null,
         accuracy: null,
@@ -177,6 +198,66 @@ export function publishedDuplicates(draft: Draft): Candidate[] {
     );
 }
 
+/**
+ * Lo que impide guardar la carta (el código de su texto en `errors.*`), o null:
+ * un plato sin nombre o sin precio, nombres repetidos dentro de su lugar, una
+ * sección sin nombre o demasiados platos. Las mismas reglas del servidor.
+ */
+export function menuProblem(menu: readonly MenuSection[]): string | null {
+    let total = 0;
+    const sections = new Set<string>();
+
+    if (menu.length > MENU_LIMITS.sections) {
+        return 'menu_too_many';
+    }
+
+    for (const section of menu) {
+        const key = section.name_es.trim().replace(/\s+/g, ' ').toLowerCase();
+
+        if (section.dishes.length === 0) {
+            continue;
+        }
+
+        if (key === '') {
+            return 'menu_section';
+        }
+
+        if (sections.has(key)) {
+            return 'menu_duplicate_section';
+        }
+
+        sections.add(key);
+
+        if (section.dishes.length > MENU_LIMITS.dishesPerSection) {
+            return 'menu_too_many';
+        }
+
+        const dishes = new Set<string>();
+
+        for (const dish of section.dishes) {
+            total++;
+            const name = dish.name_es.trim().replace(/\s+/g, ' ').toLowerCase();
+
+            if (name === '' || dish.price === null || !Number.isInteger(dish.price) || dish.price < 0 || dish.price > MENU_LIMITS.price) {
+                return 'menu_dish';
+            }
+
+            if (dishes.has(name)) {
+                return 'menu_duplicate_dish';
+            }
+
+            dishes.add(name);
+        }
+    }
+
+    return total > MENU_LIMITS.dishes ? 'menu_too_many' : null;
+}
+
+/** Cuántos platos tiene la carta, sin contar secciones vacías. */
+export function dishCount(menu: readonly MenuSection[]): number {
+    return menu.reduce((total, section) => total + section.dishes.length, 0);
+}
+
 /** Los errores de un paso, por campo, con la clave de su texto en `errors.*`. */
 export function validateStep(draft: Draft, step: StepName): Errors {
     const errors: Errors = {};
@@ -225,6 +306,14 @@ export function validateStep(draft: Draft, step: StepName): Errors {
         errors.hours = 'hours';
     }
 
+    if (step === 'menu' || step === 'catalog') {
+        const problem = menuProblem(draft.menu);
+
+        if (problem !== null) {
+            errors.menu = problem;
+        }
+    }
+
     if (step === 'owner') {
         if (draft.ownerName.trim().length < 2) {
             errors.ownerName = draft.ownerName.trim() === '' ? 'required' : 'too_short';
@@ -247,6 +336,20 @@ export function firstInvalidStep(draft: Draft): StepName | null {
     return STEPS.find((step) => step !== 'review' && Object.keys(validateStep(draft, step)).length > 0) ?? null;
 }
 
+export interface BodyDish {
+    name_es: string;
+    name_en: string | null;
+    price: number;
+    is_alcohol: boolean;
+    catalog_variant_id: number | null;
+}
+
+export interface BodySection {
+    name_es: string;
+    name_en: string | null;
+    dishes: BodyDish[];
+}
+
 export interface SubmissionBody {
     name: string;
     category_ids: number[];
@@ -257,6 +360,7 @@ export interface SubmissionBody {
     delivery: boolean;
     payment_methods: string[];
     hours: HourSlot[];
+    menu: BodySection[];
     latitude: number;
     longitude: number;
     location_source: LocationSource;
@@ -266,6 +370,25 @@ export interface SubmissionBody {
     captured_at: string;
     restaurant_id: number | null;
     distinct_from: number[];
+}
+
+/** La carta como la recibe el servidor: sin secciones vacías, nombres recortados y el inglés vacío como null. */
+function menuBody(menu: readonly MenuSection[]): BodySection[] {
+    const blank = (value: string | null): string | null => (value === null || value.trim() === '' ? null : value.trim());
+
+    return menu
+        .filter((section) => section.dishes.length > 0)
+        .map((section) => ({
+            name_es: section.name_es.trim(),
+            name_en: blank(section.name_en),
+            dishes: section.dishes.map((dish) => ({
+                name_es: dish.name_es.trim(),
+                name_en: blank(dish.name_en),
+                price: dish.price ?? 0,
+                is_alcohol: dish.is_alcohol,
+                catalog_variant_id: dish.catalog_variant_id,
+            })),
+        }));
 }
 
 /** El cuerpo del envío. Lanza si el borrador no está completo: se valida antes. */
@@ -288,6 +411,7 @@ export function toBody(draft: Draft): SubmissionBody {
         delivery: draft.delivery,
         payment_methods: draft.paymentMethods,
         hours: draft.hours,
+        menu: menuBody(draft.menu),
         latitude: draft.latitude,
         longitude: draft.longitude,
         location_source: draft.locationSource ?? 'device',
@@ -301,7 +425,7 @@ export function toBody(draft: Draft): SubmissionBody {
 }
 
 /** Lo que el servidor devuelve de una captura devuelta, para corregirla como borrador. */
-export type ReturnedContent = Omit<SubmissionBody, 'captured_at'>;
+export type ReturnedContent = Omit<SubmissionBody, 'captured_at' | 'menu'> & { menu?: BodySection[] };
 
 export function draftFromReturned(uuid: string, content: ReturnedContent, note: string | null, now: Date = new Date()): Draft {
     return {
@@ -317,6 +441,7 @@ export function draftFromReturned(uuid: string, content: ReturnedContent, note: 
         delivery: content.delivery,
         paymentMethods: content.payment_methods,
         hours: content.hours,
+        menu: content.menu ?? [],
         latitude: content.latitude,
         longitude: content.longitude,
         locationSource: content.location_source,

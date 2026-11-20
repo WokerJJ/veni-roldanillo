@@ -75,7 +75,9 @@ test('el nombre del plato es producto, marca y presentación', function () {
     expect(CatalogItem::dishName('Manzana', 'Postobón', '400 ml'))->toBe('Manzana Postobón 400 ml')
         ->and(CatalogItem::dishName('Mora', null, 'Jarra'))->toBe('Mora Jarra')
         ->and(CatalogItem::dishName('Arroz', null, null))->toBe('Arroz')
-        ->and(CatalogItem::dishName('Arroz', '', ' '))->toBe('Arroz');
+        ->and(CatalogItem::dishName('Arroz', '', ' '))->toBe('Arroz')
+        ->and(CatalogItem::dishName('Cerveza Águila', 'Águila', 'Botella 330 ml'))->toBe('Cerveza Águila Botella 330 ml')
+        ->and(CatalogItem::dishName('Coca-Cola', 'coca-cola', '400 ml'))->toBe('Coca-Cola 400 ml');
 });
 
 test('la base no deja dos productos iguales en un grupo, ni nombres vacíos, ni dos presentaciones iguales', function () {

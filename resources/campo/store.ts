@@ -120,7 +120,7 @@ export function createCampo(deps: CampoDeps) {
                 state.meta = null;
             }
 
-            state.meta = { userId: me.user.id, userName: me.user.name, categories: me.categories, paymentMethods: me.payment_methods };
+            state.meta = { userId: me.user.id, userName: me.user.name, categories: me.categories, paymentMethods: me.payment_methods, ...(me.catalog ? { catalog: me.catalog } : {}) };
             await storage.putMeta(plain(state.meta));
 
             const server = await api.list();
