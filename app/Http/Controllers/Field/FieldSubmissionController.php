@@ -15,6 +15,7 @@ use App\Models\FieldSubmission;
 use App\Models\User;
 use App\Support\Field\ConfirmationMessage;
 use App\Support\Field\DuplicateFinder;
+use App\Support\Field\FieldCatalog;
 use App\Support\GeoPoint;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,6 +43,7 @@ class FieldSubmissionController extends Controller
             'categories' => Category::query()->orderBy('position')->get(['id', 'slug', 'name_es', 'name_en'])
                 ->map(fn (Category $c): array => ['id' => $c->id, 'slug' => $c->slug, 'name_es' => $c->name_es, 'name_en' => $c->name_en])->all(),
             'payment_methods' => array_map(fn (PaymentMethod $m): string => $m->value, PaymentMethod::cases()),
+            'catalog' => FieldCatalog::forDevice(),
             'bounds' => [
                 'lat' => [StoreFieldSubmissionRequest::LAT_MIN, StoreFieldSubmissionRequest::LAT_MAX],
                 'lng' => [StoreFieldSubmissionRequest::LNG_MIN, StoreFieldSubmissionRequest::LNG_MAX],

@@ -43,11 +43,31 @@ class OwnerConfirmationController extends Controller
             'delivery' => $payload['delivery'],
             'payments' => array_map(fn (string $method): string => __("field.payments.{$method}"), $payload['payment_methods']),
             'hours' => ConfirmationMessage::hoursLines($payload['hours'], app()->getLocale()),
+            'menu' => $this->menuFor($payload['menu'] ?? []),
             'ownerName' => $submission->owner_name,
             'ownerRole' => $submission->owner_role->value,
             'privacyVersion' => LegalDocument::PRIVACY_VERSION,
             'authorizationVersion' => FieldSubmission::AUTHORIZATION_VERSION,
         ]);
+    }
+
+    /**
+     * La carta lista para mostrar: cada plato con su precio en pesos («$3.500»)
+     * y si es una bebida alcohólica.
+     *
+     * @param  list<array{name_es: string, name_en: string|null, dishes: list<array{name_es: string, name_en: string|null, price: int, is_alcohol: bool, catalog_variant_id: int|null}>}>  $menu
+     * @return list<array{name: string, dishes: list<array{name: string, price: string, alcohol: bool}>}>
+     */
+    private function menuFor(array $menu): array
+    {
+        return array_map(fn (array $section): array => [
+            'name' => $section['name_es'],
+            'dishes' => array_map(fn (array $dish): array => [
+                'name' => $dish['name_es'],
+                'price' => '$'.number_format($dish['price'], 0, ',', '.'),
+                'alcohol' => $dish['is_alcohol'],
+            ], $section['dishes']),
+        ], $menu);
     }
 
     public function store(Request $request, string $code, ConfirmFieldSubmission $confirm): RedirectResponse

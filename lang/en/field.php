@@ -10,6 +10,9 @@
 return [
     'validation' => [
         'hours' => 'Check the opening hours: slots on the same day cannot overlap or open and close at the same time.',
+        'menu_duplicate_section' => 'Two menu sections have the same name.',
+        'menu_duplicate_dish' => 'A dish is repeated within a menu section.',
+        'menu_too_many' => 'The menu has too many dishes.',
     ],
 
     'whatsapp' => [
@@ -24,6 +27,7 @@ return [
         'line_hours' => 'Opening hours:',
         'yes' => 'yes',
         'no' => 'no',
+        'line_menu' => 'Menu: :dishes dishes in :sections sections (you can see it in full at the link).',
         'call_to_action' => 'Please review it and, if it is right, confirm it here (the link works for :days days and only once):',
     ],
 
@@ -44,7 +48,7 @@ return [
         'role_owner' => 'owner',
         'role_manager' => 'business manager',
         'authorization_title' => 'Your authorization',
-        'authorization' => 'I confirm that I am the person who can decide this for this business and I authorize Vení Roldanillo to publish in its app and website the business information shown above (name, food type, address, location, phone, WhatsApp, opening hours, delivery and payment methods). I can ask for it to be corrected or removed at any time.',
+        'authorization' => 'I confirm that I am the person who can decide this for this business and I authorize Vení Roldanillo to publish in its app and website the business information shown above (name, food type, address, location, phone, WhatsApp, opening hours, delivery, payment methods and, if shown, the menu with its dishes and prices). I can ask for it to be corrected or removed at any time.',
         'privacy' => 'Your contact details (name and mobile number) are used only to verify who authorizes this and to write to you about this listing; they are not published or shared. You can view, correct or ask for them to be deleted.',
         'privacy_link' => 'Personal data policy',
         'button' => 'I confirm',
@@ -55,6 +59,8 @@ return [
         'invalid_title' => 'This link no longer works',
         'invalid' => 'The link expired, was already used or does not exist. Ask the person who sent it for a new one.',
         'changed' => 'The data changed while you were looking at it. Reload the page and review it again.',
+        'menu_title' => 'Menu and prices',
+        'alcohol_note' => 'Alcoholic drink: only for people over 18.',
         'hours' => 'Opening hours',
         'no_hours' => 'No opening hours added',
         'categories' => 'Food type',

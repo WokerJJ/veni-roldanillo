@@ -69,6 +69,26 @@
                 </dl>
             </section>
 
+            @if ($menu !== [])
+                <section class="card" aria-labelledby="carta">
+                    <h2 id="carta">{{ __('field.confirm.menu_title') }}</h2>
+                    @foreach ($menu as $section)
+                        <h3>{{ $section['name'] }}</h3>
+                        <ul class="menu">
+                            @foreach ($section['dishes'] as $dish)
+                                <li>
+                                    <span>{{ $dish['name'] }}@if ($dish['alcohol']) <strong class="plus18">+18</strong>@endif</span>
+                                    <span>{{ $dish['price'] }}</span>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endforeach
+                    @if (collect($menu)->contains(fn ($section) => collect($section['dishes'])->contains('alcohol', true)))
+                        <p class="muted">{{ __('field.confirm.alcohol_note') }}</p>
+                    @endif
+                </section>
+            @endif
+
             <p class="muted">{{ __('field.confirm.owner', ['name' => $ownerName, 'role' => __('field.confirm.role_'.$ownerRole)]) }}</p>
 
             <form method="post" action="{{ route('field.confirm.store', ['code' => $code]) }}">

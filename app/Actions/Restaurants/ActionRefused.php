@@ -59,6 +59,8 @@ final class ActionRefused extends RuntimeException
 
     public const CODE_INVALID = 'code_invalid';
 
+    public const MENU_EXISTS = 'menu_exists';
+
     public function __construct(public readonly string $reason)
     {
         parent::__construct("Acción rechazada: {$reason}.");

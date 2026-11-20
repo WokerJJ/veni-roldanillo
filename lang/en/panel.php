@@ -316,6 +316,7 @@ return [
             'not_confirmed' => 'The owner has not confirmed yet: it cannot be approved without that.',
             'content_changed' => 'The content changed after the owner confirmed: send it back so they confirm again.',
             'duplicates_unresolved' => 'Some listings could be the same business: mark them as a different business or send the capture back to complete the existing one.',
+            'menu_exists' => 'The linked listing already has a menu: changing it is a different process, it is not overwritten.',
             'code_invalid' => 'The confirmation link does not work.',
         ],
         'drafts' => [
@@ -406,6 +407,7 @@ return [
             'location_source_map' => 'placed on the map',
             'owner_role_owner' => 'owner',
             'owner_role_manager' => 'manager',
+            'menu' => 'Menu',
             'captured_at' => 'Phone time',
             'confirmation' => 'Owner confirmation',
             'confirmation_detail' => ':date · notice :privacy · authorization :authorization · link sent to :phone',

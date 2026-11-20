@@ -318,6 +318,7 @@ return [
             'not_confirmed' => 'Falta la confirmación del dueño: sin ella no se aprueba.',
             'content_changed' => 'El contenido cambió después de la confirmación del dueño: devolvela para que lo confirme de nuevo.',
             'duplicates_unresolved' => 'Hay fichas que podrían ser el mismo negocio: marcá que son otro negocio o devolvé la captura para completar la ficha existente.',
+            'menu_exists' => 'La ficha vinculada ya tiene una carta: cambiarla es otro proceso, no se pisa.',
             'code_invalid' => 'El enlace de confirmación no sirve.',
         ],
         'drafts' => [
@@ -408,6 +409,7 @@ return [
             'location_source_map' => 'ubicado en el mapa',
             'owner_role_owner' => 'dueño',
             'owner_role_manager' => 'encargado',
+            'menu' => 'Carta',
             'captured_at' => 'Hora del teléfono',
             'confirmation' => 'Confirmación del dueño',
             'confirmation_detail' => ':date · aviso :privacy · autorización :authorization · enlace al :phone',

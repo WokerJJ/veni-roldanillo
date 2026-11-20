@@ -164,3 +164,31 @@ a {
 .footnote {
     margin-top: 1.25rem;
 }
+
+.menu {
+    margin: 0 0 0.75rem;
+    padding: 0;
+    list-style: none;
+}
+
+.menu li {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.375rem 0;
+    border-bottom: 1px solid var(--line, rgb(42 22 56 / 18%));
+}
+
+.menu li span:last-child {
+    flex: none;
+    font-weight: 700;
+}
+
+.plus18 {
+    display: inline-block;
+    margin-left: 0.375rem;
+    padding: 0 0.375rem;
+    border: 2px solid currentcolor;
+    border-radius: 999px;
+    font-size: 0.8125rem;
+}
