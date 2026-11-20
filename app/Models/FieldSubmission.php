@@ -88,6 +88,12 @@ class FieldSubmission extends Model
      */
     public static function hashContent(array $payload, GeoPoint $location, string $ownerName, string $ownerRole, string $ownerPhone): string
     {
+        // Sin carta es lo mismo que una carta vacía (la etapa 1 no traía `menu`): una sola huella.
+        // Se omite, y no se agrega, para que las huellas que ya firmaron los dueños sigan valiendo.
+        if (($payload['menu'] ?? []) === []) {
+            unset($payload['menu']);
+        }
+
         return hash('sha256', json_encode([
             'payload' => self::canonical($payload),
             'lat' => sprintf('%.7F', $location->latitude),
