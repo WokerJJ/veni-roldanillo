@@ -8,16 +8,12 @@ use App\Http\Controllers\LegalDocumentController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\RestaurantController;
 use App\Http\Controllers\RestaurantRequestController;
-use App\Http\Controllers\RobotsController;
 use App\Http\Controllers\WebManifestController;
 use App\Http\Middleware\PrivateResponse;
 use App\Http\Middleware\RequireSameOriginJson;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Home')->name('home');
-
-// Sin sesión ni cookies: lo piden los buscadores, sin datos de nadie.
-Route::get('/robots.txt', RobotsController::class)->withoutMiddleware('web')->name('robots');
 
 // La ficha de un restaurante (#13, ADR 0018). El slug es su dirección pública
 // y estable; lo que no tenga forma de slug ni llega a consultar la base. El

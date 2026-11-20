@@ -72,9 +72,10 @@ return [
     | No indexar (ROBOTS_NOINDEX)
     |--------------------------------------------------------------------------
     |
-    | Con true, todas las respuestas llevan X-Robots-Tag: noindex y /robots.txt
-    | pide no indexar nada: para un dominio de pruebas o de demostración, que no
-    | debe competir en los buscadores con el definitivo. Apagado por defecto.
+    | Con true, todas las respuestas llevan X-Robots-Tag: noindex (/robots.txt
+    | no cambia: deja rastrear, para que se lea el noindex). Es para un dominio de
+    | pruebas o de demostración, que no debe competir en los buscadores con el
+    | definitivo. Apagado por defecto.
     |
     */
 

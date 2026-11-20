@@ -46,7 +46,9 @@ final class CreateAdminAccount
             throw new ActionRefused(ActionRefused::INVALID_NAME);
         }
 
-        if (mb_strlen($password) < self::PASSWORD_MIN || strlen($password) > self::PASSWORD_MAX) {
+        // Ni corta, ni que bcrypt trunque, ni en blanco, ni un solo carácter repetido.
+        if (mb_strlen($password) < self::PASSWORD_MIN || strlen($password) > self::PASSWORD_MAX
+            || trim($password) === '' || preg_match('/^(.)\1*$/su', $password) === 1) {
             throw new ActionRefused(ActionRefused::WEAK_PASSWORD);
         }
 

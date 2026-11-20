@@ -74,5 +74,7 @@ it('rechaza los datos inválidos sin crear nada', function (string $email, strin
     'nombre con salto de línea' => ['ana@example.test', "Ana\nAdmin", ADMIN_TEST_PASSWORD, ActionRefused::INVALID_NAME],
     'nombre larguísimo' => ['ana@example.test', str_repeat('a', 121), ADMIN_TEST_PASSWORD, ActionRefused::INVALID_NAME],
     'contraseña corta' => ['ana@example.test', 'Ana', 'corta-123', ActionRefused::WEAK_PASSWORD],
+    'contraseña de espacios' => ['ana@example.test', 'Ana', str_repeat(' ', 14), ActionRefused::WEAK_PASSWORD],
+    'un solo carácter repetido' => ['ana@example.test', 'Ana', str_repeat('a', 14), ActionRefused::WEAK_PASSWORD],
     'contraseña que bcrypt truncaría' => ['ana@example.test', 'Ana', str_repeat('a', 73), ActionRefused::WEAK_PASSWORD],
 ]);
