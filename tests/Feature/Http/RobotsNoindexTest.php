@@ -68,21 +68,33 @@ it('las rutas privadas siguen sin indexarse aunque la variable esté apagada', f
 });
 
 it('lee la variable como booleano', function (string $value, bool $expected) {
-    putenv("ROBOTS_NOINDEX={$value}");
-    $_ENV['ROBOTS_NOINDEX'] = $value;
-
-    try {
-        $config = require config_path('app.php');
-    } finally {
-        putenv('ROBOTS_NOINDEX');
-        unset($_ENV['ROBOTS_NOINDEX']);
-    }
-
-    expect($config['robots_noindex'])->toBe($expected);
+    expect(robotsNoindexFromEnv($value)['robots_noindex'])->toBe($expected);
 })->with([
     'true' => ['true', true],
     '1' => ['1', true],
     'false' => ['false', false],
     'off' => ['off', false],
-    'texto raro' => ['quizás', false],
+    'vacía' => ['', false],
 ]);
+
+it('un valor que no es booleano detiene la carga de la configuración, en vez de dejar el sitio indexable', function (string $value) {
+    expect(fn () => robotsNoindexFromEnv($value))->toThrow(InvalidArgumentException::class, 'ROBOTS_NOINDEX');
+})->with(['ture', 'quizás', 'si-claro']);
+
+/**
+ * config/app.php tal como lo cargaría Laravel con ese valor en el entorno.
+ *
+ * @return array<string, mixed>
+ */
+function robotsNoindexFromEnv(string $value): array
+{
+    putenv("ROBOTS_NOINDEX={$value}");
+    $_ENV['ROBOTS_NOINDEX'] = $value;
+
+    try {
+        return require config_path('app.php');
+    } finally {
+        putenv('ROBOTS_NOINDEX');
+        unset($_ENV['ROBOTS_NOINDEX']);
+    }
+}
