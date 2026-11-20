@@ -69,6 +69,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | No indexar (ROBOTS_NOINDEX)
+    |--------------------------------------------------------------------------
+    |
+    | Con true, todas las respuestas llevan X-Robots-Tag: noindex y /robots.txt
+    | pide no indexar nada: para un dominio de pruebas o de demostración, que no
+    | debe competir en los buscadores con el definitivo. Apagado por defecto.
+    |
+    */
+
+    'robots_noindex' => filter_var(env('ROBOTS_NOINDEX', false), FILTER_VALIDATE_BOOLEAN),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |
