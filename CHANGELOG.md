@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.7.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.6.0...v0.7.0) (2026-11-20)
+
+
+### Funcionalidades
+
+* barra lateral fija en computador ([#83](https://github.com/WokerJJ/veni-roldanillo/issues/83)) ([#129](https://github.com/WokerJJ/veni-roldanillo/issues/129)) ([bb2f4e7](https://github.com/WokerJJ/veni-roldanillo/commit/bb2f4e76bd886f5874cd3350674b597cc8b081ee))
+* **campo:** modo Campo, fichas levantadas en el local con dos firmas (etapa 1) ([#166](https://github.com/WokerJJ/veni-roldanillo/issues/166)) ([686cd75](https://github.com/WokerJJ/veni-roldanillo/commit/686cd7523c0775d50597425b8783a8e452e2b02b))
+* ficha en dos columnas y horario compacto ([#125](https://github.com/WokerJJ/veni-roldanillo/issues/125), [#82](https://github.com/WokerJJ/veni-roldanillo/issues/82)) ([#131](https://github.com/WokerJJ/veni-roldanillo/issues/131)) ([7a229fb](https://github.com/WokerJJ/veni-roldanillo/commit/7a229fbf8427be2ef14da61f4fe0ad8b70b725ca))
+* foto grande del plato en el detalle ([#126](https://github.com/WokerJJ/veni-roldanillo/issues/126)) ([#133](https://github.com/WokerJJ/veni-roldanillo/issues/133)) ([1c2f51c](https://github.com/WokerJJ/veni-roldanillo/commit/1c2f51c50d7ea92c5328e18710f53baa1612fbb5))
+* fotos de los platos e imágenes promocionales ([#113](https://github.com/WokerJJ/veni-roldanillo/issues/113)) ([#119](https://github.com/WokerJJ/veni-roldanillo/issues/119)) ([484d5f3](https://github.com/WokerJJ/veni-roldanillo/commit/484d5f38b9e17b2991536c842b2627e63354efa3))
+* íconos de comida y chips de ingredientes ([#115](https://github.com/WokerJJ/veni-roldanillo/issues/115)) ([#128](https://github.com/WokerJJ/veni-roldanillo/issues/128)) ([8ac3de6](https://github.com/WokerJJ/veni-roldanillo/commit/8ac3de6eb394a66b8a3c2d26be81bea257c56485))
+* ingredientes agotados hoy con reemplazo ([#112](https://github.com/WokerJJ/veni-roldanillo/issues/112)) ([#117](https://github.com/WokerJJ/veni-roldanillo/issues/117)) ([0373b96](https://github.com/WokerJJ/veni-roldanillo/commit/0373b963bc7dbf55a25df9b7c08337272f59df1f))
+* modo simple del panel del dueño con «Ver todo» ([#114](https://github.com/WokerJJ/veni-roldanillo/issues/114)) ([#123](https://github.com/WokerJJ/veni-roldanillo/issues/123)) ([317ec55](https://github.com/WokerJJ/veni-roldanillo/commit/317ec552d22038cc36611c1cead3bf86aff81501))
+* **móvil:** barra de pestañas, inicio sin cabecera, panel y lista nuevos ([#139](https://github.com/WokerJJ/veni-roldanillo/issues/139)) ([#146](https://github.com/WokerJJ/veni-roldanillo/issues/146)) ([37a9d13](https://github.com/WokerJJ/veni-roldanillo/commit/37a9d134b5b621771d6091acd51051c3b0f37bcc))
+* **móvil:** base visual, movimiento y arreglos del celular ([#138](https://github.com/WokerJJ/veni-roldanillo/issues/138)) ([#145](https://github.com/WokerJJ/veni-roldanillo/issues/145)) ([f4129d6](https://github.com/WokerJJ/veni-roldanillo/commit/f4129d6530755495a0f9290022a4f7bef8afe65e))
+* **móvil:** controles del mapa de vidrio y marcadores con el ícono de su comida ([#140](https://github.com/WokerJJ/veni-roldanillo/issues/140)) ([#153](https://github.com/WokerJJ/veni-roldanillo/issues/153)) ([319642f](https://github.com/WokerJJ/veni-roldanillo/commit/319642f9a7e86e6cb1d098130795eedcf760bfeb))
+* **móvil:** el pedido en tres pasos, con barra de progreso ([#142](https://github.com/WokerJJ/veni-roldanillo/issues/142)) ([#156](https://github.com/WokerJJ/veni-roldanillo/issues/156)) ([bf6fb49](https://github.com/WokerJJ/veni-roldanillo/commit/bf6fb49232f3978dd06fea5aee21eb18d789da52))
+* **móvil:** guía de platos con fotos, tarjetas grandes y a la vista en el inicio ([#143](https://github.com/WokerJJ/veni-roldanillo/issues/143)) ([#158](https://github.com/WokerJJ/veni-roldanillo/issues/158)) ([52fc7e1](https://github.com/WokerJJ/veni-roldanillo/commit/52fc7e12ca61e14acf1ef05064965c94cbfa3d2a))
+* **móvil:** portada de la ficha, carta estilo app de comida y detalle como hoja ([#141](https://github.com/WokerJJ/veni-roldanillo/issues/141)) ([#154](https://github.com/WokerJJ/veni-roldanillo/issues/154)) ([37bb5ee](https://github.com/WokerJJ/veni-roldanillo/commit/37bb5ee9e41525206824b3182f3917e69bdda64b))
+* rango de precios calculado de la carta ([#127](https://github.com/WokerJJ/veni-roldanillo/issues/127)) ([#137](https://github.com/WokerJJ/veni-roldanillo/issues/137)) ([ab38bb3](https://github.com/WokerJJ/veni-roldanillo/commit/ab38bb39778d218c3f71e1043f2728d930bc5e68))
+* **salida:** primer administrador, ROBOTS_NOINDEX y documentación del correo de privacidad ([#172](https://github.com/WokerJJ/veni-roldanillo/issues/172)) ([2b7c1be](https://github.com/WokerJJ/veni-roldanillo/commit/2b7c1be83b8d6ac81606804fff7abb1d953080f2))
+* **sin señal:** la última lista de restaurantes guardada, con su hora ([#144](https://github.com/WokerJJ/veni-roldanillo/issues/144)) ([#164](https://github.com/WokerJJ/veni-roldanillo/issues/164)) ([aa2e4c6](https://github.com/WokerJJ/veni-roldanillo/commit/aa2e4c632cf9b0c3eb042885c60ad180808ea160))
+
+
+### Correcciones
+
+* **deps:** laravel/framework 13.42, con el aviso de seguridad CVE-2026-128083 ([#157](https://github.com/WokerJJ/veni-roldanillo/issues/157)) ([f823cc0](https://github.com/WokerJJ/veni-roldanillo/commit/f823cc03208108c7fbb1d6315c47383bb54cac30))
+* el carrito revisa la carta antes de enviar y otros arreglos ([#151](https://github.com/WokerJJ/veni-roldanillo/issues/151)) ([#152](https://github.com/WokerJJ/veni-roldanillo/issues/152)) ([0e97ccf](https://github.com/WokerJJ/veni-roldanillo/commit/0e97ccf1b65465d9fb38b68179134dcb4891b15d))
+* los filtros abiertos ya no achican la lista de la barra ([#130](https://github.com/WokerJJ/veni-roldanillo/issues/130)) ([#132](https://github.com/WokerJJ/veni-roldanillo/issues/132)) ([a4c3187](https://github.com/WokerJJ/veni-roldanillo/commit/a4c318750b36bf02b295ac4cd5702c8b49365cf7))
+* **móvil:** el mapa espera los restaurantes y el panel no cambia de forma al cargar ([#161](https://github.com/WokerJJ/veni-roldanillo/issues/161)) ([0af6df8](https://github.com/WokerJJ/veni-roldanillo/commit/0af6df840c13830dd862c0bc8c00f7748bce8cf4))
+* **móvil:** pulido de la lista, las píldoras y la cabecera ([#147](https://github.com/WokerJJ/veni-roldanillo/issues/147)) ([#150](https://github.com/WokerJJ/veni-roldanillo/issues/150)) ([854be9e](https://github.com/WokerJJ/veni-roldanillo/commit/854be9ec2204ff59aac0464e31bc5c8cfc00465e))
+* **sin señal:** el aviso solo dice «sin señal» si no hubo respuesta, una lista rota no borra la copia y «Reintentar» da respuesta ([#144](https://github.com/WokerJJ/veni-roldanillo/issues/144)) ([#168](https://github.com/WokerJJ/veni-roldanillo/issues/168)) ([bbe8b37](https://github.com/WokerJJ/veni-roldanillo/commit/bbe8b373fa251f656abb8f471af7dff12383dbc9))
+* **sin señal:** lista validada campo a campo, aviso legible sobre el mapa oscuro ([#144](https://github.com/WokerJJ/veni-roldanillo/issues/144)) ([#169](https://github.com/WokerJJ/veni-roldanillo/issues/169)) ([4db5d70](https://github.com/WokerJJ/veni-roldanillo/commit/4db5d70fcb791ec94db9d14b25e3bb32f034abcb))
+
 ## [0.6.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.5.0...v0.6.0) (2026-10-31)
 
 
