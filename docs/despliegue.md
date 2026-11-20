@@ -168,8 +168,20 @@ El `.env` parte de `.env.example` con estos cambios:
 | `CSP_REPORT_ONLY` | `false`. Con `true` la política de contenido solo informa en la consola del navegador, sin bloquear: para probar un cambio de la política, nunca como estado normal (la app lo avisa en `docker compose logs app` al arrancar). Se lee como booleano: `off`, `no` y `0` son no |
 | `CSP_REPORT_CANDIDATE` | `false`. Con `true` la política vigente sigue bloqueando y se manda además la candidata (el perfil `candidate`, en código) solo para informar |
 | `CSP_FRAME_ANCESTORS` | Vacía: ningún sitio puede mostrar la app en un iframe. Es solo para entornos locales |
+| `ROBOTS_NOINDEX` | `false` en el dominio definitivo. Con `true` (un dominio de pruebas o de demostración) todas las respuestas llevan `X-Robots-Tag: noindex, nofollow, noarchive` y `/robots.txt` responde `Disallow: /`, para que no compita en los buscadores con el definitivo. Se lee como booleano |
+| `VENI_PRIVACY_CONTACT_EMAIL` | El buzón real que lee el responsable de los datos: lo muestra la política de datos y el aviso de los formularios. Sin él sale uno de ejemplo (`privacidad@example.test`) y la app lo avisa en el registro al arrancar |
 
 Las variables `VITE_*` no hacen falta en el servidor: ya quedaron dentro de la imagen, en el JavaScript y en su entorno. Si el `.env` las trae, valen las de la imagen.
+
+### El primer administrador
+
+En producción no hay seeders ni otra forma de crear la primera cuenta con acceso a `/admin` y `/campo`. Con la app ya arrancada:
+
+```bash
+docker compose exec app php artisan veni:make-admin tu-correo@ejemplo.com
+```
+
+Pide una confirmación (en producción), el nombre y la contraseña, esta última en un campo secreto y dos veces: no va en un argumento (quedaría en el historial del shell y en la lista de procesos) ni se imprime. Mide entre 12 y 72 caracteres y queda como **temporal**: el primer ingreso a `/admin` obliga a cambiarla. Si el correo ya tiene cuenta, del tipo que sea, el comando se detiene sin tocarla (no vincula en silencio, [ADR 0027](adr/0027-panel-de-administracion.md)). `--name="Ana"` evita la pregunta del nombre y `--force` la confirmación; la contraseña siempre se pregunta.
 
 ### Delante de la app: TLS y proxies de confianza
 
