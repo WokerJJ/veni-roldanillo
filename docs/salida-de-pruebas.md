@@ -16,8 +16,8 @@ La imagen `ghcr.io/wokerjj/veni-roldanillo:X.Y.Z` corre con Docker en tu computa
 | `deploy.sh` (bajar, migrar, comprobar `/up`, volver el `.env`) | Listo, probado con un `docker` falso. **Corre por bash**: en Windows, con WSL2 o Git Bash |
 | `deploy.yml` (despliegue por SSH desde GitHub) | **No aplica**: tu computador no es un servidor con SSH. El despliegue es a mano con `deploy.sh` |
 | HTTPS | Lo pone Cloudflare; la app sirve HTTP en `127.0.0.1:8000` y confía en el túnel (ADR 0014) |
-| Primer administrador | **Falta.** `PanelAdminSeeder` solo corre en `local` y `testing`; no hay comando para crear la primera cuenta `admin` en producción |
-| La app no se indexa en buscadores | **Falta.** Solo `/campo` y `/confirmar` llevan `noindex`; el sitio entero, no. Un dominio de pruebas indexado compite con el `.co` el día de mañana |
+| Primer administrador | **Hecho** (#172): `php artisan veni:make-admin <correo>` |
+| La app no se indexa en buscadores | **Hecho** (#172): `ROBOTS_NOINDEX=true` pone `X-Robots-Tag: noindex, nofollow, noarchive` en todas las respuestas |
 | Copia de seguridad de la base y del volumen `app_storage` | Descrita, sin implementar |
 | Mapa con versión fija en `tiles.<dominio>` | No existe: la imagen lleva la demo pública de `veni-mapa` (sigue su rama `main`). Para pruebas sirve |
 
@@ -38,10 +38,10 @@ La imagen `ghcr.io/wokerjj/veni-roldanillo:X.Y.Z` corre con Docker en tu computa
 ## Checklist
 
 ### A. Antes de encender nada (código y documentación; PR propio)
-- [ ] **Comando para crear el primer administrador**: `php artisan veni:make-admin <correo>`, que pide la contraseña sin dejarla en el historial, la deja con `must_change_password`, y rechaza si el correo ya existe. Con su prueba.
-- [ ] **`noindex` configurable**: variable `ROBOTS_NOINDEX=true`; con ella todas las respuestas llevan `X-Robots-Tag: noindex, nofollow` y `/robots.txt` dice `Disallow: /`. Con su prueba. En el `.co` definitivo se apaga.
-- [ ] **El correo de la política de datos** (`privacy.contact_email`): un correo que sí existe y que lees (hoy es `privacidad@veniroldanillo.co`, un dominio que todavía no tiene correo).
-- [ ] Decidir si se espera la release **0.7.0** (PR #118, incluye el modo Campo etapa 1 y la lista sin señal) o se usa la 0.6.0, que **no** tiene `/campo`. Para llenar la base hace falta la 0.7.0 o posterior.
+- [x] **Comando para crear el primer administrador** (#172): `php artisan veni:make-admin <correo>`, que pide la contraseña sin dejarla en el historial, la deja con `must_change_password`, y rechaza si el correo ya existe. Con su prueba.
+- [x] **`noindex` configurable** (#172): variable `ROBOTS_NOINDEX=true`; con ella todas las respuestas llevan `X-Robots-Tag: noindex, nofollow` y `/robots.txt` dice `Disallow: /`. Con su prueba. En el `.co` definitivo se apaga.
+- [x] **El correo de la política de datos** (#172): sale de la variable `VENI_PRIVACY_CONTACT_EMAIL` (por defecto `privacidad@example.test`). **Falta** ponerle en el `.env` un correo real que leas: con Cloudflare Email Routing, `privacidad@veniroldanillo.co.uk` reenviado a tu Gmail.
+- [ ] **Fusionar la release 0.7.0** (PR #118: incluye el modo Campo etapa 1, la lista sin señal y lo del apartado A) y esperar a que se publique su imagen. La 0.6.0 **no** tiene `/campo`: para llenar la base hace falta la 0.7.0 o posterior.
 
 ### B. Cloudflare
 - [ ] Terminar el registro de `veniroldanillo.co.uk` (tipo de registrante: *Non-UK Individual*) y activar la privacidad del WHOIS.
@@ -59,7 +59,8 @@ La imagen `ghcr.io/wokerjj/veni-roldanillo:X.Y.Z` corre con Docker en tu computa
   - `APP_URL=https://veniroldanillo.co.uk`
   - `TRUSTED_PROXIES`: la IP desde la que `cloudflared` llega al contenedor. Con Docker Desktop **no es la misma que en Linux**: se mide con la prueba de abajo, no se supone.
   - `APP_KEY`, `DB_PASSWORD`, `MEILISEARCH_KEY` generados (`openssl rand -base64 32`); `LOG_LEVEL=warning`.
-  - `ROBOTS_NOINDEX=true` (cuando exista A).
+  - `ROBOTS_NOINDEX=true`.
+  - `VENI_PRIVACY_CONTACT_EMAIL=privacidad@veniroldanillo.co.uk` (cuando el alias de Cloudflare Email Routing esté activo).
 - [ ] Paquete de GHCR público (o `docker login ghcr.io` con un token de lectura).
 
 ### D. Primer arranque
