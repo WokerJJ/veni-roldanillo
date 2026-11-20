@@ -52,3 +52,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0046](0046-mapa-y-lista-sin-senal-con-la-ultima-lista-guardada.md) | Mapa y lista sin señal: la última lista de restaurantes que llegó, guardada en el teléfono y a la vista con su hora | Aceptada |
 | [0047](0047-arranque-sin-lo-que-veni-no-usa-de-inertia-y-vue.md) | El arranque sin lo que Vení no usa de Inertia y de Vue | Aceptada |
 | [0048](0048-modo-campo-captura-en-el-local.md) | Modo «Campo»: captura de fichas en el local desde el celular, sin señal, con dos firmas (administración y dueño) antes de publicar | Aceptada |
+| [0049](0049-modo-campo-etapa-2-menu-y-catalogo.md) | Modo «Campo», etapa 2: la carta en la captura, un catálogo de productos y las bebidas alcohólicas con aviso de mayores de 18 | Aceptada |
