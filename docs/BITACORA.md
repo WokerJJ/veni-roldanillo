@@ -181,3 +181,14 @@ Diario de avance del proyecto: qué se hizo en cada bloque, decisiones y aprendi
 - **Pendiente jurídico:** el texto con que el dueño autoriza es provisional (versión 0.1). La etapa 1 no se usa con negocios reales hasta que un abogado lo revise; también falta decidir si el aviso de datos debe mostrarse antes de pedirle al dueño su nombre y celular en persona.
 - Aprendizajes: lo que la revisión del código no ve, lo ve la pantalla (el borrador que se volvía a guardar al cerrarse solo apareció al enviar de verdad desde el navegador). Y compartir una librería entre dos entradas no es gratis: medir el arranque antes de dar por buena una entrada nueva.
 - **Siguen:** la etapa 2 (menú y catálogo de marcas, con las bebidas alcohólicas y su aviso de mayores de 18) y la etapa 3 (corregir fichas existentes con una propuesta de cambios), el texto de autorización revisado por un abogado y probar `/campo` en un celular real.
+
+
+## 2026-11-20 · Parte 16 · El modo Campo, etapa 2: la carta y el catálogo de bebidas
+
+- **ADR 0049 y etapa 2 construida** (rama `feat/campo-etapa-2-menu-y-catalogo`): la captura suma el paso «Carta» (secciones, platos y precios que dicta el dueño) y el paso «Bebidas de marca». Todo va en la misma confirmación del dueño, sin fotos, y al aprobar se crean las secciones y los platos de la ficha oculta.
+- **Un catálogo que mantiene administración** (`/admin`): grupos (gaseosas, jugos, aguas, cervezas…), productos con marca y presentaciones, con un seeder de bebidas colombianas comunes que no pisa lo editado. Viaja en `/campo/api/me` para usarse sin señal. En el teléfono se toca la marca, se marcan las presentaciones y se pone el precio de todas las de un tamaño de una vez («todas las de 400 ml: $3.500»), con ajuste fila por fila. El mecanismo sirve para otros empaques repetidos. Solo nombres en texto, nunca logos.
+- **Inglés automático** para los platos del catálogo, llenado al aprobar (no al recibir, para que la huella del contenido no cambie).
+- **Alcohol con aviso de mayores de 18:** cada plato tiene su marca; la ficha pública muestra «+18» y una nota en la sección, el carrito avisa y el mensaje de WhatsApp lo dice. Las normas aplicables no se pudieron verificar en fuentes oficiales: quedan como pendiente de revisión jurídica, sin citar artículos.
+- **Probado a mano** en un celular emulado: capturar, confirmar como dueño y aprobar creó 2 secciones y 6 platos con precios, el inglés de los de catálogo y la marca de alcohol.
+- Aprendizajes: una prueba que espera una excepción de Eloquent no sirve con Filament, que responde 404; probar con la petición real. Y no repetir la marca cuando el producto ya la nombra («Cerveza Águila»), igual en servidor y en teléfono.
+- **Siguen:** la revisión del equipo, el texto de autorización 0.2 y las normas del alcohol con un abogado, y la etapa 3 (corregir fichas existentes).
