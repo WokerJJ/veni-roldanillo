@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DELIVERY_PREFIX, saveCart } from '@/order/storage';
+import { SAVED_KEY, saveList } from '@/restaurants/savedList';
+import { LA_CEIBA } from '@/testing/restaurants';
 import { resetOrders, useOrder } from '@/order/useOrder';
 
 import { ADDRESSES_KEY, resetAddressBook, useAddressBook } from './addresses';
@@ -75,7 +77,7 @@ describe('lo guardado en el dispositivo no sale del teléfono', () => {
 });
 
 describe('«Borrar todo lo guardado»', () => {
-    it('borra direcciones, favoritos, datos de entrega y pedidos sin enviar; deja el idioma y el tema', () => {
+    it('borra direcciones, favoritos, datos de entrega, pedidos sin enviar y la última lista de restaurantes; deja el idioma y el tema', () => {
         useAddressBook().save({ label: { kind: 'home', text: '' }, neighborhood: '', address: 'Cra 5', reference: '', name: '' });
         useFavorites().toggle('la-ceiba');
         window.localStorage.setItem(`${DELIVERY_PREFIX}la-ceiba`, '{}');
@@ -84,6 +86,9 @@ describe('«Borrar todo lo guardado»', () => {
         saveCart('el-guadual', [{ dish: 'Jugo', unitPrice: 4000, quantity: 1, choices: [], removed: [], note: null }]);
         window.localStorage.setItem('veni:locale', 'es');
         window.localStorage.setItem('veni:theme', 'dark');
+        // La última lista de restaurantes que llegó (#144) también es del teléfono.
+        saveList('es', [LA_CEIBA]);
+        expect(window.localStorage.getItem(SAVED_KEY)).not.toBeNull();
 
         clearAllSaved();
 

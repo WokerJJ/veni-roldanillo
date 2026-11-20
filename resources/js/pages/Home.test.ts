@@ -133,6 +133,7 @@ enableAutoUnmount(afterEach);
 
 beforeEach(() => {
     vi.resetModules();
+    window.localStorage.clear();
     engine.fails = false;
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
     // Miércoles 7 de octubre de 2026, 12:30 en Colombia: La Ceiba (11 a 15) está abierta.
@@ -144,11 +145,14 @@ beforeEach(() => {
     );
 });
 
-afterEach(() => {
+afterEach(async () => {
     vi.restoreAllMocks();
     vi.useRealTimers();
     vi.unstubAllEnvs();
     document.body.replaceChildren();
+    // La lista que llegó se guarda en el teléfono (#144), con un import() que puede terminar después: ninguna prueba hereda la de otra.
+    await vi.dynamicImportSettled();
+    window.localStorage.clear();
 });
 
 describe('Home', () => {
@@ -456,6 +460,53 @@ describe('Home', () => {
             await flushPromises();
 
             expect(alert().get('button').text()).toBe('Reintentar');
+        });
+    });
+
+    describe('sin señal, con una lista guardada (#144)', () => {
+        async function mountOffline() {
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const { saveList } = await import('@/restaurants/savedList');
+            saveList('es', [LA_CEIBA, EL_GUADUAL], Date.now() - 2 * 3_600_000);
+
+            const home = await mountHome();
+            home.network.last()?.fail();
+            await flushPromises();
+            await vi.dynamicImportSettled();
+            await flushPromises();
+
+            return home;
+        }
+
+        it('muestra la última lista, sin error, y avisa de hace cuánto es', async () => {
+            const { layer, panel, status } = await mountOffline();
+
+            expect(layer().props('restaurants')).toEqual([LA_CEIBA, EL_GUADUAL]);
+            expect(panel().find('[role="alert"]').exists()).toBe(false);
+            expect(status().text()).toBe('2 restaurantes en el mapa');
+            expect(document.querySelector('[data-stale]')?.textContent).toContain('Sin señal: datos de hace 2 horas');
+        });
+
+        it('«Reintentar» los vuelve a pedir y, al llegar, el aviso se va', async () => {
+            const { network, layer } = await mountOffline();
+
+            document.querySelector<HTMLButtonElement>('[data-stale-retry]')?.click();
+            expect(network.requests).toHaveLength(2);
+
+            network.last()?.respond([LA_CEIBA]);
+            await flushPromises();
+
+            expect(document.querySelector('[data-stale]')).toBeNull();
+            expect(layer().props('restaurants')).toEqual([LA_CEIBA]);
+        });
+
+        it('con la lista de ahora, no hay aviso', async () => {
+            const { layer, network } = await mountHome();
+            network.last()?.respond([LA_CEIBA]);
+            await flushPromises();
+
+            expect(layer().props('restaurants')).toEqual([LA_CEIBA]);
+            expect(document.querySelector('[data-stale]')).toBeNull();
         });
     });
 

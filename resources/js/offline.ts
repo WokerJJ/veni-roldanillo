@@ -14,6 +14,10 @@
 const LOCALE_STORAGE_KEY = 'veni:locale';
 const THEME_STORAGE_KEY = 'veni:theme';
 
+/** La lista que guarda resources/js/restaurants/savedList.ts (#144): la clave y la vigencia, repetidas aquí por lo mismo. */
+const SAVED_KEY = 'veni:restaurants';
+const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
 const LOCALES = ['es', 'en'];
 const DEFAULT_LOCALE = 'es';
 
@@ -87,6 +91,52 @@ root.dataset.locale = locale;
 root.dataset.theme = theme;
 applyThemeColor(theme);
 
+/** De hace cuánto es la copia: «hace 2 horas». Lo mismo que agoText de savedList.ts. */
+function ago(savedAt: number): string {
+    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+    const minutes = Math.max(1, Math.round((Date.now() - savedAt) / 60_000));
+    const hours = Math.round(minutes / 60);
+
+    return minutes < 60 ? rtf.format(-minutes, 'minute') : hours < 24 ? rtf.format(-hours, 'hour') : rtf.format(-Math.round(hours / 24), 'day');
+}
+
+/** Los nombres de la última lista que llegó a este teléfono, con su hora, si hay una vigente. Solo texto: nada de lo guardado se pinta como HTML. */
+function showSaved(block: HTMLElement): void {
+    const raw = stored(SAVED_KEY);
+    const saved = block.querySelector<HTMLElement>('[data-saved]');
+    const when = block.querySelector<HTMLElement>('[data-saved-ago]');
+    const list = block.querySelector<HTMLElement>('[data-saved-list]');
+
+    if (raw === null || saved === null || when === null || list === null) {
+        return;
+    }
+
+    try {
+        const body = JSON.parse(raw) as { version?: unknown; savedAt?: unknown; locale?: unknown; restaurants?: unknown };
+        const at = body.savedAt;
+
+        if (body.version !== 1 || typeof at !== 'number' || at > Date.now() || Date.now() - at > MAX_AGE_MS || !Array.isArray(body.restaurants)) {
+            return;
+        }
+
+        for (const restaurant of body.restaurants as { name?: unknown; categories?: { name?: unknown }[] }[]) {
+            if (typeof restaurant.name === 'string') {
+                const item = document.createElement('li');
+                // Las categorías vienen en el idioma en que se guardó: en otro, solo el nombre.
+                const categories = (body.locale === locale ? (restaurant.categories ?? []) : []).map((category) => category.name).filter((name) => typeof name === 'string');
+
+                item.textContent = categories.length === 0 ? restaurant.name : `${restaurant.name} · ${categories.join(', ')}`;
+                list.append(item);
+            }
+        }
+
+        when.textContent = (when.dataset.template ?? '').replace(':time', ago(at));
+        saved.hidden = list.childElementCount === 0;
+    } catch {
+        // Una copia rota no tapa el aviso: la página sigue sin la lista.
+    }
+}
+
 function retry(): void {
     window.location.reload();
 }
@@ -100,6 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (block?.dataset.title !== undefined) {
         document.title = block.dataset.title;
+    }
+
+    if (block !== null) {
+        showSaved(block);
     }
 
     for (const button of document.querySelectorAll<HTMLButtonElement>('[data-retry]')) {
