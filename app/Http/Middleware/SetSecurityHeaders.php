@@ -26,6 +26,9 @@ class SetSecurityHeaders
      */
     public const HSTS = 'max-age=31536000; includeSubDomains';
 
+    /** Que ni se indexe, ni se sigan sus enlaces, ni se guarde una copia. */
+    public const NOINDEX = 'noindex, nofollow, noarchive';
+
     /**
      * Funciones del navegador que la app no usa, apagadas para la página y
      * para cualquier iframe que cargue. La ubicación queda solo para este
@@ -73,6 +76,12 @@ class SetSecurityHeaders
         // esta, que no sabe de orígenes, no se manda: no la contradice.
         if (FrameAncestors::configured() === []) {
             $headers->set('X-Frame-Options', 'DENY');
+        }
+
+        // Dominio de pruebas (ROBOTS_NOINDEX): nada se indexa, tampoco los
+        // errores. Es el mismo valor que PrivateResponse pone en sus rutas.
+        if (config('app.robots_noindex') === true) {
+            $headers->set('X-Robots-Tag', self::NOINDEX);
         }
 
         // isSecure() ya sabe del proxy de confianza: TrustProxies corrió
