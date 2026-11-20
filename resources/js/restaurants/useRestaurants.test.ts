@@ -184,6 +184,102 @@ describe('los restaurantes del inicio', () => {
             expect(restaurants.value).toEqual([EL_GUADUAL]);
         });
 
+        it('sin respuesta del servidor (red o plazo), es «sin señal»; con una respuesta de error, no (BUG-005)', async () => {
+            const { saveList } = await import('./savedList');
+            saveList('es', [LA_CEIBA], Date.now() - 60_000);
+
+            const network = stubRestaurantsFetch();
+            const { staleSince, offline, retry } = await setUp();
+            network.last()?.fail();
+            await settle();
+
+            expect(staleSince.value).not.toBeNull();
+            expect(offline.value).toBe(true);
+
+            retry();
+            network.last()?.respondWith({ status: 503 });
+            await settle();
+
+            // Sigue la copia, pero el teléfono tiene señal: el aviso no puede decir «sin señal».
+            expect(staleSince.value).not.toBeNull();
+            expect(offline.value).toBe(false);
+        });
+
+        it('si el servidor responde 200 pero ningún elemento es válido, la copia buena no se borra (BUG-005)', async () => {
+            const { saveList, loadSaved } = await import('./savedList');
+            saveList('es', [LA_CEIBA], Date.now() - 60_000);
+
+            const network = stubRestaurantsFetch();
+            const { status, restaurants, staleSince, offline } = await setUp();
+            network.last()?.respondWith({ status: 200, body: { type: 'FeatureCollection', features: [{ roto: true }] } });
+            await settle();
+
+            expect(loadSaved()?.restaurants).toEqual([LA_CEIBA]);
+            expect(status.value).toBe('ready');
+            expect(restaurants.value).toEqual([LA_CEIBA]);
+            expect(staleSince.value).not.toBeNull();
+            expect(offline.value).toBe(false);
+        });
+
+        it('si el servidor dice que no hay restaurantes (features vacío), la copia sí se borra', async () => {
+            const { saveList, loadSaved } = await import('./savedList');
+            saveList('es', [LA_CEIBA], Date.now() - 60_000);
+
+            stubRestaurantsFetch([]);
+            await setUp();
+            await settle();
+
+            expect(loadSaved()).toBeNull();
+        });
+
+        it('al reintentar con la copia a la vista, `retrying` dura lo que el pedido y el aviso sigue si vuelve a fallar (EVA-015)', async () => {
+            const { saveList } = await import('./savedList');
+            saveList('es', [LA_CEIBA], Date.now() - 60_000);
+
+            const network = stubRestaurantsFetch();
+            const { retrying, staleSince, restaurants, retry } = await setUp();
+            network.last()?.fail();
+            await settle();
+
+            expect(retrying.value).toBe(false);
+
+            retry();
+
+            expect(retrying.value).toBe(true);
+
+            network.last()?.fail();
+            await settle();
+
+            expect(retrying.value).toBe(false);
+            expect(staleSince.value).not.toBeNull();
+
+            retry();
+            network.last()?.respond([EL_GUADUAL]);
+            await settle();
+
+            expect(retrying.value).toBe(false);
+            expect(staleSince.value).toBeNull();
+            expect(restaurants.value).toEqual([EL_GUADUAL]);
+        });
+
+        it('`retrying` no se queda pegado si el pedido se cancela por el cambio de idioma (EVA-015)', async () => {
+            const { saveList } = await import('./savedList');
+            saveList('es', [LA_CEIBA], Date.now() - 60_000);
+
+            const network = stubRestaurantsFetch();
+            const { inertia, retrying, retry } = await setUp();
+            network.last()?.fail();
+            await settle();
+
+            retry();
+            inertia.receiveFromServer('en', { replace: true });
+            await flushPromises();
+            network.last()?.respond([EL_GUADUAL]);
+            await settle();
+
+            expect(retrying.value).toBe(false);
+        });
+
         it('la copia en otro idioma que la interfaz sirve la lista, pero sin categorías ni almuerzo', async () => {
             const { saveList } = await import('./savedList');
             saveList('es', [LA_CEIBA, EL_GUADUAL], Date.now() - 60_000);

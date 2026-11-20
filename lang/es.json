@@ -51,6 +51,8 @@
     "restaurants.error": "No pudimos cargar los restaurantes. Revisá tu conexión y volvé a intentar.",
     "restaurants.retry": "Reintentar",
     "restaurants.stale": "Sin señal: datos de :time",
+    "restaurants.staleFailed": "No pudimos actualizar: datos de :time",
+    "restaurants.retrying": "Reintentando…",
     "restaurants.empty": "Todavía no hay restaurantes en el mapa. Volvé pronto, que ya los estamos sumando.",
     "restaurants.count_one": "1 restaurante en el mapa",
     "restaurants.count_many": ":count restaurantes en el mapa",
