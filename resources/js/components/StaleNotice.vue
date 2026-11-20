@@ -34,11 +34,18 @@ const time = computed(() => agoText(since, now.value.getTime(), locale.value));
 </template>
 
 <style scoped>
-/* Debajo de la fila de arriba del mapa (el crédito y la ubicación: 10 px + 44 px), con el margen del sistema. */
+/*
+ * Debajo de la fila de arriba del mapa (el crédito y la ubicación: 10 px + 44 px
+ * = 4.25rem con 10 px de aire), con el margen del sistema. Si esa fila cambia
+ * de alto, quien la dibuje define --map-top-controls-offset (con este mismo
+ * valor) y el aviso la sigue; la variable no se declara en la hoja del arranque
+ * para no engordarla (tope de 76 kB, map/bundle.test.ts): el respaldo de aquí
+ * es el valor de map.css (.veni-locate-notice, 64 px) más el aire.
+ */
 .stale-notice {
     position: absolute;
     z-index: 10;
-    top: calc(env(safe-area-inset-top, 0px) + 4.25rem);
+    top: var(--map-top-controls-offset, calc(env(safe-area-inset-top, 0px) + 4.25rem));
     right: 0.5rem;
     left: 0.5rem;
     display: flex;
@@ -90,7 +97,16 @@ const time = computed(() => agoText(since, now.value.getTime(), locale.value));
     opacity: 0.6;
 }
 
-:global([data-theme='dark']) .stale-retry {
+/*
+ * Sobre las teselas oscuras (#1C0F26 de fondo) el borde de 15 % casi no se ve:
+ * lila al 40 % sobre ciruela da ~3,7:1 contra ese fondo y ~3,2:1 contra el
+ * relleno de parques (#2D1D3A), sin vidrio ni transparencia.
+ */
+[data-theme='dark'] .stale-notice {
+    border-color: color-mix(in srgb, var(--veni-lila) 40%, var(--veni-ciruela));
+}
+
+[data-theme='dark'] .stale-retry {
     color: var(--color-veni-ciruela);
     background: var(--color-veni-mango);
 }
