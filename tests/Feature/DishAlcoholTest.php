@@ -4,7 +4,6 @@ use App\Filament\Owner\Resources\Dishes\Pages\EditDish;
 use App\Models\Dish;
 use App\Models\MenuSection;
 use App\Models\Restaurant;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 
@@ -57,6 +56,6 @@ test('el dueño no puede marcar un plato de otro restaurante', function () {
     $theirs = panelDish($other);
     actInPanel(panelMember($mine), $mine);
 
-    expect(fn () => Livewire::test(EditDish::class, ['record' => $theirs->getRouteKey()]))->toThrow(ModelNotFoundException::class);
+    $this->get("/panel/{$mine->slug}/dishes/{$theirs->getRouteKey()}/edit")->assertNotFound();
     expect($theirs->refresh()->is_alcohol)->toBeFalse();
 });
