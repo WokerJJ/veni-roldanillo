@@ -187,6 +187,8 @@ return [
         'bulk_label' => 'Precio para todas las de :size',
         'bulk_placeholder' => 'Precio para todas',
         'bulk_apply' => 'Poner a todas',
+        'bulk_applied' => 'Aplicado a :n platos',
+        'bulk_applied_one' => 'Aplicado a 1 plato',
         'jump_prices' => 'Ir a los precios (:n marcados)',
     ],
 
@@ -219,6 +221,8 @@ return [
         'saved_offline' => 'Guardada en el teléfono. Se envía cuando vuelva la señal.',
         'saved_sent' => 'Enviada. Ahora pedile la confirmación al dueño.',
         'unchecked' => 'Los duplicados no se revisaron.',
+        'unpriced' => 'Quedan :n platos sin precio.',
+        'fix_prices' => 'Poner los precios',
         'no_menu' => 'Sin carta: se carga después.',
         'edit' => 'Cambiar',
     ],

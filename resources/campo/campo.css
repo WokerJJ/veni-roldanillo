@@ -551,6 +551,14 @@ p {
     justify-content: space-between;
 }
 
+.summary__list {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
 .summary__big {
     font: 700 1.25rem/1.25 var(--veni-font-display);
 }

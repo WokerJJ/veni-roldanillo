@@ -186,6 +186,8 @@ return [
         'bulk_label' => 'Price for all the :size',
         'bulk_placeholder' => 'Price for all',
         'bulk_apply' => 'Set for all',
+        'bulk_applied' => 'Applied to :n dishes',
+        'bulk_applied_one' => 'Applied to 1 dish',
         'jump_prices' => 'Go to prices (:n ticked)',
     ],
 
@@ -218,6 +220,8 @@ return [
         'saved_offline' => 'Saved on the phone. It is sent when the signal is back.',
         'saved_sent' => 'Sent. Now ask the owner to confirm.',
         'unchecked' => 'Duplicates were not checked.',
+        'unpriced' => 'There are :n dishes without a price.',
+        'fix_prices' => 'Set the prices',
         'no_menu' => 'No menu: it is added later.',
         'edit' => 'Change',
     ],

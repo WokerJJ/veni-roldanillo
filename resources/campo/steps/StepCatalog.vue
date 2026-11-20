@@ -2,10 +2,12 @@
 import { computed, ref } from 'vue';
 
 import type { CatalogGroup, CatalogItem, CatalogVariant } from '../catalog';
-import { brandsOf, dishesOfGroup, EMPTY_CATALOG, formatPesos, isSelected, parsePrice, removeDish, setDishPrice, setLabelPrice, toggleVariant } from '../catalog';
+import { brandsOf, dishesOfGroup, EMPTY_CATALOG, isSelected, removeDish, setDishPrice, setLabelPrice, toggleVariant } from '../catalog';
 import ChoiceChip from '../components/ChoiceChip.vue';
+import DishPriceRow from '../components/DishPriceRow.vue';
 import PriceInput from '../components/PriceInput.vue';
 import type { Draft, Errors, MenuDish } from '../draft';
+import { isDishIncomplete } from '../draft';
 import type { MetaCache } from '../storage';
 import { currentLocale, t } from '../texts';
 
@@ -26,7 +28,9 @@ const { draft, errors, meta, patch } = defineProps<{
 const catalog = computed(() => meta?.catalog ?? EMPTY_CATALOG);
 const groupId = ref<number | null>(null);
 const brandKey = ref<string | null | undefined>(undefined);
-const bulk = ref<Record<string, string>>({});
+const bulk = ref<Record<string, number | null>>({});
+/** A cuántos platos se aplicó el último precio por tamaño, por tamaño (se anuncia a quien usa lector de pantalla). */
+const applied = ref<Record<string, number>>({});
 
 const group = computed<CatalogGroup | null>(() => catalog.value.groups.find((candidate) => candidate.id === groupId.value) ?? catalog.value.groups[0] ?? null);
 const brands = computed(() => (group.value ? brandsOf(group.value) : []));
@@ -60,10 +64,32 @@ function toggle(item: CatalogItem, variant: CatalogVariant | null, on: boolean):
 
 function applyBulk(label: string): void {
     const group_ = group.value;
-    const price = parsePrice(bulk.value[label] ?? '');
+    const price = bulk.value[label] ?? null;
 
     if (group_ && price !== null) {
         patch({ menu: setLabelPrice(draft.menu, group_, label, price) });
+        applied.value = { ...applied.value, [label]: chosen.value.filter((entry) => entry.label === label).length };
+        bulk.value = { ...bulk.value, [label]: null };
+    }
+}
+
+function appliedText(label: string): string {
+    const n = applied.value[label];
+
+    if (n === undefined) {
+        return '';
+    }
+
+    return n === 1 ? t('catalog.bulk_applied_one') : t('catalog.bulk_applied', { n });
+}
+
+/** Lleva a la lista de precios sin tocar la dirección (un ancla cambiaría el hash y la pantalla del asistente). */
+function jumpToPrices(): void {
+    const title = document.getElementById('campo-prices-title');
+
+    if (title) {
+        title.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+        title.focus({ preventScroll: true });
     }
 }
 
@@ -75,8 +101,9 @@ function sizeName(label: string): string {
     return label === '' ? t('catalog.no_size') : label;
 }
 
-function onBulk(label: string, event: Event): void {
-    bulk.value = { ...bulk.value, [label]: (event.target as HTMLInputElement).value };
+function onBulk(label: string, price: number | null): void {
+    bulk.value = { ...bulk.value, [label]: price };
+    applied.value = Object.fromEntries(Object.entries(applied.value).filter(([key]) => key !== label));
 }
 </script>
 
@@ -104,7 +131,7 @@ function onBulk(label: string, event: Event): void {
                 </div>
             </fieldset>
 
-            <a v-if="chosen.length > 0" class="btn btn--tonal" href="#campo-prices-title">{{ t('catalog.jump_prices', { n: chosen.length }) }}</a>
+            <button v-if="chosen.length > 0" type="button" class="btn btn--tonal" @click="jumpToPrices">{{ t('catalog.jump_prices', { n: chosen.length }) }}</button>
 
             <section v-for="item in items" :key="item.id" class="catalog-item" :aria-label="name(item)">
                 <h3 class="catalog-item__name">{{ name(item) }}<span v-if="item.is_alcohol || group.is_alcohol" class="plus18" aria-hidden="true">+18</span></h3>
@@ -132,34 +159,36 @@ function onBulk(label: string, event: Event): void {
             </section>
 
             <section v-if="chosen.length > 0" class="prices" aria-labelledby="campo-prices-title">
-                <h3 id="campo-prices-title" class="step__title">{{ t('catalog.prices_title', { n: chosen.length }) }}</h3>
+                <h3 id="campo-prices-title" class="step__title" tabindex="-1">{{ t('catalog.prices_title', { n: chosen.length }) }}</h3>
 
                 <div v-for="size in sizes" :key="size" class="size">
                     <div class="size__head">
                         <h4>{{ sizeName(size) }}</h4>
                         <div class="size__bulk">
-                            <input
-                                class="input input--price"
-                                type="text"
-                                inputmode="numeric"
-                                autocomplete="off"
-                                :aria-label="t('catalog.bulk_label', { size: sizeName(size) })"
+                            <PriceInput
+                                :id="`campo-bulk-${size}`"
+                                :label="t('catalog.bulk_label', { size: sizeName(size) })"
                                 :placeholder="t('catalog.bulk_placeholder')"
-                                :value="bulk[size] ?? ''"
-                                @input="(event) => onBulk(size, event)"
-                            >
-                            <button type="button" class="btn" :disabled="parsePrice(bulk[size] ?? '') === null" @click="applyBulk(size)">{{ t('catalog.bulk_apply') }}</button>
+                                :value="bulk[size] ?? null"
+                                @input="(price) => onBulk(size, price)"
+                                @enter="applyBulk(size)"
+                            />
+                            <button type="button" class="btn" :disabled="(bulk[size] ?? null) === null" @click="applyBulk(size)">{{ t('catalog.bulk_apply') }}</button>
                         </div>
+                        <p class="field__help" role="status">{{ appliedText(size) }}</p>
                     </div>
 
                     <ul class="dishes">
-                        <li v-for="entry in chosen.filter((candidate) => candidate.label === size)" :key="entry.dish.name_es" class="dish" :class="{ 'dish--missing': errors.menu !== undefined && entry.dish.price === null }">
+                        <li v-for="entry in chosen.filter((candidate) => candidate.label === size)" :key="entry.dish.name_es" class="dish" :class="{ 'dish--missing': errors.menu !== undefined && isDishIncomplete(entry.dish) }">
                             <p class="dish__name">{{ entry.dish.name_es }}</p>
-                            <div class="dish__row">
-                                <PriceInput :id="`campo-cprice-${entry.dish.name_es}`" :label="t('menu.dish_price')" :value="entry.dish.price" :invalid="errors.menu !== undefined && entry.dish.price === null" @input="(price) => setPrice(entry.dish, price)" />
-                                <span v-if="entry.dish.price !== null" class="muted">{{ formatPesos(entry.dish.price) }}</span>
-                                <button type="button" class="btn btn--quiet btn--remove" :aria-label="t('menu.remove_dish', { name: entry.dish.name_es })" @click="patch({ menu: removeDish(draft.menu, entry.dish) })">✕</button>
-                            </div>
+                            <DishPriceRow
+                                :id="`campo-cprice-${entry.dish.name_es}`"
+                                :value="entry.dish.price"
+                                :invalid="errors.menu !== undefined && entry.dish.price === null"
+                                :remove-name="entry.dish.name_es"
+                                @price="(price) => setPrice(entry.dish, price)"
+                                @remove="patch({ menu: removeDish(draft.menu, entry.dish) })"
+                            />
                         </li>
                     </ul>
                 </div>

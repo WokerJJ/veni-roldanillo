@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Draft, StepName } from '../draft';
-import { dishCount, STEPS } from '../draft';
+import { dishCount, STEPS, unpricedCount } from '../draft';
 import type { MetaCache } from '../storage';
 import { currentLocale, list, t } from '../texts';
 
@@ -72,7 +72,13 @@ function go(step: StepName): void {
             <p v-if="draft.menu.length === 0">{{ t('review.no_menu') }}</p>
             <template v-else>
                 <p>{{ t('menu.count', { dishes: dishCount(draft.menu), sections: draft.menu.length }) }}</p>
-                <p v-for="section in draft.menu" :key="section.name_es">{{ section.name_es }}: {{ section.dishes.length }}</p>
+                <ul class="summary__list">
+                    <li v-for="(section, index) in draft.menu" :key="index">{{ section.name_es || t('menu.section_name') }}: {{ section.dishes.length }}</li>
+                </ul>
+                <div v-if="unpricedCount(draft.menu) > 0" class="notice" role="note">
+                    <p>{{ t('review.unpriced', { n: unpricedCount(draft.menu) }) }}</p>
+                    <button type="button" class="btn btn--tonal" @click="go('menu')">{{ t('review.fix_prices') }}</button>
+                </div>
                 <p v-if="draft.menu.some((section) => section.dishes.some((dish) => dish.is_alcohol))" class="muted">{{ t('menu.alcohol_review') }}</p>
             </template>
         </section>
