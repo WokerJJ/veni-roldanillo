@@ -67,6 +67,7 @@ describe('CSS scoped de los componentes (BUG-033)', () => {
         ['resources/js/components/OrderCart.vue', []],
         ['resources/js/components/SavedOnDevice.vue', []],
         ['resources/js/components/RestaurantHours.vue', []],
+        ['resources/js/components/StaleNotice.vue', []],
         // El margen de abajo mientras está la barra del pedido es de la página entera: va en <html> a propósito.
         ['resources/js/components/OrderBar.vue', ['html.has-order-bar']],
     ])('%s: cada regla apunta a un elemento del componente', (file, global) => {
@@ -153,6 +154,17 @@ describe('CSS scoped de los componentes (BUG-033)', () => {
         expect(declarations(file, '.guide-photo')).toMatchObject({ 'aspect-ratio': '4 / 3', 'object-fit': 'cover' });
         // La portada es siempre oscura: su texto va en blanco.
         expect(declarations(file, '.guide-hero')).toMatchObject({ color: 'var(--color-veni-blanco)' });
+    });
+
+    it('el aviso de la copia guardada baja bajo la fila de controles del mapa por una variable con respaldo, y en el tema oscuro su borde se distingue del mapa (#144)', () => {
+        const file = 'resources/js/components/StaleNotice.vue';
+        const notice = declarations(file, '.stale-notice');
+
+        expect(notice['--map-top-controls-offset']).toBeUndefined();
+        expect(notice.top).toBe('var(--map-top-controls-offset, calc(env(safe-area-inset-top, 0px) + 4.25rem))');
+        // Sin el truco de :global() (BUG-033), el borde oscuro apunta al aviso.
+        expect(compiledSelectors(file)).toContain(`[data-theme='dark'] .stale-notice${SCOPE}`);
+        expect(declarations(file, `[data-theme='dark'] .stale-notice`)['border-color']).toBe('color-mix(in srgb, var(--veni-lila) 40%, var(--veni-ciruela))');
     });
 
     it('en computador la barra del pedido va sobre la columna del menú: la columna de la derecha no se acorta por ella (EVA-037)', () => {
