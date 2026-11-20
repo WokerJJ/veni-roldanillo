@@ -132,7 +132,8 @@ final class ApproveFieldSubmission
     /**
      * Las secciones y los platos de la carta capturada (ADR 0049). El inglés de
      * un plato de catálogo sale del catálogo si el teléfono no lo mandó: no es
-     * parte de lo que firma el dueño. Cada sección propone si cuenta para el
+     * parte de lo que firma el dueño. La marca de alcohol nunca baja respecto del
+     * catálogo (producto o grupo alcohólico). Cada sección propone si cuenta para el
      * rango de precios por su nombre, como siempre.
      *
      * @param  list<array{name_es: string, name_en: string|null, dishes: list<array{name_es: string, name_en: string|null, price: int, is_alcohol: bool, catalog_variant_id: int|null}>}>  $menu
@@ -143,18 +144,26 @@ final class ApproveFieldSubmission
 
         foreach ($menu as $section) {
             foreach ($section['dishes'] as $dish) {
-                if ($dish['catalog_variant_id'] !== null && $dish['name_en'] === null) {
+                if ($dish['catalog_variant_id'] !== null) {
                     $variantIds[] = $dish['catalog_variant_id'];
                 }
             }
         }
 
         $english = [];
+        $alcohol = [];
 
-        foreach (CatalogVariant::query()->with('item')->whereIn('id', $variantIds)->get() as $variant) {
+        foreach (CatalogVariant::query()->with('item.group')->whereIn('id', $variantIds)->get() as $variant) {
             $item = $variant->item;
 
-            if ($item instanceof CatalogItem && $item->name_en !== null) {
+            if (! $item instanceof CatalogItem) {
+                continue;
+            }
+
+            // El catálogo manda sobre el teléfono: un plato alcohólico nunca baja a «sin alcohol».
+            $alcohol[$variant->id] = $item->is_alcohol || $item->group?->is_alcohol === true;
+
+            if ($item->name_en !== null) {
                 $english[$variant->id] = CatalogItem::dishName($item->name_en, $item->brand, $variant->label);
             }
         }
@@ -172,7 +181,7 @@ final class ApproveFieldSubmission
                     'name_es' => $dish['name_es'],
                     'name_en' => $dish['name_en'] ?? ($dish['catalog_variant_id'] !== null ? ($english[$dish['catalog_variant_id']] ?? null) : null),
                     'price' => $dish['price'],
-                    'is_alcohol' => $dish['is_alcohol'],
+                    'is_alcohol' => $dish['is_alcohol'] || ($dish['catalog_variant_id'] !== null && ($alcohol[$dish['catalog_variant_id']] ?? false)),
                     'position' => $dishPosition,
                 ]);
             }

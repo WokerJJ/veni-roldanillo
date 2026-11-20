@@ -4,6 +4,7 @@ namespace App\Http\Requests\Field;
 
 use App\Enums\ClaimantRole;
 use App\Enums\PaymentMethod;
+use App\Models\CatalogVariant;
 use App\Models\FieldSubmission;
 use App\Rules\PlainText;
 use App\Support\ColombianMobile;
@@ -11,6 +12,7 @@ use App\Support\Field\FieldMenu;
 use App\Support\Field\WeeklyHours;
 use Closure;
 use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
@@ -82,7 +84,7 @@ class StoreFieldSubmissionRequest extends FormRequest
             'menu.*.dishes.*.name_en' => ['nullable', 'string', 'max:120', new PlainText],
             'menu.*.dishes.*.price' => ['required', 'integer', 'between:0,'.FieldMenu::MAX_PRICE],
             'menu.*.dishes.*.is_alcohol' => ['nullable', 'boolean'],
-            'menu.*.dishes.*.catalog_variant_id' => ['nullable', 'integer', Rule::exists('catalog_variants', 'id')->where('active', true)],
+            'menu.*.dishes.*.catalog_variant_id' => ['nullable', 'integer', 'min:1'],
             'captured_at' => ['required', 'date'],
             'restaurant_id' => ['nullable', 'integer', 'min:1'],
             'distinct_from' => ['nullable', 'array', 'max:10'],
@@ -112,13 +114,59 @@ class StoreFieldSubmissionRequest extends FormRequest
                     $validator->errors()->add('hours', __('field.validation.hours'));
                 }
 
-                $problem = FieldMenu::problem($this->menuFrom($this->input('menu')));
+                $menu = $this->menuFrom($this->input('menu'));
+                $problem = FieldMenu::problem($menu);
 
                 if ($problem !== null) {
                     $validator->errors()->add('menu', __("field.validation.menu_{$problem}"));
+
+                    // Una carta que ya no se acepta no merece ni una consulta al catálogo.
+                    return;
                 }
+
+                $this->assertCatalogVariants($validator, $menu);
             },
         ];
+    }
+
+    /**
+     * Las presentaciones del catálogo que trae la carta existen y están activas,
+     * igual que su producto y su grupo: una sola consulta para todos los platos.
+     *
+     * @param  list<array{dishes: list<array{catalog_variant_id: int|null}>}>  $menu
+     */
+    private function assertCatalogVariants(Validator $validator, array $menu): void
+    {
+        $ids = [];
+
+        foreach ($menu as $section) {
+            foreach ($section['dishes'] as $dish) {
+                if ($dish['catalog_variant_id'] !== null) {
+                    $ids[] = $dish['catalog_variant_id'];
+                }
+            }
+        }
+
+        if ($ids === []) {
+            return;
+        }
+
+        $valid = CatalogVariant::query()
+            ->whereIn('id', array_values(array_unique($ids)))
+            ->where('active', true)
+            ->whereHas('item', fn (Builder $item) => $item->where('active', true)->whereHas('group', fn (Builder $group) => $group->where('active', true)))
+            ->pluck('id')
+            ->flip()
+            ->all();
+
+        foreach ($menu as $sectionIndex => $section) {
+            foreach ($section['dishes'] as $dishIndex => $dish) {
+                if ($dish['catalog_variant_id'] !== null && ! isset($valid[$dish['catalog_variant_id']])) {
+                    $key = "menu.{$sectionIndex}.dishes.{$dishIndex}.catalog_variant_id";
+                    $validator->errors()->add($key, __('validation.exists', ['attribute' => $key]));
+                }
+            }
+        }
     }
 
     /**

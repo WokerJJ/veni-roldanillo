@@ -126,6 +126,30 @@ test('el inglés de un plato de catálogo sale del catálogo si el teléfono no 
         ->and($dish->name_en)->toBe('Apple Postobón 400 ml');
 });
 
+test('un plato de catálogo alcohólico nunca baja a «sin alcohol», aunque el teléfono lo mande así', function (bool $groupAlcohol, bool $itemAlcohol) {
+    $group = CatalogGroup::factory()->create(['is_alcohol' => $groupAlcohol]);
+    $item = CatalogItem::factory()->create(['group_id' => $group->id, 'is_alcohol' => $itemAlcohol, 'name_es' => 'Cerveza Águila', 'brand' => null]);
+    $variant = CatalogVariant::factory()->create(['item_id' => $item->id, 'label' => '330 ml']);
+    $free = CatalogItem::factory()->create(['group_id' => CatalogGroup::factory()->create(['is_alcohol' => false])->id, 'is_alcohol' => false, 'name_es' => 'Jugo', 'brand' => null]);
+    $freeVariant = CatalogVariant::factory()->create(['item_id' => $free->id, 'label' => 'Vaso']);
+    $admin = User::factory()->admin()->create();
+
+    $submission = menuConfirmed($admin, [[
+        'name_es' => 'Bebidas', 'name_en' => null,
+        'dishes' => [
+            ['name_es' => 'Cerveza Águila 330 ml', 'name_en' => null, 'price' => 4500, 'is_alcohol' => false, 'catalog_variant_id' => $variant->id],
+            ['name_es' => 'Jugo Vaso', 'name_en' => null, 'price' => 3000, 'is_alcohol' => false, 'catalog_variant_id' => $freeVariant->id],
+        ],
+    ]]);
+
+    $dishes = app(ApproveFieldSubmission::class)->handle($submission, $admin)->dishes()->orderBy('position')->get();
+
+    expect($dishes->pluck('is_alcohol')->all())->toBe([true, false]);
+})->with([
+    'el producto es alcohólico' => [false, true],
+    'el grupo es alcohólico' => [true, false],
+]);
+
 test('una captura sin carta (la etapa 1) se aprueba igual y no crea secciones', function () {
     $admin = User::factory()->admin()->create();
     $submission = menuConfirmed($admin, []);
@@ -225,6 +249,56 @@ test('una presentación desactivada del catálogo no se acepta', function () {
         ->assertJsonValidationErrors('menu.0.dishes.0.catalog_variant_id');
 });
 
+test('una presentación de un producto o de un grupo desactivados tampoco se acepta', function (bool $itemActive, bool $groupActive) {
+    $this->actingAs(User::factory()->admin()->create());
+    $item = CatalogItem::factory()->create(['group_id' => CatalogGroup::factory()->create(['active' => $groupActive])->id, 'active' => $itemActive]);
+    $variant = CatalogVariant::factory()->create(['item_id' => $item->id, 'active' => true]);
+
+    $this->putJson('/campo/api/submissions/'.Str::uuid(), menuBody([['name_es' => 'A', 'dishes' => [['name_es' => 'B', 'price' => 1, 'catalog_variant_id' => $variant->id]]]]))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('menu.0.dishes.0.catalog_variant_id');
+    expect(FieldSubmission::query()->count())->toBe(0);
+})->with([
+    'producto desactivado' => [false, true],
+    'grupo desactivado' => [true, false],
+]);
+
+test('validar las presentaciones del catálogo es una sola consulta, con 3 platos o con 300', function () {
+    $this->actingAs(User::factory()->admin()->create());
+    $item = CatalogItem::factory()->create(['group_id' => CatalogGroup::factory()->create()->id]);
+    $variants = CatalogVariant::factory()->count(300)->sequence(fn ($sequence): array => ['label' => "Tamaño {$sequence->index}"])->create(['item_id' => $item->id]);
+
+    $menuOf = fn (int $count): array => array_map(
+        fn (int $section): array => ['name_es' => "Sección {$section}", 'dishes' => $variants->slice($section * 25, min(25, $count - $section * 25))->values()->map(fn (CatalogVariant $variant, int $n): array => ['name_es' => "Plato {$section}-{$n}", 'price' => 1000, 'catalog_variant_id' => $variant->id])->all()],
+        range(0, (int) ceil($count / 25) - 1),
+    );
+
+    $catalogQueries = function (int $count) use ($menuOf): int {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->putJson('/campo/api/submissions/'.Str::uuid(), menuBody($menuOf($count)))->assertCreated();
+        DB::disableQueryLog();
+
+        return count(array_filter(DB::getQueryLog(), fn (array $query): bool => str_contains((string) $query['query'], 'catalog_variants')));
+    };
+
+    expect($catalogQueries(3))->toBe(1)
+        ->and($catalogQueries(300))->toBe(1);
+});
+
+test('una carta con más de trescientos platos se rechaza antes de tocar la base', function () {
+    $this->actingAs(User::factory()->admin()->create());
+    $dish = fn (int $n): array => ['name_es' => "Plato {$n}", 'price' => 1000, 'catalog_variant_id' => 999_999];
+    $menu = array_map(fn (int $section): array => ['name_es' => "Sección {$section}", 'dishes' => array_map(fn (int $n): array => $dish($section * 100 + $n), range(1, $section === 0 ? 26 : 25))], range(0, 11));
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    $this->putJson('/campo/api/submissions/'.Str::uuid(), menuBody($menu))->assertUnprocessable()->assertJsonValidationErrors('menu');
+    DB::disableQueryLog();
+
+    expect(array_filter(DB::getQueryLog(), fn (array $query): bool => str_contains((string) $query['query'], 'catalog_variants')))->toBeEmpty();
+});
+
 test('los límites: doce secciones, sesenta platos por sección y trescientos en total', function () {
     $this->actingAs(User::factory()->admin()->create());
 
@@ -289,6 +363,28 @@ test('la página del dueño muestra la carta con sus precios y el aviso de alcoh
     $text = ConfirmationMessage::text($submission->refresh(), 'https://x.test/confirmar/abc');
 
     expect($text)->toContain('Carta: 3 platos en 2 secciones')->not->toContain('Bandeja paisa');
+});
+
+test('la página del dueño muestra también el inglés de secciones y platos: es lo que firma la huella', function (string $locale) {
+    $this->withoutVite();
+    $admin = User::factory()->admin()->create();
+    $submission = app(ReceiveFieldSubmission::class)->handle($admin, (string) Str::uuid(), menuData(menuMenu()))['submission'];
+    $code = app(IssueConfirmationLink::class)->handle($submission, $admin);
+
+    $this->get("/confirmar/{$code}?lang={$locale}")
+        ->assertOk()
+        ->assertSee('Beers')
+        ->assertSee('Sancocho stew');
+})->with(['es', 'en']);
+
+test('la página del dueño no inventa inglés: sin name_en solo sale el español', function () {
+    $this->withoutVite();
+    $admin = User::factory()->admin()->create();
+    $menu = [['name_es' => 'Almuerzos', 'name_en' => null, 'dishes' => [['name_es' => 'Sancocho', 'name_en' => null, 'price' => 18000, 'is_alcohol' => false, 'catalog_variant_id' => null]]]];
+    $submission = app(ReceiveFieldSubmission::class)->handle($admin, (string) Str::uuid(), menuData($menu))['submission'];
+    $code = app(IssueConfirmationLink::class)->handle($submission, $admin);
+
+    $this->get("/confirmar/{$code}")->assertOk()->assertDontSee('lang="en"', false);
 });
 
 test('sin alcohol en la carta, la página del dueño no muestra el aviso', function () {

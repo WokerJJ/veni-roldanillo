@@ -191,6 +191,14 @@ a {
     font-weight: 700;
 }
 
+/* El inglés que también firma el dueño: debajo del nombre, más discreto. */
+.alt {
+    display: block;
+    color: var(--ink-muted);
+    font-size: 0.875rem;
+    font-weight: 400;
+}
+
 .plus18 {
     display: inline-block;
     margin-inline-start: 0.375rem;

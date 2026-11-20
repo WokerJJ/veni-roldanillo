@@ -73,11 +73,11 @@
                 <section class="card" aria-labelledby="carta">
                     <h2 id="carta">{{ __('field.confirm.menu_title') }}</h2>
                     @foreach ($menu as $section)
-                        <h3>{{ $section['name'] }}</h3>
+                        <h3>{{ $section['name'] }}@if ($section['name_en']) <small class="alt" lang="en">{{ $section['name_en'] }}</small>@endif</h3>
                         <ul class="menu">
                             @foreach ($section['dishes'] as $dish)
                                 <li>
-                                    <span>{{ $dish['name'] }}@if ($dish['alcohol']) <strong class="plus18">+18</strong>@endif</span>
+                                    <span>{{ $dish['name'] }}@if ($dish['alcohol']) <strong class="plus18">+18</strong>@endif @if ($dish['name_en'])<small class="alt" lang="en">{{ $dish['name_en'] }}</small>@endif</span>
                                     <span>{{ $dish['price'] }}</span>
                                 </li>
                             @endforeach

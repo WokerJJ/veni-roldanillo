@@ -201,3 +201,21 @@ export function formatThousands(price: number): string {
 export function formatPesos(price: number): string {
     return `$${formatThousands(price)}`;
 }
+
+/**
+ * Los platos de un borrador cuya presentación ya no está en el catálogo (se
+ * desactivó o se borró) pasan a platos libres: sin `catalog_variant_id` y sin el
+ * inglés del catálogo. El servidor rechaza una presentación que no existe, y el
+ * nombre y el precio que escribió la persona se conservan. `null` si no hay nada
+ * que cambiar.
+ */
+export function withoutMissingVariants(menu: readonly MenuSection[], catalog: Catalog): MenuSection[] | null {
+    const alive = new Set(catalog.groups.flatMap((group) => group.items.flatMap((item) => item.variants.map((variant) => variant.id))));
+    const missing = (dish: MenuDish): boolean => dish.catalog_variant_id !== null && !alive.has(dish.catalog_variant_id);
+
+    if (!menu.some((section) => section.dishes.some(missing))) {
+        return null;
+    }
+
+    return menu.map((section) => ({ ...section, dishes: section.dishes.map((dish) => (missing(dish) ? { ...dish, name_en: null, catalog_variant_id: null } : dish)) }));
+}

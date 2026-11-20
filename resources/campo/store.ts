@@ -9,6 +9,7 @@ import { reactive } from 'vue';
 
 import type { CampoApi, ConfirmationLink, ServerSubmission } from './api';
 import { AuthError, OfflineError, RejectedError } from './api';
+import { withoutMissingVariants } from './catalog';
 import type { Candidate, Draft } from './draft';
 import { draftFromReturned, firstInvalidStep, newDraft, toBody } from './draft';
 import type { CampoStorage, MetaCache, SentSummary, StorageKind } from './storage';
@@ -120,8 +121,21 @@ export function createCampo(deps: CampoDeps) {
                 state.meta = null;
             }
 
+            const previousVersion = state.meta?.catalog?.version;
+
             state.meta = { userId: me.user.id, userName: me.user.name, categories: me.categories, paymentMethods: me.payment_methods, ...(me.catalog ? { catalog: me.catalog } : {}) };
             await storage.putMeta(plain(state.meta));
+
+            // Un catálogo nuevo: los platos de borrador cuya presentación ya no existe pasan a platos libres, o el envío daría 422.
+            if (me.catalog && me.catalog.version !== previousVersion) {
+                for (const draft of [...state.drafts]) {
+                    const menu = withoutMissingVariants(draft.menu, me.catalog);
+
+                    if (menu !== null) {
+                        await putDraft({ ...draft, menu, updatedAt: now().toISOString() });
+                    }
+                }
+            }
 
             const server = await api.list();
             state.sent = server.map(summaryOf).sort(byRecent);
