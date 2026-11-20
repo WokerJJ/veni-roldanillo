@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Hash;
 
 uses(RefreshDatabase::class);
 
-const ADMIN_TEST_PASSWORD = 'contrasena-de-prueba-1';
+const ADMIN_TEST_PASSWORD = 'contrasena-de-prueba-1'; // gitleaks:allow
 
 it('crea la cuenta de administración con contraseña temporal', function () {
     $admin = app(CreateAdminAccount::class)->handle('  Ana.Admin@Example.test ', '  Ana Admin ', ADMIN_TEST_PASSWORD);

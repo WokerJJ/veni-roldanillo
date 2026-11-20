@@ -11,7 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-const MAKE_ADMIN_PASSWORD = 'contrasena-de-prueba-1';
+const MAKE_ADMIN_PASSWORD = 'contrasena-de-prueba-1'; // gitleaks:allow
 const MAKE_ADMIN_CONFIRM = 'Vas a crear una cuenta con acceso total a /admin en producción. ¿Seguís?';
 
 it('crea la cuenta preguntando el nombre y la contraseña', function () {
