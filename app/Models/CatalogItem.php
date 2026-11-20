@@ -58,7 +58,7 @@ class CatalogItem extends Model
      */
     public static function dishName(string $name, ?string $brand, ?string $label): string
     {
-        $brand = $brand === null || trim($brand) === '' || mb_stripos($name, trim($brand)) !== false ? null : $brand;
+        $brand = $brand === null || trim($brand) === '' || mb_stripos($name, trim($brand)) !== false ? null : trim($brand);
 
         return trim(implode(' ', array_filter([$name, $brand, $label], fn (?string $part): bool => $part !== null && trim($part) !== '')));
     }

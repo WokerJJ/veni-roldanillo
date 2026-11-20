@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import contract from '../../tests/contracts/dish-name.json';
 import type { Catalog, CatalogGroup } from './catalog';
 import {
     brandsOf,
@@ -106,6 +107,12 @@ describe('dishName', () => {
         expect(dishName('Cerveza Águila', 'Águila', 'Botella 330 ml')).toBe('Cerveza Águila Botella 330 ml');
         expect(dishName('Coca-Cola', 'coca-cola', '400 ml')).toBe('Coca-Cola 400 ml');
         expect(dishName('Arroz', '  ', ' ')).toBe('Arroz');
+    });
+});
+
+describe('dishName y el contrato con el servidor', () => {
+    it.each(contract.cases)('$case', ({ name, brand, label, expected }) => {
+        expect(dishName(name, brand, label)).toBe(expected);
     });
 });
 
