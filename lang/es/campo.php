@@ -1,0 +1,203 @@
+<?php
+
+/*
+| Textos de la herramienta del modo Campo (/campo, ADR 0048). No van en
+| lang/es.json, que viaja entero al navegador en cada página: el shell de
+| /campo los trae en su propio HTML (resources/views/campo.blade.php), con los
+| dos idiomas, y así abre sin señal. Los marcadores `:nombre` los reemplaza
+| resources/campo/texts.ts.
+*/
+
+return [
+    'title' => 'Campo',
+    'back' => 'Volver',
+    'close' => 'Cerrar',
+    'loading' => 'Cargando…',
+    'offline' => 'Sin señal: lo que guardés queda en este teléfono y se envía cuando vuelva.',
+    'online_again' => 'Volvió la señal.',
+    'storage_unavailable' => 'Este navegador no deja guardar borradores. No cierres esta pantalla antes de enviar.',
+
+    'login' => [
+        'title' => 'Entrá con tu cuenta de administración',
+        'body' => 'Tu sesión terminó o todavía no entraste. Tus borradores siguen guardados en este teléfono.',
+        'button' => 'Ir a entrar',
+        'retry' => 'Ya entré, reintentar',
+    ],
+
+    'home' => [
+        'new' => 'Nueva ficha',
+        'drafts' => 'Borradores',
+        'sent' => 'Enviadas',
+        'none_drafts' => 'No tenés borradores.',
+        'none_sent' => 'Todavía no enviaste fichas.',
+        'send_pending' => 'Enviar pendientes (:n)',
+        'sending' => 'Enviando…',
+        'sent_ok' => 'Enviadas: :n',
+        'sent_fail' => 'No se pudo enviar. Quedó guardado en el teléfono.',
+        'refresh' => 'Actualizar estados',
+        'continue' => 'Seguir',
+        'delete' => 'Borrar',
+        'delete_confirm' => '¿Borrar este borrador? No se puede deshacer.',
+        'unnamed' => 'Sin nombre',
+        'step_of' => 'Paso :n de :total',
+    ],
+
+    'status' => [
+        'editing' => 'Borrador',
+        'ready' => 'Lista, sin enviar',
+        'error' => 'Hay que corregirla',
+        'submitted' => 'Enviada, en espera del dueño',
+        'owner_confirmed' => 'Confirmada por el dueño',
+        'approved' => 'Aprobada',
+        'returned' => 'Devuelta',
+        'rejected' => 'Rechazada',
+    ],
+
+    'detail' => [
+        'ask_owner' => 'Pedir confirmación al dueño',
+        'ask_owner_help' => 'Se crea un enlace de un solo uso y se abre WhatsApp con el mensaje listo. Tocá «Enviar» en WhatsApp.',
+        'link_failed' => 'No se pudo crear el enlace. Probá de nuevo con señal.',
+        'expires' => 'El enlace vence el :date.',
+        'waiting' => 'Esperando que el dueño toque «Confirmo».',
+        'confirmed' => 'El dueño confirmó. Administración la revisa en /admin.',
+        'approved' => 'Aprobada: la ficha quedó oculta, lista para publicar.',
+        'returned_note' => 'Motivo de la devolución:',
+        'edit_returned' => 'Corregir y reenviar',
+        'rejected' => 'Rechazada.',
+        'duplicates' => 'Posibles duplicados: :n',
+    ],
+
+    'steps' => [
+        'basics' => 'Negocio',
+        'place' => 'Dirección y punto',
+        'duplicates' => 'Duplicados',
+        'contact' => 'Contacto y pagos',
+        'hours' => 'Horario',
+        'owner' => 'Dueño',
+        'review' => 'Revisar',
+        'next' => 'Siguiente',
+        'previous' => 'Anterior',
+        'fix' => 'Revisá lo marcado en rojo.',
+    ],
+
+    'fields' => [
+        'name' => 'Nombre del negocio',
+        'categories' => 'Tipo de comida',
+        'categories_help' => 'Elegí hasta 5.',
+        'address' => 'Dirección',
+        'reference' => 'Referencia (opcional)',
+        'reference_help' => 'Por ejemplo: «frente al parque».',
+        'whatsapp' => 'WhatsApp del negocio',
+        'whatsapp_help' => 'Celular colombiano, con o sin +57.',
+        'phone' => 'Teléfono fijo (opcional)',
+        'delivery' => '¿Hace domicilios?',
+        'yes' => 'Sí',
+        'no' => 'No',
+        'payments' => 'Medios de pago',
+        'owner_name' => 'Nombre de quien autoriza',
+        'owner_role' => 'Es',
+        'owner_role_owner' => 'Dueño o dueña',
+        'owner_role_manager' => 'Encargado o encargada',
+        'owner_phone' => 'Celular (con WhatsApp)',
+        'owner_phone_help' => 'A este número se manda el enlace para que confirme.',
+        'purpose' => 'Le expliqué que su nombre y celular se usan solo para verificar que autoriza y escribirle sobre la ficha, y que no se publican.',
+    ],
+
+    'payment' => [
+        'cash' => 'Efectivo',
+        'nequi' => 'Nequi',
+        'daviplata' => 'Daviplata',
+        'card' => 'Tarjeta',
+    ],
+
+    'days' => ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'],
+
+    'hours' => [
+        'closed' => 'Cerrado',
+        'add' => 'Agregar franja',
+        'remove' => 'Quitar franja de :day',
+        'opens' => 'Abre',
+        'closes' => 'Cierra',
+        'copy' => 'Copiar a los demás días',
+        'help' => 'Si cierra después de medianoche, poné la hora real de cierre (por ejemplo, abre 18:00 y cierra 02:00).',
+    ],
+
+    'pin' => [
+        'title' => 'Ubicación del negocio',
+        'help' => 'Pará en la puerta del local y tomá el punto. Es la ubicación del negocio, no la tuya: no se guarda tu recorrido.',
+        'take' => 'Tomar el punto aquí',
+        'retake' => 'Volver a tomarlo',
+        'waiting' => 'Buscando la señal del GPS…',
+        'accuracy' => 'Precisión: unos :m m',
+        'accuracy_bad' => 'La precisión es baja (más de :max m). Esperá unos segundos y volvé a tomarlo.',
+        'denied' => 'No diste permiso de ubicación. Activalo en los ajustes del navegador.',
+        'unsupported' => 'Este navegador no tiene GPS.',
+        'failed' => 'No se pudo tomar el punto. Probá afuera del local.',
+        'outside' => 'El punto está lejos de Roldanillo. Revisalo.',
+        'osm' => 'Ver el punto en OpenStreetMap',
+        'map' => 'Ver en el mapa',
+        'map_failed' => 'El mapa no cargó (sin señal). El punto quedó guardado igual y se revisa en /admin.',
+        'taken' => 'Punto tomado: :lat, :lng',
+    ],
+
+    'map' => [
+        'canvas' => 'Mapa con el punto del negocio. Movete con las flechas y acercá o alejá con las teclas más y menos.',
+        'zoom_in' => 'Acercar',
+        'zoom_out' => 'Alejar',
+        'locate' => '¿Dónde estoy?',
+        'locate_found' => 'Listo: tu ubicación está en el mapa.',
+        'locate_close' => 'Cerrar el aviso',
+        'locate_denied' => 'No hay permiso de ubicación. Activalo en los ajustes del navegador.',
+        'locate_signal' => 'Todavía no hay señal de ubicación. Probá al aire libre.',
+        'locate_outside' => 'Estás fuera de la zona del mapa, que cubre Roldanillo y sus alrededores.',
+        'locate_unsupported' => 'Este navegador no puede dar la ubicación.',
+        'attribution' => 'Créditos del mapa',
+        'credit' => '© colaboradores de OpenStreetMap',
+    ],
+
+    'duplicates' => [
+        'title' => 'Revisá que no esté ya',
+        'checking' => 'Buscando fichas parecidas…',
+        'none' => 'No hay fichas parecidas.',
+        'offline' => 'Sin señal no se pueden buscar duplicados: la ficha se enviará igual y administración los revisa.',
+        'found' => 'Hay fichas parecidas (nombre o a menos de 50 m):',
+        'candidate' => ':name · :status · a :distance m',
+        'complete' => 'Completar esta ficha',
+        'completing' => 'Se completará esta ficha, no se crea otra.',
+        'other' => 'Es otro negocio',
+        'other_marked' => 'Marcada como otro negocio.',
+        'published_block' => 'Ya está publicada: no se puede crear otra igual. Marcala como otro negocio si de verdad lo es.',
+        'check' => 'Buscar duplicados',
+        'in_flight' => 'Otra captura en curso: :name',
+        'status_hidden' => 'oculta',
+        'status_unclaimed' => 'publicada',
+        'status_claimed' => 'publicada',
+        'status_submitted' => 'enviada',
+        'status_owner_confirmed' => 'confirmada',
+        'osm' => 'de OpenStreetMap',
+    ],
+
+    'review' => [
+        'title' => 'Revisá y guardá',
+        'save' => 'Guardar y enviar',
+        'save_offline' => 'Guardar en el teléfono',
+        'saved_offline' => 'Guardada en el teléfono. Se envía cuando vuelva la señal.',
+        'saved_sent' => 'Enviada. Ahora pedile la confirmación al dueño.',
+        'unchecked' => 'Los duplicados no se revisaron.',
+        'edit' => 'Cambiar',
+    ],
+
+    'errors' => [
+        'required' => 'Falta este dato.',
+        'invalid' => 'Revisá este dato.',
+        'too_short' => 'Es muy corto.',
+        'whatsapp' => 'No parece un celular colombiano.',
+        'phone' => 'Solo números, de 7 a 12 dígitos.',
+        'hours' => 'Las franjas de un día no pueden cruzarse ni abrir y cerrar a la misma hora.',
+        'location' => 'Falta tomar el punto del negocio.',
+        'categories' => 'Elegí al menos una categoría.',
+        'purpose' => 'Marcá que se lo explicaste al dueño.',
+        'server' => 'El servidor rechazó la ficha: revisala.',
+        'conflict' => 'Esta ficha ya se envió con otro contenido. Hacé una nueva.',
+    ],
+];

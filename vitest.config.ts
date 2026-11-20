@@ -18,7 +18,7 @@ export default defineConfig({
     test: {
         environment: 'happy-dom',
         // scripts/: pruebas de los scripts de Node (icons-sync), en entorno node.
-        include: ['resources/js/**/*.test.ts', 'scripts/**/*.test.mjs'],
+        include: ['resources/js/**/*.test.ts', 'resources/campo/**/*.test.ts', 'scripts/**/*.test.mjs'],
         // El primer import de un componente en frío puede rozar los 5 s por
         // defecto en máquinas cargadas (CI, Docker en marcha).
         testTimeout: 15_000,

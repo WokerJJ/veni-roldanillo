@@ -18,6 +18,12 @@ return [
         '0.2' => '0941fd18febeb06b7bb4f71783e0f7102bc57ea7dace2b2d2bf289b7f17b6302',
         '0.3' => '37f83ca80da348646a8d4ada1e400ed99ffe5a1ca7703b303b1c6cc73c75de02',
     ],
+    // El texto que acepta el dueño en /confirmar (ADR 0048), en español e inglés:
+    // las claves están en tests/Feature/Field/AuthorizationTextTest.php. Se agrega
+    // una línea al subir FieldSubmission::AUTHORIZATION_VERSION.
+    'field_authorization' => [
+        '0.1' => 'f4b298586d2b842a5a36586ac5e4cb76151300796054907e9fb3d7ce59297fe8',
+    ],
     'reviews' => [
         '0.1' => 'a5aad8e9aca8ad3476dd684f9e3b6ae7c7a6cfb55c21478df57118c8c0edac99',
     ],

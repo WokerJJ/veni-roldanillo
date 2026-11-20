@@ -191,15 +191,16 @@ test('order_intents no tiene columnas de dirección, contenido ni ubicación', f
     ]);
 });
 
-test('ninguna tabla guarda coordenadas salvo restaurantes y barrios', function () {
+test('ninguna tabla guarda coordenadas salvo restaurantes, barrios y las capturas de campo', function () {
     $geo = collect(DB::select(
         "SELECT f_table_name AS t FROM geography_columns WHERE f_table_schema = 'public'"
     ))->pluck('t')->sort()->values()->all();
 
-    expect($geo)->toBe(['neighborhoods', 'restaurants']);
+    // field_submissions guarda el punto del NEGOCIO que levantó el administrador (ADR 0048), nunca el de una persona.
+    expect($geo)->toBe(['field_submissions', 'neighborhoods', 'restaurants']);
 });
 
-test('ninguna tabla tiene columnas de ubicación o dirección salvo restaurantes y barrios', function () {
+test('ninguna tabla tiene columnas de ubicación o dirección salvo restaurantes, barrios y el punto del negocio de las capturas de campo', function () {
     $columns = collect(DB::select(<<<'SQL'
         SELECT c.table_name || '.' || c.column_name AS c
         FROM information_schema.columns c
@@ -209,6 +210,8 @@ test('ninguna tabla tiene columnas de ubicación o dirección salvo restaurantes
           AND table_name NOT IN ('restaurants', 'neighborhoods')
           -- La IP de la sesión es del framework (seguridad de la sesión), no una dirección postal.
           AND NOT (table_name = 'sessions' AND column_name = 'ip_address')
+          -- El punto del negocio de una captura de campo y de dónde salió (ADR 0048): no es la ubicación de una persona.
+          AND NOT (table_name = 'field_submissions' AND column_name IN ('location', 'location_source'))
           AND column_name ~* '(^|_)(lat|lng|lon|latitude|longitude|location|coords?|geom|address|direccion|ubicacion)(_|$)'
         SQL))->pluck('c')->all();
 

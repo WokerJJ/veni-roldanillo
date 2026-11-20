@@ -40,6 +40,25 @@ final class ActionRefused extends RuntimeException
 
     public const UNCLAIMED_HAS_OWNER = 'unclaimed_has_owner';
 
+    // Modo Campo (ADR 0048).
+    public const NOT_YOURS = 'not_yours';
+
+    public const CONTENT_CONFLICT = 'content_conflict';
+
+    public const CONTENT_UNCHANGED = 'content_unchanged';
+
+    public const INVALID_TARGET = 'invalid_target';
+
+    public const NOT_OPEN = 'not_open';
+
+    public const NOT_CONFIRMED = 'not_confirmed';
+
+    public const CONTENT_CHANGED = 'content_changed';
+
+    public const DUPLICATES_UNRESOLVED = 'duplicates_unresolved';
+
+    public const CODE_INVALID = 'code_invalid';
+
     public function __construct(public readonly string $reason)
     {
         parent::__construct("Acción rechazada: {$reason}.");

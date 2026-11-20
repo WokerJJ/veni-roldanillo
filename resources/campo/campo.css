@@ -1,0 +1,580 @@
+/*
+ * Estilo de /campo (ADR 0048). CSS común, sin Tailwind: es una entrada aparte
+ * de la app y no debe sumar utilidades al CSS del arranque. Sigue el estilo
+ * del celular (ADR 0040 a 0044): el contenido es sólido y el vidrio va solo en
+ * los controles (la barra de arriba y la de pasos). Áreas táctiles de 48 px,
+ * contraste de 4,5:1 o más, foco visible, y respeta «Reducir transparencia» y
+ * «Reducir movimiento».
+ */
+@import '../../brand/tokens.css';
+@import '../css/fonts.css';
+
+:root {
+    color-scheme: light dark;
+    --canvas: var(--veni-blanco);
+    --surface: var(--veni-lila);
+    --ink: var(--veni-ciruela);
+    --ink-muted: var(--veni-ciruela-suave);
+    --accent: var(--veni-ciruela);
+    --accent-ink: var(--veni-blanco);
+    --line: rgb(42 22 56 / 18%);
+    --line-strong: var(--veni-ciruela-suave);
+    --glass: rgb(255 255 255 / 72%);
+    --glass-solid: var(--veni-blanco);
+    --warn-bg: #fff4d9;
+    --warn-ink: #5a3a00;
+    --error: #a3202a;
+    --error-bg: #fde8ea;
+    --ok-bg: #e2f4e6;
+    --ok-ink: #14532d;
+    --whatsapp: #0b6b3a;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --canvas: var(--veni-ciruela);
+        --surface: #3a2549;
+        --ink: var(--veni-blanco);
+        --ink-muted: var(--veni-lila);
+        --accent: var(--veni-mango);
+        --accent-ink: var(--veni-ciruela);
+        --line: rgb(255 255 255 / 22%);
+        --line-strong: var(--veni-lila);
+        --glass: rgb(42 22 56 / 70%);
+        --glass-solid: var(--veni-ciruela);
+        --warn-bg: #4a3512;
+        --warn-ink: #ffe3a8;
+        --error: #ff9aa0;
+        --error-bg: #4d1f27;
+        --ok-bg: #1d4a2c;
+        --ok-ink: #c9f2d3;
+        --whatsapp: #4ade80;
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    /* Que el foco y los campos no queden bajo la barra de arriba ni la de pasos. */
+    scroll-padding-top: calc(env(safe-area-inset-top) + 4.5rem);
+    scroll-padding-bottom: calc(env(safe-area-inset-bottom) + 6.5rem);
+}
+
+body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--ink);
+    font: 1.0625rem/1.5 var(--veni-font-body);
+    -webkit-font-smoothing: antialiased;
+}
+
+.shell {
+    min-height: 100dvh;
+}
+
+.bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: calc(env(safe-area-inset-top) + 0.5rem) 1rem 0.5rem;
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    backdrop-filter: blur(20px) saturate(1.4);
+    border-bottom: 1px solid var(--line);
+}
+
+.bar__title {
+    margin: 0;
+    font: 700 1.375rem/1.2 var(--veni-font-display);
+}
+
+.main {
+    max-width: 38rem;
+    margin: 0 auto;
+    padding: 1rem 1rem calc(env(safe-area-inset-bottom) + 6rem);
+}
+
+h2,
+h3,
+h4,
+p {
+    margin: 0;
+}
+
+.section-title {
+    margin: 1.5rem 0 0.5rem;
+    font: 700 1.25rem/1.25 var(--veni-font-display);
+}
+
+.muted {
+    color: var(--ink-muted);
+}
+
+/* Botones */
+.btn {
+    display: inline-flex;
+    min-height: 3rem;
+    min-width: 3rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    max-width: 100%;
+    border: 2px solid var(--accent);
+    border-radius: var(--veni-radius-md);
+    background: transparent;
+    color: var(--ink);
+    font: 700 1rem/1.2 var(--veni-font-body);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.btn--primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+}
+
+.btn--quiet {
+    padding-inline: 0.5rem;
+    border-color: transparent;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
+/* El texto del botón discreto se alinea con los títulos; el área táctil sigue en 48 px. */
+.btn--quiet:first-child:not(.btn--block),
+.home section > .btn--quiet {
+    margin-inline-start: -0.5rem;
+}
+
+.home section > .btn--quiet {
+    margin-top: 0.5rem;
+}
+
+.btn--block {
+    display: flex;
+    width: 100%;
+    margin-top: 0.75rem;
+}
+
+.btn--glass {
+    border-color: var(--line);
+    border-radius: 999px;
+    background: var(--glass-solid);
+    min-width: 3rem;
+}
+
+.btn--whatsapp {
+    border-color: var(--whatsapp);
+    color: var(--whatsapp);
+}
+
+.btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.btn:focus-visible,
+.input:focus-visible,
+.choice__input:focus-visible + .choice__label,
+.check__input:focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: 3px;
+}
+
+/* Avisos y estados */
+.notice {
+    margin: 0.75rem 0;
+    padding: 0.75rem 1rem;
+    border-radius: var(--veni-radius-sm);
+    background: var(--warn-bg);
+    color: var(--warn-ink);
+    font-weight: 600;
+}
+
+.notice--error {
+    background: var(--error-bg);
+    color: var(--error);
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.125rem 0.625rem;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.badge--ready,
+.badge--submitted {
+    background: var(--warn-bg);
+    color: var(--warn-ink);
+}
+
+.badge--owner_confirmed,
+.badge--approved {
+    background: var(--ok-bg);
+    color: var(--ok-ink);
+}
+
+.badge--error,
+.badge--returned,
+.badge--rejected {
+    background: var(--error-bg);
+    color: var(--error);
+}
+
+/* Listas del inicio */
+.home,
+.login,
+.detail {
+    display: block;
+}
+
+.cards {
+    display: grid;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.card {
+    padding: 1rem;
+    border-radius: var(--veni-radius-lg);
+    background: var(--surface);
+}
+
+.card__title {
+    font: 700 1.125rem/1.25 var(--veni-font-display);
+}
+
+.card__meta {
+    margin-top: 0.25rem;
+    color: var(--ink-muted);
+    font-size: 0.9375rem;
+}
+
+.card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+/* El formulario en pasos */
+.wizard__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.wizard__count {
+    color: var(--ink-muted);
+    font-weight: 600;
+}
+
+.wizard__progress {
+    display: block;
+    width: 100%;
+    height: 0.5rem;
+    margin: 0.25rem 0 1rem;
+    accent-color: var(--accent);
+}
+
+.wizard__title {
+    margin: 0.5rem 0 1rem;
+    font: 700 1.625rem/1.2 var(--veni-font-display);
+}
+
+.wizard__title:focus {
+    outline: none;
+}
+
+.wizard__nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 10;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    padding: 0.75rem 1rem calc(env(safe-area-inset-bottom) + 0.75rem);
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    backdrop-filter: blur(20px) saturate(1.4);
+    border-top: 1px solid var(--line);
+}
+
+.wizard__nav .btn--primary {
+    flex: 1;
+}
+
+.step {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.step__title {
+    font: 700 1.25rem/1.25 var(--veni-font-display);
+}
+
+.field {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.field__label,
+.group__legend {
+    font-weight: 700;
+}
+
+.field__help {
+    color: var(--ink-muted);
+    font-size: 0.9375rem;
+}
+
+.field__error {
+    color: var(--error);
+    font-size: 0.9375rem;
+    font-weight: 700;
+}
+
+.input {
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.625rem 0.875rem;
+    border: 2px solid var(--line-strong);
+    border-radius: var(--veni-radius-md);
+    background: var(--canvas);
+    color: var(--ink);
+    font: 500 1.0625rem/1.3 var(--veni-font-body);
+}
+
+.field--error .input,
+.input[aria-invalid='true'] {
+    border-color: var(--error);
+}
+
+.group {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.choice {
+    position: relative;
+    display: inline-flex;
+}
+
+.choice__input {
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+}
+
+.choice__label {
+    display: inline-flex;
+    min-height: 3rem;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    gap: 0.375rem;
+    border: 2px solid var(--line-strong);
+    border-radius: 999px;
+    background: var(--canvas);
+    font-weight: 600;
+}
+
+.choice__input:checked + .choice__label {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-ink);
+}
+
+/* La elección no depende solo del color: lleva una marca decorativa. */
+.choice__input:checked + .choice__label::before {
+    content: '✓' / '';
+    font-weight: 700;
+}
+
+.check {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    min-height: 3rem;
+}
+
+.check__input {
+    flex: none;
+    width: 1.75rem;
+    height: 1.75rem;
+    margin: 0.125rem 0 0;
+    accent-color: var(--accent);
+}
+
+/* Horario */
+.day {
+    padding: 0.75rem 1rem;
+    border-radius: var(--veni-radius-lg);
+    background: var(--surface);
+}
+
+.day__name {
+    font: 700 1.0625rem/1.25 var(--veni-font-display);
+}
+
+.day__closed {
+    color: var(--ink-muted);
+}
+
+.day__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.slot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+}
+
+.slot__time {
+    display: grid;
+    flex: 1 1 7rem;
+    min-width: 0;
+    gap: 0.125rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.slot .input {
+    min-width: 0;
+    padding-inline: 0.625rem;
+}
+
+/* A 320 px la ✕ pasa a su propia línea, a la derecha, en vez de apretar las horas. */
+.slot__remove {
+    flex: none;
+    margin-inline-start: auto;
+    text-decoration: none;
+}
+
+/* Punto del negocio */
+.pin {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.pin__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.pin__coords {
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.pinmap__canvas {
+    height: 16rem;
+    border-radius: var(--veni-radius-lg);
+    overflow: hidden;
+    background: var(--surface);
+}
+
+/* Duplicados */
+.candidates {
+    display: grid;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.candidate {
+    padding: 0.75rem 1rem;
+    border-radius: var(--veni-radius-lg);
+    background: var(--surface);
+}
+
+.candidate__name {
+    font-weight: 700;
+}
+
+.candidate__state {
+    color: var(--ok-ink);
+    font-weight: 700;
+}
+
+.candidate__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+/* Revisión */
+.summary {
+    padding: 0.75rem 1rem;
+    border-radius: var(--veni-radius-lg);
+    background: var(--surface);
+}
+
+.summary__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.summary__big {
+    font: 700 1.25rem/1.25 var(--veni-font-display);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    .bar,
+    .wizard__nav {
+        background: var(--glass-solid);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .btn,
+    .input,
+    .choice__label {
+        transition:
+            transform 0.12s cubic-bezier(0.2, 0, 0, 1),
+            background-color 0.18s cubic-bezier(0.2, 0, 0, 1),
+            border-color 0.18s cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    .btn:active:not(:disabled) {
+        transform: scale(0.97);
+    }
+}

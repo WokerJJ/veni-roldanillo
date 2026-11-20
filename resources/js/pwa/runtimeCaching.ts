@@ -27,7 +27,10 @@ interface Navigation {
 }
 
 /** La Cache API del service worker, donde corre `navigation`; aquí solo se declara. */
-declare const caches: { match(url: string, options: { ignoreSearch: boolean }): Promise<Response | undefined> };
+declare const caches: {
+    match(url: string, options: { ignoreSearch: boolean; cacheName?: string }): Promise<Response | undefined>;
+    open(name: string): Promise<{ put(url: string, response: Response): Promise<void> }>;
+};
 
 /**
  * Navegaciones: siempre a la red y sin guardar nada (el HTML depende del
@@ -67,6 +70,65 @@ export async function navigation({ event, request }: Navigation): Promise<Respon
 }
 
 /**
+ * El shell del modo Campo (ADR 0048): la única navegación que se guarda. Es HTML
+ * estático, sin sesión, sin cookies y sin datos de nadie (Laravel lo sirve sin
+ * el grupo web, como /offline), así que guardarlo no sirve la página de otra
+ * persona: lo que trabaja con datos es la API de /campo/api, que no se guarda.
+ * Sin red abre la copia guardada, para capturar fichas sin señal.
+ *
+ * Red primero: con una copia guardada, la red tiene 3 segundos; sin ella, los
+ * 10 de siempre. Solo se guarda una respuesta 200 de HTML que lleve la marca del
+ * shell (`<meta name="veni-campo-shell">`, resources/views/campo.blade.php): un
+ * portal cautivo de un wifi también responde 200 de HTML y no debe pisar la
+ * copia buena. Siempre en la misma clave: la caché nunca pasa de una entrada.
+ * Se copia como texto en public/sw.js: repite los nombres en vez de usar
+ * constantes del módulo.
+ */
+export async function campoShell({ event, request }: Navigation): Promise<Response> {
+    const options = { ignoreSearch: true, cacheName: 'veni-campo-shell' };
+    const saved = await caches.match('/campo', options);
+    const fallback = async (): Promise<Response> => saved ?? (await caches.match('/offline', { ignoreSearch: true })) ?? Response.error();
+    let stopWaiting = (): void => undefined;
+    const late = new Promise<undefined>((resolve) => {
+        const timer = setTimeout(
+            () => {
+                resolve(undefined);
+            },
+            saved ? 3000 : 10000,
+        );
+
+        stopWaiting = () => {
+            clearTimeout(timer);
+        };
+    });
+
+    try {
+        const preloaded = (event as { preloadResponse?: Promise<Response | undefined> }).preloadResponse;
+        const answer = Promise.resolve(preloaded).then((response) => response ?? fetch(request));
+        const response = await Promise.race([answer, late]);
+
+        if (response === undefined) {
+            return await fallback();
+        }
+
+        if (response.status === 200 && (response.headers.get('Content-Type') ?? '').startsWith('text/html')) {
+            const body = await response.clone().text();
+
+            if (body.includes('<meta name="veni-campo-shell" content="1">')) {
+                const cache = await caches.open('veni-campo-shell');
+                await cache.put('/campo', response.clone());
+            }
+        }
+
+        return response;
+    } catch {
+        return await fallback();
+    } finally {
+        stopWaiting();
+    }
+}
+
+/**
  * Las rutas del service worker, en el orden en que Workbox las prueba: gana
  * la primera que acepta el pedido. `env` son las variables `VITE_` de la
  * compilación; sin URL del estilo del mapa no hay ruta para el mapa.
@@ -80,9 +142,28 @@ export async function navigation({ event, request }: Navigation): Promise<Respon
 export function runtimeCaching(env: Readonly<Record<string, string | undefined>>): RuntimeCaching[] {
     return [
         {
-            // Va primera: ninguna ruta con caché llega a ver una navegación.
+            // El shell de /campo, antes que la regla general (ADR 0048).
+            urlPattern: ({ request, sameOrigin, url }) => request.mode === 'navigate' && sameOrigin && url.pathname === '/campo',
+            handler: campoShell,
+        },
+        {
+            // Va después del shell: ninguna ruta con caché llega a ver una navegación.
             urlPattern: ({ request }) => request.mode === 'navigate',
             handler: navigation,
+        },
+        {
+            // La entrada de /campo y su estilo (vite.config.ts les da el prefijo
+            // `campo-`): sin lo que el shell carga, no abre sin señal. En su
+            // propia caché: en veni-assets, con 120 lugares para los chunks y los
+            // íconos, otros archivos podrían sacarlos. Cada compilación suma dos;
+            // el tope deja unas tres compilaciones y el resto vence.
+            urlPattern: ({ sameOrigin, url }) => sameOrigin && /^\/build\/assets\/campo-[\w-]+\.(?:js|css)$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+                cacheName: 'veni-campo-assets',
+                expiration: { maxEntries: 8, maxAgeSeconds: 60 * DAY, purgeOnQuotaError: true },
+                cacheableResponse: { statuses: [200] },
+            },
         },
         {
             // MapLibre: el motor y lo que comparte con su worker, más de

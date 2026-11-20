@@ -44,6 +44,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public const RESTAURANT_REQUESTS_PER_HOUR_PER_IP = 20;
 
+    /** Modo Campo (ADR 0048): capturas por hora y cuenta, búsquedas de duplicados por hora y cuenta, y visitas a la página del dueño por hora e IP. */
+    public const FIELD_SUBMISSIONS_PER_HOUR = 60;
+
+    public const FIELD_LOOKUPS_PER_HOUR = 120;
+
+    public const OWNER_CONFIRMATIONS_PER_HOUR = 20;
+
     /**
      * Las mismas, por día con un mismo celular, sumando todas las fichas:
      * frena a quien cambia de IP para insistir con el mismo número. Solo
@@ -143,6 +150,20 @@ class AppServiceProvider extends ServiceProvider
                 [...$headers, 'Content-Type' => 'text/plain; charset=UTF-8'],
             )));
 
+        // Modo Campo (ADR 0048): por cuenta de administración, y el enlace del
+        // dueño por IP real (también cuentan los intentos con códigos malos).
+        RateLimiter::for('field-submissions', fn (Request $request) => Limit::perHour(self::FIELD_SUBMISSIONS_PER_HOUR)
+            ->by('field-submissions:'.self::limiterKey($request)));
+        RateLimiter::for('field-lookup', fn (Request $request) => Limit::perHour(self::FIELD_LOOKUPS_PER_HOUR)
+            ->by('field-lookup:'.self::limiterKey($request)));
+        RateLimiter::for('owner-confirmation', fn (Request $request) => Limit::perHour(self::OWNER_CONFIRMATIONS_PER_HOUR)
+            ->by('owner-confirmation:'.$request->ip())
+            ->response(fn (Request $request, array $headers) => response(
+                __('requests.error.too_many'),
+                429,
+                [...$headers, 'Content-Type' => 'text/plain; charset=UTF-8'],
+            )));
+
         // La política que solo informa no bloquea nada: en producción es para
         // probar un cambio un rato, nunca el estado normal (ADR 0014).
         if ($this->app->isProduction() && config('security.csp.report_only') === true) {
@@ -152,5 +173,13 @@ class AppServiceProvider extends ServiceProvider
         // La política de datos publicada con el correo de ejemplo, sin el
         // responsable o todavía como borrador (#23): avisa en el registro.
         LegalReadiness::report();
+    }
+
+    /** La cuenta de la sesión y, sin ella, la IP real. */
+    private static function limiterKey(Request $request): string
+    {
+        $id = $request->user()?->getAuthIdentifier();
+
+        return is_scalar($id) ? 'user:'.$id : 'ip:'.$request->ip();
     }
 }

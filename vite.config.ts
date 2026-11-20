@@ -99,6 +99,35 @@ function dropInertiaForms(): Plugin {
  * - Sin definir: avisa y compila. Así compila CI, que no tiene `.env`; la app
  *   muestra el mapa como no disponible.
  */
+/**
+ * El shell de /campo (ADR 0048) usa su propia copia de Vue en la compilación.
+ *
+ * Si compartiera los módulos de Vue con la entrada de la app, Rollup los
+ * sacaría a un chunk común que la app descarga al arrancar, y ese chunk pesa
+ * unos 7 kB comprimidos más que lo mismo dentro de la entrada: el arranque
+ * pagaría por una herramienta que solo usa el administrador (resources/js/map/
+ * bundle.test.ts lo mide). El build de navegador de Vue (`vue.runtime.esm-
+ * browser.prod.js`) trae su runtime adentro y no importa `@vue/*`, así que es
+ * otro módulo para Rollup y nada se comparte con la app. Solo en la
+ * compilación: en desarrollo y en las pruebas, Vue de siempre. Cuesta lo que
+ * pesa Vue (unos 25 kB comprimidos) en el chunk de /campo, que solo baja quien
+ * abre /campo y que el service worker guarda.
+ */
+function isolateCampoVue(): Plugin {
+    return {
+        name: 'veni-isolate-campo-vue',
+        apply: 'build',
+        enforce: 'pre',
+        async resolveId(source, importer, options) {
+            if (source !== 'vue' || importer === undefined || !importer.replaceAll('\\', '/').includes('/resources/campo/')) {
+                return null;
+            }
+
+            return this.resolve('vue/dist/vue.runtime.esm-browser.prod.js', importer, { ...options, skipSelf: true });
+        },
+    };
+}
+
 function checkMapStyleUrl(): Plugin {
     return {
         name: 'veni:check-map-style-url',
@@ -164,6 +193,10 @@ const ROOT = fileURLToPath(new URL('.', import.meta.url));
  * carga del build: un script clásico y su hoja de estilos.
  */
 const OFFLINE_ENTRIES = ['resources/js/offline.ts', 'resources/css/offline.css'];
+
+// El modo Campo (ADR 0048): su shell y la página con que el dueño confirma son
+// entradas aparte. Nada de esto entra al shell que se guarda al instalar.
+const FIELD_ENTRIES = ['resources/campo/main.ts', 'resources/campo/campo.css', 'resources/css/confirm.css'];
 
 /**
  * El shell que el service worker guarda al instalarse: la entrada y la página
@@ -239,7 +272,7 @@ function serviceWorker(env: Record<string, string>): PluginOption {
 export default defineConfig(({ mode }) => ({
     plugins: [
         laravel({
-            input: ['resources/js/app.ts', ...OFFLINE_ENTRIES],
+            input: ['resources/js/app.ts', ...OFFLINE_ENTRIES, ...FIELD_ENTRIES],
             refresh: true,
         }),
         // Sin los comentarios de las plantillas, como en producción: así
@@ -249,6 +282,7 @@ export default defineConfig(({ mode }) => ({
         tailwindcss(),
         shareMapWorkerCode(),
         dropInertiaForms(),
+        isolateCampoVue(),
         checkMapStyleUrl(),
         copyBrandIcons(),
         serviceWorker(loadEnv(mode, ROOT, 'VITE_')),
@@ -271,6 +305,14 @@ export default defineConfig(({ mode }) => ({
         __VUE_OPTIONS_API__: 'false',
     },
     build: {
+        rollupOptions: {
+            output: {
+                // La entrada de /campo (ADR 0048) lleva el prefijo `campo-`, como su
+                // estilo: el service worker la guarda en su propia caché por ese
+                // nombre (resources/js/pwa/runtimeCaching.ts). El resto, como siempre.
+                entryFileNames: (chunk) => (chunk.facadeModuleId?.replaceAll('\\', '/').endsWith('/resources/campo/main.ts') === true ? 'assets/campo-[hash].js' : 'assets/[name]-[hash].js'),
+            },
+        },
         // Los dos chunks de MapLibre (su código y el que comparte con el worker)
         // rondan los 570 kB y solo se descargan al abrir un mapa: el aviso de
         // Vite (500 kB) se sube para que salte con lo que crezca de más.
