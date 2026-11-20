@@ -34,30 +34,75 @@ export interface SavedList {
     restaurants: Restaurant[];
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isText(value: unknown): value is string {
+    return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isCategory(value: unknown): boolean {
+    return isRecord(value) && isText(value.slug) && isText(value.name);
+}
+
+function isWeeklyHours(value: unknown): boolean {
+    return isRecord(value) && isNumber(value.weekday) && Number.isInteger(value.weekday) && value.weekday >= 0 && value.weekday <= 6 && isText(value.opens) && isText(value.closes);
+}
+
+function isSpecialHours(value: unknown): boolean {
+    return isRecord(value) && isText(value.date) && typeof value.closed === 'boolean' && (value.opens === null || isText(value.opens)) && (value.closes === null || isText(value.closes));
+}
+
+function isLunch(value: unknown): boolean {
+    return value === null || (isRecord(value) && isText(value.date) && isText(value.description) && isNumber(value.price));
+}
+
+function isPriceRange(value: unknown): boolean {
+    return value === null || (isRecord(value) && isNumber(value.min) && isNumber(value.max) && value.min <= value.max);
+}
+
+function isBooleanIfPresent(value: unknown): boolean {
+    return value === undefined || typeof value === 'boolean';
+}
+
+function isEach(value: unknown, check: (item: unknown) => boolean): boolean {
+    return Array.isArray(value) && value.every(check);
+}
+
 /**
  * Lo que se guardó se escribió con la forma de `Restaurant` (la versión 1 de la
- * copia): se piden los campos sin los que el mapa y la lista fallarían, y una
- * versión distinta ya se descartó antes por `version`.
+ * copia), pero el almacenamiento es del dispositivo: lo puede haber tocado
+ * alguien o otra versión de la app con el mismo número. Se revisa cada campo
+ * que usan la lista y el mapa (un dato roto rompería la pantalla justo sin
+ * señal, cuando no hay otra) sin importar `api.ts`, que viaja en el arranque.
+ * Uno que no cumple se descarta; una versión distinta ya se descartó por `version`.
  */
 function isRestaurant(value: unknown): value is Restaurant {
-    if (typeof value !== 'object' || value === null || !('slug' in value) || !('name' in value) || !('coordinates' in value)) {
+    if (!isRecord(value) || !isText(value.slug) || !isText(value.name)) {
         return false;
     }
 
-    const { slug, name, coordinates } = value;
+    const { coordinates } = value;
 
     return (
-        typeof slug === 'string' &&
-        typeof name === 'string' &&
         Array.isArray(coordinates) &&
         coordinates.length === 2 &&
-        coordinates.every((degrees) => Number.isFinite(degrees)) &&
-        'categories' in value &&
-        Array.isArray(value.categories) &&
-        'hours' in value &&
-        Array.isArray(value.hours) &&
-        'special_hours' in value &&
-        Array.isArray(value.special_hours)
+        isNumber(coordinates[0]) &&
+        isNumber(coordinates[1]) &&
+        Math.abs(coordinates[0]) <= 180 &&
+        Math.abs(coordinates[1]) <= 90 &&
+        isEach(value.categories, isCategory) &&
+        isEach(value.hours, isWeeklyHours) &&
+        isEach(value.special_hours, isSpecialHours) &&
+        isLunch(value.lunch) &&
+        isPriceRange(value.price_range) &&
+        isBooleanIfPresent(value.delivery) &&
+        isBooleanIfPresent(value.fictitious)
     );
 }
 
