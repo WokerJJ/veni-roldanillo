@@ -84,7 +84,7 @@ function missing(dish: MenuDish): boolean {
                     :value="section.name_es"
                     @input="(event) => changeSection(sectionIndex, { name_es: onText(event) })"
                 >
-                <button type="button" class="btn btn--quiet" :aria-label="t('menu.remove_section', { name: section.name_es || t('menu.section_name') })" @click="removeSection(sectionIndex)">✕</button>
+                <button type="button" class="btn btn--quiet btn--remove" :aria-label="t('menu.remove_section', { name: section.name_es || t('menu.section_name') })" @click="removeSection(sectionIndex)">✕</button>
             </div>
 
             <ul class="dishes">
@@ -99,13 +99,13 @@ function missing(dish: MenuDish): boolean {
                         :value="dish.name_es"
                         @input="(event) => changeDish(sectionIndex, dishIndex, { name_es: onText(event) })"
                     >
-                    <div class="dish__row">
+                    <div class="dish__row dish__row--menu">
                         <PriceInput :id="`campo-price-${String(sectionIndex)}-${String(dishIndex)}`" :label="t('menu.dish_price')" :value="dish.price" :invalid="errors.menu !== undefined && dish.price === null" @input="(price) => changeDish(sectionIndex, dishIndex, { price })" />
                         <label class="check dish__alcohol">
                             <input class="check__input" type="checkbox" :checked="dish.is_alcohol" @change="(event) => changeDish(sectionIndex, dishIndex, { is_alcohol: (event.target as HTMLInputElement).checked })">
                             <span>{{ t('menu.alcohol') }}</span>
                         </label>
-                        <button type="button" class="btn btn--quiet" :aria-label="t('menu.remove_dish', { name: dish.name_es || t('menu.dish_name') })" @click="removeDish(sectionIndex, dishIndex)">✕</button>
+                        <button type="button" class="btn btn--quiet btn--remove" :aria-label="t('menu.remove_dish', { name: dish.name_es || t('menu.dish_name') })" @click="removeDish(sectionIndex, dishIndex)">✕</button>
                     </div>
                     <p v-if="dish.price !== null" class="field__help">{{ formatPesos(dish.price) }}</p>
                 </li>

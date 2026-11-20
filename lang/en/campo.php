@@ -186,6 +186,7 @@ return [
         'bulk_label' => 'Price for all the :size',
         'bulk_placeholder' => 'Price for all',
         'bulk_apply' => 'Set for all',
+        'jump_prices' => 'Go to prices (:n ticked)',
     ],
 
     'duplicates' => [

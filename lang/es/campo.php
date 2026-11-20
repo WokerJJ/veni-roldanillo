@@ -187,6 +187,7 @@ return [
         'bulk_label' => 'Precio para todas las de :size',
         'bulk_placeholder' => 'Precio para todas',
         'bulk_apply' => 'Poner a todas',
+        'jump_prices' => 'Ir a los precios (:n marcados)',
     ],
 
     'duplicates' => [

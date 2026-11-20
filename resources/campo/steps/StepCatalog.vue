@@ -104,6 +104,8 @@ function onBulk(label: string, event: Event): void {
                 </div>
             </fieldset>
 
+            <a v-if="chosen.length > 0" class="btn btn--tonal" href="#campo-prices-title">{{ t('catalog.jump_prices', { n: chosen.length }) }}</a>
+
             <section v-for="item in items" :key="item.id" class="catalog-item" :aria-label="name(item)">
                 <h3 class="catalog-item__name">{{ name(item) }}<span v-if="item.is_alcohol || group.is_alcohol" class="plus18" aria-hidden="true">+18</span></h3>
                 <div class="choices">
@@ -156,7 +158,7 @@ function onBulk(label: string, event: Event): void {
                             <div class="dish__row">
                                 <PriceInput :id="`campo-cprice-${entry.dish.name_es}`" :label="t('menu.dish_price')" :value="entry.dish.price" :invalid="errors.menu !== undefined && entry.dish.price === null" @input="(price) => setPrice(entry.dish, price)" />
                                 <span v-if="entry.dish.price !== null" class="muted">{{ formatPesos(entry.dish.price) }}</span>
-                                <button type="button" class="btn btn--quiet" :aria-label="t('menu.remove_dish', { name: entry.dish.name_es })" @click="patch({ menu: removeDish(draft.menu, entry.dish) })">✕</button>
+                                <button type="button" class="btn btn--quiet btn--remove" :aria-label="t('menu.remove_dish', { name: entry.dish.name_es })" @click="patch({ menu: removeDish(draft.menu, entry.dish) })">✕</button>
                             </div>
                         </li>
                     </ul>
