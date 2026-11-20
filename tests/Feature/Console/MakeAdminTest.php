@@ -78,7 +78,9 @@ it('rechaza un correo inválido y una contraseña corta', function (string $emai
 it('en producción pide confirmación y, si se niega, no hace nada', function () {
     app()['env'] = 'production';
 
-    $this->artisan('veni:make-admin', ['email' => 'ana@example.test'])
+    $this->artisan('veni:make-admin', ['email' => 'ana@example.test', '--name' => 'Ana'])
+        ->expectsQuestion('Contraseña (mínimo 12 caracteres)', MAKE_ADMIN_PASSWORD)
+        ->expectsQuestion('Repetí la contraseña', MAKE_ADMIN_PASSWORD)
         ->expectsConfirmation(MAKE_ADMIN_CONFIRM, 'no')
         ->assertFailed();
 
@@ -89,9 +91,9 @@ it('en producción crea la cuenta tras confirmar', function () {
     app()['env'] = 'production';
 
     $this->artisan('veni:make-admin', ['email' => 'ana@example.test', '--name' => 'Ana'])
-        ->expectsConfirmation(MAKE_ADMIN_CONFIRM, 'yes')
         ->expectsQuestion('Contraseña (mínimo 12 caracteres)', MAKE_ADMIN_PASSWORD)
         ->expectsQuestion('Repetí la contraseña', MAKE_ADMIN_PASSWORD)
+        ->expectsConfirmation(MAKE_ADMIN_CONFIRM, 'yes')
         ->assertSuccessful();
 
     expect(User::query()->where('email', 'ana@example.test')->exists())->toBeTrue();
@@ -104,4 +106,14 @@ it('en producción, --force omite la confirmación', function () {
         ->expectsQuestion('Contraseña (mínimo 12 caracteres)', MAKE_ADMIN_PASSWORD)
         ->expectsQuestion('Repetí la contraseña', MAKE_ADMIN_PASSWORD)
         ->assertSuccessful();
+});
+
+it('en producción no pregunta la confirmación si los datos ya son inválidos', function () {
+    app()['env'] = 'production';
+
+    $this->artisan('veni:make-admin', ['email' => 'no-es-correo', '--name' => 'Ana'])
+        ->expectsQuestion('Contraseña (mínimo 12 caracteres)', MAKE_ADMIN_PASSWORD)
+        ->expectsQuestion('Repetí la contraseña', MAKE_ADMIN_PASSWORD)
+        ->expectsOutputToContain('El correo no es válido')
+        ->assertFailed();
 });

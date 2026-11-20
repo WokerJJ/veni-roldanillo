@@ -31,9 +31,12 @@ final class CreateAdminAccount
     public const PASSWORD_MAX = 72;
 
     /**
+     * Los datos, sin tocar la base: la consola los valida antes de pedir la
+     * confirmación, para no hacer confirmar algo que se va a rechazar.
+     *
      * @throws ActionRefused
      */
-    public function handle(string $email, string $name, string $password): User
+    public function validate(string $email, string $name, string $password): void
     {
         $email = mb_strtolower(trim($email));
         $name = trim($name);
@@ -51,6 +54,17 @@ final class CreateAdminAccount
             || trim($password) === '' || preg_match('/^(.)\1*$/su', $password) === 1) {
             throw new ActionRefused(ActionRefused::WEAK_PASSWORD);
         }
+    }
+
+    /**
+     * @throws ActionRefused
+     */
+    public function handle(string $email, string $name, string $password): User
+    {
+        $this->validate($email, $name, $password);
+
+        $email = mb_strtolower(trim($email));
+        $name = trim($name);
 
         return DB::transaction(function () use ($email, $name, $password): User {
             $this->refuseExistingAccount($email);

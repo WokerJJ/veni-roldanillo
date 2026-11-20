@@ -29,14 +29,6 @@ class MakeAdmin extends Command
         $email = $this->argument('email');
         $name = $this->option('name');
 
-        // Solo en producción, y --force lo omite (para un despliegue automatizado).
-        if ($this->laravel->environment('production') && ! $this->option('force')
-            && ! $this->components->confirm('Vas a crear una cuenta con acceso total a /admin en producción. ¿Seguís?', false)) {
-            $this->components->warn('Cancelado. No se creó nada.');
-
-            return self::FAILURE;
-        }
-
         if (! is_string($name) || trim($name) === '') {
             $asked = $this->components->ask('Nombre de la persona');
             $name = is_string($asked) ? $asked : '';
@@ -52,6 +44,18 @@ class MakeAdmin extends Command
         }
 
         try {
+            // Primero los datos y recién después la confirmación: no se le
+            // pide a nadie confirmar algo que va a ser rechazado.
+            $create->validate($email, $name, $password);
+
+            // Solo en producción, y --force lo omite (para un despliegue automatizado).
+            if ($this->laravel->environment('production') && ! $this->option('force')
+                && ! $this->components->confirm('Vas a crear una cuenta con acceso total a /admin en producción. ¿Seguís?', false)) {
+                $this->components->warn('Cancelado. No se creó nada.');
+
+                return self::FAILURE;
+            }
+
             $admin = $create->handle($email, $name, $password);
         } catch (ActionRefused $refused) {
             $this->components->error(match ($refused->reason) {
