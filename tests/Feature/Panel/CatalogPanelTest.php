@@ -75,6 +75,37 @@ test('crear un producto con sus presentaciones, y no repetir el mismo nombre y m
     expect(CatalogItem::query()->count())->toBe(1);
 });
 
+test('el panel compara marca y nombre como la base: sin mayúsculas ni espacios de más', function () {
+    catalogPanelAdmin();
+    $group = CatalogGroup::factory()->create();
+    CatalogItem::factory()->create(['group_id' => $group->id, 'brand' => 'Postobón', 'name_es' => 'Manzana']);
+    CatalogItem::factory()->create(['group_id' => $group->id, 'brand' => null, 'name_es' => 'Jugo de mora']);
+
+    Livewire::test(CreateCatalogItem::class)
+        ->fillForm(['group_id' => $group->id, 'brand' => ' POSTOBÓN ', 'name_es' => '  manzana '])
+        ->call('create')
+        ->assertHasFormErrors(['name_es']);
+
+    Livewire::test(CreateCatalogItem::class)
+        ->fillForm(['group_id' => $group->id, 'brand' => '', 'name_es' => 'JUGO DE MORA '])
+        ->call('create')
+        ->assertHasFormErrors(['name_es']);
+
+    expect(CatalogItem::query()->count())->toBe(2);
+});
+
+test('dos presentaciones que solo se distinguen por mayúsculas o espacios no se aceptan en el mismo producto', function () {
+    catalogPanelAdmin();
+    $group = CatalogGroup::factory()->create();
+
+    Livewire::test(CreateCatalogItem::class)
+        ->fillForm(['group_id' => $group->id, 'name_es' => 'Cola', 'variants' => [['label' => '400 ml', 'active' => true], ['label' => ' 400 ML ', 'active' => true]]])
+        ->call('create')
+        ->assertHasFormErrors();
+
+    expect(CatalogItem::query()->count())->toBe(0);
+});
+
 test('editar un producto no lo duplica contra sí mismo y deja desactivarlo', function () {
     catalogPanelAdmin();
     $item = CatalogItem::factory()->create(['brand' => 'Marca', 'name_es' => 'Cola']);

@@ -80,6 +80,17 @@ test('el nombre del plato es producto, marca y presentación', function () {
         ->and(CatalogItem::dishName('Coca-Cola', 'coca-cola', '400 ml'))->toBe('Coca-Cola 400 ml');
 });
 
+test('el nombre del plato cumple el contrato compartido con el teléfono (tests/contracts/dish-name.json)', function () {
+    /** @var array{cases: list<array{case: string, name: string, brand: string|null, label: string|null, expected: string}>} $contract */
+    $contract = json_decode((string) file_get_contents(base_path('tests/contracts/dish-name.json')), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($contract['cases'])->not->toBeEmpty();
+
+    foreach ($contract['cases'] as $case) {
+        expect(CatalogItem::dishName($case['name'], $case['brand'], $case['label']))->toBe($case['expected'], $case['case']);
+    }
+});
+
 test('la base no deja dos productos iguales en un grupo, ni nombres vacíos, ni dos presentaciones iguales', function () {
     $group = CatalogGroup::factory()->create();
     CatalogItem::factory()->create(['group_id' => $group->id, 'brand' => 'Marca', 'name_es' => 'Cola']);
@@ -95,6 +106,21 @@ test('la base no deja dos productos iguales en un grupo, ni nombres vacíos, ni 
     CatalogVariant::factory()->create(['item_id' => $item->id, 'label' => '400 ml']);
 
     expect(catalogViolation(fn () => CatalogVariant::factory()->create(['item_id' => $item->id, 'label' => '400 ml'])))->toBeTrue();
+});
+
+test('la unicidad del catálogo ignora mayúsculas y espacios de más en marca, nombre y presentación', function () {
+    $group = CatalogGroup::factory()->create();
+    CatalogItem::factory()->create(['group_id' => $group->id, 'brand' => 'Postobón', 'name_es' => 'Manzana']);
+    CatalogItem::factory()->create(['group_id' => $group->id, 'brand' => null, 'name_es' => 'Jugo de mora']);
+
+    expect(catalogViolation(fn () => CatalogItem::factory()->create(['group_id' => $group->id, 'brand' => ' POSTOBÓN ', 'name_es' => '  manzana '])))->toBeTrue()
+        ->and(catalogViolation(fn () => CatalogItem::factory()->create(['group_id' => $group->id, 'brand' => '  ', 'name_es' => 'JUGO DE MORA'])))->toBeTrue()
+        ->and(catalogViolation(fn () => CatalogItem::factory()->create(['group_id' => $group->id, 'brand' => '', 'name_es' => ' Jugo de mora'])))->toBeTrue();
+
+    $item = CatalogItem::factory()->create(['group_id' => $group->id]);
+    CatalogVariant::factory()->create(['item_id' => $item->id, 'label' => '400 ml']);
+
+    expect(catalogViolation(fn () => CatalogVariant::factory()->create(['item_id' => $item->id, 'label' => ' 400 ML '])))->toBeTrue();
 });
 
 test('solo administración ve y cambia el catálogo, y nadie lo borra', function () {

@@ -451,6 +451,7 @@ return [
             'variant' => 'Size',
             'add_variant' => 'Add size',
             'item_taken' => 'There is already a product with that name and brand in this group.',
+            'variant_taken' => 'There are two identical sizes on this product (ignoring case and extra spaces).',
         ],
     ],
 ];

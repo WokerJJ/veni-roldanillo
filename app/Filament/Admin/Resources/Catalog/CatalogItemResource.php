@@ -88,8 +88,9 @@ class CatalogItemResource extends AdminResource
                             $brand = $get('brand');
                             $taken = CatalogItem::query()
                                 ->where('group_id', $get('group_id'))
-                                ->whereRaw("coalesce(brand, '') = ?", [is_string($brand) ? $brand : ''])
-                                ->whereRaw('lower(name_es) = ?', [mb_strtolower(is_string($value) ? $value : '')])
+                                // Lo mismo que el índice único de la base: sin mayúsculas ni espacios de más.
+                                ->whereRaw("coalesce(lower(btrim(brand)), '') = lower(btrim(?))", [is_string($brand) ? $brand : ''])
+                                ->whereRaw('lower(btrim(name_es)) = lower(btrim(?))', [is_string($value) ? $value : ''])
                                 ->when($record instanceof Model, fn (Builder $query) => $query->whereKeyNot($record?->getKey()))
                                 ->exists();
 
@@ -115,7 +116,20 @@ class CatalogItemResource extends AdminResource
                     ->maxItems(12)
                     ->addActionLabel(__('panel.admin.catalog.add_variant'))
                     ->schema([
-                        TextInput::make('label')->label(__('panel.admin.catalog.variant'))->required()->maxLength(40)->distinct(),
+                        TextInput::make('label')->label(__('panel.admin.catalog.variant'))->required()->maxLength(40)
+                            ->rules([
+                                // Como el índice de la base: «400 ml» y « 400 ML » son la misma presentación.
+                                fn (TextInput $component): Closure => function (string $attribute, mixed $value, Closure $fail) use ($component): void {
+                                    $normalize = fn (mixed $label): string => mb_strtolower(trim(is_string($label) ? $label : ''));
+                                    $variants = $component->getParentRepeater()?->getRawState();
+                                    $labels = collect(is_array($variants) ? $variants : [])
+                                        ->map(fn (mixed $variant): string => $normalize(is_array($variant) ? ($variant['label'] ?? null) : null));
+
+                                    if ($labels->filter(fn (string $label): bool => $label === $normalize($value))->count() > 1) {
+                                        $fail((string) __('panel.admin.catalog.variant_taken'));
+                                    }
+                                },
+                            ]),
                         Toggle::make('active')->label(__('panel.admin.catalog.active'))->default(true),
                     ])
                     ->columns(2),

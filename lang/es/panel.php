@@ -453,6 +453,7 @@ return [
             'variant' => 'Presentación',
             'add_variant' => 'Agregar presentación',
             'item_taken' => 'Ya hay un producto con ese nombre y esa marca en este grupo.',
+            'variant_taken' => 'Hay dos presentaciones iguales en este producto (sin contar mayúsculas ni espacios).',
         ],
     ],
 ];
