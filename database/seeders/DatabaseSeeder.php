@@ -17,6 +17,7 @@ class DatabaseSeeder extends FictitiousSeeder
     {
         $this->call([
             CategorySeeder::class,
+            CatalogSeeder::class,
             NeighborhoodSeeder::class,
             UserSeeder::class,
             RestaurantSeeder::class,
