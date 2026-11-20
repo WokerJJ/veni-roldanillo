@@ -1,5 +1,7 @@
 <?php
 
+use App\Support\StrictBoolean;
+
 return [
 
     /*
@@ -66,6 +68,20 @@ return [
     */
 
     'timezone' => env('APP_TIMEZONE', 'America/Bogota'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | No indexar (ROBOTS_NOINDEX)
+    |--------------------------------------------------------------------------
+    |
+    | Con true, todas las respuestas llevan X-Robots-Tag: noindex (/robots.txt
+    | no cambia: deja rastrear, para que se lea el noindex). Es para un dominio de
+    | pruebas o de demostración, que no debe competir en los buscadores con el
+    | definitivo. Apagado por defecto.
+    |
+    */
+
+    'robots_noindex' => StrictBoolean::parse('ROBOTS_NOINDEX', env('ROBOTS_NOINDEX', false)),
 
     /*
     |--------------------------------------------------------------------------

@@ -1,0 +1,4 @@
+# Contraseñas ficticias de prueba (nunca reales) de un commit que ya no está en
+# ninguna rama, pero que GitHub conserva en refs/pull/171/head y gitleaks escanea.
+beb659500057e9ed3f2a6a81c732464ce4de4d25:tests/Feature/Actions/CreateAdminAccountTest.php:generic-api-key:19
+beb659500057e9ed3f2a6a81c732464ce4de4d25:tests/Feature/Console/MakeAdminTest.php:generic-api-key:14

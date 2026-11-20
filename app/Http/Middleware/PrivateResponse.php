@@ -20,7 +20,7 @@ class PrivateResponse
         $response = $next($request);
 
         $response->headers->set('Cache-Control', 'no-store, private');
-        $response->headers->set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+        $response->headers->set('X-Robots-Tag', SetSecurityHeaders::NOINDEX);
 
         return $response;
     }
