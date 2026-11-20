@@ -258,6 +258,16 @@ export function dishCount(menu: readonly MenuSection[]): number {
     return menu.reduce((total, section) => total + section.dishes.length, 0);
 }
 
+/** Un plato al que le falta el nombre o el precio (un precio de 0 cuenta como puesto). */
+export function isDishIncomplete(dish: MenuDish): boolean {
+    return dish.name_es.trim() === '' || dish.price === null;
+}
+
+/** Cuántos platos de la carta no tienen precio. */
+export function unpricedCount(menu: readonly MenuSection[]): number {
+    return menu.reduce((total, section) => total + section.dishes.filter((dish) => dish.price === null).length, 0);
+}
+
 /** Los errores de un paso, por campo, con la clave de su texto en `errors.*`. */
 export function validateStep(draft: Draft, step: StepName): Errors {
     const errors: Errors = {};

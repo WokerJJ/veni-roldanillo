@@ -11,6 +11,7 @@ import {
     normalizedName,
     parsePrice,
     removeDish,
+    renameDish,
     setDishPrice,
     setLabelPrice,
     toggleVariant,
@@ -243,5 +244,21 @@ describe('consultas', () => {
     it('los nombres se comparan sin mayúsculas ni espacios de más', () => {
         expect(normalizedName('  Coca-Cola   400 ML ')).toBe('coca-cola 400 ml');
         expect(CATALOG.groups).toHaveLength(3);
+    });
+});
+
+describe('renameDish', () => {
+    const fromCatalog = { name_es: 'Manzana Postobón 400 ml', name_en: 'Apple Postobón 400 ml', price: 3500, is_alcohol: false, catalog_variant_id: 100 };
+
+    it('un plato de catálogo que se renombra deja de serlo y pierde el inglés de la presentación', () => {
+        const renamed = renameDish(fromCatalog, 'Manzana grande');
+
+        expect(renamed).toEqual({ name_es: 'Manzana grande', name_en: null, price: 3500, is_alcohol: false, catalog_variant_id: null });
+    });
+
+    it('un plato propio solo cambia de nombre', () => {
+        const own = { name_es: 'Sopa', name_en: null, price: 9000, is_alcohol: false, catalog_variant_id: null };
+
+        expect(renameDish(own, 'Sopa del día')).toEqual({ ...own, name_es: 'Sopa del día' });
     });
 });

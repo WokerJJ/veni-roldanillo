@@ -164,6 +164,15 @@ export function setDishPrice(menu: readonly MenuSection[], target: MenuDish, pri
     return menu.map((section) => ({ ...section, dishes: section.dishes.map((dish) => (dish === target ? { ...dish, price } : dish)) }));
 }
 
+/**
+ * Renombra un plato. Si venía de una presentación del catálogo deja de serlo
+ * (`catalog_variant_id` null) y pierde su inglés: si no, el servidor le pondría
+ * el inglés de la presentación original a un plato que ya es otro.
+ */
+export function renameDish(dish: MenuDish, name: string): MenuDish {
+    return dish.catalog_variant_id === null ? { ...dish, name_es: name } : { ...dish, name_es: name, name_en: null, catalog_variant_id: null };
+}
+
 /** El mismo precio para todas las marcadas de un tamaño del grupo («todas las de 400 ml: $3.500»). */
 export function setLabelPrice(menu: readonly MenuSection[], group: CatalogGroup, label: string, price: number | null): MenuSection[] {
     return menu.map((section) => ({
@@ -183,7 +192,12 @@ export function parsePrice(text: string): number | null {
     return Number(digits);
 }
 
+/** Miles con punto, sin el signo: 3500 → «3.500» (lo que se ve en el campo de precio). */
+export function formatThousands(price: number): string {
+    return String(price).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
 /** Pesos con puntos de miles: 3500 → «$3.500», sin depender de los datos de Intl del teléfono. */
 export function formatPesos(price: number): string {
-    return `$${String(price).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+    return `$${formatThousands(price)}`;
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Draft, MenuDish, MenuSection } from './draft';
-import { dishCount, draftFromReturned, firstInvalidStep, menuProblem, newDraft, toBody, validateStep } from './draft';
+import { dishCount, draftFromReturned, firstInvalidStep, isDishIncomplete, menuProblem, newDraft, toBody, unpricedCount, validateStep } from './draft';
 
 /*
 | La carta en el borrador (ADR 0049): las mismas reglas del servidor (FieldMenu)
@@ -93,5 +93,25 @@ describe('la carta del borrador', () => {
 
         expect(capturedAt).toBeDefined();
         expect(draftFromReturned('44444444-4444-4444-8444-444444444444', content, 'Falta un precio').menu).toEqual([section('Almuerzos', [dish('Sancocho', 18000)])]);
+    });
+});
+
+describe('platos incompletos', () => {
+    const dish = (name_es: string, price: number | null): MenuDish => ({ name_es, name_en: null, price, is_alcohol: false, catalog_variant_id: null });
+
+    it('falta el nombre o el precio; un precio de 0 cuenta como puesto', () => {
+        expect(isDishIncomplete(dish('Sopa', 9000))).toBe(false);
+        expect(isDishIncomplete(dish('Sopa', 0))).toBe(false);
+        expect(isDishIncomplete(dish('Sopa', null))).toBe(true);
+        expect(isDishIncomplete(dish('   ', 9000))).toBe(true);
+    });
+
+    it('cuenta los platos sin precio de toda la carta', () => {
+        const menu: MenuSection[] = [
+            { name_es: 'A', name_en: null, dishes: [dish('Sopa', null), dish('Arroz', 5000)] },
+            { name_es: 'B', name_en: null, dishes: [dish('Jugo', null)] },
+        ];
+
+        expect(unpricedCount(menu)).toBe(2);
     });
 });
