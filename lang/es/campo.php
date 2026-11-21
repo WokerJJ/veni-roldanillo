@@ -159,7 +159,7 @@ return [
 
     'menu' => [
         'intro' => 'Lo que el dueño te dicte: secciones y platos con su precio en pesos. Las bebidas de marca se arman más rápido en el paso siguiente.',
-        'count' => ':dishes platos en :sections secciones',
+        'count' => 'Platos: :dishes · Secciones: :sections',
         'section_name' => 'Nombre de la sección (por ejemplo, Almuerzos)',
         'remove_section' => 'Quitar la sección :name',
         'dish_name' => 'Nombre del plato',

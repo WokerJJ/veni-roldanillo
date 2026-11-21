@@ -158,7 +158,7 @@ return [
 
     'menu' => [
         'intro' => 'What the owner tells you: sections and dishes with their price in pesos. Brand drinks are quicker to set up in the next step.',
-        'count' => ':dishes dishes in :sections sections',
+        'count' => 'Dishes: :dishes · Sections: :sections',
         'section_name' => 'Section name (for example, Lunch)',
         'remove_section' => 'Remove the section :name',
         'dish_name' => 'Dish name',

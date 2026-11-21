@@ -28,7 +28,7 @@ return [
         'line_hours' => 'Opening hours:',
         'yes' => 'yes',
         'no' => 'no',
-        'line_menu' => 'Menu: :dishes dishes in :sections sections (you can see it in full at the link).',
+        'line_menu' => 'Menu (dishes: :dishes; sections: :sections), in full at the link.',
         'call_to_action' => 'Please review it and, if it is right, confirm it here (the link works for :days days and only once):',
     ],
 

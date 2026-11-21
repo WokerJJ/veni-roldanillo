@@ -362,7 +362,7 @@ test('la página del dueño muestra la carta con sus precios y el aviso de alcoh
 
     $text = ConfirmationMessage::text($submission->refresh(), 'https://x.test/confirmar/abc');
 
-    expect($text)->toContain('Carta: 3 platos en 2 secciones')->not->toContain('Bandeja paisa');
+    expect($text)->toContain('Carta (platos: 3; secciones: 2)')->not->toContain('Bandeja paisa');
 });
 
 test('la página del dueño muestra también el inglés de secciones y platos: es lo que firma la huella', function (string $locale) {

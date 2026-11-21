@@ -29,7 +29,7 @@ return [
         'line_hours' => 'Horario:',
         'yes' => 'sí',
         'no' => 'no',
-        'line_menu' => 'Carta: :dishes platos en :sections secciones (la ves completa en el enlace).',
+        'line_menu' => 'Carta (platos: :dishes; secciones: :sections), completa en el enlace.',
         'call_to_action' => 'Revisala y, si está bien, confirmala acá (el enlace vale :days días y se usa una sola vez):',
     ],
 
