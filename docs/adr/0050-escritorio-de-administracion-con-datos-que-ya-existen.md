@@ -22,5 +22,5 @@ El Escritorio de `/admin` estaba vacío. Para saber si los primeros restaurantes
 ## Consecuencias
 
 - Los números sirven para el piloto con restaurantes reales sin tocar la privacidad de nadie; no dicen cuántas personas usan la app, y eso es a propósito.
-- Las fichas ficticias salen marcadas «ejemplo» en lugar de excluirse, para que el Escritorio se vea con los datos de desarrollo.
+- Las fichas ficticias salen marcadas «ejemplo» en lugar de excluirse, para que el Escritorio se vea con los datos de desarrollo. El ranking de toques, en cambio, solo cuenta fichas publicadas: una ficha oculta no aparece aunque haya tenido toques (desempate por nombre y luego por id).
 - Con cientos de restaurantes, la consulta de frescura sigue siendo un recorrido de las tres tablas; si llegara a pesar, se cachea unos minutos en un ADR propio.

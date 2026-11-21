@@ -349,6 +349,28 @@ describe('toques en «Enviar pedido por WhatsApp»', function () {
             ->and($ranking[1]->previous)->toBe(0);
     });
 
+    test('el ranking solo incluye fichas publicadas; las ocultas con toques no salen', function () {
+        $now = CarbonImmutable::parse('2026-11-20 12:00', 'America/Bogota');
+        $visible = Restaurant::factory()->create(['name' => 'Visible']);
+        $hidden = Restaurant::factory()->hidden()->create(['name' => 'Oculta']);
+        tapAt($visible, '2026-11-20 10:00');
+        tapAt($hidden, '2026-11-20 10:00');
+        tapAt($hidden, '2026-11-20 11:00');
+
+        expect(array_map(fn ($row) => $row->name, OrderIntentRanking::top(7, 10, $now)))->toBe(['Visible']);
+    });
+
+    test('con los mismos conteos y el mismo nombre, el ranking desempata por id', function () {
+        $now = CarbonImmutable::parse('2026-11-20 12:00', 'America/Bogota');
+        $first = Restaurant::factory()->create(['name' => 'Homónimo']);
+        $second = Restaurant::factory()->create(['name' => 'Homónimo']);
+        // Se insertan al revés para que el orden físico no ayude.
+        tapAt($second, '2026-11-20 10:00');
+        tapAt($first, '2026-11-20 10:00');
+
+        expect(array_map(fn ($row) => $row->id, OrderIntentRanking::top(7, 10, $now)))->toBe([$first->id, $second->id]);
+    });
+
     test('el ranking respeta el límite y no hace una consulta por restaurante', function () {
         $now = CarbonImmutable::parse('2026-11-20 12:00', 'America/Bogota');
         Restaurant::factory()->count(5)->create()->each(fn (Restaurant $restaurant) => tapAt($restaurant, '2026-11-20 10:00'));
