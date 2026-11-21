@@ -218,7 +218,7 @@ let requestedSlug = selectedFromUrl(page.url);
  * Se abrió con un restaurante pedido en la dirección: el panel de abajo del
  * celular nace a media altura, que es la que va a tener su resumen, y la
  * conserva (`min-height`) desde el primer pintado, mientras llegan la lista y
- * el resumen y cuando este aparece. Sin eso crecía de golpe (CLS, ADR 0050).
+ * el resumen y cuando este aparece. Sin eso crecía de golpe (CLS, ADR 0051).
  * Se suelta en cuanto el panel deja de ser «el resumen de ese enlace»: el
  * enlace no era de un restaurante que se vea, se cerró el resumen, se pidió la
  * ruta, se eligió otro restaurante o se cambió la altura con la manija.
@@ -227,7 +227,7 @@ const waitingForShared = ref(requestedSlug !== null);
 /** El restaurante de ese enlace: `requestedSlug` se vacía al llegar la lista, y con otro elegido la reserva ya no es de este panel. */
 const sharedSlug = requestedSlug;
 
-/** Único lugar donde se suelta la reserva del alto del resumen (ADR 0050). */
+/** Único lugar donde se suelta la reserva del alto del resumen (ADR 0051). */
 function releaseSharedReserve(): void {
     waitingForShared.value = false;
 }
@@ -344,7 +344,7 @@ const panelView = computed(() => {
     return status.value === 'error' || (status.value === 'ready' && !hasRestaurants.value) || panelPartsFailed.value ? 'notice' : 'welcome';
 });
 
-/** El panel de abajo del celular, con el alto del resumen reservado (ADR 0050): sin conexión a la lista el aviso se ajusta a su texto. */
+/** El panel de abajo del celular, con el alto del resumen reservado (ADR 0051): sin conexión a la lista el aviso se ajusta a su texto. */
 const reserveSheet = computed(() => waitingForShared.value && !desktop.value && status.value !== 'error' && !panelPartsFailed.value);
 
 watch([sheetSnap, selectedSlug, directionsOpen], ([snap, slug, route]) => {

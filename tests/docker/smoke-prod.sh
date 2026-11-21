@@ -678,7 +678,7 @@ service_worker() {
         echo "    /sw.js no trae precache"
         return 1
     }
-    # Sin lo que el inicio adelanta del mapa (`data-map-engine`, ADR 0050): el
+    # Sin lo que el inicio adelanta del mapa (`data-map-engine`, ADR 0051): el
     # motor no va en el precache a propósito (ADR 0015), lo baja quien lo usa.
     home=$(grep -o '"[^"]*/build/assets/[^"]*"' <<< "$(page / | grep -v 'data-map-engine')" | sed 's#^"[^"]*\(/build/assets/[^"]*\)"$#\1#' | sort -u)
     [ -n "$home" ] || {

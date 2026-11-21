@@ -1,4 +1,4 @@
-# ADR 0050 · El arranque del mapa, medido: el motor se adelanta desde el HTML y el panel de un enlace compartido nace con su alto
+# ADR 0051 · El arranque del mapa, medido: el motor se adelanta desde el HTML y el panel de un enlace compartido nace con su alto
 
 - Estado: aceptada
 - Fecha: 2026-11-21

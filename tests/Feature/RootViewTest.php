@@ -94,7 +94,7 @@ test('carga la entrada compilada y la página desde el manifest', function () {
 test('las pantallas sin mapa no cargan ni precargan MapLibre', function () {
     // ADR 0007. Quien visita una página sin mapa no debe descargar su código
     // ni su CSS; en las que lo tienen, lo pide el componente al montarse (y el
-    // inicio lo adelanta desde el HTML: ADR 0050, más abajo).
+    // inicio lo adelanta desde el HTML: ADR 0051, más abajo).
     $this->get('/credits')
         ->assertOk()
         ->assertSee('build/assets/Credits-prueba.js', false)
@@ -127,7 +127,7 @@ test('da a iOS el ícono de la pantalla de inicio', function () {
 
 test('el inicio adelanta el motor del mapa, después de la entrada y de la página', function () {
     // El motor baja con import() al montar el mapa (ADR 0007): sin este aviso
-    // empieza a bajar recién cuando la entrada terminó de ejecutarse (ADR 0050).
+    // empieza a bajar recién cuando la entrada terminó de ejecutarse (ADR 0051).
     $html = $this->get('/')->assertOk()->getContent();
 
     preg_match('/<meta property="csp-nonce" nonce="([^"]+)"/', $html, $found);
@@ -146,7 +146,7 @@ test('el inicio adelanta el motor del mapa, después de la entrada y de la pági
         ->and(strpos($html, $page))->toBeLessThan(strpos($html, $engine));
 });
 
-// Prueba negativa: fija la decisión del ADR 0050 (se probó adelantar la lista y el
+// Prueba negativa: fija la decisión del ADR 0051 (se probó adelantar la lista y el
 // navegador no reutilizaba la petición); no mide nada, la evidencia está en el ADR.
 test('el inicio no adelanta la lista de restaurantes: el navegador no reutilizaba la petición y la pedía dos veces', function () {
     $this->get('/')

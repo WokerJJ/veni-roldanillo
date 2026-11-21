@@ -732,8 +732,8 @@ describe('Home', () => {
         });
 
         // Estas pruebas solo comprueban la mecánica de la reserva (clase y altura). Que
-        // el CLS baje de verdad lo garantiza la medición del ADR 0050, no jsdom.
-        describe('el panel no cambia de forma al llegar el resumen (CLS, ADR 0050)', () => {
+        // el CLS baje de verdad lo garantiza la medición del ADR 0051, no jsdom.
+        describe('el panel no cambia de forma al llegar el resumen (CLS, ADR 0051)', () => {
             const RESERVED = 'sheet:min-h-(--sheet-height)';
 
             it('nace a media altura y reserva ese alto mientras llegan la lista y el resumen', async () => {

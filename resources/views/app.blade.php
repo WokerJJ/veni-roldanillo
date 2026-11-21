@@ -71,7 +71,7 @@
             El inicio monta el mapa en cuanto arranca, y el motor (MapLibre y
             PMTiles) baja con import() recién entonces, cuando la entrada ya se
             ejecutó (ADR 0007). Aquí se anuncia para que empiece a bajar junto
-            con ella (ADR 0050). Va después de @vite: la entrada y la página se
+            con ella (ADR 0051). Va después de @vite: la entrada y la página se
             piden primero y el motor detrás, sin quitarles ancho de banda.
         --}}
         @if (($page['component'] ?? null) === 'Home')

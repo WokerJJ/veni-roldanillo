@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Vite;
 /**
  * Lo que el inicio pide enseguida con el mapa, que la vista raíz adelanta
  * desde el HTML para que empiece a bajar junto con la entrada y no cuando esta
- * ya terminó de ejecutarse (ADR 0050).
+ * ya terminó de ejecutarse (ADR 0051).
  *
  * El motor del mapa (MapLibre y PMTiles) es un chunk que el frontend carga con
  * `import()` al montar el mapa (ADR 0007): Vite no lo anuncia en el HTML. Aquí
