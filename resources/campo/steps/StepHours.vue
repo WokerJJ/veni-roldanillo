@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CloseIcon from '../components/CloseIcon.vue';
 import type { Draft, Errors, HourSlot } from '../draft';
 import { list, t } from '../texts';
 
@@ -65,7 +66,7 @@ function copyToOthers(weekday: number): void {
                     <span>{{ t('hours.closes') }}</span>
                     <input class="input" type="time" :value="item.slot.closes" @input="(event) => change(item.index, 'closes', (event.target as HTMLInputElement).value)">
                 </label>
-                <button type="button" class="btn btn--quiet slot__remove" :aria-label="t('hours.remove', { day: dayName(weekday) })" @click="remove(item.index)">✕</button>
+                <button type="button" class="btn btn--quiet slot__remove" :aria-label="t('hours.remove', { day: dayName(weekday) })" @click="remove(item.index)"><CloseIcon /></button>
             </div>
 
             <div class="day__actions">

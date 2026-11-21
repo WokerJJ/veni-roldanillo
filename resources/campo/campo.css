@@ -149,7 +149,7 @@ p {
 }
 
 /* El texto del botón discreto se alinea con los títulos; el área táctil sigue en 48 px. */
-.btn--quiet:first-child:not(.btn--block),
+.btn--quiet:first-child:not(.btn--block):not(.btn--remove),
 .home section > .btn--quiet {
     margin-inline-start: -0.5rem;
 }
@@ -773,4 +773,9 @@ p {
             background-color 0.18s cubic-bezier(0.2, 0, 0, 1),
             border-color 0.18s cubic-bezier(0.2, 0, 0, 1);
     }
+}
+
+.icon-close {
+    display: block;
+    margin: auto;
 }

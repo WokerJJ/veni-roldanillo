@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CloseIcon from './CloseIcon.vue';
 import PriceInput from './PriceInput.vue';
 
 import { t } from '../texts';
@@ -23,6 +24,6 @@ const emit = defineEmits<{ price: [price: number | null]; remove: []; enter: [] 
     <div class="dish__row">
         <PriceInput :id="id" :label="t('menu.dish_price')" :value="value" :invalid="invalid" @input="(price) => emit('price', price)" @enter="emit('enter')" />
         <slot />
-        <button type="button" class="btn btn--quiet btn--remove" :aria-label="t('menu.remove_dish', { name: removeName })" @click="emit('remove')">✕</button>
+        <button type="button" class="btn btn--quiet btn--remove" :aria-label="t('menu.remove_dish', { name: removeName })" @click="emit('remove')"><CloseIcon /></button>
     </div>
 </template>

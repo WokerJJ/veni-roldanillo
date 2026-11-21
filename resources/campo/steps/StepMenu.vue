@@ -2,6 +2,7 @@
 import { nextTick } from 'vue';
 
 import { renameDish } from '../catalog';
+import CloseIcon from '../components/CloseIcon.vue';
 import DishPriceRow from '../components/DishPriceRow.vue';
 import type { Draft, Errors, MenuDish, MenuSection } from '../draft';
 import { dishCount, isDishIncomplete, MENU_LIMITS } from '../draft';
@@ -111,7 +112,7 @@ function rename(sectionIndex: number, dishIndex: number, name: string): void {
                     :value="section.name_es"
                     @input="(event) => changeSection(sectionIndex, { name_es: onText(event) })"
                 >
-                <button type="button" class="btn btn--quiet btn--remove" :aria-label="t('menu.remove_section', { name: section.name_es || t('menu.section_name') })" @click="removeSection(sectionIndex)">✕</button>
+                <button type="button" class="btn btn--quiet btn--remove" :aria-label="t('menu.remove_section', { name: section.name_es || t('menu.section_name') })" @click="removeSection(sectionIndex)"><CloseIcon /></button>
             </div>
 
             <ul class="dishes">
