@@ -1,5 +1,5 @@
 /*
-| El catálogo en el teléfono y cómo arma la carta (ADR 0050). Son funciones
+| El catálogo en el teléfono y cómo arma la carta (ADR 0052). Son funciones
 | puras sobre la carta del borrador: marcar una presentación crea su plato en
 | la sección de su grupo, desmarcarla lo quita, y el precio se pone plato por
 | plato o de una vez para todas las de un tamaño («todas las de 400 ml: $3.500»).

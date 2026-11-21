@@ -731,15 +731,107 @@ describe('Home', () => {
             expect(document.activeElement).toBe(panel().get('h2').element);
         });
 
-        it('la cámara va hasta él cuando el panel asomado termina de crecer', async () => {
+        // Estas pruebas solo comprueban la mecánica de la reserva (clase y altura). Que
+        // el CLS baje de verdad lo garantiza la medición del ADR 0051, no jsdom.
+        describe('el panel no cambia de forma al llegar el resumen (CLS, ADR 0051)', () => {
+            const RESERVED = 'sheet:min-h-(--sheet-height)';
+
+            it('nace a media altura y reserva ese alto mientras llegan la lista y el resumen', async () => {
+                const { panel } = await mountHome({ url: '/?r=prueba-el-guadual' });
+
+                expect(panel().attributes('data-sheet')).toBe('half');
+                expect(panel().classes()).toContain(RESERVED);
+            });
+
+            it('con el resumen a la vista conserva ese alto: no se encoge al mostrarse', async () => {
+                const { network, panel } = await mountHome({ url: '/?r=prueba-el-guadual' });
+
+                network.last()?.respond([LA_CEIBA, EL_GUADUAL]);
+                await flushPromises();
+
+                expect(panel().find('[role="dialog"]').exists()).toBe(true);
+                expect(panel().attributes('data-sheet')).toBe('half');
+                expect(panel().classes()).toContain(RESERVED);
+            });
+
+            it.each([
+                ['se cierra el resumen', async (home: Awaited<ReturnType<typeof mountHome>>) => home.pressEscape()],
+                [
+                    'se cambia la altura con la manija',
+                    async (home: Awaited<ReturnType<typeof mountHome>>) => {
+                        await home.panel().get('[data-sheet-handle]').trigger('keydown', { key: 'End' });
+                    },
+                ],
+            ])('deja de reservarlo cuando %s', async (_when, act) => {
+                const home = await mountHome({ url: '/?r=prueba-el-guadual', answer: [LA_CEIBA, EL_GUADUAL] });
+                expect(home.panel().classes()).toContain(RESERVED);
+
+                await act(home);
+                await flushPromises();
+
+                expect(home.panel().classes()).not.toContain(RESERVED);
+            });
+
+            it('si ese restaurante no está en la lista, el panel vuelve a asomarse y no reserva nada', async () => {
+                const { panel } = await mountHome({ url: '/?r=ya-no-esta', answer: [LA_CEIBA] });
+
+                expect(panel().attributes('data-sheet')).toBe('peek');
+                expect(panel().classes()).not.toContain(RESERVED);
+            });
+
+            it('si la lista no llega no queda reservado: el aviso se ajusta a su texto', async () => {
+                const { network, panel } = await mountHome({ url: '/?r=prueba-el-guadual' });
+
+                network.last()?.fail();
+                await flushPromises();
+
+                expect(panel().classes()).not.toContain(RESERVED);
+            });
+
+            it('tras fallar la lista y «Reintentar», la reserva sigue mientras vuelve: el cambio automático de altura no la suelta', async () => {
+                const { network, panel } = await mountHome({ url: '/?r=prueba-el-guadual' });
+                network.last()?.fail();
+                await flushPromises();
+
+                await panel().get('[role="alert"] button').trigger('click');
+                await flushPromises();
+
+                expect(panel().attributes('data-sheet')).toBe('half');
+                expect(panel().classes()).toContain(RESERVED);
+
+                network.last()?.respond([LA_CEIBA, EL_GUADUAL]);
+                await flushPromises();
+
+                expect(panel().find('[role="dialog"]').exists()).toBe(true);
+                expect(panel().attributes('data-sheet')).toBe('half');
+                expect(panel().classes()).toContain(RESERVED);
+            });
+
+            it('si con el resumen del enlace abierto se elige otro restaurante, deja de reservar', async () => {
+                const home = await mountHome({ url: '/?r=prueba-el-guadual', answer: [LA_CEIBA, EL_GUADUAL] });
+                expect(home.panel().classes()).toContain(RESERVED);
+
+                await home.tapOnMap('prueba-la-ceiba');
+
+                expect(home.panel().classes()).not.toContain(RESERVED);
+            });
+
+            it('sin restaurante en la dirección, asomado y sin reservar', async () => {
+                const { panel } = await mountHome();
+
+                expect(panel().attributes('data-sheet')).toBe('peek');
+                expect(panel().classes()).not.toContain(RESERVED);
+            });
+        });
+
+        it('la cámara va hasta él en cuanto llega: el panel ya nació con el alto del resumen, no hay que esperar a que crezca', async () => {
             const home = await mountHome({ url: '/?r=prueba-el-guadual' });
-            const { reveal, finish } = watchSheetMoves(home);
+            const { reveal } = watchSheetMoves(home);
 
             home.network.last()?.respond([LA_CEIBA, EL_GUADUAL]);
             await flushPromises();
-            expect(reveal).not.toHaveBeenCalled();
 
-            await finish();
+            expect(home.panel().attributes('data-sheet')).toBe('half');
             expect(reveal).toHaveBeenCalledOnce();
         });
 

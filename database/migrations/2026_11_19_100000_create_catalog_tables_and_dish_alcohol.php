@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * El catálogo del modo Campo, etapa 2 (ADR 0050): grupos, productos y
+ * El catálogo del modo Campo, etapa 2 (ADR 0052): grupos, productos y
  * presentaciones que administración mantiene y que viajan a /campo para
  * armar la carta de un local sin teclear cada bebida. Solo texto: ninguna
  * columna guarda logos ni imágenes de marcas. Además, la marca de «bebida

@@ -18,7 +18,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 /**
- * Los grupos del catálogo del modo Campo (ADR 0050): gaseosas, cervezas,
+ * Los grupos del catálogo del modo Campo (ADR 0052): gaseosas, cervezas,
  * jugos naturales… Cada uno dice qué sección del menú crea al aprobar una
  * captura. Se desactivan, no se borran.
  */

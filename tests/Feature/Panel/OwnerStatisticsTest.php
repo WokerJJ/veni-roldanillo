@@ -127,6 +127,29 @@ test('la tabla lleva su título para lectores de pantalla y el cambio se anuncia
         ->assertSeeHtml('aria-live="polite"');
 });
 
+test('con pocos toques en el período anterior no se muestra porcentaje; con 20 o más, sí', function () {
+    $this->travelTo(CarbonImmutable::parse('2026-10-29 12:00', 'America/Bogota'));
+    $restaurant = Restaurant::factory()->claimed()->create();
+    foreach (range(1, 4) as $ignored) {
+        intentAt($restaurant, '2026-10-29 09:00');
+    }
+    intentAt($restaurant, '2026-10-20 09:00');
+
+    actInPanel(panelMember($restaurant), $restaurant);
+
+    Livewire::test(Statistics::class)
+        ->assertSee(__('panel.stats.change_few', ['previous' => 1, 'days' => 7]))
+        ->assertDontSee('% más')->assertDontSee('% menos');
+
+    foreach (range(1, OrderIntentStats::MIN_PREVIOUS_FOR_PERCENT) as $ignored) {
+        intentAt($restaurant, '2026-10-21 09:00');
+    }
+
+    Livewire::test(Statistics::class)
+        ->assertSee('% menos')
+        ->assertDontSee(__('panel.stats.change_few', ['previous' => 21, 'days' => 7]));
+});
+
 test('un período que no es número en la URL no rompe la página: queda en 7 días', function () {
     // Con Livewire::withQueryParams y no con una petición HTTP: la petición
     // con ?days=abc deja estado de Livewire en el proceso y ensucia el HTML de

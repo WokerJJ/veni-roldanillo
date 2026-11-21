@@ -8,7 +8,7 @@ use App\Models\CatalogVariant;
 use App\Models\User;
 
 /**
- * El catálogo del modo Campo (ADR 0050) es de administración: nadie más lo ve
+ * El catálogo del modo Campo (ADR 0052) es de administración: nadie más lo ve
  * ni lo cambia desde el panel. (El teléfono lo recibe por `/campo/api/me`, que
  * exige la Policy de las capturas.)
  */

@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
 /**
- * El catálogo del modo Campo (ADR 0050): marca, nombre y presentación no se
+ * El catálogo del modo Campo (ADR 0052): marca, nombre y presentación no se
  * repiten sin importar mayúsculas ni espacios de más. Los índices de la
  * migración que creó el catálogo comparaban `lower(name_es)` y la presentación
  * tal cual, y dejaban «Cola» y «cola » como dos productos (y dos platos casi

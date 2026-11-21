@@ -3,7 +3,7 @@
 namespace App\Support\Field;
 
 /**
- * Las reglas de la carta que se levanta en una captura de campo (ADR 0050): sus
+ * Las reglas de la carta que se levanta en una captura de campo (ADR 0052): sus
  * límites y lo que el servidor revisa además de cada campo. La carta viaja en
  * el payload de la captura; solo al aprobar se vuelve secciones y platos.
  */

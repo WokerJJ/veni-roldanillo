@@ -20,7 +20,7 @@ import {
 import type { MenuSection } from './draft';
 
 /*
-| Armar la carta con el catálogo (ADR 0050): marcar presentaciones, poner el
+| Armar la carta con el catálogo (ADR 0052): marcar presentaciones, poner el
 | precio de una vez por tamaño y no dejar nada a medias. Las funciones son
 | puras: cada una devuelve una carta nueva.
 */

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Una presentación de un producto del catálogo (ADR 0050): «400 ml», «1,5 L»,
+ * Una presentación de un producto del catálogo (ADR 0052): «400 ml», «1,5 L»,
  * «Vaso», «Jarra». Su precio no está aquí: lo dicta el dueño en cada local.
  */
 #[UsePolicy(CatalogPolicy::class)]

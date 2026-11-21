@@ -181,7 +181,7 @@ La primera migración crea las extensiones `postgis` y `btree_gist` (`CREATE EXT
 
 `php artisan db:seed` carga datos ficticios y solo corre con `APP_ENV` en `local` o `testing`; las cuentas de `UserSeeder` (`@example.test`) tienen contraseñas aleatorias que no se muestran. Todavía no se puede repetir sobre una base ya sembrada: para volver a sembrar, `php artisan migrate:fresh --seed`.
 
-**En producción** los seeders de ejemplo se niegan a correr. Lo único que se carga allí son los datos de referencia (los tipos de comida y el catálogo de bebidas del modo Campo, ADR 0050) con `php artisan veni:cargar-referencia`: solo agrega lo que falta, no pisa lo que administración editó y se puede repetir. Sin las categorías, el paso «Negocio» de `/campo` no muestra ningún tipo de comida.
+**En producción** los seeders de ejemplo se niegan a correr. Lo único que se carga allí son los datos de referencia (los tipos de comida y el catálogo de bebidas del modo Campo, ADR 0052) con `php artisan veni:cargar-referencia`: solo agrega lo que falta, no pisa lo que administración editó y se puede repetir. Sin las categorías, el paso «Negocio» de `/campo` no muestra ningún tipo de comida.
 
 Panel del dueño (`/panel`, ADR 0025): `PanelOwnerSeeder` crea, **solo en desarrollo**, `panel.duena@example.test` (dueña del primer restaurante de ejemplo), `panel.otro@example.test` (dueño del segundo) y `panel.empleado@example.test` (empleado, que no entra al panel), todas con la contraseña de ejemplo `veni-panel-dev`. No es una contraseña real ni sirve fuera de `local` o `testing`. En una base ya sembrada se agregan sin borrar nada con `php artisan db:seed --class=PanelOwnerSeeder`.
 
