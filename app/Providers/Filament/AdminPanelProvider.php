@@ -3,6 +3,9 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Admin\Auth\Login;
+use App\Filament\Admin\Widgets\CatalogStatusWidget;
+use App\Filament\Admin\Widgets\MenuFreshnessWidget;
+use App\Filament\Admin\Widgets\OrderIntentsWidget;
 use App\Filament\Auth\EditProfile;
 use App\Filament\Owner\Support\InitialsAvatarProvider;
 use App\Http\Middleware\RequirePasswordChange;
@@ -36,6 +39,8 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * - Sin tenancy: administración ve todas las fichas. Lo que cambia estados
  *   (publicar, ocultar, aprobar, rechazar) pasa por las acciones de
  *   App\Actions\Restaurants, cada una en su transacción.
+ * - Escritorio (ADR 0050): tres widgets de solo lectura, solo para el rol
+ *   admin (AdminWidget::canView), sobre datos que ya existen.
  * - CSP: el mismo perfil «panel» que /panel (OwnerPanelProvider::cspProfile).
  */
 class AdminPanelProvider extends PanelProvider
@@ -60,7 +65,11 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 Dashboard::class,
             ])
-            ->widgets([])
+            ->widgets([
+                CatalogStatusWidget::class,
+                MenuFreshnessWidget::class,
+                OrderIntentsWidget::class,
+            ])
             ->middleware([
                 UseContentSecurityPolicyProfile::class.':'.OwnerPanelProvider::CSP_PROFILE,
                 EncryptCookies::class,

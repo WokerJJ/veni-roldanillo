@@ -34,7 +34,27 @@ final readonly class OrderIntentStats
         public int $pickup,
     ) {}
 
+    /**
+     * Desde cuántos toques en el período anterior vale la pena mostrar un
+     * porcentaje: con menos, «+300 %» es 1 contra 4 y engaña.
+     */
+    public const MIN_PREVIOUS_FOR_PERCENT = 20;
+
     public static function for(Restaurant $restaurant, int $days, ?CarbonImmutable $now = null): self
+    {
+        /** @var int|string $id */
+        $id = $restaurant->getKey();
+
+        return self::build($id, $days, $now);
+    }
+
+    /** Lo mismo, sumando todos los restaurantes (el Escritorio de administración). */
+    public static function overall(int $days, ?CarbonImmutable $now = null): self
+    {
+        return self::build(null, $days, $now);
+    }
+
+    private static function build(int|string|null $restaurantId, int $days, ?CarbonImmutable $now): self
     {
         $timezone = config()->string('app.timezone');
         $today = ($now ?? CarbonImmutable::now())->setTimezone($timezone)->startOfDay();
@@ -46,7 +66,7 @@ final readonly class OrderIntentStats
         $rows = OrderIntent::query()
             ->toBase()
             ->selectRaw('(created_at AT TIME ZONE ?)::date AS day, fulfillment, count(*) AS total', [$timezone])
-            ->where('restaurant_id', $restaurant->getKey())
+            ->when($restaurantId !== null, fn ($query) => $query->where('restaurant_id', $restaurantId))
             ->where('created_at', '>=', $previousStart)
             ->where('created_at', '<', $end)
             ->groupByRaw('1, 2')
@@ -92,6 +112,12 @@ final readonly class OrderIntentStats
         }
 
         return (int) round(($this->current - $this->previous) * 100 / $this->previous);
+    }
+
+    /** Si el período anterior tiene toques suficientes para comparar en porcentaje. */
+    public function percentIsMeaningful(): bool
+    {
+        return $this->previous >= self::MIN_PREVIOUS_FOR_PERCENT;
     }
 
     /** El día con más clics del período (para escalar las barras); al menos 1. */

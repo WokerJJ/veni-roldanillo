@@ -237,6 +237,14 @@ Decidido en el [ADR 0027](adr/0027-panel-de-administracion.md). Panel `admin` en
 | Capturas de campo | `app/Filament/Admin/Resources/FieldSubmissions`, `FieldSubmissionPolicy` | Las capturas del modo Campo (más abajo): aprobar solo con la confirmación del dueño, devolver y rechazar con motivo |
 | Acciones de dominio | `app/Actions/Restaurants` | `PublishRestaurant`, `DismissOsmDraft`, `HideRestaurant`, `ApproveRestaurantClaim` (cuenta, membresía, ficha reclamada y revisión en una transacción, contraseña temporal mostrada una vez), `ApproveRemovalRequest` y `RejectRestaurantRequest`. Leen bloqueado y rechazan con `ActionRefused`; los comandos `veni:publish` y `veni:osm-dismiss` usan las mismas |
 
+Escritorio (`/admin`, [ADR 0050](adr/0050-escritorio-de-administracion-con-datos-que-ya-existen.md)): tres widgets de solo lectura en `app/Filament/Admin/Widgets`, sobre datos que ya existen y sin medir a nadie. Cada uno exige el rol admin (`AdminWidget::canView`) además del acceso al panel.
+
+| Widget | Consulta | Qué muestra |
+| --- | --- | --- |
+| Estado del catálogo | `App\Support\CatalogOverview` | Publicadas, reclamadas, ocultas y solicitudes pendientes (reclamos, retiros, capturas de campo), con enlace a cada recurso |
+| Frescura de los menús | `App\Support\MenuFreshness` | Por ficha publicada, días desde el último cambio en sus platos, secciones o almuerzos del día (fechas de Colombia), del más viejo al más reciente |
+| Toques en «Enviar pedido por WhatsApp» | `OrderIntentStats::overall`, `App\Support\OrderIntentRanking` | 7 o 30 días contra el período anterior y ranking de 10; son toques, no pedidos, y con menos de 20 en el período anterior no hay porcentaje |
+
 Cuenta de ejemplo para desarrollo: `PanelAdminSeeder` (README, «Desarrollo local»).
 
 ### Modo Campo (`/campo`)

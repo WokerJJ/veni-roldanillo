@@ -7,6 +7,7 @@
     $change = $stats->change();
     $changeText = match (true) {
         $change === null => __('panel.stats.change_none', ['days' => $days]),
+        ! $stats->percentIsMeaningful() => __('panel.stats.change_few', ['previous' => $stats->previous, 'days' => $days]),
         $change > 0 => __('panel.stats.change_up', ['percent' => $change, 'days' => $days]),
         $change < 0 => __('panel.stats.change_down', ['percent' => abs($change), 'days' => $days]),
         default => __('panel.stats.change_same', ['days' => $days]),
