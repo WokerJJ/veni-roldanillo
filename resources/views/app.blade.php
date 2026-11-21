@@ -67,6 +67,18 @@
         @endif
 
         @vite(['resources/js/app.ts', "resources/js/pages/{$page['component']}.vue"])
+        {{--
+            El inicio monta el mapa en cuanto arranca, y el motor (MapLibre y
+            PMTiles) baja con import() recién entonces, cuando la entrada ya se
+            ejecutó (ADR 0007). Aquí se anuncia para que empiece a bajar junto
+            con ella (ADR 0050). Va después de @vite: la entrada y la página se
+            piden primero y el motor detrás, sin quitarles ancho de banda.
+        --}}
+        @if (($page['component'] ?? null) === 'Home')
+            @foreach (\App\Support\MapPreload::engineModules() as $module)
+                <link rel="modulepreload" href="{{ $module }}" nonce="{{ Vite::cspNonce() }}">
+            @endforeach
+        @endif
         <x-inertia::head>
             <title>{{ isset($meta['title']) ? $meta['title'].' · ' : '' }}{{ config('app.name', 'Vení Roldanillo') }}</title>
         </x-inertia::head>

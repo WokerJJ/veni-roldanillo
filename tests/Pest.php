@@ -71,11 +71,20 @@ function fakeViteManifest(): string
             'isDynamicEntry' => true,
             'dynamicImports' => ['resources/js/map/engine.ts'],
         ],
+        'resources/js/pages/Credits.vue' => [
+            'file' => 'assets/Credits-prueba.js',
+            'src' => 'resources/js/pages/Credits.vue',
+            'isDynamicEntry' => true,
+        ],
         'resources/js/map/engine.ts' => [
             'file' => 'assets/engine-prueba.js',
             'src' => 'resources/js/map/engine.ts',
             'isDynamicEntry' => true,
             'css' => ['assets/engine-prueba.css'],
+            'imports' => ['_motor-compartido-prueba.js'],
+        ],
+        '_motor-compartido-prueba.js' => [
+            'file' => 'assets/motor-compartido-prueba.js',
         ],
         // La página sin conexión (#5): su script, su estilo y los logos.
         'resources/js/offline.ts' => [
