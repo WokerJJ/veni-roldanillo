@@ -2,29 +2,15 @@
 
 namespace Database\Seeders;
 
-use App\Models\Category;
-
 /**
- * Tipos de comida genéricos (clasificación, no datos de negocios).
+ * Tipos de comida genéricos (clasificación, no datos de negocios). En
+ * desarrollo entran con el resto de los datos de ejemplo; son los mismos que
+ * en producción (ReferenceCategorySeeder).
  */
 class CategorySeeder extends FictitiousSeeder
 {
     protected function populate(): void
     {
-        $categories = [
-            ['comida-tipica', 'Comida típica', 'Traditional food'],
-            ['comidas-rapidas', 'Comidas rápidas', 'Fast food'],
-            ['asados', 'Asados', 'Grill'],
-            ['panaderia-cafeteria', 'Panadería y cafetería', 'Bakery and café'],
-            ['pescados-mariscos', 'Pescados y mariscos', 'Fish and seafood'],
-            ['heladeria-postres', 'Heladería y postres', 'Ice cream and desserts'],
-        ];
-
-        foreach ($categories as $position => [$slug, $es, $en]) {
-            Category::query()->updateOrCreate(
-                ['slug' => $slug],
-                ['name_es' => $es, 'name_en' => $en, 'position' => $position],
-            );
-        }
+        $this->call(ReferenceCategorySeeder::class);
     }
 }
