@@ -262,6 +262,46 @@ return [
     ],
     // Admin panel (#19, ADR 0027).
     'admin' => [
+        // Dashboard (ADR 0050): read-only, over data that already exists.
+        'dashboard' => [
+            'catalog' => [
+                'heading' => 'Catalog status',
+                'published' => 'Published listings',
+                'published_hint' => ':unclaimed unclaimed',
+                'claimed' => 'Claimed',
+                'hidden' => 'Hidden',
+                'hidden_hint' => 'Includes OpenStreetMap drafts',
+                'claims' => 'Pending claims',
+                'removals' => 'Pending removals',
+                'field' => 'Open field captures',
+                'see' => 'View',
+            ],
+            'freshness' => [
+                'heading' => 'Menu freshness',
+                'intro' => 'When each published restaurant last touched its menu or "Today\'s lunch", oldest first.',
+                'summary' => ':stale of :total listings have gone :days days or more without updating their menu (or have none).',
+                'restaurant' => 'Restaurant',
+                'last' => 'Last update',
+                'since' => 'How long ago',
+                'days' => '{0} Today|{1} 1 day ago|[2,*] :count days ago',
+                'never' => 'No menu yet',
+                'stale' => 'not updated',
+                'example' => 'example',
+                'empty' => 'There are no published listings yet.',
+                'more' => 'Showing the :shown most out of date of :total listings.',
+                'note' => 'Counts any change to their dishes, sections or daily lunches, including marking a dish sold out. It is a sign of activity, not a guarantee that the menu is right.',
+            ],
+            'clicks' => [
+                'heading' => 'Taps on "Send order on WhatsApp"',
+                'intro' => 'These are taps, not orders: the person may still not send the message. Vení does not see what was ordered or by whom. Adds up every restaurant, by Colombian day.',
+                'change_none' => 'No taps in the previous :days days or in these',
+                'change_few' => 'Only :previous in the previous :days days: too few to work out a percentage',
+                'ranking' => 'Restaurants with the most taps',
+                'before' => 'Before',
+                'empty' => 'No taps in the last :days days.',
+                'note' => 'Each record is deleted after :months months. "Before" is the taps in the same number of days right before.',
+            ],
+        ],
         'restaurants' => [
             'label' => 'Listing',
             'plural' => 'Listings',
