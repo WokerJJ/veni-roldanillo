@@ -12,6 +12,7 @@ return [
         'hours' => 'Check the opening hours: slots on the same day cannot overlap or open and close at the same time.',
         'menu_duplicate_section' => 'Two menu sections have the same name.',
         'menu_duplicate_dish' => 'A dish is repeated within a menu section.',
+        'catalog_variant' => 'A drink on the menu is no longer in the catalog. Remove it and pick it again.',
         'menu_too_many' => 'The menu has too many dishes.',
     ],
 

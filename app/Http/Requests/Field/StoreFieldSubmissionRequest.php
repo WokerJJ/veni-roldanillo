@@ -163,7 +163,7 @@ class StoreFieldSubmissionRequest extends FormRequest
             foreach ($section['dishes'] as $dishIndex => $dish) {
                 if ($dish['catalog_variant_id'] !== null && ! isset($valid[$dish['catalog_variant_id']])) {
                     $key = "menu.{$sectionIndex}.dishes.{$dishIndex}.catalog_variant_id";
-                    $validator->errors()->add($key, __('validation.exists', ['attribute' => $key]));
+                    $validator->errors()->add($key, __('field.validation.catalog_variant'));
                 }
             }
         }

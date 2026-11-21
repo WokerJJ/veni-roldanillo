@@ -13,6 +13,7 @@ return [
         'hours' => 'Revisá el horario: las franjas de un mismo día no pueden cruzarse ni abrir y cerrar a la misma hora.',
         'menu_duplicate_section' => 'Hay dos secciones de la carta con el mismo nombre.',
         'menu_duplicate_dish' => 'Hay un plato repetido dentro de una sección de la carta.',
+        'catalog_variant' => 'Una bebida de la carta ya no está en el catálogo. Quítala y márcala de nuevo.',
         'menu_too_many' => 'La carta tiene demasiados platos.',
     ],
 
