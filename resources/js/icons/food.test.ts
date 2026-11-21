@@ -113,8 +113,8 @@ describe('lo que nombra el código existe (EVA-025)', () => {
         expect([...named].filter((name) => !files.has(name))).toEqual([]);
     });
 
-    it('las categorías con ícono son las de CategorySeeder, ni una más ni una menos', () => {
-        const seeder = readFileSync(`${ROOT}database/seeders/CategorySeeder.php`, 'utf8');
+    it('las categorías con ícono son las de ReferenceCategorySeeder, ni una más ni una menos', () => {
+        const seeder = readFileSync(`${ROOT}database/seeders/ReferenceCategorySeeder.php`, 'utf8');
         const seeded = [...seeder.matchAll(/^\s*\['([a-z0-9-]+)', '/gm)].map(([, slug]) => slug);
 
         expect(seeded).toHaveLength(6);

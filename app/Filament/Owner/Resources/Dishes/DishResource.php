@@ -99,6 +99,9 @@ class DishResource extends OwnerResource
                     ->label(__('panel.dishes.available'))
                     ->helperText(__('panel.dishes.available_help'))
                     ->default(true),
+                Toggle::make('is_alcohol')
+                    ->label(__('panel.dishes.alcohol'))
+                    ->helperText(__('panel.dishes.alcohol_help')),
                 Toggle::make('sold_out_today')
                     ->label(__('panel.dishes.sold_out_today'))
                     ->helperText(__('panel.dishes.sold_out_help'))

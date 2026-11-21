@@ -6,6 +6,7 @@
 | no depender del orden ni del estado que dejó otra prueba.
 */
 
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -133,5 +134,36 @@ test('la casilla del rango de precios marca por el nombre las secciones que ya h
     ]);
 
     // Deja la base vacía para las pruebas que siguen.
+    $this->artisan('migrate:fresh')->assertSuccessful();
+});
+
+test('el índice del catálogo sin mayúsculas ni espacios se niega a crearse si ya hay repetidos, y no borra nada', function () {
+    $this->artisan('migrate:fresh')->assertSuccessful();
+
+    $migration = 'database/migrations/2026_11_20_100000_make_catalog_unique_indexes_case_insensitive.php';
+
+    // Se vuelve a los índices anteriores, que dejaban entrar «Cola» y «cola ».
+    $this->artisan('migrate:rollback', ['--path' => [$migration]])->assertSuccessful();
+
+    $group = DB::table('catalog_groups')->insertGetId(['slug' => 'gaseosas', 'name_es' => 'Gaseosas', 'section_name_es' => 'Bebidas']);
+    $first = DB::table('catalog_items')->insertGetId(['group_id' => $group, 'brand' => 'Marca', 'name_es' => 'Cola']);
+    $second = DB::table('catalog_items')->insertGetId(['group_id' => $group, 'brand' => 'MARCA ', 'name_es' => 'cola ']);
+    DB::table('catalog_variants')->insert([['item_id' => $first, 'label' => '400 ml'], ['item_id' => $first, 'label' => '400 ML ']]);
+
+    expect(fn () => Artisan::call('migrate', ['--path' => [$migration]]))
+        ->toThrow(RuntimeException::class, "ids: {$first}, {$second}");
+
+    expect(DB::table('catalog_items')->count())->toBe(2)
+        ->and(DB::table('catalog_variants')->count())->toBe(2);
+
+    // Resueltos a mano, la migración pasa y el índice nuevo rige.
+    DB::table('catalog_variants')->where('label', '400 ML ')->delete();
+    DB::table('catalog_items')->where('id', $second)->delete();
+
+    $this->artisan('migrate', ['--path' => [$migration]])->assertSuccessful();
+
+    expect(fn () => DB::table('catalog_items')->insert(['group_id' => $group, 'brand' => ' marca', 'name_es' => 'COLA ']))
+        ->toThrow(UniqueConstraintViolationException::class);
+
     $this->artisan('migrate:fresh')->assertSuccessful();
 });

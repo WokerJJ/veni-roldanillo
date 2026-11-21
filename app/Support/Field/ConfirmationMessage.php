@@ -55,6 +55,12 @@ final class ConfirmationMessage
             array_push($lines, ...$hours);
         }
 
+        $menu = $payload['menu'] ?? [];
+
+        if ($menu !== []) {
+            $lines[] = $t('line_menu', ['dishes' => FieldMenu::dishCount($menu), 'sections' => count($menu)]);
+        }
+
         array_push($lines, '', $t('call_to_action', ['days' => FieldSubmission::CONFIRMATION_DAYS]), $url);
 
         return implode("\n", $lines);

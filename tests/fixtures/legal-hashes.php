@@ -23,6 +23,7 @@ return [
     // una línea al subir FieldSubmission::AUTHORIZATION_VERSION.
     'field_authorization' => [
         '0.1' => 'f4b298586d2b842a5a36586ac5e4cb76151300796054907e9fb3d7ce59297fe8',
+        '0.2' => '9256c21f85a5d9739601da7d6c0ca9baabb5bb7652c00f73763e72d7e06b6d75',
     ],
     'reviews' => [
         '0.1' => 'a5aad8e9aca8ad3476dd684f9e3b6ae7c7a6cfb55c21478df57118c8c0edac99',

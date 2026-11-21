@@ -673,6 +673,7 @@ onBeforeUnmount(() => {
             <template v-else>
                 <!-- Paso 1 · Tu pedido -->
                 <div :hidden="stage !== 0" data-stage="0">
+                    <p v-if="items.some((item) => item.alcohol === true)" class="mt-3 rounded-md border border-line bg-surface p-3 text-sm font-semibold" role="note" data-alcohol-notice>{{ t('order.cart.alcohol_notice') }}</p>
                     <ul class="mt-2 divide-y divide-line" :aria-label="t('order.cart.lines')">
                         <li v-for="(item, index) in items" :key="lineKeys[index]" class="py-3" data-line>
                             <div class="flex items-start justify-between gap-3">

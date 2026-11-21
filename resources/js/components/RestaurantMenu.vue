@@ -203,6 +203,7 @@ const summary = computed(() => {
         <!-- Con id y foco propios: las pestañas fijas de la ficha (#141, M7) llevan aquí. -->
         <div v-for="(section, index) in sections" :id="`ficha-menu-${index}`" :key="index" tabindex="-1" class="menu-section mt-4" data-section>
             <h3 :id="`${headingId}-${index}`" class="text-base">{{ section.name }}</h3>
+            <p v-if="section.dishes.some((dish) => dish.alcohol === true)" class="mt-0.5 text-sm text-ink-muted" data-alcohol-note>{{ t('restaurant.menu.alcohol_note') }}</p>
 
             <ul class="divide-y divide-line" :aria-labelledby="`${headingId}-${index}`">
                 <li v-for="(dish, position) in section.dishes" :key="position" class="menu-dish relative" data-dish>

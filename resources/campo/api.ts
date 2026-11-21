@@ -6,6 +6,7 @@
 | rechazo del servidor (422 o 409: hay que corregir).
 */
 
+import type { Catalog } from './catalog';
 import type { Candidate, ReturnedContent, SubmissionBody } from './draft';
 import type { Category, SentSummary } from './storage';
 
@@ -28,6 +29,7 @@ export interface Me {
     csrf: string;
     categories: Category[];
     payment_methods: string[];
+    catalog?: Catalog;
 }
 
 export interface ServerSubmission extends SentSummary {

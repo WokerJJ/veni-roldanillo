@@ -11,6 +11,10 @@
 return [
     'validation' => [
         'hours' => 'Revisá el horario: las franjas de un mismo día no pueden cruzarse ni abrir y cerrar a la misma hora.',
+        'menu_duplicate_section' => 'Hay dos secciones de la carta con el mismo nombre.',
+        'menu_duplicate_dish' => 'Hay un plato repetido dentro de una sección de la carta.',
+        'catalog_variant' => 'Una bebida de la carta ya no está en el catálogo. Quítala y márcala de nuevo.',
+        'menu_too_many' => 'La carta tiene demasiados platos.',
     ],
 
     'whatsapp' => [
@@ -25,6 +29,7 @@ return [
         'line_hours' => 'Horario:',
         'yes' => 'sí',
         'no' => 'no',
+        'line_menu' => 'Carta (platos: :dishes; secciones: :sections), completa en el enlace.',
         'call_to_action' => 'Revisala y, si está bien, confirmala acá (el enlace vale :days días y se usa una sola vez):',
     ],
 
@@ -45,7 +50,7 @@ return [
         'role_owner' => 'dueño o dueña',
         'role_manager' => 'administración del negocio',
         'authorization_title' => 'Tu autorización',
-        'authorization' => 'Confirmo que soy la persona que puede decidirlo en este negocio y autorizo a Vení Roldanillo a publicar en su app y su sitio web la información del negocio que aparece arriba (nombre, tipo de comida, dirección, ubicación, teléfono, WhatsApp, horario, domicilio y medios de pago). Puedo pedir que la corrijan o la retiren cuando quiera.',
+        'authorization' => 'Confirmo que soy la persona que puede decidirlo en este negocio y autorizo a Vení Roldanillo a publicar en su app y su sitio web la información del negocio que aparece arriba (nombre, tipo de comida, dirección, ubicación, teléfono, WhatsApp, horario, domicilio, medios de pago y, si aparece, la carta con sus platos y precios). Puedo pedir que la corrijan o la retiren cuando quiera.',
         'privacy' => 'Tus datos de contacto (nombre y celular) se usan solo para verificar quién autoriza y para escribirte sobre esta ficha, no se publican ni se comparten. Podés consultarlos, corregirlos o pedir que los borren.',
         'privacy_link' => 'Política de tratamiento de datos',
         'button' => 'Confirmo',
@@ -56,6 +61,8 @@ return [
         'invalid_title' => 'Este enlace ya no sirve',
         'invalid' => 'El enlace venció, ya se usó o no existe. Pedile a quien te lo mandó uno nuevo.',
         'changed' => 'Los datos cambiaron mientras los mirabas. Recargá la página y revisalos de nuevo.',
+        'menu_title' => 'Carta y precios',
+        'alcohol_note' => 'Bebida alcohólica: solo para mayores de 18 años.',
         'hours' => 'Horario',
         'no_hours' => 'Sin horario cargado',
         'categories' => 'Tipo de comida',

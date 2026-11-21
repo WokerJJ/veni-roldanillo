@@ -250,6 +250,7 @@ class FieldSubmissionResource extends AdminResource
                         'authorization' => (string) $record->owner_authorization_version,
                         'phone' => (string) $record->confirmation_phone,
                     ]),
+                (string) __('panel.admin.field.menu') => self::menuLines($payload['menu'] ?? []) ?: ['—'],
                 (string) __('panel.admin.field.captured_at') => $record->captured_at->format('Y-m-d H:i'),
             ],
             'link' => [
@@ -257,6 +258,27 @@ class FieldSubmissionResource extends AdminResource
                 'href' => "https://www.openstreetmap.org/?mlat={$lat}&mlon={$lng}#map=19/{$lat}/{$lng}",
             ],
         ]);
+    }
+
+    /**
+     * La carta en líneas, para revisarla: sección, plato, precio y el aviso de alcohol.
+     *
+     * @param  list<array{name_es: string, name_en: string|null, dishes: list<array{name_es: string, name_en: string|null, price: int, is_alcohol: bool, catalog_variant_id: int|null}>}>  $menu
+     * @return list<string>
+     */
+    private static function menuLines(array $menu): array
+    {
+        $lines = [];
+
+        foreach ($menu as $section) {
+            $lines[] = '▸ '.$section['name_es'];
+
+            foreach ($section['dishes'] as $dish) {
+                $lines[] = '   '.$dish['name_es'].' · $'.number_format($dish['price'], 0, ',', '.').($dish['is_alcohol'] ? ' · +18' : '');
+            }
+        }
+
+        return $lines;
     }
 
     public static function getPages(): array

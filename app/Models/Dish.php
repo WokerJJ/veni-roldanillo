@@ -53,7 +53,7 @@ use Laravel\Scout\Searchable;
  */
 #[Fillable([
     'menu_section_id', 'name_es', 'name_en', 'description_es', 'description_en',
-    'price', 'tags', 'available', 'sold_out_until', 'position',
+    'price', 'tags', 'available', 'sold_out_until', 'position', 'is_alcohol',
 ])]
 #[UsePolicy(RestaurantContentPolicy::class)]
 class Dish extends Model implements BelongsToRestaurant
@@ -71,6 +71,7 @@ class Dish extends Model implements BelongsToRestaurant
     protected $attributes = [
         'tags' => '[]',
         'available' => true,
+        'is_alcohol' => false,
     ];
 
     /**
@@ -82,6 +83,7 @@ class Dish extends Model implements BelongsToRestaurant
             'price' => 'integer',
             'tags' => 'array',
             'available' => 'boolean',
+            'is_alcohol' => 'boolean',
             'sold_out_until' => 'date',
             'position' => 'integer',
         ];

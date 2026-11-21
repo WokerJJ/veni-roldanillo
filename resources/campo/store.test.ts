@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CampoApi, ServerSubmission } from './api';
 import { AuthError, OfflineError, RejectedError } from './api';
+import type { Catalog } from './catalog';
 import type { Draft } from './draft';
 import { newDraft } from './draft';
 import { memoryStorage } from './storage';
@@ -270,6 +271,40 @@ describe('actualizar con señal', () => {
         await campo.refresh();
 
         expect(campo.state.drafts[0]?.name).toBe('Ya corregida');
+    });
+});
+
+describe('un catálogo nuevo', () => {
+    const dishOf = (variantId: number | null, price: number | null = 3500) => ({ name_es: variantId === null ? 'Jugo libre' : 'Manzana Postobón 400 ml', name_en: variantId === null ? null : 'Apple Postobón 400 ml', price, is_alcohol: false, catalog_variant_id: variantId });
+    const catalogOf = (version: string, variantIds: number[]): Catalog => ({
+        version,
+        groups: [{ id: 1, slug: 'gaseosas', name_es: 'Gaseosas', name_en: null, section_name_es: 'Bebidas', section_name_en: null, is_alcohol: false, items: [{ id: 10, brand: null, name_es: 'Manzana', name_en: null, is_alcohol: false, variants: variantIds.map((id) => ({ id, label: `V${String(id)}` })) }] }],
+    });
+    const meOf = (catalog: Catalog) => () => Promise.resolve({ user: { id: 1, name: 'Jhon' }, csrf: 't', categories: [], payment_methods: [], catalog });
+
+    it('si la versión cambia, los platos cuya presentación ya no existe pasan a platos libres y el envío no da 422', async () => {
+        await storage.putMeta({ userId: 1, userName: 'Jhon', categories: [], paymentMethods: [], catalog: catalogOf('v1', [5, 6]) });
+        await storage.putDraft(ready('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', { menu: [{ name_es: 'Bebidas', name_en: null, dishes: [dishOf(5), dishOf(6)] }] }));
+        const campo = build(fakeApi({ me: vi.fn(meOf(catalogOf('v2', [6]))) }));
+        await campo.load();
+        await campo.refresh();
+
+        const [gone, kept] = campo.state.drafts[0]?.menu[0]?.dishes ?? [];
+
+        expect(gone).toEqual({ name_es: 'Manzana Postobón 400 ml', name_en: null, price: 3500, is_alcohol: false, catalog_variant_id: null });
+        expect(kept?.catalog_variant_id).toBe(6);
+        expect(kept?.name_en).toBe('Apple Postobón 400 ml');
+        expect((await storage.listDrafts())[0]?.menu[0]?.dishes[0]?.catalog_variant_id).toBeNull();
+    });
+
+    it('si la versión es la misma, no toca los borradores', async () => {
+        await storage.putMeta({ userId: 1, userName: 'Jhon', categories: [], paymentMethods: [], catalog: catalogOf('v1', [6]) });
+        await storage.putDraft(ready('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', { menu: [{ name_es: 'Bebidas', name_en: null, dishes: [dishOf(5)] }] }));
+        const campo = build(fakeApi({ me: vi.fn(meOf(catalogOf('v1', [6]))) }));
+        await campo.load();
+        await campo.refresh();
+
+        expect(campo.state.drafts[0]?.menu[0]?.dishes[0]?.catalog_variant_id).toBe(5);
     });
 });
 

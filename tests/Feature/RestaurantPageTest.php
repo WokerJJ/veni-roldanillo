@@ -197,7 +197,7 @@ describe('lista blanca', function () {
             ->and(array_keys($profile['hours'][0]))->toBe(['weekday', 'opens', 'closes'])
             ->and(array_keys($profile['special_hours'][0]))->toBe(['date', 'closed', 'opens', 'closes', 'note'])
             ->and(array_keys($profile['menu'][0]))->toBe(['name', 'dishes'])
-            ->and(array_keys($profile['menu'][0]['dishes'][0]))->toBe(['name', 'description', 'price', 'sold_out_until', 'photo', 'ingredients', 'contains', 'groups'])
+            ->and(array_keys($profile['menu'][0]['dishes'][0]))->toBe(['name', 'description', 'price', 'alcohol', 'sold_out_until', 'photo', 'ingredients', 'contains', 'groups'])
             ->and(array_keys($profile['menu'][0]['dishes'][0]['groups'][0]))->toBe(['name', 'kind', 'min', 'max', 'options'])
             ->and(array_keys($profile['menu'][0]['dishes'][0]['groups'][0]['options'][0]))->toBe(['name', 'price', 'ingredient']);
     });
@@ -456,12 +456,12 @@ describe('menú', function () {
 
         expect(restaurantPageProfile($this->get('/restaurants/la-ceiba'))['menu'])->toBe([
             ['name' => 'Platos fuertes (prueba)', 'dishes' => [
-                ['name' => 'Primero', 'description' => 'Descripción de ejemplo.', 'price' => 18500, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'contains' => [], 'groups' => []],
-                ['name' => 'Segundo', 'description' => 'Descripción de ejemplo.', 'price' => 22000, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'contains' => [], 'groups' => []],
+                ['name' => 'Primero', 'description' => 'Descripción de ejemplo.', 'price' => 18500, 'alcohol' => false, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'contains' => [], 'groups' => []],
+                ['name' => 'Segundo', 'description' => 'Descripción de ejemplo.', 'price' => 22000, 'alcohol' => false, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'contains' => [], 'groups' => []],
             ]],
             ['name' => 'Bebidas (prueba)', 'dishes' => [
-                ['name' => 'Jugo', 'description' => null, 'price' => 4000, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'contains' => [], 'groups' => []],
-                ['name' => 'Gaseosa', 'description' => null, 'price' => 3500, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'contains' => [], 'groups' => []],
+                ['name' => 'Jugo', 'description' => null, 'price' => 4000, 'alcohol' => false, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'contains' => [], 'groups' => []],
+                ['name' => 'Gaseosa', 'description' => null, 'price' => 3500, 'alcohol' => false, 'sold_out_until' => null, 'photo' => null, 'ingredients' => [], 'contains' => [], 'groups' => []],
             ]],
         ]);
     });

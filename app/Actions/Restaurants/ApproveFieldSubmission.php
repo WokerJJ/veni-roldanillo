@@ -5,6 +5,8 @@ namespace App\Actions\Restaurants;
 use App\Enums\FieldSubmissionStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\RestaurantStatus;
+use App\Models\CatalogItem;
+use App\Models\CatalogVariant;
 use App\Models\FieldSubmission;
 use App\Models\Restaurant;
 use App\Models\User;
@@ -95,6 +97,11 @@ final class ApproveFieldSubmission
                 'verified_at' => now(),
             ])->save();
 
+            // La carta de una ficha que ya la tiene no se pisa en silencio (etapa 3).
+            if (($payload['menu'] ?? []) !== [] && $restaurant->menuSections()->exists()) {
+                throw new ActionRefused(ActionRefused::MENU_EXISTS);
+            }
+
             $restaurant->categories()->sync($payload['category_ids']);
             $restaurant->openingHours()->delete();
 
@@ -105,6 +112,8 @@ final class ApproveFieldSubmission
                     'closes_at' => $slot['closes'],
                 ]);
             }
+
+            $this->createMenu($restaurant, $payload['menu'] ?? []);
 
             $locked->forceFill([
                 'status' => FieldSubmissionStatus::Approved,
@@ -118,6 +127,65 @@ final class ApproveFieldSubmission
 
             return $restaurant;
         });
+    }
+
+    /**
+     * Las secciones y los platos de la carta capturada (ADR 0052). El inglés de
+     * un plato de catálogo sale del catálogo si el teléfono no lo mandó: no es
+     * parte de lo que firma el dueño. La marca de alcohol nunca baja respecto del
+     * catálogo (producto o grupo alcohólico). Cada sección propone si cuenta para el
+     * rango de precios por su nombre, como siempre.
+     *
+     * @param  list<array{name_es: string, name_en: string|null, dishes: list<array{name_es: string, name_en: string|null, price: int, is_alcohol: bool, catalog_variant_id: int|null}>}>  $menu
+     */
+    private function createMenu(Restaurant $restaurant, array $menu): void
+    {
+        $variantIds = [];
+
+        foreach ($menu as $section) {
+            foreach ($section['dishes'] as $dish) {
+                if ($dish['catalog_variant_id'] !== null) {
+                    $variantIds[] = $dish['catalog_variant_id'];
+                }
+            }
+        }
+
+        $english = [];
+        $alcohol = [];
+
+        foreach (CatalogVariant::query()->with('item.group')->whereIn('id', $variantIds)->get() as $variant) {
+            $item = $variant->item;
+
+            if (! $item instanceof CatalogItem) {
+                continue;
+            }
+
+            // El catálogo manda sobre el teléfono: un plato alcohólico nunca baja a «sin alcohol».
+            $alcohol[$variant->id] = $item->is_alcohol || $item->group?->is_alcohol === true;
+
+            if ($item->name_en !== null) {
+                $english[$variant->id] = CatalogItem::dishName($item->name_en, $item->brand, $variant->label);
+            }
+        }
+
+        foreach ($menu as $position => $section) {
+            $created = $restaurant->menuSections()->create([
+                'name_es' => $section['name_es'],
+                'name_en' => $section['name_en'],
+                'position' => $position,
+            ]);
+
+            foreach ($section['dishes'] as $dishPosition => $dish) {
+                $restaurant->dishes()->create([
+                    'menu_section_id' => $created->getKey(),
+                    'name_es' => $dish['name_es'],
+                    'name_en' => $dish['name_en'] ?? ($dish['catalog_variant_id'] !== null ? ($english[$dish['catalog_variant_id']] ?? null) : null),
+                    'price' => $dish['price'],
+                    'is_alcohol' => $dish['is_alcohol'] || ($dish['catalog_variant_id'] !== null && ($alcohol[$dish['catalog_variant_id']] ?? false)),
+                    'position' => $dishPosition,
+                ]);
+            }
+        }
     }
 
     /**
