@@ -245,6 +245,7 @@ return [
         'change_up' => ':percent % más que los :days días anteriores',
         'change_down' => ':percent % menos que los :days días anteriores',
         'change_same' => 'Igual que los :days días anteriores',
+        'change_few' => 'Los :days días anteriores hubo solo :previous: con tan pocos no se calcula un porcentaje',
         'change_none' => 'Sin clics en los :days días anteriores para comparar',
         'delivery' => 'A domicilio',
         'pickup' => 'Para recoger',

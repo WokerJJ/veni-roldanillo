@@ -243,6 +243,7 @@ return [
         'change_up' => ':percent% more than the previous :days days',
         'change_down' => ':percent% fewer than the previous :days days',
         'change_same' => 'Same as the previous :days days',
+        'change_few' => 'Only :previous in the previous :days days: too few to work out a percentage',
         'change_none' => 'No taps in the previous :days days to compare',
         'delivery' => 'Delivery',
         'pickup' => 'Pickup',
