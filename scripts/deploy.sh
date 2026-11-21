@@ -20,6 +20,18 @@ timeout=${DEPLOY_TIMEOUT:-120}
 # 1 mientras el .env apunta a una imagen que todavía no demostró que arranca.
 env_replaced=0
 
+# Pone .env.nuevo en el lugar del .env. Lo normal es `mv`, de un solo paso. En
+# Windows (Git Bash con Docker Desktop) `mv` falla con «Permission denied»
+# mientras un contenedor tiene el .env abierto: entonces se escribe encima, en el
+# mismo archivo (conserva dueño y permisos, y el contenedor ya montado lo ve).
+# Ese camino no es atómico; solo se usa si `mv` no pudo.
+put_env() {
+    if mv -f .env.nuevo .env 2> /dev/null; then
+        return 0
+    fi
+    cat .env.nuevo > .env && rm -f .env.nuevo
+}
+
 # Reemplaza el .env por una copia con otro APP_IMAGE, de un solo paso (mv): si
 # el script se corta a la mitad, el .env es el anterior o el nuevo, nunca uno a
 # medio escribir. La copia nace con cp -p y se reescribe sin cambiarle dueño,
@@ -44,7 +56,7 @@ replace_env() {
         echo "la carpeta tiene que heredar el grupo del .env (docs/despliegue.md, «Qué hay en el servidor»)." >&2
         return 1
     fi
-    mv -f .env.nuevo .env
+    put_env
 }
 
 # Los registros de los servicios, a un archivo que solo lee quien despliega.
@@ -73,7 +85,7 @@ abort() {
 on_exit() {
     local status=$?
     if [ "$status" != 0 ] && [ "$env_replaced" = 1 ]; then
-        if cp -p .env.anterior .env.nuevo && mv -f .env.nuevo .env; then
+        if cp -p .env.anterior .env.nuevo && put_env; then
             echo "El .env volvió a como estaba antes de este despliegue (copia en .env.anterior)." >&2
             echo "Los contenedores no: cómo volver a la versión anterior está en docs/despliegue.md." >&2
         else
