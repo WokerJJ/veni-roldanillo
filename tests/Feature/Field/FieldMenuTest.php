@@ -25,7 +25,7 @@ use Illuminate\Support\Str;
 uses(RefreshDatabase::class);
 
 /**
- * La carta en la captura de campo (ADR 0049): se valida, se confirma por el
+ * La carta en la captura de campo (ADR 0050): se valida, se confirma por el
  * dueño con sus precios, y al aprobar se vuelve secciones y platos de la
  * ficha oculta.
  *

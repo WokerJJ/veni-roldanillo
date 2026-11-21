@@ -70,7 +70,7 @@ export interface OrderItem {
     dish: string;
     /** Precio del plato más sus adiciones, por unidad. */
     unitPrice: number;
-    /** Bebida alcohólica (ADR 0049); solo si lo es: el pedido lleva el aviso de mayores de 18. */
+    /** Bebida alcohólica (ADR 0050); solo si lo es: el pedido lleva el aviso de mayores de 18. */
     alcohol?: boolean;
     quantity: number;
     choices: ChosenOption[];

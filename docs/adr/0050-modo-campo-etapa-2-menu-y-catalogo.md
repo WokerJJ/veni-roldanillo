@@ -1,4 +1,4 @@
-# ADR 0049 · Modo «Campo», etapa 2: la carta en la captura, un catálogo de productos y las bebidas alcohólicas con aviso de mayores de 18
+# ADR 0050 · Modo «Campo», etapa 2: la carta en la captura, un catálogo de productos y las bebidas alcohólicas con aviso de mayores de 18
 
 - Estado: aceptada
 - Fecha: 2026-11-19

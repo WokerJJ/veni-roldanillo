@@ -10,7 +10,7 @@ use Illuminate\Console\Command;
 
 /**
  * Carga los datos de referencia que la app necesita para funcionar: los tipos
- * de comida y el catálogo de bebidas del modo Campo (ADR 0049). Es lo único
+ * de comida y el catálogo de bebidas del modo Campo (ADR 0050). Es lo único
  * que se siembra en producción: los seeders de ejemplo se niegan a correr
  * fuera de local y testing porque crean cuentas y negocios ficticios.
  *

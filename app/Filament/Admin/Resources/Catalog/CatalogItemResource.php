@@ -27,7 +27,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Los productos del catálogo del modo Campo y sus presentaciones (ADR 0049):
+ * Los productos del catálogo del modo Campo y sus presentaciones (ADR 0050):
  * administración los mantiene y viajan a `/campo` para armar una carta sin
  * teclear cada bebida. Solo texto: los nombres como los vende el restaurante,
  * nunca logos ni imágenes de marca. Se desactivan, no se borran.

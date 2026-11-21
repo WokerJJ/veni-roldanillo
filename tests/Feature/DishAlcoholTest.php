@@ -10,7 +10,7 @@ use Livewire\Livewire;
 uses(RefreshDatabase::class);
 
 /**
- * Las bebidas alcohólicas con aviso de mayores de 18 (ADR 0049): el plato lleva
+ * Las bebidas alcohólicas con aviso de mayores de 18 (ADR 0050): el plato lleva
  * la marca, la ficha pública la manda y el dueño la puede cambiar.
  */
 test('la ficha pública manda la marca de alcohol de cada plato, y solo la de los platos publicados', function () {

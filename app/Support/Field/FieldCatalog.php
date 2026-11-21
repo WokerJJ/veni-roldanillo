@@ -8,7 +8,7 @@ use App\Models\CatalogVariant;
 use Illuminate\Database\Eloquent\Relations\Relation;
 
 /**
- * El catálogo tal como viaja al teléfono en `GET /campo/api/me` (ADR 0049):
+ * El catálogo tal como viaja al teléfono en `GET /campo/api/me` (ADR 0050):
  * solo lo activo, con una versión (huella de su contenido) para que `/campo`
  * lo guarde en el dispositivo y lo reemplace solo cuando cambia. Solo texto.
  */

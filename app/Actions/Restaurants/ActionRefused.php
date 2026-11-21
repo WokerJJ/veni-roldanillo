@@ -61,6 +61,11 @@ final class ActionRefused extends RuntimeException
 
     public const MENU_EXISTS = 'menu_exists';
 
+    // Primer administrador (veni:make-admin).
+    public const INVALID_NAME = 'invalid_name';
+
+    public const WEAK_PASSWORD = 'weak_password';
+
     public function __construct(public readonly string $reason)
     {
         parent::__construct("Acción rechazada: {$reason}.");

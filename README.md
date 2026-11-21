@@ -14,7 +14,7 @@
 
 Plataforma web instalable (PWA), bilingüe español/inglés, que reúne a **todos los restaurantes de Roldanillo** (Valle del Cauca, Colombia) con menús, precios, mapa, horarios y calificaciones confiables, y permite **pedir a domicilio por WhatsApp sin comisiones** para el negocio.
 
-> Estado: versión 0.6.0 publicada. La Fase 1 (MVP) está completa: mapa, fichas con menú y fotos, pedido por WhatsApp, panel de dueños y de administración. En curso: rediseño para celular. El detalle está en [docs/05-roadmap.md](docs/05-roadmap.md). Dominio: `veniroldanillo.co`
+> Estado: versión 0.6.0 publicada. La Fase 1 (MVP) está completa: mapa, fichas con menú y fotos, pedido por WhatsApp, panel de dueños y de administración. Integrados desde entonces: el rediseño para celular, la última lista de restaurantes sin señal y la etapa 1 del modo Campo (levantar fichas en el local). En curso: el modo Campo, etapa 2. El detalle está en [docs/05-roadmap.md](docs/05-roadmap.md). Dominio: `veniroldanillo.co`
 
 ## El problema
 
@@ -181,7 +181,7 @@ La primera migración crea las extensiones `postgis` y `btree_gist` (`CREATE EXT
 
 `php artisan db:seed` carga datos ficticios y solo corre con `APP_ENV` en `local` o `testing`; las cuentas de `UserSeeder` (`@example.test`) tienen contraseñas aleatorias que no se muestran. Todavía no se puede repetir sobre una base ya sembrada: para volver a sembrar, `php artisan migrate:fresh --seed`.
 
-**En producción** los seeders de ejemplo se niegan a correr. Lo único que se carga allí son los datos de referencia (los tipos de comida y el catálogo de bebidas del modo Campo, ADR 0049) con `php artisan veni:cargar-referencia`: solo agrega lo que falta, no pisa lo que administración editó y se puede repetir. Sin las categorías, el paso «Negocio» de `/campo` no muestra ningún tipo de comida.
+**En producción** los seeders de ejemplo se niegan a correr. Lo único que se carga allí son los datos de referencia (los tipos de comida y el catálogo de bebidas del modo Campo, ADR 0050) con `php artisan veni:cargar-referencia`: solo agrega lo que falta, no pisa lo que administración editó y se puede repetir. Sin las categorías, el paso «Negocio» de `/campo` no muestra ningún tipo de comida.
 
 Panel del dueño (`/panel`, ADR 0025): `PanelOwnerSeeder` crea, **solo en desarrollo**, `panel.duena@example.test` (dueña del primer restaurante de ejemplo), `panel.otro@example.test` (dueño del segundo) y `panel.empleado@example.test` (empleado, que no entra al panel), todas con la contraseña de ejemplo `veni-panel-dev`. No es una contraseña real ni sirve fuera de `local` o `testing`. En una base ya sembrada se agregan sin borrar nada con `php artisan db:seed --class=PanelOwnerSeeder`.
 

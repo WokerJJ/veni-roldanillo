@@ -9,7 +9,7 @@ import { dishCount, isDishIncomplete, MENU_LIMITS } from '../draft';
 import { t } from '../texts';
 
 /**
- * Paso 6: la carta que el dueño dicta, por secciones y platos (ADR 0049). Los
+ * Paso 6: la carta que el dueño dicta, por secciones y platos (ADR 0050). Los
  * platos que vienen del catálogo (bebidas de marca) se marcan en el paso
  * siguiente, pero también se ven y se corrigen aquí. Un plato sin precio no
  * deja avanzar.

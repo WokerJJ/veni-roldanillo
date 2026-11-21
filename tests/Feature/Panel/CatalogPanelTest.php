@@ -14,7 +14,7 @@ use Livewire\Livewire;
 uses(RefreshDatabase::class);
 
 /**
- * El catálogo del modo Campo en /admin (ADR 0049): solo administración, con las
+ * El catálogo del modo Campo en /admin (ADR 0050): solo administración, con las
  * presentaciones de cada producto en el mismo formulario.
  */
 function catalogPanelAdmin(): User

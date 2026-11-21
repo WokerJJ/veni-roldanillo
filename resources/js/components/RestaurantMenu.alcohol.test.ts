@@ -7,7 +7,7 @@ import type * as FakeInertia from '@/testing/inertia';
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 
 /*
-| Las bebidas alcohólicas en la carta de la ficha (ADR 0049): un «+18» en el
+| Las bebidas alcohólicas en la carta de la ficha (ADR 0050): un «+18» en el
 | plato y una nota en la sección que tenga alguna. Sin alcohol, la carta no
 | cambia.
 */

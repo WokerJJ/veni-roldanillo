@@ -65,6 +65,49 @@ describe('la lista guardada (#144)', () => {
         expect(loadSaved(NOW)?.restaurants).toEqual([LA_CEIBA]);
     });
 
+    it('una copia completa y válida (con almuerzo, precios, horario especial) sigue pasando', () => {
+        const full = {
+            ...LA_CEIBA,
+            categories: [{ slug: 'parrilla', name: 'Parrilla' }],
+            hours: [{ weekday: 6, opens: '11:00', closes: '22:00' }],
+            special_hours: [
+                { date: '2026-12-25', closed: true, opens: null, closes: null },
+                { date: '2026-12-31', closed: false, opens: '10:00', closes: '14:00' },
+            ],
+            delivery: true,
+            fictitious: false,
+            lunch: { date: '2026-10-07', description: 'Sancocho', price: 15_000 },
+            price_range: { min: 9_000, max: 32_000 },
+        };
+        window.localStorage.setItem(SAVED_KEY, JSON.stringify({ version: 1, savedAt: NOW, locale: 'es', restaurants: [full] }));
+
+        expect(loadSaved(NOW)?.restaurants).toEqual([full]);
+    });
+
+    it.each([
+        ['una categoría que no es objeto', { categories: [1] }],
+        ['una categoría sin nombre', { categories: [{ slug: 'x' }] }],
+        ['un horario vacío', { hours: [{}] }],
+        ['un día de la semana fuera de 0 a 6', { hours: [{ weekday: 7, opens: '08:00', closes: '12:00' }] }],
+        ['una hora que no es texto', { hours: [{ weekday: 1, opens: 800, closes: '12:00' }] }],
+        ['un horario especial vacío', { special_hours: [{}] }],
+        ['un horario especial sin «closed» booleano', { special_hours: [{ date: '2026-12-25', closed: 'si', opens: null, closes: null }] }],
+        ['un horario especial con una hora que no es texto ni null', { special_hours: [{ date: '2026-12-25', closed: false, opens: 9, closes: null }] }],
+        ['un almuerzo que es texto', { lunch: 'x' }],
+        ['un almuerzo sin precio numérico', { lunch: { date: '2026-10-07', description: 'Sancocho', price: '15' } }],
+        ['un rango de precios con texto', { price_range: { min: 'a', max: 2 } }],
+        ['un rango de precios con mínimo mayor que el máximo', { price_range: { min: 10, max: 2 } }],
+        ['un rango de precios que es un número', { price_range: 5 }],
+        ['un domicilio que no es booleano', { delivery: 'yes' }],
+        ['una marca de ejemplo que no es booleana', { fictitious: 1 }],
+        ['una longitud fuera de rango', { coordinates: [181, 4.4] }],
+        ['una latitud fuera de rango', { coordinates: [-76.1, 91] }],
+    ])('un restaurante con %s se descarta, y los demás se muestran', (_case, broken) => {
+        window.localStorage.setItem(SAVED_KEY, JSON.stringify({ version: 1, savedAt: NOW, locale: 'es', restaurants: [{ ...LA_CEIBA, ...broken }, EL_GUADUAL] }));
+
+        expect(loadSaved(NOW)?.restaurants).toEqual([EL_GUADUAL]);
+    });
+
     it('una lista demasiado grande no se guarda, y borra la anterior para no mostrar datos viejos', () => {
         saveList('es', [LA_CEIBA], NOW);
         const huge = Array.from({ length: 2_000 }, (_, index) => ({ ...LA_CEIBA, slug: `restaurante-${String(index)}` }));

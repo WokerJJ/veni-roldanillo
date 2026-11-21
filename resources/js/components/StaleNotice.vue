@@ -7,7 +7,8 @@ import { agoText } from '@/restaurants/savedList';
 
 /**
  * El aviso de que la lista de restaurantes es la última que llegó a este
- * teléfono (#144, ADR 0046): «Sin señal: datos de hace 2 horas», con
+ * teléfono (#144, ADR 0046): «Sin señal: datos de hace 2 horas» (o, si el servidor
+ * respondió con un error, «No pudimos actualizar: datos de hace …»), con
  * «Reintentar». Sale sobre el mapa mientras la lista es la guardada; con la
  * señal de vuelta (o al reintentar) llega la de verdad y el aviso se va solo.
  *
@@ -15,7 +16,8 @@ import { agoText } from '@/restaurants/savedList';
  * arranque, con los demás componentes del inicio (components/links.ts). Los
  * estilos van aquí, con alcance, y no en la hoja de estilos del arranque.
  */
-const { since } = defineProps<{ since: number }>();
+/** `answered`: el servidor respondió con un error (hay señal): el texto no dice «sin señal». `busy`: hay un reintento en curso. */
+const { since, answered, busy } = defineProps<{ since: number; answered?: boolean; busy?: boolean }>();
 const emit = defineEmits<{ retry: [] }>();
 
 const { t, locale } = useI18n();
@@ -26,17 +28,24 @@ const time = computed(() => agoText(since, now.value.getTime(), locale.value));
 
 <template>
     <div role="status" class="stale-notice" data-stale>
-        <span class="stale-text">{{ t('restaurants.stale', { time }) }}</span>
-        <button type="button" class="stale-retry" data-stale-retry @click="emit('retry')">{{ t('restaurants.retry') }}</button>
+        <span class="stale-text">{{ t(answered ? 'restaurants.staleFailed' : 'restaurants.stale', { time }) }}</span>
+        <button type="button" class="stale-retry" data-stale-retry :disabled="busy" :aria-busy="busy" @click="emit('retry')">{{ t(busy ? 'restaurants.retrying' : 'restaurants.retry') }}</button>
     </div>
 </template>
 
 <style scoped>
-/* Debajo de la fila de arriba del mapa (el crédito y la ubicación: 10 px + 44 px), con el margen del sistema. */
+/*
+ * Debajo de la fila de arriba del mapa (el crédito y la ubicación: 10 px + 44 px
+ * = 4.25rem con 10 px de aire), con el margen del sistema. Si esa fila cambia
+ * de alto, quien la dibuje define --map-top-controls-offset (con este mismo
+ * valor) y el aviso la sigue; la variable no se declara en la hoja del arranque
+ * para no engordarla (tope de 76 kB, map/bundle.test.ts): el respaldo de aquí
+ * es el valor de map.css (.veni-locate-notice, 64 px) más el aire.
+ */
 .stale-notice {
     position: absolute;
     z-index: 10;
-    top: calc(env(safe-area-inset-top, 0px) + 4.25rem);
+    top: var(--map-top-controls-offset, calc(env(safe-area-inset-top, 0px) + 4.25rem));
     right: 0.5rem;
     left: 0.5rem;
     display: flex;
@@ -84,7 +93,20 @@ const time = computed(() => agoText(since, now.value.getTime(), locale.value));
     opacity: 0.85;
 }
 
-:global([data-theme='dark']) .stale-retry {
+.stale-retry:disabled {
+    opacity: 0.6;
+}
+
+/*
+ * Sobre las teselas oscuras (#1C0F26 de fondo) el borde de 15 % casi no se ve:
+ * lila al 40 % sobre ciruela da ~3,7:1 contra ese fondo y ~3,2:1 contra el
+ * relleno de parques (#2D1D3A), sin vidrio ni transparencia.
+ */
+[data-theme='dark'] .stale-notice {
+    border-color: color-mix(in srgb, var(--veni-lila) 40%, var(--veni-ciruela));
+}
+
+[data-theme='dark'] .stale-retry {
     color: var(--color-veni-ciruela);
     background: var(--color-veni-mango);
 }

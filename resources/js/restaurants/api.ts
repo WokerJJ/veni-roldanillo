@@ -153,7 +153,8 @@ function parseFeature(value: unknown): Restaurant | null {
  * Pide los restaurantes publicados, con las categorías en `locale`. El idioma
  * va en la URL: es lo único que viaja (el pedido sale sin cookies), y cada URL
  * es una sola respuesta que el navegador guarda un minuto. Se rechaza si la
- * respuesta no es un 200 con una FeatureCollection, si se aborta `signal` o si
+ * respuesta no es un 200 con una FeatureCollection (o trae elementos y ninguno es
+ * válido), si se aborta `signal` o si
  * pasa el plazo.
  */
 export async function fetchRestaurants(locale: Locale, signal: AbortSignal): Promise<Restaurant[]> {
@@ -187,7 +188,14 @@ export async function fetchRestaurants(locale: Locale, signal: AbortSignal): Pro
             throw new Error('Restaurantes: la respuesta no es una FeatureCollection.');
         }
 
-        return listOf(body.features, parseFeature);
+        const list = listOf(body.features, parseFeature);
+
+        // Llegaron elementos pero ninguno sirve: forma rota, no «no hay restaurantes». Se rechaza para no pisar la copia guardada con una lista vacía (#144).
+        if (list.length === 0 && body.features.length > 0) {
+            throw new Error('Restaurantes: ningún elemento tiene la forma esperada.');
+        }
+
+        return list;
     } finally {
         clearTimeout(timer);
         signal.removeEventListener('abort', abort);

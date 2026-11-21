@@ -11,7 +11,7 @@ import type * as FakeInertia from '@/testing/inertia';
 vi.mock('@inertiajs/vue3', () => import('@/testing/inertia'));
 
 /*
-| El aviso de mayores de 18 en el carrito (ADR 0049): aparece solo si el
+| El aviso de mayores de 18 en el carrito (ADR 0050): aparece solo si el
 | pedido lleva una bebida alcohólica, en los dos idiomas.
 */
 

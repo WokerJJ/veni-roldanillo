@@ -4,7 +4,7 @@ import type { Draft, MenuDish, MenuSection } from './draft';
 import { dishCount, draftFromReturned, firstInvalidStep, isDishIncomplete, menuProblem, newDraft, toBody, unpricedCount, validateStep } from './draft';
 
 /*
-| La carta en el borrador (ADR 0049): las mismas reglas del servidor (FieldMenu)
+| La carta en el borrador (ADR 0050): las mismas reglas del servidor (FieldMenu)
 | para avisar en el local, sin señal.
 */
 

@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Un grupo del catálogo del modo Campo (ADR 0049): gaseosas, jugos, cervezas,
+ * Un grupo del catálogo del modo Campo (ADR 0050): gaseosas, jugos, cervezas,
  * jugos naturales, adicionales… Dice qué sección del menú crea al aprobar y si
  * sus productos son, por defecto, bebidas alcohólicas. Solo texto.
  */

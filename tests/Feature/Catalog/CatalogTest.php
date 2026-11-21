@@ -26,7 +26,7 @@ function catalogViolation(Closure $write): bool
 }
 
 /**
- * El catálogo del modo Campo (ADR 0049): solo texto, el seeder solo agrega y
+ * El catálogo del modo Campo (ADR 0050): solo texto, el seeder solo agrega y
  * es de administración.
  */
 test('el seeder carga lo común en Colombia, con cervezas y licores marcados como alcohol', function () {

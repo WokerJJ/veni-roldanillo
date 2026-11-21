@@ -8,7 +8,7 @@ use App\Models\CatalogVariant;
 use Illuminate\Database\Seeder;
 
 /**
- * El catálogo de partida del modo Campo (ADR 0049): lo que más se repite en
+ * El catálogo de partida del modo Campo (ADR 0050): lo que más se repite en
  * la carta de un restaurante colombiano, con sus presentaciones típicas.
  *
  * A diferencia de los seeders de ejemplo, es DATO DE REFERENCIA real y se

@@ -90,7 +90,7 @@ export function orderMessage(items: readonly OrderItem[], details: OrderDetails,
 
     const blocks: string[][] = [[t('order.message.greeting'), ...items.flatMap((item) => itemLines(item, t, money))]];
 
-    // Un pedido con bebidas alcohólicas lo dice (ADR 0049): quien lo atiende sabe que la entrega es solo a mayores de 18.
+    // Un pedido con bebidas alcohólicas lo dice (ADR 0050): quien lo atiende sabe que la entrega es solo a mayores de 18.
     if (items.some((item) => item.alcohol === true)) {
         blocks.push([t('order.message.alcohol')]);
     }

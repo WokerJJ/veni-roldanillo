@@ -130,7 +130,7 @@ final class ApproveFieldSubmission
     }
 
     /**
-     * Las secciones y los platos de la carta capturada (ADR 0049). El inglés de
+     * Las secciones y los platos de la carta capturada (ADR 0050). El inglés de
      * un plato de catálogo sale del catálogo si el teléfono no lo mandó: no es
      * parte de lo que firma el dueño. La marca de alcohol nunca baja respecto del
      * catálogo (producto o grupo alcohólico). Cada sección propone si cuenta para el

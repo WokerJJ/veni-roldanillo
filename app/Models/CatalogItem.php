@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Un producto del catálogo (ADR 0049): «Manzana» de la marca «Postobón», o
+ * Un producto del catálogo (ADR 0050): «Manzana» de la marca «Postobón», o
  * «Jugo de mora». El nombre del plato es el del producto, su marca y su
  * presentación (`dishName`). Solo texto: nunca logos ni imágenes de marca.
  */
