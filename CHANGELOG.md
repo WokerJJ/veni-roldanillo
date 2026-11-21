@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.1](https://github.com/WokerJJ/veni-roldanillo/compare/v0.8.0...v0.8.1) (2026-11-21)
+
+
+### Funcionalidades
+
+* **campo:** la carta y el catálogo de bebidas en la captura (etapa 2) ([bd1e51b](https://github.com/WokerJJ/veni-roldanillo/commit/bd1e51ba6b11f9cf7ccd0b2f1924f01ecaf7be4a))
+
+
+### Correcciones
+
+* **despliegue:** deploy.sh escribe el .env encima cuando mv no puede, en Windows ([#181](https://github.com/WokerJJ/veni-roldanillo/issues/181)) ([569b80f](https://github.com/WokerJJ/veni-roldanillo/commit/569b80f6b78672386903a3e35354268105534c2e))
+
 ## [0.8.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.7.0...v0.8.0) (2026-11-21)
 
 
