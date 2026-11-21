@@ -76,17 +76,19 @@ describe('quién lo ve', function () {
     test('cada widget se niega a quien no es admin, aunque llegue a su componente', function () {
         $restaurant = Restaurant::factory()->claimed()->create();
         $owner = panelMember($restaurant);
+        $widgets = [CatalogStatusWidget::class, MenuFreshnessWidget::class, OrderIntentsWidget::class];
 
-        $this->actingAs($owner);
         Filament::setCurrentPanel(Filament::getPanel('admin'));
 
-        foreach ([CatalogStatusWidget::class, MenuFreshnessWidget::class, OrderIntentsWidget::class] as $widget) {
+        foreach ($widgets as $widget) {
             expect($widget::canView())->toBeFalse();
+            // Filament autoriza en bootCanAuthorizeAccess, antes de mount(): se fija aquí por si cambia.
+            Livewire::actingAs($owner)->test($widget)->assertForbidden();
         }
 
         dashboardAdmin();
 
-        foreach ([CatalogStatusWidget::class, MenuFreshnessWidget::class, OrderIntentsWidget::class] as $widget) {
+        foreach ($widgets as $widget) {
             expect($widget::canView())->toBeTrue();
         }
     });
