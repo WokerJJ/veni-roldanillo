@@ -13,8 +13,9 @@ use Illuminate\Support\Facades\DB;
 /**
  * Estado del catálogo (Escritorio de administración): cuántas fichas hay
  * publicadas (sin reclamar y reclamadas), cuántas ocultas y cuántas
- * solicitudes esperan una decisión. Cuatro conteos sobre columnas que ya
- * tienen índice (status; status + created_at).
+ * solicitudes esperan una decisión. Son conteos pequeños: restaurants.status
+ * no tiene índice (un recorrido de la tabla, de cientos de filas a lo sumo);
+ * las solicitudes pendientes son aún menos.
  */
 final readonly class CatalogOverview
 {
