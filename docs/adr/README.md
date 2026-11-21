@@ -53,3 +53,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0047](0047-arranque-sin-lo-que-veni-no-usa-de-inertia-y-vue.md) | El arranque sin lo que Vení no usa de Inertia y de Vue | Aceptada |
 | [0048](0048-modo-campo-captura-en-el-local.md) | Modo «Campo»: captura de fichas en el local desde el celular, sin señal, con dos firmas (administración y dueño) antes de publicar | Aceptada |
 | [0049](0049-dominio-de-pruebas-no-indexable-y-primer-administrador-por-consola.md) | Dominio de pruebas que no se indexa y primer administrador por consola | Aceptada |
+| [0050](0050-escritorio-de-administracion-con-datos-que-ya-existen.md) | Escritorio de administración: tres widgets de solo lectura sobre datos que ya existen | Aceptada |
