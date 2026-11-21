@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.7.0...v0.8.0) (2026-11-21)
+
+
+### Funcionalidades
+
+* **admin:** Escritorio con estado del catálogo, frescura de menús y toques de WhatsApp ([#176](https://github.com/WokerJJ/veni-roldanillo/issues/176)) ([36a2468](https://github.com/WokerJJ/veni-roldanillo/commit/36a2468a0aad4949e1486b5a8ed2af7cd8f41ee4))
+
+
+### Rendimiento
+
+* **inicio:** adelanta el motor del mapa y evita el salto del panel ([#177](https://github.com/WokerJJ/veni-roldanillo/issues/177)) ([#178](https://github.com/WokerJJ/veni-roldanillo/issues/178)) ([38075f1](https://github.com/WokerJJ/veni-roldanillo/commit/38075f102496287b6a230b7a7c5b44ced60e6de8))
+
 ## [0.7.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.6.0...v0.7.0) (2026-11-20)
 
 
