@@ -54,7 +54,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * @phpstan-type ProfileIngredient array{name: string, essential: bool, in_dish: bool, sold_out_until: string, substitute: ProfileSubstitute|null}
  * @phpstan-type ProfileOptionGroup array{name: string, kind: string, min: int, max: int, options: list<ProfileOption>}
  * @phpstan-type ProfileImage array{src: string, srcset: string}
- * @phpstan-type ProfileDish array{name: string, name_es?: string, description: string|null, price: int, sold_out_until: string|null, photo: ProfileImage|null, ingredients: list<ProfileIngredient>, contains: list<ProfileContent>, groups: list<ProfileOptionGroup>}
+ * @phpstan-type ProfileDish array{name: string, name_es?: string, description: string|null, price: int, alcohol: bool, sold_out_until: string|null, photo: ProfileImage|null, ingredients: list<ProfileIngredient>, contains: list<ProfileContent>, groups: list<ProfileOptionGroup>}
  * @phpstan-type ProfilePromotion array{title: string, ends_at: string, image: ProfileImage|null}
  * @phpstan-type ProfileSection array{name: string, dishes: list<ProfileDish>}
  * @phpstan-type Profile array{
@@ -221,6 +221,7 @@ class RestaurantProfile extends JsonResource
             ...$this->names($dish),
             'description' => $dish->translated('description', $this->locale),
             'price' => $dish->price,
+            'alcohol' => $dish->is_alcohol,
             // «Agotado hoy» vale hasta esta fecha, incluida. Si
             // hoy está agotado lo dice el dispositivo, como
             // «abierto ahora»: la ficha puede quedar abierta de

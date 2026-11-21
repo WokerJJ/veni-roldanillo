@@ -17,7 +17,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * @phpstan-type FieldPayload array{name: string, category_ids: list<int>, address: string, reference: string|null, phone: string|null, whatsapp: string|null, delivery: bool, payment_methods: list<string>, hours: list<array{weekday: int, opens: string, closes: string}>}
+ * @phpstan-type FieldPayload array{name: string, category_ids: list<int>, address: string, reference: string|null, phone: string|null, whatsapp: string|null, delivery: bool, payment_methods: list<string>, hours: list<array{weekday: int, opens: string, closes: string}>, menu?: list<array{name_es: string, name_en: string|null, dishes: list<array{name_es: string, name_en: string|null, price: int, is_alcohol: bool, catalog_variant_id: int|null}>}>}
  *
  * Captura de una ficha en el local (modo Campo, ADR 0048). Todo lo escribe
  * el servidor desde una petición validada: no hay campos asignables en masa.
@@ -46,7 +46,7 @@ class FieldSubmission extends Model
     use HasFactory, MassPrunable;
 
     /** Versión del texto provisional de la autorización del dueño (ADR 0048). */
-    public const string AUTHORIZATION_VERSION = '0.1';
+    public const string AUTHORIZATION_VERSION = '0.2';
 
     public const int CONFIRMATION_DAYS = 7;
 
@@ -57,7 +57,7 @@ class FieldSubmission extends Model
         'status' => 'submitted',
         'kind' => 'new_restaurant',
         'revision' => 1,
-        'payload_version' => 1,
+        'payload_version' => 2,
     ];
 
     /**
@@ -88,6 +88,12 @@ class FieldSubmission extends Model
      */
     public static function hashContent(array $payload, GeoPoint $location, string $ownerName, string $ownerRole, string $ownerPhone): string
     {
+        // Sin carta es lo mismo que una carta vacía (la etapa 1 no traía `menu`): una sola huella.
+        // Se omite, y no se agrega, para que las huellas que ya firmaron los dueños sigan valiendo.
+        if (($payload['menu'] ?? []) === []) {
+            unset($payload['menu']);
+        }
+
         return hash('sha256', json_encode([
             'payload' => self::canonical($payload),
             'lat' => sprintf('%.7F', $location->latitude),

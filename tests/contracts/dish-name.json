@@ -1,0 +1,17 @@
+{
+    "description": "El nombre de un plato del catálogo: producto + marca + presentación. Lo calculan CatalogItem::dishName (servidor, al aprobar) y dishName de resources/campo/catalog.ts (teléfono, al capturar) y tienen que coincidir: el nombre que ve quien captura es el que se guarda. Cambiar una regla es cambiar este archivo.",
+    "cases": [
+        { "case": "producto, marca y presentación", "name": "Manzana", "brand": "Postobón", "label": "400 ml", "expected": "Manzana Postobón 400 ml" },
+        { "case": "sin marca", "name": "Mora", "brand": null, "label": "Jarra", "expected": "Mora Jarra" },
+        { "case": "sin marca ni presentación", "name": "Arroz", "brand": null, "label": null, "expected": "Arroz" },
+        { "case": "marca y presentación en blanco", "name": "Arroz", "brand": "  ", "label": " ", "expected": "Arroz" },
+        { "case": "marca vacía", "name": "Arroz", "brand": "", "label": "Plato", "expected": "Arroz Plato" },
+        { "case": "el producto ya nombra la marca", "name": "Cerveza Águila", "brand": "Águila", "label": "Botella 330 ml", "expected": "Cerveza Águila Botella 330 ml" },
+        { "case": "la marca ya nombrada con otras mayúsculas", "name": "Coca-Cola", "brand": "coca-cola", "label": "400 ml", "expected": "Coca-Cola 400 ml" },
+        { "case": "la marca con tilde y la eñe en mayúsculas", "name": "Jugo de Piña", "brand": "PIÑA", "label": "Vaso", "expected": "Jugo de Piña Vaso" },
+        { "case": "la marca con espacios alrededor, ya nombrada", "name": "Cerveza águila", "brand": "  Águila  ", "label": null, "expected": "Cerveza águila" },
+        { "case": "la marca con espacios alrededor, no nombrada", "name": "Malta", "brand": "  Pony  ", "label": "330 ml", "expected": "Malta Pony 330 ml" },
+        { "case": "la presentación con coma decimal", "name": "Gaseosa", "brand": "Colombiana", "label": "1,5 L", "expected": "Gaseosa Colombiana 1,5 L" },
+        { "case": "un producto sin presentación y con marca", "name": "Aguardiente", "brand": "Néctar", "label": null, "expected": "Aguardiente Néctar" }
+    ]
+}

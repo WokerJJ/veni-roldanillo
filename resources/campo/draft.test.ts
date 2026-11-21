@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Draft } from './draft';
-import { draftFromReturned, firstInvalidStep, hoursAreValid, newDraft, normalizeMobile, publishedDuplicates, toBody, validateStep } from './draft';
+import { draftFromReturned, firstInvalidStep, hoursAreValid, newDraft, normalizeMobile, publishedDuplicates, STEPS, toBody, validateStep } from './draft';
 
 function complete(overrides: Partial<Draft> = {}): Draft {
     return {
@@ -157,6 +157,6 @@ describe('draftFromReturned', () => {
 
         expect(draft).toMatchObject({ uuid: '22222222-2222-4222-8222-222222222222', name: 'Sazón del Parque', returnNote: 'Falta la referencia', ownerPhone: '573004445566', purposeExplained: true });
         expect(firstInvalidStep(draft)).toBeNull();
-        expect(draft.step).toBe(6);
+        expect(draft.step).toBe(STEPS.indexOf('review'));
     });
 });

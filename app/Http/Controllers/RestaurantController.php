@@ -63,7 +63,7 @@ class RestaurantController extends Controller
                     $dishes
                         ->select([
                             'id', 'restaurant_id', 'menu_section_id', 'name_es', 'name_en',
-                            'description_es', 'description_en', 'price', 'photo_path', 'available', 'sold_out_until', 'position',
+                            'description_es', 'description_en', 'price', 'is_alcohol', 'photo_path', 'available', 'sold_out_until', 'position',
                         ])
                         ->where('available', true);
                 },

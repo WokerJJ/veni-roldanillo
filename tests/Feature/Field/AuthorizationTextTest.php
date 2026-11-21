@@ -16,6 +16,8 @@ const FIELD_AUTHORIZATION_KEYS = [
     'confirm.role_owner',
     'confirm.role_manager',
     'confirm.authorization_title',
+    'confirm.menu_title',
+    'confirm.alcohol_note',
     'confirm.authorization',
     'confirm.privacy',
     'confirm.privacy_link',

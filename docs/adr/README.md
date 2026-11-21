@@ -55,3 +55,4 @@ Cada decisión importante queda en un archivo numerado con su contexto, la decis
 | [0049](0049-dominio-de-pruebas-no-indexable-y-primer-administrador-por-consola.md) | Dominio de pruebas que no se indexa y primer administrador por consola | Aceptada |
 | [0050](0050-escritorio-de-administracion-con-datos-que-ya-existen.md) | Escritorio de administración: tres widgets de solo lectura sobre datos que ya existen | Aceptada |
 | [0051](0051-arranque-del-mapa-medido-motor-adelantado-y-panel-sin-saltos.md) | El arranque del mapa, medido: el motor se adelanta desde el HTML y el panel de un enlace compartido nace con su alto | Aceptada |
+| [0052](0052-modo-campo-etapa-2-menu-y-catalogo.md) | Modo «Campo», etapa 2: la carta en la captura, un catálogo de productos y las bebidas alcohólicas con aviso de mayores de 18 | Aceptada |

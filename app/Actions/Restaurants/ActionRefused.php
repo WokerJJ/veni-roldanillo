@@ -59,6 +59,8 @@ final class ActionRefused extends RuntimeException
 
     public const CODE_INVALID = 'code_invalid';
 
+    public const MENU_EXISTS = 'menu_exists';
+
     // Primer administrador (veni:make-admin).
     public const INVALID_NAME = 'invalid_name';
 

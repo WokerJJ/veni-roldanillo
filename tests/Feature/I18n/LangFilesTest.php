@@ -243,8 +243,8 @@ test('los textos de /campo tienen las mismas claves en los dos idiomas y existen
         'status.editing', 'status.ready', 'status.error',
         ...array_map(fn (PaymentMethod $m): string => "payment.{$m->value}", PaymentMethod::cases()),
         ...array_map(fn (ClaimantRole $r): string => "fields.owner_role_{$r->value}", ClaimantRole::cases()),
-        ...array_map(fn (string $step): string => "steps.{$step}", ['basics', 'place', 'duplicates', 'contact', 'hours', 'owner', 'review']),
-        ...array_map(fn (string $code): string => "errors.{$code}", ['required', 'invalid', 'too_short', 'whatsapp', 'phone', 'hours', 'location', 'categories', 'purpose']),
+        ...array_map(fn (string $step): string => "steps.{$step}", ['basics', 'place', 'duplicates', 'contact', 'hours', 'menu', 'catalog', 'owner', 'review']),
+        ...array_map(fn (string $code): string => "errors.{$code}", ['required', 'invalid', 'too_short', 'whatsapp', 'phone', 'hours', 'location', 'categories', 'purpose', 'menu_dish', 'menu_section', 'menu_duplicate_section', 'menu_duplicate_dish', 'menu_too_many']),
         ...array_map(fn (string $status): string => "duplicates.status_{$status}", ['hidden', 'unclaimed', 'claimed', 'submitted', 'owner_confirmed']),
     ];
     expect(array_values(array_diff($dynamic, $keys)))->toBe([], 'Faltan claves de /campo que el código arma con un valor');
