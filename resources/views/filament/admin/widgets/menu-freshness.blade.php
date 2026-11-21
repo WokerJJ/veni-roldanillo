@@ -17,7 +17,7 @@
         @else
             <p data-summary style="margin: 0 0 1rem; font-weight: 500">{{ __('panel.admin.dashboard.freshness.summary', ['stale' => $freshness['stale'], 'total' => $freshness['total'], 'days' => $stale]) }}</p>
             <div style="overflow-x: auto" tabindex="0" role="region" aria-label="{{ __('panel.admin.dashboard.freshness.heading') }}">
-                <table style="width: 100%; min-width: 24rem; border-collapse: collapse; font-size: 0.875rem; line-height: 1.25rem">
+                <table style="width: 100%; min-width: 17rem; border-collapse: collapse; font-size: 0.875rem; line-height: 1.25rem">
                     <caption style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0">{{ __('panel.admin.dashboard.freshness.heading') }}</caption>
                     <thead>
                         <tr style="text-align: start; {{ $muted }}">
@@ -43,7 +43,7 @@
                                 <td style="padding: 0.625rem 1rem 0.625rem 0; white-space: nowrap; font-variant-numeric: tabular-nums">
                                     {{ $row->last_at?->locale($locale)->isoFormat('D MMM YYYY') ?? '—' }}
                                 </td>
-                                <td style="padding: 0.625rem 0; white-space: nowrap" data-since>
+                                <td style="padding: 0.625rem 0" data-since>
                                     @if ($row->days === null)
                                         <strong>{{ __('panel.admin.dashboard.freshness.never') }}</strong>
                                     @elseif ($row->days >= $stale)

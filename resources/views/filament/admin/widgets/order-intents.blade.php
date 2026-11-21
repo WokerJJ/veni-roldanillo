@@ -87,7 +87,7 @@
                     <p style="{{ $muted }}; margin: 0" data-empty>{{ __('panel.admin.dashboard.clicks.empty', ['days' => $days]) }}</p>
                 @else
                     <div style="overflow-x: auto" tabindex="0" role="region" aria-label="{{ __('panel.admin.dashboard.clicks.ranking') }}">
-                    <table style="width: 100%; min-width: 20rem; border-collapse: collapse; font-size: 0.875rem; line-height: 1.25rem">
+                    <table style="width: 100%; min-width: 17rem; border-collapse: collapse; font-size: 0.875rem; line-height: 1.25rem">
                         <caption style="{{ $sr }}">{{ __('panel.admin.dashboard.clicks.ranking') }}</caption>
                         <thead>
                             <tr style="{{ $muted }}">
