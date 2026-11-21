@@ -76,7 +76,7 @@
         --}}
         @if (($page['component'] ?? null) === 'Home')
             @foreach (\App\Support\MapPreload::engineModules() as $module)
-                <link rel="modulepreload" href="{{ $module }}" nonce="{{ Vite::cspNonce() }}">
+                <link rel="modulepreload" href="{{ $module }}" nonce="{{ Vite::cspNonce() }}" data-map-engine>
             @endforeach
         @endif
         <x-inertia::head>

@@ -135,8 +135,8 @@ test('el inicio adelanta el motor del mapa, después de la entrada y de la pági
     expect($nonce)->not->toBeEmpty();
 
     $page = '<script type="module" src="'.asset('build/assets/Home-prueba.js').'"';
-    $engine = '<link rel="modulepreload" href="'.asset('build/assets/engine-prueba.js').'" nonce="'.$nonce.'">';
-    $shared = '<link rel="modulepreload" href="'.asset('build/assets/motor-compartido-prueba.js').'" nonce="'.$nonce.'">';
+    $engine = '<link rel="modulepreload" href="'.asset('build/assets/engine-prueba.js').'" nonce="'.$nonce.'" data-map-engine>';
+    $shared = '<link rel="modulepreload" href="'.asset('build/assets/motor-compartido-prueba.js').'" nonce="'.$nonce.'" data-map-engine>';
 
     expect($html)
         ->toContain($page)
