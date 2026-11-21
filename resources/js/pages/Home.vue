@@ -214,6 +214,23 @@ const page = usePage();
  * dirección solo viaja el restaurante, nunca la ubicación de quien usa el mapa.
  */
 let requestedSlug = selectedFromUrl(page.url);
+/**
+ * Se abrió con un restaurante pedido en la dirección: el panel de abajo del
+ * celular nace a media altura, que es la que va a tener su resumen, y la
+ * conserva (`min-height`) desde el primer pintado, mientras llegan la lista y
+ * el resumen y cuando este aparece. Sin eso crecía de golpe (CLS, ADR 0050).
+ * Se suelta en cuanto el panel deja de ser «el resumen de ese enlace»: el
+ * enlace no era de un restaurante que se vea, se cerró el resumen, se pidió la
+ * ruta, se eligió otro restaurante o se cambió la altura con la manija.
+ */
+const waitingForShared = ref(requestedSlug !== null);
+/** El restaurante de ese enlace: `requestedSlug` se vacía al llegar la lista, y con otro elegido la reserva ya no es de este panel. */
+const sharedSlug = requestedSlug;
+
+/** Único lugar donde se suelta la reserva del alto del resumen (ADR 0050). */
+function releaseSharedReserve(): void {
+    waitingForShared.value = false;
+}
 
 /** El inicio abrió la lista porque la dirección traía filtros: al bajar finder.ts se consume ese «una vez». */
 let listFromAddress = false;
@@ -314,7 +331,7 @@ const panel = computed(() => sheet.value?.root ?? null);
  * ahí, quien usa la app la cambia con la manija.
  */
 // Abierta con la lista (la barra de pestañas la pidió desde otra página), a la altura completa.
-const sheetSnap = ref<SheetSnap>(listOpen.value === false ? 'peek' : 'full');
+const sheetSnap = ref<SheetSnap>(listOpen.value !== false ? 'full' : waitingForShared.value ? 'half' : 'peek');
 const panelView = computed(() => {
     if (selected.value) {
         return directionsOpen.value ? 'route' : 'summary';
@@ -327,8 +344,28 @@ const panelView = computed(() => {
     return status.value === 'error' || (status.value === 'ready' && !hasRestaurants.value) || panelPartsFailed.value ? 'notice' : 'welcome';
 });
 
+/** El panel de abajo del celular, con el alto del resumen reservado (ADR 0050): sin conexión a la lista el aviso se ajusta a su texto. */
+const reserveSheet = computed(() => waitingForShared.value && !desktop.value && status.value !== 'error' && !panelPartsFailed.value);
+
+watch([sheetSnap, selectedSlug, directionsOpen], ([snap, slug, route]) => {
+    if (!waitingForShared.value) {
+        return;
+    }
+
+    // `requestedSlug` sigue pendiente mientras llega la lista: con el resumen aún sin elegir no se suelta.
+    // Se suelta si cambia la altura, se pide la ruta, se cierra el resumen o se elige otro restaurante.
+    if (snap !== 'half' || route || (slug === null && requestedSlug === null) || (slug !== null && slug !== sharedSlug)) {
+        releaseSharedReserve();
+    }
+});
+
 // La lista, a la altura completa (#138, A2): a media altura entraban dos o tres filas.
 watch(panelView, (view) => {
+    // Esperando el resumen de un enlace (p. ej. al reintentar la lista), la bienvenida no asoma el panel: soltaría la reserva sin que nadie lo haya tocado.
+    if (view === 'welcome' && waitingForShared.value && requestedSlug !== null) {
+        return;
+    }
+
     sheetSnap.value = view === 'welcome' ? 'peek' : view === 'list' ? 'full' : 'half';
 });
 
@@ -494,6 +531,13 @@ watch(status, (current) => {
             openDirections();
         }
     } else {
+        // El enlace no es de un restaurante que se vea: sin resumen que esperar, el panel vuelve a asomarse.
+        releaseSharedReserve();
+
+        if (panelView.value === 'welcome') {
+            sheetSnap.value = 'peek';
+        }
+
         syncUrl(null);
     }
 });
@@ -626,7 +670,7 @@ onBeforeUnmount(() => {
             :role="desktop ? 'region' : undefined"
             :aria-label="desktop ? t('home.sidebar_label') : undefined"
             class="z-10"
-            :class="classes.sheet"
+            :class="[classes.sheet, { 'sheet:min-h-(--sheet-height)': reserveSheet }]"
         >
             <!-- El título de la página sigue en el documento aunque el panel muestre otra cosa. -->
             <h1 :class="[!desktop && panelParts && (selected || listOpen) ? 'sr-only' : 'text-lg md:text-2xl', { 'sheet:sr-only': quietPanel }]">{{ t('home.heading') }}</h1>
