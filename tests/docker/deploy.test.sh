@@ -272,6 +272,36 @@ si_falla_search_sync_el_despliegue_sigue() {
     grep -q '^compose exec -d app php artisan veni:search-sync' "$calls" || fail "no lanzó veni:search-sync"
 }
 
+si_mv_no_puede_reemplazar_el_env_lo_escribe_encima() {
+    # Como en Windows con un contenedor que tiene el .env abierto: mv falla sobre él.
+    cat > "$bin/mv" <<'SH'
+#!/bin/sh
+case "$*" in
+    *' .env') echo "mv: cannot move '.env.nuevo' to '.env': Permission denied" >&2; exit 1 ;;
+esac
+exec /bin/mv "$@"
+SH
+    chmod +x "$bin/mv"
+    run_deploy "$new_image"
+    assert_ok || return 1
+    assert_env_only_changed "APP_IMAGE=$old_image" "APP_IMAGE=$new_image" || return 1
+    [ ! -e "$server/.env.nuevo" ] || fail "quedó el archivo temporal .env.nuevo"
+}
+
+si_falla_el_arranque_y_mv_no_puede_el_env_vuelve_al_anterior() {
+    cat > "$bin/mv" <<'SH'
+#!/bin/sh
+case "$*" in
+    *' .env') echo "mv: Permission denied" >&2; exit 1 ;;
+esac
+exec /bin/mv "$@"
+SH
+    chmod +x "$bin/mv"
+    FAKE_DOCKER_FAILS=up run_deploy "$new_image"
+    assert_failed || return 1
+    assert_env_untouched || return 1
+}
+
 # --- Ejecución -----------------------------------------------------------------
 
 run_test() {
@@ -299,6 +329,8 @@ run_test repetir_la_misma_version_no_reescribe_el_env
 run_test los_registros_quedan_en_el_servidor_y_no_en_la_salida
 run_test leido_por_la_entrada_estandar_llega_a_la_ultima_linea
 run_test si_falla_search_sync_el_despliegue_sigue
+run_test si_mv_no_puede_reemplazar_el_env_lo_escribe_encima
+run_test si_falla_el_arranque_y_mv_no_puede_el_env_vuelve_al_anterior
 
 echo
 echo "$((total - failures)) de $total pruebas pasaron"
