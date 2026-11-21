@@ -13,7 +13,7 @@ import { currentLocale, t } from '../texts';
 
 /**
  * Paso 7: bebidas de marca y otros paquetes que se repiten, del catálogo
- * (ADR 0050). Se toca el grupo y la marca, se marcan los productos y sus
+ * (ADR 0052). Se toca el grupo y la marca, se marcan los productos y sus
  * presentaciones, y los precios se ponen por tamaño («todas las de 400 ml:
  * $3.500») y se ajustan plato por plato. Una sola pasada crea todos los
  * platos de su sección. El catálogo viaja en el teléfono: funciona sin señal.

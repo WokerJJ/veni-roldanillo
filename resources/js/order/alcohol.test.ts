@@ -15,7 +15,7 @@ import { emptySelection, toOrderItem } from './selection';
 import { loadCart, saveCart } from './storage';
 
 /*
-| Las bebidas alcohólicas en el pedido (ADR 0050): el plato lo marca, el
+| Las bebidas alcohólicas en el pedido (ADR 0052): el plato lo marca, el
 | ítem lo conserva, el carrito guardado no lo pierde y el mensaje de WhatsApp
 | lo dice. Un pedido sin alcohol sale exactamente igual que antes.
 */

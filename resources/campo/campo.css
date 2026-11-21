@@ -587,7 +587,7 @@ p {
     }
 }
 
-/* Carta y catálogo (ADR 0050) */
+/* Carta y catálogo (ADR 0052) */
 .chip {
     display: inline-flex;
     min-height: 2.75rem;

@@ -38,7 +38,7 @@ export interface MetaCache {
     userName: string;
     categories: Category[];
     paymentMethods: string[];
-    /** El catálogo de productos (ADR 0050), para armar la carta sin señal. Opcional: lo guardado antes no lo trae. */
+    /** El catálogo de productos (ADR 0052), para armar la carta sin señal. Opcional: lo guardado antes no lo trae. */
     catalog?: Catalog;
 }
 
