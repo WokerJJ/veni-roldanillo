@@ -320,6 +320,25 @@ still_running() {
     done
 }
 
+# El PHP de la imagen tiene que dejar llegar una foto del tamaño que promete la
+# app (config/media.php, ADR 0034): con php.ini-production a secas se corta en
+# 2 MB, antes de que las reglas de la app la vean. El archivo va por debajo del
+# tope de subida y el cuerpo de la petición, por encima, porque el multipart
+# pesa más que el archivo.
+php_accepts_app_uploads() {
+    # shellcheck disable=SC2016 # Las variables son de PHP, no del shell.
+    docker run --rm --entrypoint php "$image" -r '
+        require "/app/vendor/autoload.php";
+        $app = (require "/app/config/media.php")["max_kilobytes"] * 1024;
+        $upload = ini_parse_quantity(ini_get("upload_max_filesize"));
+        $post = ini_parse_quantity(ini_get("post_max_size"));
+        if ($upload <= $app || $post <= $upload) {
+            echo "    la app promete $app bytes; upload_max_filesize=$upload, post_max_size=$post\n";
+            exit(1);
+        }
+    '
+}
+
 # --- Seguridad HTTP (ADR 0014) -------------------------------------------------
 
 # Una variable del entorno de la imagen, sin la entrada ni el .env.
@@ -741,6 +760,7 @@ check "la imagen no corre como root" in_image 'test "$(id -u)" != 0'
 check "la imagen no trae la entrada de desarrollo" in_image 'test ! -e /app/docker/entrypoint-dev.sh'
 check "la imagen no trae un .env" in_image 'test ! -e /app/.env'
 check "la imagen no trae Composer" in_image '! command -v composer > /dev/null'
+check "PHP deja subir fotos del tamaño que promete la app" php_accepts_app_uploads
 
 # El mapa con que se compiló el JavaScript, que la imagen deja en su entorno.
 map_style_url=$(image_env VITE_MAP_STYLE_URL)
