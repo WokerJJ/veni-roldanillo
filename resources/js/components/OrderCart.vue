@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useId, useTemplateRef, watch } from 'vue';
 
 import Icon from '@/components/Icon.vue';
 import { useNow } from '@/composables/useNow';
@@ -23,10 +23,10 @@ import { orderMessage, whatsappNumber, whatsappUrl } from '@/order/message';
 import { lineProblem } from '@/order/reconcile';
 import { businessDay } from '@/restaurants/openStatus';
 import type { OrderItem } from '@/order/selection';
-import { MAX_QUANTITY, MIN_QUANTITY } from '@/order/selection';
+import { isOrderable, MAX_QUANTITY, MIN_QUANTITY } from '@/order/selection';
 import { forgetDelivery, loadDelivery } from '@/order/storage';
 import { useOrder } from '@/order/useOrder';
-import type { PaymentMethod, RestaurantProfile } from '@/restaurants/profile';
+import type { PaymentMethod, MenuDish, RestaurantProfile } from '@/restaurants/profile';
 import { PAYMENT_METHOD_KEYS, knownPaymentMethods } from '@/restaurants/profile';
 import type { AddressLabel, AddressLabelKind, SavedAddress } from '@/saved/addresses';
 import { isStored, LABEL_MAX_LENGTH, MAX_ADDRESSES, useAddressBook } from '@/saved/addresses';
@@ -235,6 +235,62 @@ const lineProblems = computed(() => {
     return items.value.map((item) => (dishes === undefined ? null : lineProblem(item, dishes, today.value)));
 });
 const blocked = computed(() => lineProblems.value.some((problem) => problem !== null));
+
+/**
+ * El plato de la carta de hoy con el que se puede cambiar cada línea, o null:
+ * ya no está, hoy no se pide o no tiene nada que elegir. Con dos platos del
+ * mismo nombre, el que cuadra con la línea.
+ */
+const editableDishes = computed(() => {
+    const dishes = restaurant.menu?.flatMap((section) => section.dishes) ?? [];
+
+    return items.value.map((item) => {
+        const candidates = dishes.filter((dish) => (dish.name === item.dish || dish.name_es === item.dish) && dish.groups.length > 0 && isOrderable(dish, today.value));
+
+        return candidates.find((dish) => lineProblem(item, [dish], today.value) === null) ?? candidates[0] ?? null;
+    });
+});
+
+/*
+| Cambiar una línea: el selector del plato, con lo ya elegido, encima del
+| carrito. Baja con import() recién al tocarlo (la ficha casi siempre ya lo
+| tiene). Al cerrarse, el foco vuelve a «Cambiar» de esa línea o al título.
+*/
+const editing = shallowRef<{ index: number; item: OrderItem; dish: MenuDish } | null>(null);
+const {
+    Dialog: Picker,
+    open: picking,
+    show: openPicker,
+    close: closePicker,
+} = useLazyDialog(
+    () => import('@/components/DishPicker.vue'),
+    'carrito',
+    () => {
+        const line = editing.value?.index ?? -1;
+        editing.value = null;
+        (dialog.value?.querySelectorAll<HTMLElement>('[data-line]')[line]?.querySelector<HTMLElement>('[data-change]') ?? title.value)?.focus();
+    },
+);
+
+function change(index: number): void {
+    const item = items.value[index];
+    const dish = editableDishes.value[index];
+
+    if (item !== undefined && dish) {
+        editing.value = { index, item, dish };
+        openPicker();
+    }
+}
+
+async function save(next: OrderItem): Promise<void> {
+    // Si mientras tanto la línea cambió (otra pestaña), no se pisa otra.
+    if (editing.value !== null && items.value[editing.value.index] === editing.value.item) {
+        order.replace(editing.value.index, next);
+    }
+
+    await closePicker();
+    await announce(t('order.cart.changed', { name: next.dish }));
+}
 
 const message = computed(() => orderMessage(items.value, details.value, context.value, t, money));
 const href = computed(() => (number.value === null ? null : whatsappUrl(number.value, message.value)));
@@ -716,6 +772,16 @@ onBeforeUnmount(() => {
                                     </button>
                                 </div>
                                 <button
+                                    v-if="editableDishes[index]"
+                                    type="button"
+                                    class="ml-auto inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
+                                    :aria-label="t('order.cart.change_label', { name: item.dish })"
+                                    data-change
+                                    @click="change(index)"
+                                >
+                                    {{ t('order.cart.change') }}
+                                </button>
+                                <button
                                     type="button"
                                     class="inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
                                     :aria-label="t('order.cart.remove_label', { name: item.dish })"
@@ -1103,6 +1169,8 @@ onBeforeUnmount(() => {
 
         <!-- «Editar o borrar tus direcciones»: otro diálogo encima de este, solo con la libreta. -->
         <Manager v-if="managing" @close="closeManager" />
+        <!-- «Cambiar» una línea: el selector del plato, también encima. -->
+        <Picker v-if="picking && editing" :dish="editing.dish" :item="editing.item" :today="today" @add="save" @close="closePicker" />
     </dialog>
 </template>
 

@@ -89,6 +89,59 @@ export function emptySelection(dish: MenuDish): DishSelection {
 }
 
 /**
+ * La selección que dio una línea del pedido, para cambiarla desde el
+ * carrito. La línea guarda nombres, no ids (ADR 0018): lo que ya no está en
+ * la carta se pierde, y se ve en el selector antes de guardar.
+ */
+export function selectionFromItem(dish: MenuDish, item: OrderItem, today?: string): DishSelection {
+    // Cada elección se usa una vez: con dos grupos del mismo nombre no se marca doble.
+    const pending = [...item.choices];
+    const chosen = dish.groups.map((group) =>
+        group.options.flatMap((option, optionIndex) => {
+            if (group.kind === 'removal') {
+                return item.removed.includes(option.name) ? [optionIndex] : [];
+            }
+
+            const found = pending.findIndex((choice) => choice.group === group.name && choice.name === option.name);
+
+            if (found === -1) {
+                return [];
+            }
+
+            pending.splice(found, 1);
+
+            return [optionIndex];
+        }),
+    );
+    const declined = (today === undefined ? [] : ingredientEffects(dish, today)).flatMap((effect) =>
+        effect.kind === 'substitute' && !effect.required && (item.missing ?? []).includes(effect.name) ? [effect.index] : [],
+    );
+
+    return { chosen, note: item.note ?? '', quantity: clampQuantity(item.quantity), declined };
+}
+
+/** Cambiar la línea `index`: si queda igual a otra, se juntan. */
+export function replaceItem(items: readonly OrderItem[], index: number, item: OrderItem): OrderItem[] {
+    if (items[index] === undefined) {
+        return [...items];
+    }
+
+    const twin = items.findIndex((existing, position) => position !== index && sameLine(existing, item));
+
+    if (twin === -1) {
+        return items.map((existing, position) => (position === index ? item : existing));
+    }
+
+    return items.flatMap((existing, position) => {
+        if (position === index) {
+            return [];
+        }
+
+        return [position === twin ? { ...existing, quantity: clampQuantity(existing.quantity + item.quantity) } : existing];
+    });
+}
+
+/**
  * Si el grupo se elige con una sola opción (botones de radio): solo el
  * obligatorio de exactamente una. Uno opcional de tope 1 va con casilla,
  * porque un radio no se puede desmarcar.

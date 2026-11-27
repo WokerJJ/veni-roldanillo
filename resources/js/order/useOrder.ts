@@ -3,7 +3,7 @@ import { computed, type ComputedRef, shallowRef } from 'vue';
 import { removeWithPrefix } from '@/device/localStore';
 
 import type { OrderItem } from './selection';
-import { addItem, clampQuantity, itemsCount, itemsTotal } from './selection';
+import { addItem, clampQuantity, itemsCount, itemsTotal, replaceItem } from './selection';
 import { CART_PREFIX, CART_TTL_MS, loadSavedCart, parseCart, saveCart, savedCartSlugs } from './storage';
 
 /**
@@ -34,6 +34,8 @@ export interface Order {
     add: (item: OrderItem) => number;
     /** Cambia la cantidad de una línea (entre 1 y 20). */
     setQuantity: (index: number, quantity: number) => void;
+    /** Cambia lo elegido en una línea; si queda igual a otra, se juntan. */
+    replace: (index: number, item: OrderItem) => void;
     /** Quita una línea. */
     remove: (index: number) => void;
     clear: () => void;
@@ -196,6 +198,9 @@ export function useOrder(slug: string): Order {
                 slug,
                 items.value.map((item, position) => (position === index ? { ...item, quantity: clampQuantity(quantity) } : item)),
             );
+        },
+        replace: (index, item) => {
+            update(slug, replaceItem(items.value, index, item));
         },
         remove: (index) => {
             update(

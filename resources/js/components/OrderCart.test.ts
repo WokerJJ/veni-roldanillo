@@ -1107,3 +1107,45 @@ describe('OrderCart: el pedido en tres pasos (#142, M10)', () => {
         expect(wrapper.findAll('[data-footer-nav] button:not([data-send])').map((button) => button.text())).toEqual(['Back', 'Continue']);
     });
 });
+
+describe('OrderCart: cambiar una línea', () => {
+    const DISH = {
+        name: JUICE.dish,
+        description: null,
+        price: 4000,
+        sold_out_until: null,
+        ingredients: [],
+        groups: [{ name: 'Adiciones (prueba)', kind: 'choice' as const, min: 0, max: 1, options: [{ name: 'Leche (prueba)', price: 1000, ingredient: null }] }],
+        photo: null,
+    };
+    const WITH_MENU = { ...RESTAURANT, menu: [{ name: 'Bebidas (prueba)', dishes: [DISH] }] } as unknown as CartRestaurant;
+
+    it('«Cambiar» abre el plato con las adiciones plegadas y «Guardar» reemplaza la línea', async () => {
+        const { wrapper, order } = await mountCart(WITH_MENU, [JUICE]);
+
+        await wrapper.get('[data-change]').trigger('click');
+        await vi.waitFor(() => {
+            expect(wrapper.find('[data-dish-picker]').exists()).toBe(true);
+        });
+
+        const picker = wrapper.get('[data-dish-picker]');
+        expect(picker.get('[data-fold]').attributes('aria-expanded')).toBe('false');
+        expect(picker.get('[data-group="0"] ul').attributes('hidden')).toBeDefined();
+
+        await picker.get('[data-fold]').trigger('click');
+        expect(picker.get('[data-group="0"] ul').attributes('hidden')).toBeUndefined();
+
+        await picker.get('[data-option]').setValue(true);
+        await picker.get('form').trigger('submit');
+        await flushPromises();
+
+        expect(order.items.value).toEqual([{ ...JUICE, unitPrice: 5000, choices: [{ group: 'Adiciones (prueba)', name: 'Leche (prueba)', price: 1000 }] }]);
+        expect(wrapper.find('[data-dish-picker]').exists()).toBe(false);
+    });
+
+    it('un plato sin nada que elegir no ofrece «Cambiar»', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, [JUICE]);
+
+        expect(wrapper.find('[data-change]').exists()).toBe(false);
+    });
+});

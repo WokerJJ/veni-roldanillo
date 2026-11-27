@@ -22,6 +22,7 @@ import {
     MAX_QUANTITY,
     MIN_QUANTITY,
     NOTE_MAX_LENGTH,
+    selectionFromItem,
     selectionProblems,
     setSubstitute,
     toggleOption,
@@ -63,12 +64,18 @@ import type { MenuDish, MenuOptionGroup } from '@/restaurants/profile';
  * tocarla se amplía a pantalla completa (DishPhotoViewer, otro diálogo encima
  * de este) y al cerrar el foco vuelve a ella. Sin foto, el ícono del plato más
  * chico y sin ampliar. «Agregar · $X» queda fijo abajo.
+ *
+ * Lo opcional (quitar ingredientes y adiciones) va plegado: lo abre quien
+ * quiera cambiar el plato, con un botón por grupo. Lo obligatorio queda a la
+ * vista. Con `item` (una línea del carrito) abre con lo ya elegido, esos
+ * grupos desplegados, y en vez de «Agregar» dice «Guardar».
  */
 const {
     dish,
     unavailable = null,
     today: day = null,
-} = defineProps<{ dish: MenuDish; unavailable?: UnavailableReason | null; today?: string | null }>();
+    item: editing = null,
+} = defineProps<{ dish: MenuDish; unavailable?: UnavailableReason | null; today?: string | null; item?: OrderItem | null }>();
 /** El día del menú; sin día (null), el plato se arma sin mirar ingredientes. Función: sigue al prop. */
 function currentDay(): string | undefined {
     return day ?? undefined;
@@ -84,7 +91,9 @@ const zoomButton = useTemplateRef<HTMLButtonElement>('zoom');
 /** La foto a pantalla completa, abierta o no. */
 const zoomed = ref(false);
 
-const selection = ref(emptySelection(dish));
+const selection = ref(editing === null ? emptySelection(dish) : selectionFromItem(dish, editing, day ?? undefined));
+/** Los grupos opcionales desplegados: al abrir, los que ya traen algo elegido. */
+const opened = ref<readonly number[]>(selection.value.chosen.flatMap((indexes, index) => (indexes.length > 0 ? [index] : [])));
 /** Los errores se muestran después del primer intento de agregar, no antes. */
 const attempted = ref(false);
 const announcement = ref('');
@@ -137,6 +146,19 @@ function problemText(problem: GroupProblem | null | undefined): string {
         case 'unavailable':
             return t('order.picker.error_unavailable');
     }
+}
+
+/** Sin mínimo (quitar, adiciones): se puede dejar plegado. */
+function isOptional(group: MenuOptionGroup): boolean {
+    return group.min === 0;
+}
+
+function isFolded(group: MenuOptionGroup, groupIndex: number): boolean {
+    return isOptional(group) && !opened.value.includes(groupIndex);
+}
+
+function unfold(groupIndex: number): void {
+    opened.value = opened.value.includes(groupIndex) ? opened.value.filter((index) => index !== groupIndex) : [...opened.value, groupIndex];
 }
 
 function isChosen(groupIndex: number, optionIndex: number): boolean {
@@ -408,13 +430,30 @@ onMounted(() => {
                     :data-group="groupIndex"
                     :aria-describedby="`${id}-hint-${groupIndex}${attempted && problems[groupIndex] ? ` ${id}-error-${groupIndex}` : ''}`"
                 >
-                    <legend class="font-semibold">{{ group.name }}</legend>
-                    <p :id="`${id}-hint-${groupIndex}`" class="text-sm text-ink-muted">{{ hint(group) }}</p>
+                    <legend class="font-semibold" :class="{ 'w-full': isOptional(group) }">
+                        <button
+                            v-if="isOptional(group)"
+                            type="button"
+                            class="dish-picker-fold flex min-h-touch w-full items-center justify-between gap-3 text-left font-semibold"
+                            :aria-expanded="!isFolded(group, groupIndex)"
+                            :aria-controls="`${id}-options-${groupIndex}`"
+                            data-fold
+                            @click="unfold(groupIndex)"
+                        >
+                            <span class="min-w-0 wrap-anywhere">
+                                {{ group.name }}
+                                <span v-if="selection.chosen[groupIndex]?.length" class="font-normal text-ink-muted" data-fold-count>· {{ selection.chosen[groupIndex]?.length }}</span>
+                            </span>
+                            <span class="dish-picker-fold-mark shrink-0" aria-hidden="true" />
+                        </button>
+                        <template v-else>{{ group.name }}</template>
+                    </legend>
+                    <p :id="`${id}-hint-${groupIndex}`" class="text-sm text-ink-muted" :hidden="isFolded(group, groupIndex)">{{ hint(group) }}</p>
                     <p v-if="attempted && problems[groupIndex]" :id="`${id}-error-${groupIndex}`" class="mt-1 text-sm font-semibold" data-error>
                         {{ problemText(problems[groupIndex]) }}
                     </p>
 
-                    <ul class="mt-1 divide-y divide-line">
+                    <ul :id="`${id}-options-${groupIndex}`" class="mt-1 divide-y divide-line" :hidden="isFolded(group, groupIndex)">
                         <template v-for="(option, optionIndex) in group.options" :key="optionIndex">
                             <li v-if="!isSubstituted(groupIndex, optionIndex)">
                                 <label class="flex min-h-touch cursor-pointer items-center gap-3 py-1" :class="{ 'dish-picker-blocked': isBlocked(group, groupIndex, optionIndex) }">
@@ -486,7 +525,7 @@ onMounted(() => {
                     class="inline-flex min-h-touch flex-1 items-center justify-center rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
                     data-add
                 >
-                    {{ t('order.picker.add', { price: formatPesos(total, locale) }) }}
+                    {{ t(editing === null ? 'order.picker.add' : 'order.picker.save', { price: formatPesos(total, locale) }) }}
                 </button>
             </footer>
 
@@ -639,6 +678,16 @@ onMounted(() => {
     .dish-picker:not([data-dragging]) {
         transition: translate 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
     }
+}
+
+/* El «+» de un grupo plegado y el «−» cuando está abierto. */
+.dish-picker-fold-mark::before {
+    content: '+';
+    font-size: 1.25rem;
+}
+
+.dish-picker-fold[aria-expanded='true'] .dish-picker-fold-mark::before {
+    content: '−';
 }
 
 .dish-picker-check {
