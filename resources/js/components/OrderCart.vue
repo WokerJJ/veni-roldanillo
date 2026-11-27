@@ -747,8 +747,8 @@ onBeforeUnmount(() => {
                                     <p v-if="item.quantity > 1" class="text-sm text-ink-muted">{{ t('order.cart.each', { price: money(item.unitPrice) }) }}</p>
                                 </div>
                             </div>
-                            <div class="mt-1 flex items-center justify-between gap-3">
-                                <div class="flex items-center gap-1" role="group" :aria-label="t('order.cart.quantity_of', { name: item.dish })">
+                            <div class="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                                <div class="flex shrink-0 items-center gap-1" role="group" :aria-label="t('order.cart.quantity_of', { name: item.dish })">
                                     <button
                                         type="button"
                                         class="order-cart-step inline-flex size-touch items-center justify-center rounded-full border border-line text-xl"
@@ -771,25 +771,27 @@ onBeforeUnmount(() => {
                                         +
                                     </button>
                                 </div>
-                                <button
-                                    v-if="editableDishes[index]"
-                                    type="button"
-                                    class="ml-auto inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
-                                    :aria-label="t('order.cart.change_label', { name: item.dish })"
-                                    data-change
-                                    @click="change(index)"
-                                >
-                                    {{ t('order.cart.change') }}
-                                </button>
-                                <button
-                                    type="button"
-                                    class="inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
-                                    :aria-label="t('order.cart.remove_label', { name: item.dish })"
-                                    data-remove
-                                    @click="remove(index)"
-                                >
-                                    {{ t('order.cart.remove') }}
-                                </button>
+                                <div class="ml-auto flex items-center gap-1">
+                                    <button
+                                        v-if="editableDishes[index]"
+                                        type="button"
+                                        class="inline-flex min-h-touch items-center rounded-full px-3 font-semibold underline underline-offset-4 hover:bg-surface"
+                                        :aria-label="t('order.cart.change_label', { name: item.dish })"
+                                        data-change
+                                        @click="change(index)"
+                                    >
+                                        {{ t('order.cart.change') }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="inline-flex min-h-touch items-center rounded-full px-3 text-ink-muted underline underline-offset-4 hover:bg-surface"
+                                        :aria-label="t('order.cart.remove_label', { name: item.dish })"
+                                        data-remove
+                                        @click="remove(index)"
+                                    >
+                                        {{ t('order.cart.remove') }}
+                                    </button>
+                                </div>
                             </div>
                         </li>
                     </ul>

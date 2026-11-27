@@ -680,7 +680,30 @@ onMounted(() => {
     }
 }
 
-/* El «+» de un grupo plegado y el «−» cuando está abierto. */
+/*
+ * El botón de un grupo plegable es una fila: sobresale medio rem a cada lado
+ * para que el fondo al pasar por encima no quede pegado al texto, que sigue
+ * alineado con lo demás.
+ */
+.dish-picker-fold {
+    width: calc(100% + 1rem);
+    margin-inline: -0.5rem;
+    padding-inline: 0.5rem;
+    border-radius: var(--veni-radius-sm);
+}
+
+@media (hover: hover) {
+    .dish-picker-fold:hover {
+        background: var(--color-surface);
+    }
+}
+
+/* El «+» de un grupo plegado y el «−» cuando está abierto; con ancho fijo, no se corre al cambiar. */
+.dish-picker-fold-mark {
+    width: 1.5rem;
+    text-align: center;
+}
+
 .dish-picker-fold-mark::before {
     content: '+';
     font-size: 1.25rem;
