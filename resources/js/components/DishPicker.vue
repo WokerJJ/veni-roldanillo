@@ -10,7 +10,7 @@ import { useI18n } from '@/composables/useI18n';
 import { useModalDialog } from '@/composables/useModalDialog';
 import { formatPesos } from '@/i18n/intl';
 import { ingredientEffects, isOptionSubstituted } from '@/order/ingredients';
-import type { GroupProblem, OrderItem, UnavailableReason } from '@/order/selection';
+import type { DishSelection, GroupProblem, OrderItem, UnavailableReason } from '@/order/selection';
 import {
     acceptsSubstitute,
     clampQuantity,
@@ -22,6 +22,7 @@ import {
     MAX_QUANTITY,
     MIN_QUANTITY,
     NOTE_MAX_LENGTH,
+    selectionFromItem,
     selectionProblems,
     setSubstitute,
     toggleOption,
@@ -63,12 +64,18 @@ import type { MenuDish, MenuOptionGroup } from '@/restaurants/profile';
  * tocarla se amplía a pantalla completa (DishPhotoViewer, otro diálogo encima
  * de este) y al cerrar el foco vuelve a ella. Sin foto, el ícono del plato más
  * chico y sin ampliar. «Agregar · $X» queda fijo abajo.
+ *
+ * Lo opcional (quitar ingredientes y adiciones) va plegado: lo abre quien
+ * quiera cambiar el plato, con un botón por grupo. Lo obligatorio queda a la
+ * vista. Con `item` (una línea del carrito) abre con lo ya elegido, esos
+ * grupos desplegados, y en vez de «Agregar» dice «Guardar».
  */
 const {
     dish,
     unavailable = null,
     today: day = null,
-} = defineProps<{ dish: MenuDish; unavailable?: UnavailableReason | null; today?: string | null }>();
+    item: editing = null,
+} = defineProps<{ dish: MenuDish; unavailable?: UnavailableReason | null; today?: string | null; item?: OrderItem | null }>();
 /** El día del menú; sin día (null), el plato se arma sin mirar ingredientes. Función: sigue al prop. */
 function currentDay(): string | undefined {
     return day ?? undefined;
@@ -84,7 +91,13 @@ const zoomButton = useTemplateRef<HTMLButtonElement>('zoom');
 /** La foto a pantalla completa, abierta o no. */
 const zoomed = ref(false);
 
-const selection = ref(emptySelection(dish));
+const recovered = editing === null ? null : selectionFromItem(dish, editing, day ?? undefined);
+const selection = ref<DishSelection>(recovered ?? emptySelection(dish));
+/** Lo de la línea que no se pudo volver a marcar: se dice arriba. */
+const lost = recovered?.lost ?? [];
+const lostItems = computed(() => lost.map(({ kind, name }) => (kind === 'choice' ? name : t('order.picker.remove_option', { name }))).join(', '));
+/** Los grupos opcionales desplegados: al abrir, los que ya traen algo elegido (todos, si algo se perdió). */
+const opened = ref<readonly number[]>(selection.value.chosen.flatMap((indexes, index) => (lost.length > 0 || indexes.length > 0 ? [index] : [])));
 /** Los errores se muestran después del primer intento de agregar, no antes. */
 const attempted = ref(false);
 const announcement = ref('');
@@ -137,6 +150,19 @@ function problemText(problem: GroupProblem | null | undefined): string {
         case 'unavailable':
             return t('order.picker.error_unavailable');
     }
+}
+
+/** Sin mínimo (quitar, adiciones): se puede dejar plegado. */
+function isOptional(group: MenuOptionGroup): boolean {
+    return group.min === 0;
+}
+
+function isFolded(group: MenuOptionGroup, groupIndex: number): boolean {
+    return isOptional(group) && !opened.value.includes(groupIndex);
+}
+
+function unfold(groupIndex: number): void {
+    opened.value = opened.value.includes(groupIndex) ? opened.value.filter((index) => index !== groupIndex) : [...opened.value, groupIndex];
 }
 
 function isChosen(groupIndex: number, optionIndex: number): boolean {
@@ -316,6 +342,7 @@ onMounted(() => {
         ref="dialog"
         class="dish-picker text-ink"
         :aria-labelledby="`${id}-title`"
+        :aria-describedby="lost.length > 0 ? `${id}-lost` : undefined"
         :style="dragY === null ? undefined : { translate: `0 ${String(dragY)}px` }"
         :data-dragging="dragY === null ? undefined : ''"
         data-dish-picker
@@ -379,6 +406,11 @@ onMounted(() => {
                     </p>
                 </header>
 
+                <p v-if="lost.length > 0" :id="`${id}-lost`" class="mt-3 flex items-start gap-1 text-sm font-semibold wrap-anywhere" data-lost>
+                    <Icon name="informacion" :size="20" class="mt-0.5 shrink-0" />
+                    {{ t('order.picker.lost', { items: lostItems }) }}
+                </p>
+
                 <fieldset v-for="effect in substitutes" :key="`swap-${effect.index}`" class="mt-4" :aria-describedby="`${id}-swap-hint-${effect.index}`" data-substitute>
                     <legend class="font-semibold">{{ t('order.picker.swap_legend', { name: effect.name }) }}</legend>
                     <p :id="`${id}-swap-hint-${effect.index}`" class="text-sm text-ink-muted">
@@ -408,13 +440,33 @@ onMounted(() => {
                     :data-group="groupIndex"
                     :aria-describedby="`${id}-hint-${groupIndex}${attempted && problems[groupIndex] ? ` ${id}-error-${groupIndex}` : ''}`"
                 >
-                    <legend class="font-semibold">{{ group.name }}</legend>
-                    <p :id="`${id}-hint-${groupIndex}`" class="text-sm text-ink-muted">{{ hint(group) }}</p>
+                    <legend class="font-semibold" :class="{ 'w-full': isOptional(group) }">
+                        <button
+                            v-if="isOptional(group)"
+                            type="button"
+                            class="dish-picker-fold flex min-h-touch w-full items-center justify-between gap-3 text-left font-semibold"
+                            :aria-expanded="!isFolded(group, groupIndex)"
+                            :aria-controls="`${id}-options-${groupIndex}`"
+                            data-fold
+                            @click="unfold(groupIndex)"
+                        >
+                            <span class="min-w-0 wrap-anywhere">
+                                {{ group.name }}
+                                <template v-if="selection.chosen[groupIndex]?.length">
+                                    <span class="font-normal text-ink-muted" aria-hidden="true" data-fold-count>· {{ selection.chosen[groupIndex]?.length }}</span>
+                                    <span class="sr-only">{{ t(selection.chosen[groupIndex]?.length === 1 ? 'order.picker.fold_count_one' : 'order.picker.fold_count', { count: selection.chosen[groupIndex]?.length ?? 0 }) }}</span>
+                                </template>
+                            </span>
+                            <span class="dish-picker-fold-mark shrink-0" aria-hidden="true" />
+                        </button>
+                        <template v-else>{{ group.name }}</template>
+                    </legend>
+                    <p :id="`${id}-hint-${groupIndex}`" class="text-sm text-ink-muted" :hidden="isFolded(group, groupIndex)">{{ hint(group) }}</p>
                     <p v-if="attempted && problems[groupIndex]" :id="`${id}-error-${groupIndex}`" class="mt-1 text-sm font-semibold" data-error>
                         {{ problemText(problems[groupIndex]) }}
                     </p>
 
-                    <ul class="mt-1 divide-y divide-line">
+                    <ul :id="`${id}-options-${groupIndex}`" class="mt-1 divide-y divide-line" :hidden="isFolded(group, groupIndex)">
                         <template v-for="(option, optionIndex) in group.options" :key="optionIndex">
                             <li v-if="!isSubstituted(groupIndex, optionIndex)">
                                 <label class="flex min-h-touch cursor-pointer items-center gap-3 py-1" :class="{ 'dish-picker-blocked': isBlocked(group, groupIndex, optionIndex) }">
@@ -486,7 +538,7 @@ onMounted(() => {
                     class="inline-flex min-h-touch flex-1 items-center justify-center rounded-full bg-veni-ciruela px-5 font-semibold text-veni-blanco hover:bg-veni-ciruela-suave dark:bg-veni-mango dark:text-veni-ciruela dark:hover:bg-veni-blanco"
                     data-add
                 >
-                    {{ t('order.picker.add', { price: formatPesos(total, locale) }) }}
+                    {{ t(editing === null ? 'order.picker.add' : 'order.picker.save', { price: formatPesos(total, locale) }) }}
                 </button>
             </footer>
 
@@ -639,6 +691,39 @@ onMounted(() => {
     .dish-picker:not([data-dragging]) {
         transition: translate 200ms cubic-bezier(0.2, 0.9, 0.3, 1);
     }
+}
+
+/*
+ * El botón de un grupo plegable es una fila: sobresale medio rem a cada lado
+ * para que el fondo al pasar por encima no quede pegado al texto, que sigue
+ * alineado con lo demás.
+ */
+.dish-picker-fold {
+    width: calc(100% + 1rem);
+    margin-inline: -0.5rem;
+    padding-inline: 0.5rem;
+    border-radius: var(--veni-radius-sm);
+}
+
+@media (hover: hover) {
+    .dish-picker-fold:hover {
+        background: var(--color-surface);
+    }
+}
+
+/* El «+» de un grupo plegado y el «−» cuando está abierto; con ancho fijo, no se corre al cambiar. */
+.dish-picker-fold-mark {
+    width: 1.5rem;
+    text-align: center;
+}
+
+.dish-picker-fold-mark::before {
+    content: '+';
+    font-size: 1.25rem;
+}
+
+.dish-picker-fold[aria-expanded='true'] .dish-picker-fold-mark::before {
+    content: '−';
 }
 
 .dish-picker-check {

@@ -13,8 +13,8 @@ import type { MenuDish } from '@/restaurants/profile';
 | grupos, las opciones y los ingredientes solo viajan en el idioma de la
 | ficha: si se cambia de idioma con platos en el pedido, una línea con
 | opciones o avisos sale como `changed` (y una agregada en inglés y vista en
-| español, como `gone`). Se quita y se vuelve a agregar, que es también el
-| arreglo de los demás casos.
+| español, como `gone`). Se arregla con «Cambiar», que dice lo que no
+| pudo recuperar; si la línea no tiene ese botón, se quita y se vuelve a agregar.
 */
 
 /** Por qué una línea ya no se puede enviar como está. */

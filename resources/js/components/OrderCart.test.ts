@@ -577,7 +577,7 @@ describe('OrderCart', () => {
         await wrapper.get('[data-mode="pickup"]').setValue(true);
         await wrapper.get('[data-payment="nequi"]').setValue(true);
 
-        expect(wrapper.get('[data-line-problem]').text()).toBe('Este plato cambió desde que lo agregaste. Quitalo y volvé a agregarlo.');
+        expect(wrapper.get('[data-line-problem]').text()).toBe('Este plato cambió desde que lo agregaste. Tocá «Cambiar»; si no aparece, quitalo y volvé a agregarlo.');
         expect(wrapper.get('[data-lines-blocked]').text()).toBe('Hay platos de tu pedido que cambiaron. Revisalos antes de enviar.');
         expect(wrapper.get('[data-send]').element.tagName).toBe('BUTTON');
         expect(wrapper.html()).not.toContain('wa.me');
@@ -1105,5 +1105,188 @@ describe('OrderCart: el pedido en tres pasos (#142, M10)', () => {
         await next(wrapper);
         expect(wrapper.get('[data-announcement]').text()).toBe('Step 2 of 3.');
         expect(wrapper.findAll('[data-footer-nav] button:not([data-send])').map((button) => button.text())).toEqual(['Back', 'Continue']);
+    });
+});
+
+describe('OrderCart: cambiar una línea', () => {
+    const DISH = {
+        name: JUICE.dish,
+        description: null,
+        price: 4000,
+        sold_out_until: null,
+        ingredients: [],
+        groups: [{ name: 'Adiciones (prueba)', kind: 'choice' as const, min: 0, max: 1, options: [{ name: 'Leche (prueba)', price: 1000, ingredient: null }] }],
+        photo: null,
+    };
+    const WITH_MENU = { ...RESTAURANT, menu: [{ name: 'Bebidas (prueba)', dishes: [DISH] }] } as unknown as CartRestaurant;
+
+    it('«Cambiar» abre el plato con las adiciones plegadas y «Guardar» reemplaza la línea', async () => {
+        const { wrapper, order } = await mountCart(WITH_MENU, [JUICE]);
+
+        await wrapper.get('[data-change]').trigger('click');
+        await vi.waitFor(() => {
+            expect(wrapper.find('[data-dish-picker]').exists()).toBe(true);
+        });
+
+        const picker = wrapper.get('[data-dish-picker]');
+        expect(picker.get('[data-fold]').attributes('aria-expanded')).toBe('false');
+        expect(picker.get('[data-group="0"] ul').attributes('hidden')).toBeDefined();
+
+        await picker.get('[data-fold]').trigger('click');
+        expect(picker.get('[data-group="0"] ul').attributes('hidden')).toBeUndefined();
+
+        await picker.get('[data-option]').setValue(true);
+        await picker.get('form').trigger('submit');
+        await flushPromises();
+
+        expect(order.items.value).toEqual([{ ...JUICE, unitPrice: 5000, choices: [{ group: 'Adiciones (prueba)', name: 'Leche (prueba)', price: 1000 }] }]);
+        expect(wrapper.find('[data-dish-picker]').exists()).toBe(false);
+    });
+
+    it('un plato sin nada que elegir no ofrece «Cambiar»', async () => {
+        const { wrapper } = await mountCart(RESTAURANT, [JUICE]);
+
+        expect(wrapper.find('[data-change]').exists()).toBe(false);
+    });
+
+    const MILK = { group: 'Adiciones (prueba)', name: 'Leche (prueba)', price: 1000 };
+    const WITH_MILK: OrderItem = { ...JUICE, unitPrice: 5000, choices: [MILK] };
+    const menu = (...dishes: unknown[]) => ({ ...RESTAURANT, menu: [{ name: 'Bebidas (prueba)', dishes }] }) as unknown as CartRestaurant;
+    type Wrapper = Awaited<ReturnType<typeof mountCart>>['wrapper'];
+
+    async function openLine(wrapper: Wrapper, line = 0) {
+        await nth(wrapper.findAll('[data-line]'), line).get('[data-change]').trigger('click');
+        await vi.waitFor(() => {
+            expect(wrapper.find('[data-dish-picker]').exists()).toBe(true);
+        });
+
+        return wrapper.get('[data-dish-picker]');
+    }
+
+    async function submitPicker(wrapper: Wrapper): Promise<void> {
+        await wrapper.get('[data-dish-picker] form').trigger('submit');
+        await flushPromises();
+    }
+
+    /** Otra pestaña (o releer lo guardado): los mismos datos en objetos nuevos. */
+    function otherTab(edit: (stored: string) => string = (stored) => stored): void {
+        const key = `veni:cart:${RESTAURANT.slug}`;
+        window.dispatchEvent(new StorageEvent('storage', { key, newValue: edit(localStorage.getItem(key) ?? '') }));
+    }
+
+    it('una línea con elecciones abre con su grupo desplegado y contado, y «Guardar» la deja igual', async () => {
+        const { wrapper, order } = await mountCart(WITH_MENU, [WITH_MILK]);
+        const picker = await openLine(wrapper);
+
+        expect(picker.get('[data-fold]').attributes('aria-expanded')).toBe('true');
+        expect(picker.get('[data-fold-count]').text()).toBe('· 1');
+        expect(picker.get('[data-add]').text()).toContain('Guardar');
+        expect(picker.find('[data-lost]').exists()).toBe(false);
+
+        await submitPicker(wrapper);
+
+        expect(order.items.value).toEqual([WITH_MILK]);
+    });
+
+    it('al cerrar sin guardar, el foco vuelve a «Cambiar» de esa línea', async () => {
+        const { wrapper } = await mountCart(WITH_MENU, [WITH_MILK]);
+        const picker = await openLine(wrapper);
+
+        await picker.get('[aria-label="Cerrar"]').trigger('click');
+        await flushPromises();
+
+        expect(wrapper.find('[data-dish-picker]').exists()).toBe(false);
+        expect(document.activeElement).toBe(wrapper.get('[data-change]').element);
+    });
+
+    it('guarda aunque otra pestaña haya releído el pedido (objetos nuevos)', async () => {
+        const { wrapper, order } = await mountCart(WITH_MENU, [JUICE]);
+        const picker = await openLine(wrapper);
+
+        otherTab();
+        await picker.get('[data-option]').setValue(true);
+        await submitPicker(wrapper);
+
+        expect(order.items.value).toEqual([WITH_MILK]);
+        expect(wrapper.get('[data-announcement]').text()).toBe('Cambiaste Jugo de prueba.');
+    });
+
+    it('si la línea ya no está como se abrió, no dice «Cambiaste»: avisa', async () => {
+        const { wrapper, order } = await mountCart(WITH_MENU, [JUICE]);
+        const picker = await openLine(wrapper);
+
+        otherTab((stored) => stored.replace('"quantity":1', '"quantity":3'));
+        await picker.get('[data-option]').setValue(true);
+        await submitPicker(wrapper);
+
+        expect(order.items.value).toEqual([{ ...JUICE, quantity: 3 }]);
+        expect(wrapper.get('[data-announcement]').text()).toBe('Tu pedido cambió mientras tanto: no guardamos el cambio. Revisalo.');
+    });
+
+    it('dice arriba lo que no pudo recuperar y despliega lo opcional', async () => {
+        const { wrapper } = await mountCart(WITH_MENU, [{ ...JUICE, unitPrice: 5000, choices: [{ group: 'Extras', name: 'Milk', price: 1000 }] }]);
+        const picker = await openLine(wrapper);
+
+        expect(picker.get('[data-lost]').text()).toBe('No pudimos recuperar: Milk. Revisá y elegí de nuevo antes de guardar.');
+        expect(picker.get('[data-fold]').attributes('aria-expanded')).toBe('true');
+    });
+
+    it('entre homónimos elige el que cuadra, aunque no pida elegir nada', async () => {
+        const { wrapper } = await mountCart(menu(DISH, { ...DISH, price: 6000, groups: [] }), [{ ...JUICE, unitPrice: 6000 }]);
+
+        expect(wrapper.find('[data-change]').exists()).toBe(false);
+    });
+
+    it('si ningún homónimo cuadra, no ofrece «Cambiar»', async () => {
+        const { wrapper } = await mountCart(menu(DISH, { ...DISH, price: 6000 }), [{ ...JUICE, unitPrice: 9000 }]);
+
+        expect(wrapper.find('[data-change]').exists()).toBe(false);
+    });
+
+    it('con el selector abierto sigue la carta: si el plato se agota, no guarda', async () => {
+        const { wrapper, order } = await mountCart(WITH_MENU, [JUICE]);
+        await openLine(wrapper);
+
+        await wrapper.setProps({ restaurant: menu({ ...DISH, sold_out_until: '2999-01-01' }) });
+        await submitPicker(wrapper);
+
+        expect(wrapper.find('[data-dish-picker]').exists()).toBe(true);
+        expect(wrapper.get('[data-dish-picker]').text()).toContain('Este plato se agotó');
+        expect(order.items.value).toEqual([JUICE]);
+    });
+
+    it('si el plato desaparece de la carta, cierra el selector y avisa', async () => {
+        const { wrapper } = await mountCart(WITH_MENU, [JUICE]);
+        await openLine(wrapper);
+
+        await wrapper.setProps({ restaurant: menu() });
+        await flushPromises();
+
+        expect(wrapper.find('[data-dish-picker]').exists()).toBe(false);
+        expect(wrapper.get('[data-announcement]').text()).toBe('La carta cambió y no podés seguir cambiando Jugo de prueba. Revisá tu pedido.');
+    });
+
+    it('al juntar líneas avisa las unidades que no caben y el foco va a la que queda', async () => {
+        const { wrapper, order } = await mountCart(WITH_MENU, [{ ...WITH_MILK, quantity: 19 }, { ...JUICE, quantity: 3 }]);
+        const picker = await openLine(wrapper, 1);
+
+        await picker.get('[data-fold]').trigger('click');
+        await picker.get('[data-option]').setValue(true);
+        await submitPicker(wrapper);
+
+        expect(order.items.value).toEqual([{ ...WITH_MILK, quantity: 20 }]);
+        expect(wrapper.get('[data-announcement]').text()).toBe('Cambiaste Jugo de prueba. Solo caben 20 en el pedido: se quitaron 2.');
+        expect(document.activeElement).toBe(wrapper.get('[data-change]').element);
+    });
+
+    it('al juntar con una línea de más abajo, el foco va a la resultante y no a la que ocupó su lugar', async () => {
+        const noted: OrderItem = { ...JUICE, note: 'otra' };
+        const { wrapper } = await mountCart(WITH_MENU, [JUICE, noted, WITH_MILK]);
+        const picker = await openLine(wrapper, 0);
+
+        await picker.get('[data-option]').setValue(true);
+        await submitPicker(wrapper);
+
+        expect(document.activeElement).toBe(nth(wrapper.findAll('[data-line]'), 1).get('[data-change]').element);
     });
 });

@@ -39,3 +39,11 @@ Había que decidir cómo se guarda «quitar», qué viaja al navegador, dónde s
 - La restricción vive en la base: un grupo de quitar obligatorio falla al guardarse, venga de donde venga.
 - Que una opción sin recargo no muestre «+ $ 0» y que quitar no muestre precio son reglas de la vista; el dato ya llega en 0.
 - Los restaurantes de ejemplo traen proteína obligatoria (una con recargo), adiciones (una desactivada, que no sale), ingredientes para quitar y la preparación del jugo, todo rotulado «(prueba)» y solo en restaurantes con `is_fictitious`.
+
+## Precisión · Lo opcional va plegado y una línea se puede cambiar desde el carrito
+
+La mayoría pide el plato como viene: con quitar ingredientes y adiciones a la vista, el selector era largo para quien no quería cambiar nada.
+
+- **Los grupos sin mínimo** (quitar y adiciones) salen plegados, con un botón por grupo (`aria-expanded`) que dice cuántas opciones hay elegidas. Los obligatorios siguen a la vista. Se oculta con `hidden`, sin directivas que sumen código al arranque.
+- **Cada línea del carrito tiene «Cambiar»** cuando el plato de hoy tiene algo que elegir: reabre el selector con lo ya elegido (`selectionFromItem`, por nombres, porque la línea no guarda ids) y «Guardar» reemplaza la línea; si queda igual a otra, se juntan. El selector baja con `import()` recién al tocarlo.
+- **Descartado:** editar ingredientes y adiciones dentro de la propia línea del carrito. Duplicaba los grupos, los topes, los reemplazos del día y el precio fuera del selector.
