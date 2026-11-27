@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/WokerJJ/veni-roldanillo/compare/v0.8.2...v0.9.0) (2026-11-27)
+
+
+### Funcionalidades
+
+* lo opcional del plato plegado y cambiar líneas desde el carrito ([#187](https://github.com/WokerJJ/veni-roldanillo/issues/187)) ([#188](https://github.com/WokerJJ/veni-roldanillo/issues/188)) ([a03f4ea](https://github.com/WokerJJ/veni-roldanillo/commit/a03f4ea810cf24d64fef468dbc1cff7e2e344bfd))
+
 ## [0.8.2](https://github.com/WokerJJ/veni-roldanillo/compare/v0.8.1...v0.8.2) (2026-11-27)
 
 
