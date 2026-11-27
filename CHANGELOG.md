@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.2](https://github.com/WokerJJ/veni-roldanillo/compare/v0.8.1...v0.8.2) (2026-11-27)
+
+
+### Correcciones
+
+* **deps:** avisos de seguridad en Symfony y league/csv ([#189](https://github.com/WokerJJ/veni-roldanillo/issues/189)) ([#190](https://github.com/WokerJJ/veni-roldanillo/issues/190)) ([2bd5d9d](https://github.com/WokerJJ/veni-roldanillo/commit/2bd5d9d08b1fada3b98da2fa2656c4e78e98a284))
+* **despliegue:** deja subir en la imagen fotos del tamaño que promete la app ([#186](https://github.com/WokerJJ/veni-roldanillo/issues/186)) ([9fbf3f3](https://github.com/WokerJJ/veni-roldanillo/commit/9fbf3f3917f0efb93743a25f9ba16b2b9e718f14))
+
 ## [0.8.1](https://github.com/WokerJJ/veni-roldanillo/compare/v0.8.0...v0.8.1) (2026-11-21)
 
 

@@ -153,8 +153,16 @@ ENV APP_ENV=production \
 # Composer no llega a esta etapa: solo lo copian dev y vendor.
 # expose_php: sin la cabecera X-Powered-By, que anuncia la versión exacta de
 # PHP a quien busque una con fallas conocidas (php.ini-production la deja).
+# upload_max_filesize y post_max_size: php.ini-production corta en 2 MB y la
+# app promete fotos de 8 MB (config/media.php, ADR 0034). Quedan por encima
+# para que el rechazo lo den las reglas de la app, con su mensaje; la prueba de
+# humo falla si config/media.php los alcanza.
 RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
-    && echo 'expose_php = Off' > "$PHP_INI_DIR/conf.d/zz-prod.ini"
+    && printf '%s\n' \
+        'expose_php = Off' \
+        'upload_max_filesize = 10M' \
+        'post_max_size = 12M' \
+        > "$PHP_INI_DIR/conf.d/zz-prod.ini"
 
 # De docker/ solo entra la entrada de producción, y en /usr/local/bin (de
 # root): el usuario de la aplicación la ejecuta pero no puede reescribirla.
