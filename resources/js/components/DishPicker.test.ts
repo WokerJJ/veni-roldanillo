@@ -632,6 +632,19 @@ describe('DishPicker: la hoja del celular (#141, M9)', () => {
         expect(without.wrapper.get('form > div.overflow-y-auto').classes()).toContain('pt-12');
     });
 
+    it('el contador del grupo plegado dice cuántos van para el lector de pantalla', async () => {
+        const { group, option } = await mountPicker();
+        const fold = () => group(1).get('[data-fold]');
+
+        await fold().trigger('click');
+        await option(1, 0).setValue(true);
+        expect(fold().get('[data-fold-count]').attributes('aria-hidden')).toBe('true');
+        expect(fold().get('.sr-only').text()).toBe('1 elegido');
+
+        await option(1, 1).setValue(true);
+        expect(fold().get('.sr-only').text()).toBe('2 elegidos');
+    });
+
     it('«Agregar · $X» queda fuera de lo que se desplaza, fijo abajo', async () => {
         const { wrapper } = await mountPicker();
 

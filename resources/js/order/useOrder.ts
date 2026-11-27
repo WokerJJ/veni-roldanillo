@@ -34,8 +34,8 @@ export interface Order {
     add: (item: OrderItem) => number;
     /** Cambia la cantidad de una línea (entre 1 y 20). */
     setQuantity: (index: number, quantity: number) => void;
-    /** Cambia lo elegido en una línea; si queda igual a otra, se juntan. */
-    replace: (index: number, item: OrderItem) => void;
+    /** Cambia lo elegido en una línea; si queda igual a otra, se juntan. Devuelve las unidades que no entraron (tope de 20). */
+    replace: (index: number, item: OrderItem) => number;
     /** Quita una línea. */
     remove: (index: number) => void;
     clear: () => void;
@@ -200,7 +200,13 @@ export function useOrder(slug: string): Order {
             );
         },
         replace: (index, item) => {
-            update(slug, replaceItem(items.value, index, item));
+            const current = items.value[index];
+            const expected = current === undefined ? 0 : itemsCount(items.value) - current.quantity + item.quantity;
+            const next = replaceItem(items.value, index, item);
+
+            update(slug, next);
+
+            return Math.max(0, expected - itemsCount(next));
         },
         remove: (index) => {
             update(

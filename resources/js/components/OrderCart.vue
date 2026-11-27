@@ -23,7 +23,7 @@ import { orderMessage, whatsappNumber, whatsappUrl } from '@/order/message';
 import { lineProblem } from '@/order/reconcile';
 import { businessDay } from '@/restaurants/openStatus';
 import type { OrderItem } from '@/order/selection';
-import { isOrderable, MAX_QUANTITY, MIN_QUANTITY } from '@/order/selection';
+import { isOrderable, MAX_QUANTITY, MIN_QUANTITY, sameLine, unavailableReason } from '@/order/selection';
 import { forgetDelivery, loadDelivery } from '@/order/storage';
 import { useOrder } from '@/order/useOrder';
 import type { PaymentMethod, MenuDish, RestaurantProfile } from '@/restaurants/profile';
@@ -238,25 +238,51 @@ const blocked = computed(() => lineProblems.value.some((problem) => problem !== 
 
 /**
  * El plato de la carta de hoy con el que se puede cambiar cada línea, o null:
- * ya no está, hoy no se pide o no tiene nada que elegir. Con dos platos del
- * mismo nombre, el que cuadra con la línea.
+ * ya no está, hoy no se pide o no tiene nada que elegir. Entre todos los
+ * homónimos que se pueden pedir, el que cuadra con la línea; si ninguno
+ * cuadra y hay más de uno, no se adivina.
  */
-const editableDishes = computed(() => {
-    const dishes = restaurant.menu?.flatMap((section) => section.dishes) ?? [];
+const menuDishes = computed(() => restaurant.menu?.flatMap((section) => section.dishes) ?? []);
 
-    return items.value.map((item) => {
-        const candidates = dishes.filter((dish) => (dish.name === item.dish || dish.name_es === item.dish) && dish.groups.length > 0 && isOrderable(dish, today.value));
+const editableDishes = computed(() =>
+    items.value.map((item) => {
+        const homonyms = menuDishes.value.filter((dish) => (dish.name === item.dish || dish.name_es === item.dish) && isOrderable(dish, today.value));
+        const found = homonyms.find((dish) => lineProblem(item, [dish], today.value) === null) ?? (homonyms.length === 1 ? homonyms[0] : undefined);
 
-        return candidates.find((dish) => lineProblem(item, [dish], today.value) === null) ?? candidates[0] ?? null;
-    });
-});
+        return found !== undefined && found.groups.length > 0 ? found : null;
+    }),
+);
 
 /*
 | Cambiar una línea: el selector del plato, con lo ya elegido, encima del
 | carrito. Baja con import() recién al tocarlo (la ficha casi siempre ya lo
 | tiene). Al cerrarse, el foco vuelve a «Cambiar» de esa línea o al título.
 */
-const editing = shallowRef<{ index: number; item: OrderItem; dish: MenuDish } | null>(null);
+const editing = shallowRef<{ index: number; item: OrderItem; name: string; nth: number; shape: string } | null>(null);
+/** La línea a la que vuelve el foco si no es la que se abrió (-1: al título). */
+let returnTo: number | null = null;
+
+/** Lo que fija las posiciones que el selector tiene marcadas: si cambia, lo marcado ya no vale. */
+function dishShape(dish: MenuDish): string {
+    return JSON.stringify([
+        dish.groups.map((group) => [group.name, group.kind, group.options.map((option) => option.name)]),
+        (dish.ingredients ?? []).map((ingredient) => ingredient.name),
+    ]);
+}
+
+/** El plato del selector, tomado de la carta actual (precios y agotados al día), o null si ya no está. */
+const editingDish = computed(() => {
+    const open = editing.value;
+
+    if (open === null) {
+        return null;
+    }
+
+    const dish = menuDishes.value.filter((other) => other.name === open.name)[open.nth];
+
+    return dish !== undefined && dishShape(dish) === open.shape ? dish : null;
+});
+
 const {
     Dialog: Picker,
     open: picking,
@@ -266,9 +292,15 @@ const {
     () => import('@/components/DishPicker.vue'),
     'carrito',
     () => {
-        const line = editing.value?.index ?? -1;
+        const line = returnTo ?? editing.value?.index ?? -1;
+        returnTo = null;
         editing.value = null;
         (dialog.value?.querySelectorAll<HTMLElement>('[data-line]')[line]?.querySelector<HTMLElement>('[data-change]') ?? title.value)?.focus();
+    },
+    () => {
+        // El foco se queda en «Cambiar», para volver a intentar.
+        editing.value = null;
+        void announce(t('order.picker.load_error'));
     },
 );
 
@@ -277,19 +309,51 @@ function change(index: number): void {
     const dish = editableDishes.value[index];
 
     if (item !== undefined && dish) {
-        editing.value = { index, item, dish };
+        const nth = menuDishes.value.filter((other) => other.name === dish.name).indexOf(dish);
+
+        returnTo = null;
+        announcement.value = '';
+        editing.value = { index, item, name: dish.name, nth, shape: dishShape(dish) };
         openPicker();
     }
 }
 
+watch(
+    () => editing.value !== null && editingDish.value === null,
+    async (gone) => {
+        const name = editing.value?.item.dish;
+
+        if (gone && name !== undefined) {
+            await closePicker();
+            await announce(t('order.cart.dish_gone', { name }));
+        }
+    },
+);
+
 async function save(next: OrderItem): Promise<void> {
-    // Si mientras tanto la línea cambió (otra pestaña), no se pisa otra.
-    if (editing.value !== null && items.value[editing.value.index] === editing.value.item) {
-        order.replace(editing.value.index, next);
+    const opened = editing.value;
+
+    if (opened === null) {
+        return;
     }
 
+    // Por contenido y no por referencia: otra pestaña trae objetos nuevos.
+    const index = items.value.findIndex((line) => line.quantity === opened.item.quantity && sameLine(line, opened.item));
+
+    if (index === -1) {
+        returnTo = -1;
+        await closePicker();
+        await announce(t('order.cart.stale'));
+
+        return;
+    }
+
+    const lost = order.replace(index, next);
+    returnTo = items.value.findIndex((line) => sameLine(line, next));
     await closePicker();
-    await announce(t('order.cart.changed', { name: next.dish }));
+
+    const changed = t('order.cart.changed', { name: next.dish });
+    await announce(lost > 0 ? `${changed} ${t('order.cart.changed_capped', { max: MAX_QUANTITY, count: lost })}` : changed);
 }
 
 const message = computed(() => orderMessage(items.value, details.value, context.value, t, money));
@@ -1172,7 +1236,15 @@ onBeforeUnmount(() => {
         <!-- «Editar o borrar tus direcciones»: otro diálogo encima de este, solo con la libreta. -->
         <Manager v-if="managing" @close="closeManager" />
         <!-- «Cambiar» una línea: el selector del plato, también encima. -->
-        <Picker v-if="picking && editing" :dish="editing.dish" :item="editing.item" :today="today" @add="save" @close="closePicker" />
+        <Picker
+            v-if="picking && editing && editingDish"
+            :dish="editingDish"
+            :item="editing.item"
+            :today="today"
+            :unavailable="unavailableReason(editingDish, today)"
+            @add="save"
+            @close="closePicker"
+        />
     </dialog>
 </template>
 

@@ -88,16 +88,32 @@ export function emptySelection(dish: MenuDish): DishSelection {
     return { chosen: dish.groups.map(() => []), note: '', quantity: MIN_QUANTITY, declined: [] };
 }
 
+/** Algo de una línea que el selector no puede volver a marcar: una opción, o algo que iba sin. */
+export interface LostChoice {
+    kind: 'choice' | 'without';
+    name: string;
+}
+
+export interface RecoveredSelection extends DishSelection {
+    lost: LostChoice[];
+}
+
 /**
  * La selección que dio una línea del pedido, para cambiarla desde el
  * carrito. La línea guarda nombres, no ids (ADR 0018): lo que ya no está en
- * la carta se pierde, y se ve en el selector antes de guardar.
+ * la carta, o hoy está agotado, no se marca y vuelve en `lost` para que el
+ * selector lo diga antes de guardar.
  */
-export function selectionFromItem(dish: MenuDish, item: OrderItem, today?: string): DishSelection {
+export function selectionFromItem(dish: MenuDish, item: OrderItem, today?: string): RecoveredSelection {
     // Cada elección se usa una vez: con dos grupos del mismo nombre no se marca doble.
     const pending = [...item.choices];
-    const chosen = dish.groups.map((group) =>
+    const chosen = dish.groups.map((group, groupIndex) =>
         group.options.flatMap((option, optionIndex) => {
+            // Lo fijo por un ingrediente agotado no es una elección: bloquearía el grupo y falsearía el contador.
+            if (isOptionLocked(dish, groupIndex, optionIndex, today)) {
+                return [];
+            }
+
             if (group.kind === 'removal') {
                 return item.removed.includes(option.name) ? [optionIndex] : [];
             }
@@ -113,11 +129,25 @@ export function selectionFromItem(dish: MenuDish, item: OrderItem, today?: strin
             return [optionIndex];
         }),
     );
-    const declined = (today === undefined ? [] : ingredientEffects(dish, today)).flatMap((effect) =>
+    const effects = today === undefined ? [] : ingredientEffects(dish, today);
+    const declined = effects.flatMap((effect) =>
         effect.kind === 'substitute' && !effect.required && (item.missing ?? []).includes(effect.name) ? [effect.index] : [],
     );
+    const removable = dish.groups.flatMap((group) => (group.kind === 'removal' ? group.options.map((option) => option.name) : []));
+    // Lo que iba «sin» por no haber: se recupera si hoy sigue faltando y todavía puede ir sin.
+    const stillWithout = effects.flatMap((effect) =>
+        effect.kind === 'without' || (effect.kind === 'substitute' && !effect.required) ? [effect.name] : [],
+    );
+    const without = [
+        ...item.removed.filter((name) => !removable.includes(name)),
+        ...(today === undefined ? [] : (item.missing ?? []).filter((name) => !stillWithout.includes(name))),
+    ];
+    const lost: LostChoice[] = [
+        ...pending.map((choice): LostChoice => ({ kind: 'choice', name: choice.name })),
+        ...without.map((name): LostChoice => ({ kind: 'without', name })),
+    ];
 
-    return { chosen, note: item.note ?? '', quantity: clampQuantity(item.quantity), declined };
+    return { chosen, note: item.note ?? '', quantity: clampQuantity(item.quantity), declined, lost };
 }
 
 /** Cambiar la línea `index`: si queda igual a otra, se juntan. */
@@ -137,8 +167,17 @@ export function replaceItem(items: readonly OrderItem[], index: number, item: Or
             return [];
         }
 
-        return [position === twin ? { ...existing, quantity: clampQuantity(existing.quantity + item.quantity) } : existing];
+        return [position === twin ? joinLines(existing, item) : existing];
     });
+}
+
+/** Juntar dos líneas iguales: suma sin pasar del tope y no pierde el aviso de alcohol de ninguna (ADR 0052). */
+function joinLines(line: OrderItem, added: OrderItem): OrderItem {
+    return {
+        ...line,
+        ...(line.alcohol === true || added.alcohol === true ? { alcohol: true } : {}),
+        quantity: clampQuantity(line.quantity + added.quantity),
+    };
 }
 
 /**
@@ -401,7 +440,7 @@ export function addItem(items: readonly OrderItem[], item: OrderItem): OrderItem
         return [...items, item];
     }
 
-    return items.map((existing, position) => (position === index ? { ...existing, quantity: clampQuantity(existing.quantity + item.quantity) } : existing));
+    return items.map((existing, position) => (position === index ? joinLines(existing, item) : existing));
 }
 
 /** El total estimado de los ítems, en pesos. */

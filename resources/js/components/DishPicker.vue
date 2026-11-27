@@ -10,7 +10,7 @@ import { useI18n } from '@/composables/useI18n';
 import { useModalDialog } from '@/composables/useModalDialog';
 import { formatPesos } from '@/i18n/intl';
 import { ingredientEffects, isOptionSubstituted } from '@/order/ingredients';
-import type { GroupProblem, OrderItem, UnavailableReason } from '@/order/selection';
+import type { DishSelection, GroupProblem, OrderItem, UnavailableReason } from '@/order/selection';
 import {
     acceptsSubstitute,
     clampQuantity,
@@ -91,9 +91,13 @@ const zoomButton = useTemplateRef<HTMLButtonElement>('zoom');
 /** La foto a pantalla completa, abierta o no. */
 const zoomed = ref(false);
 
-const selection = ref(editing === null ? emptySelection(dish) : selectionFromItem(dish, editing, day ?? undefined));
-/** Los grupos opcionales desplegados: al abrir, los que ya traen algo elegido. */
-const opened = ref<readonly number[]>(selection.value.chosen.flatMap((indexes, index) => (indexes.length > 0 ? [index] : [])));
+const recovered = editing === null ? null : selectionFromItem(dish, editing, day ?? undefined);
+const selection = ref<DishSelection>(recovered ?? emptySelection(dish));
+/** Lo de la línea que no se pudo volver a marcar: se dice arriba. */
+const lost = recovered?.lost ?? [];
+const lostItems = computed(() => lost.map(({ kind, name }) => (kind === 'choice' ? name : t('order.picker.remove_option', { name }))).join(', '));
+/** Los grupos opcionales desplegados: al abrir, los que ya traen algo elegido (todos, si algo se perdió). */
+const opened = ref<readonly number[]>(selection.value.chosen.flatMap((indexes, index) => (lost.length > 0 || indexes.length > 0 ? [index] : [])));
 /** Los errores se muestran después del primer intento de agregar, no antes. */
 const attempted = ref(false);
 const announcement = ref('');
@@ -338,6 +342,7 @@ onMounted(() => {
         ref="dialog"
         class="dish-picker text-ink"
         :aria-labelledby="`${id}-title`"
+        :aria-describedby="lost.length > 0 ? `${id}-lost` : undefined"
         :style="dragY === null ? undefined : { translate: `0 ${String(dragY)}px` }"
         :data-dragging="dragY === null ? undefined : ''"
         data-dish-picker
@@ -401,6 +406,11 @@ onMounted(() => {
                     </p>
                 </header>
 
+                <p v-if="lost.length > 0" :id="`${id}-lost`" class="mt-3 flex items-start gap-1 text-sm font-semibold wrap-anywhere" data-lost>
+                    <Icon name="informacion" :size="20" class="mt-0.5 shrink-0" />
+                    {{ t('order.picker.lost', { items: lostItems }) }}
+                </p>
+
                 <fieldset v-for="effect in substitutes" :key="`swap-${effect.index}`" class="mt-4" :aria-describedby="`${id}-swap-hint-${effect.index}`" data-substitute>
                     <legend class="font-semibold">{{ t('order.picker.swap_legend', { name: effect.name }) }}</legend>
                     <p :id="`${id}-swap-hint-${effect.index}`" class="text-sm text-ink-muted">
@@ -442,7 +452,10 @@ onMounted(() => {
                         >
                             <span class="min-w-0 wrap-anywhere">
                                 {{ group.name }}
-                                <span v-if="selection.chosen[groupIndex]?.length" class="font-normal text-ink-muted" data-fold-count>· {{ selection.chosen[groupIndex]?.length }}</span>
+                                <template v-if="selection.chosen[groupIndex]?.length">
+                                    <span class="font-normal text-ink-muted" aria-hidden="true" data-fold-count>· {{ selection.chosen[groupIndex]?.length }}</span>
+                                    <span class="sr-only">{{ t(selection.chosen[groupIndex]?.length === 1 ? 'order.picker.fold_count_one' : 'order.picker.fold_count', { count: selection.chosen[groupIndex]?.length ?? 0 }) }}</span>
+                                </template>
                             </span>
                             <span class="dish-picker-fold-mark shrink-0" aria-hidden="true" />
                         </button>
